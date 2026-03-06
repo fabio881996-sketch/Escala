@@ -20,7 +20,7 @@ def load_data():
 # --- INTERFACE DE LOGIN ---
 def login():
     st.markdown("<h1 style='text-align: center;'>🔑 Login</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center;'>Escala de Serviço - 50 Elementos</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center;'>Escala de Serviço - Posto Territorial Famalicão</p>", unsafe_allow_html=True)
     
     with st.form("login_form"):
         email = st.text_input("Email (institucional ex: ...@gnr.pt)").strip().lower()
