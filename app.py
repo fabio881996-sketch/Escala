@@ -77,7 +77,7 @@ def main_app():
             mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True, busca_exata=True)
             
             # Apoio ao Atendimento (Bloco exclusivo)
-            mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True, busca_exata=True)
+            mostrar_bloco("Apoio ao Atendimento", ["Apoio Atendimento"], ordenar_hora=True, busca_exata=True)
             
             # Operacional
             mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True)
