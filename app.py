@@ -2,56 +2,64 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="Sistema GNR", layout="wide")
+st.set_page_config(page_title="GNR - Sistema de Gestão", layout="wide")
 
-# Inicializa conexão
-conn = st.connection("gsheets", type=GSheetsConnection)
+# Conectar aos Secrets
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error("Erro nos Secrets. Verifique se o JSON está bem colado.")
+    st.stop()
 
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+if "logado" not in st.session_state:
+    st.session_state["logado"] = False
 
-# TELA DE LOGIN
-if not st.session_state["logged_in"]:
+if not st.session_state["logado"]:
     st.title("🔑 Login GNR")
+    
+    # Botão para forçar limpeza de erros antigos
+    if st.sidebar.button("Limpar Cache de Erros"):
+        st.cache_data.clear()
+        st.rerun()
+
     with st.form("login_form"):
-        email = st.text_input("Email").strip().lower()
-        senha = st.text_input("Password", type="password")
+        u_email = st.text_input("Email").strip().lower()
+        u_pass = st.text_input("Password", type="password")
+        
         if st.form_submit_button("Entrar"):
             try:
-                # Tenta ler a aba 'users'
-                df_u = conn.read(worksheet="users", ttl=0)
-                df_u.columns = [str(c).strip().lower() for c in df_u.columns]
+                # ESTRATÉGIA: Ler a folha sem especificar o nome da aba
+                # Isto evita o erro 400 se o nome da aba tiver caracteres estranhos
+                df_u = conn.read(ttl=0) 
                 
-                user = df_u[(df_u['email'].astype(str).str.lower() == email) & 
-                            (df_u['password'].astype(str) == senha)]
-                
-                if not user.empty:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user_nome"] = user.iloc[0]['nome']
-                    st.rerun()
-                else:
-                    st.error("Email ou Senha incorretos.")
+                if df_u is not None:
+                    # Normalizar nomes das colunas (retira espaços e põe minúsculas)
+                    df_u.columns = [str(c).strip().lower() for c in df_u.columns]
+                    
+                    # Validar se as colunas existem
+                    if 'email' in df_u.columns and 'password' in df_u.columns:
+                        user = df_u[(df_u['email'].astype(str).str.lower() == u_email) & 
+                                    (df_u['password'].astype(str) == str(u_pass))]
+                        
+                        if not user.empty:
+                            st.session_state["logado"] = True
+                            st.session_state["user_nome"] = user.iloc[0]['nome']
+                            st.rerun()
+                        else:
+                            st.error("Email ou Password incorretos.")
+                    else:
+                        st.warning("A aba foi lida, mas não encontrei as colunas 'email' e 'password'.")
+                        st.write("Colunas detetadas:", list(df_u.columns))
             except Exception as e:
-                st.error("Erro ao aceder à Google Sheet. Verifique se a aba se chama 'users'.")
+                st.error("🚨 Erro Crítico 400")
+                st.info("O Google Sheets rejeitou o pedido. Verifique se a folha não tem células mescladas ou filtros ativos.")
                 st.code(e)
 
-# TELA PRINCIPAL
 else:
-    st.sidebar.success(f"Ligado: {st.session_state['user_nome']}")
+    st.sidebar.success(f"Logado: {st.session_state['user_nome']}")
     st.title("📅 Escala de Serviço")
     
-    # Seletor de data para buscar a aba (ex: 06-03)
-    data_sel = st.date_input("Selecione o dia", value=pd.to_datetime("2026-03-06"))
-    nome_aba = data_sel.strftime("%d-%m")
-
-    if st.button(f"Ver Escala {nome_aba}"):
-        try:
-            df_escala = conn.read(worksheet=nome_aba, ttl=0)
-            st.dataframe(df_escala, use_container_width=True)
-        except:
-            st.warning(f"Aba '{nome_aba}' não encontrada na folha.")
-
     if st.sidebar.button("Sair"):
-        st.session_state["logged_in"] = False
+        st.session_state["logado"] = False
         st.rerun()
         
