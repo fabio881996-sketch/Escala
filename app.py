@@ -3,98 +3,82 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-st.set_page_config(page_title="GNR - Gestão de Escalas", layout="wide", page_icon="🚓")
+# Configuração da página
+st.set_page_config(page_title="Escalas GNR", layout="wide")
 
-# --- CONEXÃO ---
+# Inicializar conexão
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Erro nos Secrets.")
+    st.error("Erro na ligação aos Secrets.")
     st.stop()
 
+# Gestão de Login no Session State
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
 
-# --- LOGIN ---
+# --- ESTRUTURA DE LOGIN ---
 if not st.session_state["logado"]:
-    st.title("🚓 Portal de Escalas GNR")
-    with st.form("login_form"):
+    st.title("🚓 Acesso às Escalas")
+    with st.form("login"):
         u_email = st.text_input("Email").strip().lower()
-        u_pass = st.text_input("Password", type="password")
+        u_pass = st.text_input("Palavra-passe", type="password")
         if st.form_submit_button("Entrar"):
             try:
-                # Lemos a primeira aba (utilizadores)
+                # Lê a 1ª aba (utilizadores) para validar login
                 df_u = conn.read(ttl=0)
                 df_u.columns = [str(c).strip().lower() for c in df_u.columns]
+                
                 user = df_u[(df_u['email'].astype(str).str.lower() == u_email) & 
                             (df_u['password'].astype(str) == u_pass)]
+                
                 if not user.empty:
                     st.session_state["logado"] = True
-                    st.session_state["user_nome"] = user.iloc[0]['nome']
+                    st.session_state["nome_militar"] = user.iloc[0]['nome']
                     st.rerun()
                 else:
-                    st.error("Credenciais inválidas.")
+                    st.error("Email ou Password incorretos.")
             except Exception as e:
-                st.error("Erro de conexão. Verifique os Secrets.")
+                st.error("Erro ao ler base de dados de utilizadores.")
 
-# --- ÁREA LOGADA ---
+# --- ESTRUTURA DA ESCALA (PÓS-LOGIN) ---
 else:
-    st.sidebar.title(f"Militar: {st.session_state['user_nome']}")
+    st.sidebar.write(f"Militar: **{st.session_state['nome_militar']}**")
     if st.sidebar.button("Sair"):
         st.session_state["logado"] = False
         st.rerun()
 
-    tab1, tab2 = st.tabs(["📅 Escala Diária", "🔄 Troca de Serviço"])
+    st.title("📅 Consulta de Escala Diária")
+    
+    # Seletor de Data
+    # Se na folha tens '06-03', o código abaixo gera exatamente '06-03'
+    data_sel = st.date_input("Escolha o dia", value=datetime.now())
+    nome_da_aba = data_sel.strftime("%d-%m") 
 
-    with tab1:
-        st.subheader("Consultar Escala")
-        data_sel = st.date_input("Data:", value=datetime.now())
-        nome_aba_alvo = data_sel.strftime("escala_%d_%m")
+    st.info(f"A procurar a aba chamada: **{nome_da_aba}**")
 
-        if st.button("🔄 Carregar/Atualizar Escala"):
-            st.cache_data.clear()
-            try:
-                # MÉTODO NOVO: Em vez de pedir a aba ao Google, 
-                # pedimos a folha e especificamos a aba aqui.
-                df_escala = conn.read(worksheet=nome_aba_alvo, ttl=0)
+    if st.button(f"Carregar Escala de {nome_da_aba}"):
+        # Limpa cache para garantir dados frescos
+        st.cache_data.clear()
+        
+        try:
+            # Tenta ler a aba específica (ex: 06-03)
+            df = conn.read(worksheet=nome_da_aba, ttl=0)
+            
+            if df is not None and not df.empty:
+                st.success(f"Escala de {nome_da_aba} carregada com sucesso!")
+                st.dataframe(df, use_container_width=True, hide_index=True)
+            else:
+                st.warning("A aba existe, mas não foram detetados dados.")
                 
-                if df_escala is not None and not df_escala.empty:
-                    st.success(f"Escala {nome_aba_alvo} carregada.")
-                    st.dataframe(df_escala, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("A aba existe mas não tem dados.")
-            except Exception as e:
-                st.error(f"Não foi possível ler a aba '{nome_aba_alvo}'")
-                st.info("Tente o seguinte: Vá à Google Sheet e mude o nome da aba para algo simples como 'TESTE' e tente carregar.")
-                with st.expander("Detalhes Técnicos do Erro"):
-                    st.code(str(e))
-
-    with tab2:
-        st.subheader("Pedir Troca")
-        with st.form("troca"):
-            d_servico = st.date_input("Dia do Serviço")
-            m_com_quem = st.text_input("Trocar com (Posto/Nome)")
-            razon = st.text_area("Motivo")
-            if st.form_submit_button("Submeter"):
-                try:
-                    # Tenta ler a aba de pedidos, se falhar cria estrutura
-                    try:
-                        df_p = conn.read(worksheet="pedidos_troca", ttl=0)
-                    except:
-                        df_p = pd.DataFrame(columns=["data_pedido", "militar", "troca_com", "dia", "motivo", "estado"])
-
-                    novo = pd.DataFrame([{
-                        "data_pedido": datetime.now().strftime("%d/%m/%Y"),
-                        "militar": st.session_state["user_nome"],
-                        "troca_com": m_com_quem,
-                        "dia": d_servico.strftime("%d/%m/%Y"),
-                        "motivo": razon,
-                        "estado": "PENDENTE"
-                    }])
-                    
-                    df_final = pd.concat([df_p, novo], ignore_index=True)
-                    conn.update(worksheet="pedidos_troca", data=df_final)
-                    st.success("Pedido enviado!")
-                except Exception as e:
-                    st.error("Erro ao gravar. Verifique se a aba 'pedidos_troca' existe.")
-                    
+        except Exception as e:
+            st.error(f"Não foi possível carregar a aba '{nome_da_aba}'")
+            st.markdown("""
+            **Verifique estes 3 pontos na sua Google Sheet:**
+            1. O nome da aba é exatamente **{}**? (Sem espaços antes ou depois).
+            2. Selecione a folha toda e clique em **Anular Moldagem** (Unmerge) para remover células mescladas.
+            3. A primeira linha da folha tem de ter os títulos (Posto, Nome, etc.).
+            """.format(nome_da_aba))
+            with st.expander("Erro Técnico Detalhado"):
+                st.code(str(e))
+                
