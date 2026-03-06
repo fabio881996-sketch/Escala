@@ -58,41 +58,59 @@ def main_app():
     # --- OPÇÃO 2: SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Troca de Serviço")
-        st.write("Selecione a data para ver os colegas disponíveis para troca.")
-
+        
         data_t = st.date_input("Data do serviço a trocar", format="DD/MM/YYYY")
         nome_aba_t = data_t.strftime("%d-%m")
-        
         df_dia_t = load_sheet(nome_aba_t)
 
         if df_dia_t is not None:
-            # LISTA DE PALAVRAS A EXCLUIR (ADMINISTRATIVOS E FOLGAS)
-            excluir = ["folga", "férias", "ferias", "pronto", "inquéritos", "inqueritos", "secretaria"]
+            # 1. Identificar o MEU serviço automaticamente
+            meu_df = df_dia_t[df_dia_t['id'].astype(str) == st.session_state['user_id']]
             
-            # Filtro: 
-            # 1. Não pode ser o próprio utilizador
-            # 2. O serviço não pode conter as palavras da lista 'excluir'
-            df_filtrado = df_dia_t[
-                (df_dia_t['id'].astype(str) != st.session_state['user_id']) & 
-                (~df_dia_t['serviço'].str.lower().isin(excluir))
-            ]
-            
-            ids_disponiveis = df_filtrado['id'].unique()
-
-            if len(ids_disponiveis) > 0:
-                with st.form("form_troca_filtrado"):
-                    id_colega = st.selectbox("Trocar com o ID (apenas elementos no terreno):", ids_disponiveis)
-                    servico_meu = st.text_input("Teu serviço atual (Ex: Patrulha)")
-                    obs = st.text_area("Notas/Motivo")
-                    
-                    if st.form_submit_button("Gerar Pedido"):
-                        msg = (f"SOLICITAÇÃO DE TROCA:\nData: {nome_aba_t}\nRequerente: ID {st.session_state['user_id']}\nSubstituto: ID {id_colega}\nServiço: {servico_meu}\nMotivo: {obs}")
-                        st.warning("Copia e envia ao Admin/Comando:")
-                        st.code(msg)
+            if meu_df.empty:
+                st.warning("Não tens serviço atribuído neste dia, portanto não podes solicitar troca.")
             else:
-                st.warning("Não existem colegas disponíveis para troca neste dia (todos em folga, férias ou serviço interno).")
+                meu_s = meu_df.iloc[0]['serviço']
+                meu_h = meu_df.iloc[0]['horário']
+                
+                st.info(f"*O teu serviço atual:* {meu_s} ({meu_h})")
+
+                # 2. Filtrar colegas disponíveis (Excluir folgas/férias/etc)
+                excluir = ["folga", "férias", "ferias", "pronto", "inquéritos", "inqueritos", "secretaria"]
+                df_colegas = df_dia_t[
+                    (df_dia_t['id'].astype(str) != st.session_state['user_id']) & 
+                    (~df_dia_t['serviço'].str.lower().isin(excluir))
+                ].copy()
+
+                if not df_colegas.empty:
+                    # Criar uma coluna legível para o menu de seleção
+                    df_colegas['info_selecao'] = df_colegas['id'].astype(str) + " - " + df_colegas['serviço'] + " (" + df_colegas['horário'] + ")"
+                    
+                    with st.form("form_troca_detalhado"):
+                        selecao = st.selectbox("Trocar com (ID - Serviço - Horário):", df_colegas['info_selecao'].tolist())
+                        
+                        # Extrair dados do colega selecionado
+                        colega_id = selecao.split(" - ")[0]
+                        colega_info = df_colegas[df_colegas['id'].astype(str) == colega_id].iloc[0]
+                        
+                        motivo = st.text_area("Motivo da Troca")
+                        
+                        if st.form_submit_button("Gerar Pedido de Troca"):
+                            msg = (
+                                f"🚨 SOLICITAÇÃO DE TROCA DE SERVIÇO\n"
+                                f"📅 DATA: {nome_aba_t}\n\n"
+                                f"👤 REQUERENTE (ID {st.session_state['user_id']}):\n"
+                                f"Saída: {meu_s} ({meu_h})\n\n"
+                                f"👤 SUBSTITUTO (ID {colega_id}):\n"
+                                f"Entrada: {colega_info['serviço']} ({colega_info['horário']})\n\n"
+                                f"📝 MOTIVO: {motivo}"
+                            )
+                            st.warning("Copia o pedido abaixo:")
+                            st.code(msg)
+                else:
+                    st.warning("Não existem colegas no terreno disponíveis para troca nesta data.")
         else:
-            st.error(f"Escala de {nome_aba_t} ainda não criada.")
+            st.error(f"A escala para {nome_aba_t} ainda não foi publicada.")
 
     if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
