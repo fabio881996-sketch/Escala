@@ -1,115 +1,97 @@
 import streamlit as st
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime
 
-st.set_page_config(page_title="Sistema GNR - Trocas", page_icon="🚓", layout="wide")
+# Configuração da Página
+st.set_page_config(page_title="Sistema GNR - Escalas", page_icon="🚓", layout="wide")
 
-# CONFIGURAÇÃO DO ADMINISTRADOR
+# CONFIGURAÇÃO DO ADMIN
 EMAIL_ADMIN = "ferreira.fr@gnr.pt"
 
-def load_sheet(aba_nome):
-    try:
-        url = st.secrets["gsheet_url"]
-        base_url = url.split('/edit')[0]
-        csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
-        df = pd.read_csv(csv_url)
-        df.columns = [c.strip().lower() for c in df.columns]
-        if 'id' in df.columns: df['id'] = df['id'].astype(str).str.strip()
-        return df
-    except:
-        return None
+# Inicializar Conexão
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-def main_app():
-    st.sidebar.markdown(f"### 👤 {st.session_state['user_name']}")
-    
-    # Define o menu com base no email
-    opcoes_menu = ["📅 Escala Diária", "🔄 Minhas Trocas"]
-    if st.session_state['user_email'] == EMAIL_ADMIN:
-        opcoes_menu.append("🛡️ Painel Admin")
-    
-    menu = st.sidebar.radio("Navegação", opcoes_menu)
-
-    # --- 📅 ESCALA DIÁRIA ---
-    if menu == "📅 Escala Diária":
-        st.title("📅 Escala de Serviço")
-        # ... (Aqui manténs todo o código dos blocos Atendimento, Patrulha, etc. que já tinhas)
-        st.info("Visualização da Escala Geral")
-
-    # --- 🔄 MINHAS TROCAS (Utilizador) ---
-    elif menu == "🔄 Minhas Trocas":
-        st.title("🔄 Gestão de Trocas")
-        tab1, tab2 = st.tabs(["Solicitar Nova Troca", "Histórico/Status"])
-        
-        with tab1:
-            data_t = st.date_input("Data do serviço", format="DD/MM/YYYY")
-            df_dia = load_sheet(data_t.strftime("%d-%m"))
-            if df_dia is not None:
-                meu_id = st.session_state['user_id']
-                meu_servico = df_dia[df_dia['id'] == meu_id]
-                
-                if not meu_servico.empty:
-                    st.write(f"O teu serviço: **{meu_servico.iloc[0]['serviço']}**")
-                    colegas = df_dia[df_dia['id'] != meu_id]
-                    selecionado = st.selectbox("Escolher colega para troca:", colegas['id'].tolist())
-                    motivo = st.text_area("Motivo da troca")
-                    
-                    if st.button("Enviar Pedido ao Comandante"):
-                        # Aqui o sistema simula o envio. 
-                        # Para gravar real, precisamos da conexão st.connection("gsheets")
-                        st.success(f"Pedido enviado! Aguarda validação de {EMAIL_ADMIN}")
-                        st.info("Status atual: ⏳ PENDENTE")
-                else:
-                    st.warning("Não estás escalado para este dia.")
-
-        with tab2:
-            st.subheader("Estado dos teus pedidos")
-            df_t = load_sheet("trocas")
-            if df_t is not None:
-                minhas = df_t[(df_t['id_requerente'] == st.session_state['user_id']) | 
-                              (df_t['id_substituto'] == st.session_state['user_id'])]
-                st.dataframe(minhas, use_container_width=True, hide_index=True)
-
-    # --- 🛡️ PAINEL ADMIN (Só para ferreira.fr@gnr.pt) ---
-    elif menu == "🛡️ Painel Admin":
-        st.title("🛡️ Validação de Pedidos de Troca")
-        df_t = load_sheet("trocas")
-        
-        if df_t is not None and not df_t.empty:
-            pendentes = df_t[df_t['status'].str.lower() == "pendente"]
-            if not pendentes.empty:
-                for idx, row in pendentes.iterrows():
-                    with st.expander(f"Pedido: {row['id_requerente']} 🔄 {row['id_substituto']} ({row['data']})"):
-                        st.write(f"**Motivo:** {row['motivo']}")
-                        col1, col2 = st.columns(2)
-                        if col1.button("✅ Aprovar", key=f"app_{idx}"):
-                            st.success("Troca Aprovada! A escala será atualizada.")
-                        if col2.button("❌ Recusar", key=f"rej_{idx}"):
-                            st.error("Troca Recusada.")
-            else:
-                st.write("Não existem pedidos pendentes.")
-        else:
-            st.info("Sem registos na aba de trocas.")
-
-# --- LOGIN MODIFICADO PARA GUARDAR EMAIL ---
 def login():
-    st.markdown("<h1 style='text-align: center;'>🔑 Acesso GNR</h1>", unsafe_allow_html=True)
-    with st.form("login"):
-        u_email = st.text_input("Email").strip().lower()
-        u_pass = st.text_input("Password", type="password")
-        if st.form_submit_button("Entrar"):
-            df_u = load_sheet("utilizadores")
-            if df_u is not None:
-                user = df_u[(df_u['email'].str.lower() == u_email) & (df_u['password'].astype(str) == str(u_pass))]
+    st.markdown("<h1 style='text-align: center;'>🔑 Acesso à Escala</h1>", unsafe_allow_html=True)
+    
+    with st.form("login_form"):
+        email_i = st.text_input("Email").strip().lower()
+        pass_i = st.text_input("Password", type="password")
+        entrar = st.form_submit_button("Entrar")
+        
+        if entrar:
+            try:
+                # Carregar utilizadores via conexão segura
+                df_u = conn.read(worksheet="utilizadores")
+                df_u.columns = [c.strip().lower() for c in df_u.columns]
+                
+                # Validar credenciais
+                user = df_u[(df_u['email'].str.lower() == email_i) & (df_u['password'].astype(str) == str(pass_i))]
+                
                 if not user.empty:
                     st.session_state["logged_in"] = True
                     st.session_state["user_id"] = str(user.iloc[0]['id']).strip()
                     st.session_state["user_name"] = user.iloc[0]['nome']
-                    st.session_state["user_email"] = u_email # Guarda o email para validar admin
+                    st.session_state["user_email"] = email_i
                     st.rerun()
                 else:
-                    st.error("Credenciais inválidas.")
+                    st.error("Email ou Password incorretos.")
+            except Exception as e:
+                st.error(f"Erro ao aceder à base de dados: {e}")
+                st.info("Verifica se a aba 'utilizadores' existe e se o Segredo JSON está correto.")
 
-if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
-if not st.session_state["logged_in"]: login()
-else: main_app()
+def main_app():
+    # Sidebar com Logout e Info
+    st.sidebar.markdown(f"### 👤 {st.session_state['user_name']}")
+    st.sidebar.info(f"ID: {st.session_state['user_id']}")
+    
+    # Definição do Menu
+    opcoes = ["📅 Escala Diária", "🔄 Solicitar Troca", "📋 Meus Pedidos"]
+    if st.session_state['user_email'] == EMAIL_ADMIN:
+        opcoes.append("🛡️ Painel Admin")
+        
+    menu = st.sidebar.radio("Navegação", opcoes)
+
+    # --- 📅 ESCALA DIÁRIA (LÓGICA ANTERIOR) ---
+    if menu == "📅 Escala Diária":
+        st.title("📅 Escala de Serviço Diária")
+        data_sel = st.date_input("Consultar dia:", format="DD/MM/YYYY")
+        nome_aba = data_sel.strftime("%d-%m")
+        
+        try:
+            df_dia = conn.read(worksheet=nome_aba)
+            if df_dia is not None:
+                # ... (Aqui podes manter a tua função mostrar_bloco que já tínhamos feito)
+                st.success(f"Escala de {nome_aba} carregada.")
+                st.dataframe(df_dia, use_container_width=True, hide_index=True)
+        except:
+            st.warning(f"Escala de {nome_aba} não encontrada.")
+
+    # --- 🔄 SOLICITAR TROCA ---
+    elif menu == "🔄 Solicitar Troca":
+        st.title("🔄 Novo Pedido de Troca")
+        # Lógica de escrita que enviamos anteriormente...
+        st.info("Preencha os dados para enviar ao Comandante.")
+
+    # --- 🛡️ PAINEL ADMIN ---
+    elif menu == "🛡️ Painel Admin":
+        st.title("🛡️ Gestão de Pedidos")
+        try:
+            df_trocas = conn.read(worksheet="trocas")
+            st.dataframe(df_trocas)
+        except:
+            st.error("Aba 'trocas' não encontrada.")
+
+    if st.sidebar.button("Sair"):
+        st.session_state["logged_in"] = False
+        st.rerun()
+
+# --- CONTROLO DE SESSÃO ---
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+
+if not st.session_state["logged_in"]:
+    login()
+else:
+    main_app()
     
