@@ -10,11 +10,10 @@ def load_sheet(aba_nome):
         base_url = url.split('/edit')[0]
         csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
         df = pd.read_csv(csv_url)
-        # Limpar nomes das colunas e dados
+        # Limpeza de colunas e dados
         df.columns = [c.strip().lower() for c in df.columns]
         df['id'] = df['id'].astype(str).str.strip()
         df['serviço'] = df['serviço'].astype(str).str.strip()
-        # Se o horário for NaN (vazio), preenche com "---"
         df['horário'] = df['horário'].fillna("---").astype(str).str.strip()
         return df
     except:
@@ -55,44 +54,54 @@ def main_app():
 
             st.divider()
             
-            def mostrar_bloco(titulo, lista_servicos, ordenar_hora=False):
-                # Filtro que aceita variações (ex: "Folga" encontra "Folga Semanal")
-                padrao = '|'.join(lista_servicos).lower()
-                temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+            def mostrar_bloco(titulo, lista_servicos, ordenar_hora=False, busca_exata=False):
+                if busca_exata:
+                    # Procura o termo exato (ex: evita que 'Atendimento' apanhe 'Apoio ao Atendimento')
+                    temp_df = df_dia[df_dia['serviço'].str.lower().isin([s.lower() for s in lista_servicos])].copy()
+                else:
+                    # Procura se a palavra está contida (útil para Folgas/Férias)
+                    padrao = '|'.join(lista_servicos).lower()
+                    temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 
                 if not temp_df.empty:
                     st.subheader(f"🔹 {titulo}")
-                    # Agrupar IDs
                     agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                     agrupado = agrupado[['id', 'serviço', 'horário']]
                     if ordenar_hora:
                         agrupado = agrupado.sort_values(by='horário')
                     st.dataframe(agrupado, use_container_width=True, hide_index=True)
 
-            # --- BLOCOS ATUALIZADOS ---
-            mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True)
-            mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True)
+            # --- ORGANIZAÇÃO DOS BLOCOS ---
+            
+            # Atendimento (Busca exata para não misturar com o Apoio)
+            mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True, busca_exata=True)
+            
+            # Apoio ao Atendimento (Bloco exclusivo)
+            mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True, busca_exata=True)
+            
+            # Operacional
             mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True)
-            mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True)
+            mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
             mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
             
-            # Nestes blocos, a lista de termos foi simplificada para captar tudo
+            # Administrativo e Ausências
             mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquérito", "Diligência", "Tribunal"])
             mostrar_bloco("Folgas", ["Folga"])
             mostrar_bloco("Férias e Licenças", ["Férias", "Licença"])
             mostrar_bloco("Saúde", ["Doente"])
+            
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
     elif menu == "🔄 Solicitar Troca":
+        # ... (Código de trocas permanece o mesmo para garantir consistência)
         st.title("🔄 Troca de Serviço")
         data_t = st.date_input("Data do serviço", format="DD/MM/YYYY")
         nome_aba_t = data_t.strftime("%d-%m")
         df_dia_t = load_sheet(nome_aba_t)
 
         if df_dia_t is not None:
-            # Lista de bloqueio para trocas
             indisponivel = ["folga", "férias", "licença", "doente", "diligência", "tribunal", "inquérito", "secretaria", "pronto"]
             meu_df = df_dia_t[df_dia_t['id'] == st.session_state['user_id']]
             
@@ -131,3 +140,4 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
+    
