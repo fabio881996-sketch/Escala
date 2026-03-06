@@ -22,7 +22,7 @@ def load_data():
         return None
 
 def login():
-    st.markdown("<h1 style='text-align: center;'>🔑 Login</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🔑 Login - Escala de Serviço Posto Territorial Famalicão </h1>", unsafe_allow_html=True)
     with st.form("login_form"):
         email = st.text_input("Email").strip().lower()
         password = st.text_input("Password", type="password")
