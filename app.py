@@ -1,111 +1,60 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
-from datetime import datetime
 
-# 1. CONFIGURAÇÃO
-st.set_page_config(page_title="GNR - Sistema de Gestão", layout="wide")
+st.set_page_config(page_title="GNR - Reset de Ligação", layout="wide")
 
-# 2. CONEXÃO
-conn = st.connection("gsheets", type=GSheetsConnection)
+# 1. TENTAR LIGAR À GOOGLE SHEET
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    st.sidebar.success("✅ Conexão configurada nos Secrets")
+except Exception as e:
+    st.error("❌ Erro nos Secrets! A App não consegue ler as tuas chaves.")
+    st.exception(e)
+    st.stop()
 
-def load_data(aba_nome):
+# 2. FUNÇÃO DE LEITURA DIRETA
+def ler_folha(nome_aba):
     try:
-        # ttl=0 garante que não usamos lixo da memória (cache)
-        df = conn.read(worksheet=aba_nome, ttl=0)
-        if df is not None:
-            df.columns = [str(c).strip().lower() for c in df.columns]
-            return df
-        return None
-    except:
-        return None
+        # ttl=0 ignora qualquer cache antiga
+        return conn.read(worksheet=nome_aba, ttl=0)
+    except Exception as e:
+        return f"Erro: {e}"
 
-# 3. LOGIN
-def login():
-    st.markdown("<h1 style='text-align: center;'>🚓 Login GNR</h1>", unsafe_allow_html=True)
-    with st.form("login"):
-        u_email = st.text_input("Email").strip().lower()
-        u_pass = st.text_input("Password", type="password")
-        if st.form_submit_button("Entrar"):
-            df_u = load_data("utilizadores")
-            if df_u is not None:
-                user = df_u[(df_u['email'].astype(str).str.lower() == u_email) & 
-                            (df_u['password'].astype(str) == str(u_pass))]
-                if not user.empty:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user_id"] = str(user.iloc[0]['id']).strip()
-                    st.session_state["user_name"] = user.iloc[0]['nome']
-                    st.rerun()
-                else: st.error("Credenciais incorretas.")
-            else: st.error("Erro: Não consigo ler a aba 'utilizadores'. Verifique a partilha da folha.")
+st.title("🚓 Sistema GNR - Diagnóstico Total")
 
-# 4. APP PRINCIPAL
-def main_app():
-    st.sidebar.write(f"👤 {st.session_state['user_name']}")
-    menu = st.sidebar.radio("Navegação", ["📅 Escala Diária", "🔄 Trocas", "🛡️ Admin"])
+# --- TESTE 1: UTILIZADORES ---
+st.subheader("1. Teste de Acesso: Utilizadores")
+df_u = ler_folha("utilizadores")
 
-    if menu == "📅 Escala Diária":
-        st.title("📅 Escala de Serviço")
-        data_sel = st.date_input("Escolha o dia", value=datetime.now())
-        
-        # O código vai tentar encontrar a aba, não importa como se chame
-        dia = data_sel.strftime("%d")
-        mes = data_sel.strftime("%m")
-        
-        # Tenta formatos: "06-03", "6-3", "06/03", "6/3"
-        possibilidades = [f"{dia}-{mes}", f"{int(dia)}-{int(mes)}", f"{dia}/{mes}", f"{int(dia)}/{int(mes)}"]
-        
-        df_dia = None
-        aba_final = ""
-        
-        for p in possibilidades:
-            df_dia = load_data(p)
-            if df_dia is not None:
-                aba_final = p
-                break
-
-        if df_dia is not None:
-            st.success(f"✅ Escala carregada com sucesso (Aba: {aba_final})")
-            
-            # Limpeza técnica de colunas
-            mapa = {}
-            for col in df_dia.columns:
-                if 'id' in col: mapa[col] = 'ID'
-                elif 'serv' in col: mapa[col] = 'Serviço'
-                elif 'hor' in col: mapa[col] = 'Horário'
-            df_final = df_dia.rename(columns=mapa)
-
-            # Mostrar o serviço do utilizador logado
-            meu_id = st.session_state['user_id']
-            meu_serv = df_final[df_final['ID'].astype(str).str.contains(meu_id, na=False)]
-            if not meu_serv.empty:
-                st.info(f"🚩 **O TEU SERVIÇO:** {meu_serv.iloc[0]['Serviço']} | {meu_serv.iloc[0]['Horário']}")
-
-            st.divider()
-            
-            # Organização por Blocos
-            def bloco(titulo, palavras):
-                padrao = '|'.join(palavras).lower()
-                temp = df_final[df_final['Serviço'].str.lower().str.contains(padrao, na=False)]
-                if not temp.empty:
-                    st.subheader(f"🔹 {titulo}")
-                    st.dataframe(temp[['ID', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
-
-            bloco("Atendimento", ["atendimento"])
-            bloco("Patrulhas e PO", ["patrulha", "po"])
-            bloco("Outros", ["ronda", "secretaria", "pronto", "remunerado"])
-            bloco("Ausências", ["folga", "férias", "licença", "doente"])
-            
-        else:
-            st.error(f"❌ Não encontrei a aba para o dia {dia}-{mes}")
-            st.warning("⚠️ Verificação Crítica: A primeira linha da aba '06-03' na Google Sheet TEM de ser os cabeçalhos (ID, Serviço, Horário).")
-
-    if st.sidebar.button("Sair"):
-        st.session_state["logged_in"] = False
-        st.rerun()
-
-# CONTROLO
-if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
-if not st.session_state["logged_in"]: login()
-else: main_app()
+if isinstance(df_u, pd.DataFrame):
+    st.success("✅ Aba 'utilizadores' lida com sucesso!")
+    st.write("Linhas encontradas:", len(df_u))
+    # Mostra apenas as colunas para segurança
+    st.write("Colunas detetadas:", df_u.columns.tolist())
     
+    # Tenta mostrar o login só se a aba funcionar
+    with st.expander("Abrir Formulário de Login"):
+        with st.form("login"):
+            email = st.text_input("Email")
+            senha = st.text_input("Pass", type="password")
+            if st.form_submit_button("Testar Login"):
+                user = df_u[df_u.iloc[:, 1].astype(str).str.contains(email, na=False)]
+                if not user.empty: st.write("✅ Encontrado!")
+                else: st.write("❌ Não encontrado.")
+else:
+    st.error("❌ Não consigo ler a aba 'utilizadores'")
+    st.info(f"Detalhe técnico: {df_u}")
+
+st.divider()
+
+# --- TESTE 2: ESCALA 06-03 ---
+st.subheader("2. Teste de Acesso: Escala 06-03")
+df_e = ler_folha("06-03")
+
+if isinstance(df_e, pd.DataFrame):
+    st.success("✅ Aba '06-03' lida com sucesso!")
+    st.dataframe(df_e)
+else:
+    st.error("❌ Não consigo ler a aba '06-03'")
+    st.info(f"Detalhe técnico: {df_e}")
