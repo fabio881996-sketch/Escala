@@ -16,7 +16,7 @@ def load_sheet(aba_nome):
         return None
 
 def login():
-    st.markdown("<h1 style='text-align: center;'>🔐 Acesso à Escala</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🔑 Acesso à Escala</h1>", unsafe_allow_html=True)
     with st.form("login_form"):
         email_i = st.text_input("Email").strip().lower()
         pass_i = st.text_input("Password", type="password")
@@ -44,16 +44,15 @@ def main_app():
         df_dia = load_sheet(nome_aba)
 
         if df_dia is not None:
-            # 1. O MEU SERVIÇO (Destaque)
+            # 1. DESTAQUE INDIVIDUAL
             meu_df = df_dia[df_dia['id'].astype(str) == st.session_state['user_id']]
             if not meu_df.empty:
                 st.success(f"📌 *O TEU SERVIÇO:* {meu_df.iloc[0]['serviço']} | {meu_df.iloc[0]['horário']}")
 
             st.divider()
             
-            # --- FUNÇÃO PARA MOSTRAR BLOCOS ---
+            # --- FUNÇÃO DE EXIBIÇÃO POR BLOCO ---
             def mostrar_bloco(titulo, lista_servicos, ordenar_hora=False):
-                # Filtra os serviços que pertencem a este bloco (case-insensitive)
                 temp_df = df_dia[df_dia['serviço'].str.lower().isin([s.lower() for s in lista_servicos])]
                 if not temp_df.empty:
                     st.subheader(f"🔹 {titulo}")
@@ -61,18 +60,24 @@ def main_app():
                         temp_df = temp_df.sort_values(by='horário')
                     st.dataframe(temp_df[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
 
-            # --- ORGANIZAÇÃO POR CATEGORIAS ---
-            
-            # BLOCO 1: Operacional / Atendimento (Ordenado por Horário)
+            # --- ORGANIZAÇÃO DA ESCALA GERAL ---
+
+            # 1. ATENDIMENTO
             mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True)
             mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True)
-            mostrar_bloco("PO / Patrulha / Ronda", ["PO", "Patrulha", "Ronda"], ordenar_hora=True)
-            mostrar_bloco("Remunerado", ["Remunerado"], ordenar_hora=True)
             
-            # BLOCO 2: Administrativo e Outros
+            # 2. OPERACIONAL SEPARADO (Como solicitado)
+            mostrar_bloco("PO (Posto Móvel / Outros)", ["PO"], ordenar_hora=True)
+            mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True)
+            mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
+            
+            # 3. REMUNERADOS
+            mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
+            
+            # 4. ADMINISTRATIVO E APOIO
             mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquéritos", "Diligência", "Tribunal"])
             
-            # BLOCO 3: Ausências e Licenças
+            # 5. FOLGAS E AUSÊNCIAS
             mostrar_bloco("Folgas", ["Folga Semanal", "Folga Complementar"])
             mostrar_bloco("Férias e Licenças", ["Férias", "Outras Licenças"])
             mostrar_bloco("Saúde", ["Doentes"])
@@ -87,7 +92,7 @@ def main_app():
         df_dia_t = load_sheet(nome_aba_t)
 
         if df_dia_t is not None:
-            # Filtro de quem NÃO pode trocar (indisponíveis)
+            # Lista de serviços que NÃO permitem troca
             indisponivel = ["folga semanal", "folga complementar", "férias", "outras licenças", "doentes", "diligência", "tribunal", "inquéritos", "secretaria", "pronto"]
             
             meu_df = df_dia_t[df_dia_t['id'].astype(str) == st.session_state['user_id']]
@@ -95,7 +100,7 @@ def main_app():
             if not meu_df.empty and meu_df.iloc[0]['serviço'].lower() not in indisponivel:
                 meu_s, meu_h = meu_df.iloc[0]['serviço'], meu_df.iloc[0]['horário']
                 
-                # Colegas disponíveis (apenas Atendimento, Patrulha, PO, Remunerado)
+                # Colegas que PODEM trocar (Atendimento, Apoio, PO, Patrulha, Ronda, Remunerado)
                 df_colegas = df_dia_t[
                     (df_dia_t['id'].astype(str) != st.session_state['user_id']) & 
                     (~df_dia_t['serviço'].str.lower().isin(indisponivel))
@@ -105,16 +110,16 @@ def main_app():
                     df_colegas['display'] = df_colegas['id'].astype(str) + " - " + df_colegas['serviço'] + " (" + df_colegas['horário'] + ")"
                     with st.form("form_troca"):
                         selecao = st.selectbox("Trocar com:", df_colegas['display'].tolist())
-                        motivo = st.text_area("Motivo:")
-                        if st.form_submit_button("Gerar Pedido"):
+                        motivo = st.text_area("Motivo da troca:")
+                        if st.form_submit_button("Gerar Mensagem de Troca"):
                             id_c = selecao.split(" - ")[0]
                             c_info = df_colegas[df_colegas['id'].astype(str) == id_c].iloc[0]
-                            msg = f"PEDIDO DE TROCA ({nome_aba_t}):\nSair: ID {st.session_state['user_id']} ({meu_s})\nEntrar: ID {id_c} ({c_info['serviço']})\nMotivo: {motivo}"
+                            msg = f"SOLICITAÇÃO DE TROCA ({nome_aba_t}):\nSair: ID {st.session_state['user_id']} ({meu_s})\nEntrar: ID {id_c} ({c_info['serviço']})\nMotivo: {motivo}"
                             st.code(msg)
                 else:
-                    st.warning("Sem colegas operacionais disponíveis para troca.")
+                    st.warning("Não há colegas operacionais disponíveis nesta data.")
             else:
-                st.error("Não podes solicitar trocas nesta condição ou data.")
+                st.error("Não podes solicitar trocas nesta condição.")
 
     if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
