@@ -1,4 +1,3 @@
-[20:51, 06/03/2026] Fábio Ferreira: import streamlit as st
 import pandas as pd
 from datetime import datetime
 
