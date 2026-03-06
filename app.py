@@ -56,10 +56,8 @@ def main_app():
             
             def mostrar_bloco(titulo, lista_servicos, ordenar_hora=False, busca_exata=False):
                 if busca_exata:
-                    # Procura o termo exato (ex: evita que 'Atendimento' apanhe 'Apoio ao Atendimento')
                     temp_df = df_dia[df_dia['serviço'].str.lower().isin([s.lower() for s in lista_servicos])].copy()
                 else:
-                    # Procura se a palavra está contida (útil para Folgas/Férias)
                     padrao = '|'.join(lista_servicos).lower()
                     temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 
@@ -72,20 +70,14 @@ def main_app():
                     st.dataframe(agrupado, use_container_width=True, hide_index=True)
 
             # --- ORGANIZAÇÃO DOS BLOCOS ---
-            
-            # Atendimento (Busca exata para não misturar com o Apoio)
             mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True, busca_exata=True)
+            mostrar_bloco("Apoio ao Atendimento", ["Apoio Atendimento", "Apoio ao Atendimento"], ordenar_hora=True, busca_exata=True)
             
-            # Apoio ao Atendimento (Bloco exclusivo)
-            mostrar_bloco("Apoio ao Atendimento", ["Apoio Atendimento"], ordenar_hora=True, busca_exata=True)
-            
-            # Operacional
-            mostrar_bloco("Patrulha Ocorrências", ["PO"], ordenar_hora=True, busca_exata=True)
+            mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
             mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
             
-            # Administrativo e Ausências
             mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquérito"])
             mostrar_bloco("Tribunal", ["Tribunal"])
             mostrar_bloco("Folgas", ["Folga"])
@@ -97,7 +89,6 @@ def main_app():
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
     elif menu == "🔄 Solicitar Troca":
-        # ... (Código de trocas permanece o mesmo para garantir consistência)
         st.title("🔄 Troca de Serviço")
         data_t = st.date_input("Data do serviço", format="DD/MM/YYYY")
         nome_aba_t = data_t.strftime("%d-%m")
