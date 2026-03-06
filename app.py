@@ -51,6 +51,7 @@ def main_app():
                 st.success(f"📌 *O TEU SERVIÇO:* {meu_servico.iloc[0]['serviço']} | {meu_servico.iloc[0]['horário']}")
             
             st.subheader(f"👥 Equipa em Serviço - {nome_aba}")
+            # Mostra apenas ID, Serviço e Horário para todos
             st.dataframe(df_dia[['id', 'serviço', 'horário']].sort_values(by='horário'), use_container_width=True, hide_index=True)
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
@@ -64,55 +65,59 @@ def main_app():
         df_dia_t = load_sheet(nome_aba_t)
 
         if df_dia_t is not None:
-            # 1. Identificar o MEU serviço automaticamente
+            # Palavras que indicam que o utilizador NÃO pode trocar serviço
+            indisponivel = ["folga", "férias", "ferias", "pronto", "inquéritos", "inqueritos", "secretaria"]
+            
+            # 1. Verificar o meu próprio serviço
             meu_df = df_dia_t[df_dia_t['id'].astype(str) == st.session_state['user_id']]
             
             if meu_df.empty:
-                st.warning("Não tens serviço atribuído neste dia, portanto não podes solicitar troca.")
+                st.warning("Não constas na escala deste dia.")
+            elif meu_df.iloc[0]['serviço'].lower() in indisponivel:
+                st.error(f"Estás de '{meu_df.iloc[0]['serviço']}'. Não podes solicitar trocas nesta condição.")
             else:
                 meu_s = meu_df.iloc[0]['serviço']
                 meu_h = meu_df.iloc[0]['horário']
-                
-                st.info(f"*O teu serviço atual:* {meu_s} ({meu_h})")
+                st.info(f"*O teu serviço:* {meu_s} ({meu_h})")
 
-                # 2. Filtrar colegas disponíveis (Excluir folgas/férias/etc)
-                excluir = ["folga", "férias", "ferias", "pronto", "inquéritos", "inqueritos", "secretaria"]
+                # 2. Filtrar APENAS colegas com quem é POSSÍVEL trocar
                 df_colegas = df_dia_t[
                     (df_dia_t['id'].astype(str) != st.session_state['user_id']) & 
-                    (~df_dia_t['serviço'].str.lower().isin(excluir))
+                    (~df_dia_t['serviço'].str.lower().isin(indisponivel))
                 ].copy()
 
                 if not df_colegas.empty:
-                    # Criar uma coluna legível para o menu de seleção
-                    df_colegas['info_selecao'] = df_colegas['id'].astype(str) + " - " + df_colegas['serviço'] + " (" + df_colegas['horário'] + ")"
+                    # Criar a etiqueta de seleção: "ID - SERVIÇO (HORÁRIO)"
+                    df_colegas['display'] = df_colegas['id'].astype(str) + " - " + df_colegas['serviço'] + " (" + df_colegas['horário'] + ")"
                     
-                    with st.form("form_troca_detalhado"):
-                        selecao = st.selectbox("Trocar com (ID - Serviço - Horário):", df_colegas['info_selecao'].tolist())
+                    with st.form("form_troca"):
+                        selecionado = st.selectbox("Escolha o colega para trocar serviço:", df_colegas['display'].tolist())
                         
-                        # Extrair dados do colega selecionado
-                        colega_id = selecao.split(" - ")[0]
-                        colega_info = df_colegas[df_colegas['id'].astype(str) == colega_id].iloc[0]
+                        # Recuperar dados do colega escolhido para o relatório final
+                        id_escolhido = selecionado.split(" - ")[0]
+                        dados_c = df_colegas[df_colegas['id'].astype(str) == id_escolhido].iloc[0]
                         
-                        motivo = st.text_area("Motivo da Troca")
+                        motivo = st.text_area("Indique o motivo da troca:")
                         
-                        if st.form_submit_button("Gerar Pedido de Troca"):
-                            msg = (
-                                f"🚨 SOLICITAÇÃO DE TROCA DE SERVIÇO\n"
+                        if st.form_submit_button("Gerar Mensagem de Troca"):
+                            texto_final = (
+                                f"📝 PEDIDO DE TROCA DE SERVIÇO\n"
                                 f"📅 DATA: {nome_aba_t}\n\n"
-                                f"👤 REQUERENTE (ID {st.session_state['user_id']}):\n"
-                                f"Saída: {meu_s} ({meu_h})\n\n"
-                                f"👤 SUBSTITUTO (ID {colega_id}):\n"
-                                f"Entrada: {colega_info['serviço']} ({colega_info['horário']})\n\n"
-                                f"📝 MOTIVO: {motivo}"
+                                f"✅ REQUERENTE (Sair):\n"
+                                f"ID {st.session_state['user_id']} -> {meu_s} ({meu_h})\n\n"
+                                f"🔄 SUBSTITUTO (Entrar):\n"
+                                f"ID {id_escolhido} -> {dados_c['serviço']} ({dados_c['horário']})\n\n"
+                                f"💭 MOTIVO: {motivo}"
                             )
-                            st.warning("Copia o pedido abaixo:")
-                            st.code(msg)
+                            st.subheader("Pedido Gerado:")
+                            st.code(texto_final)
+                            st.success("Copia o texto acima e envia para validação.")
                 else:
-                    st.warning("Não existem colegas no terreno disponíveis para troca nesta data.")
+                    st.warning("Não existem outros elementos no terreno disponíveis para troca neste dia.")
         else:
-            st.error(f"A escala para {nome_aba_t} ainda não foi publicada.")
+            st.error(f"A escala para {nome_aba_t} ainda não existe.")
 
-    if st.sidebar.button("Sair"):
+    if st.sidebar.button("Terminar Sessão"):
         st.session_state["logged_in"] = False
         st.rerun()
 
