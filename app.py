@@ -3,23 +3,18 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Sistema GNR - Gestão", page_icon="🚓", layout="wide")
+# 1. CONFIGURAÇÃO
+st.set_page_config(page_title="GNR - Sistema de Escalas", layout="wide")
 
 # 2. CONEXÃO
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error("Erro nos Secrets.")
-    st.stop()
+conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 3. FUNÇÃO DE LEITURA ROBUSTA
 def load_data(aba_nome):
     try:
-        # ttl=0 força a leitura de dados novos sem cache
+        # ttl=0 para garantir dados frescos
         df = conn.read(worksheet=aba_nome, ttl=0)
         if df is not None:
-            # Limpa nomes de colunas (tira espaços, acentos e põe minúsculas)
+            # Normalizar cabeçalhos (remover espaços e acentos)
             df.columns = [str(c).strip().lower()
                           .replace('ç', 'c').replace('í', 'i').replace('ó', 'o') 
                           .replace('é', 'e').replace('ã', 'a').replace('ê', 'e')
@@ -29,10 +24,10 @@ def load_data(aba_nome):
     except:
         return None
 
-# 4. LOGIN
+# 3. LOGIN
 def login():
-    st.markdown("<h1 style='text-align: center;'>🚓 Acesso GNR</h1>", unsafe_allow_html=True)
-    with st.form("login_form"):
+    st.markdown("<h1 style='text-align: center;'>🚓 Login GNR</h1>", unsafe_allow_html=True)
+    with st.form("login"):
         u_email = st.text_input("Email").strip().lower()
         u_pass = st.text_input("Password", type="password")
         if st.form_submit_button("Entrar"):
@@ -44,70 +39,81 @@ def login():
                     st.session_state["logged_in"] = True
                     st.session_state["user_id"] = str(user.iloc[0]['id']).strip()
                     st.session_state["user_name"] = user.iloc[0]['nome']
-                    st.session_state["user_email"] = u_email
                     st.rerun()
                 else: st.error("Email ou Password incorretos.")
-            else: st.error("Não detetei a aba 'utilizadores'. Verifique a Sheet.")
+            else: st.error("Erro: Aba 'utilizadores' não encontrada.")
 
-# 5. APP PRINCIPAL
+# 4. APP PRINCIPAL
 def main_app():
-    st.sidebar.markdown(f"### 👤 {st.session_state['user_name']}")
-    
-    menu = st.sidebar.radio("Navegação", ["📅 Escala Diária", "🔄 Solicitar Troca", "🛡️ Painel Admin"])
+    st.sidebar.write(f"👤 {st.session_state['user_name']}")
+    menu = st.sidebar.radio("Menu", ["📅 Escala", "🔄 Trocas", "🛡️ Admin"])
 
-    if menu == "📅 Escala Diária":
-        st.title("📅 Escala de Serviço")
-        data_sel = st.date_input("Data:", value=datetime.now())
-        nome_aba = data_sel.strftime("%d-%m") # Tenta "06-03"
-
-        df_dia = load_data(nome_aba)
+    if menu == "📅 Escala":
+        st.title("📅 Escala Diária")
+        data_sel = st.date_input("Selecione o dia", value=datetime.now())
+        
+        # LISTA DE POSSÍVEIS NOMES PARA A ABA
+        # O código vai tentar todos estes até um funcionar
+        tentativas = [
+            data_sel.strftime("%d-%m"),       # 06-03
+            data_sel.strftime("%-d-%-m"),     # 6-3
+            data_sel.strftime("%d/%m"),       # 06/03
+            f"{data_sel.day}-{data_sel.month}",# 6-3 (manual)
+            "0" + data_sel.strftime("%d-%m") if data_sel.day < 10 else data_sel.strftime("%d-%m")
+        ]
+        
+        df_dia = None
+        aba_encontrada = ""
+        
+        for nome in tentativas:
+            df_dia = load_data(nome)
+            if df_dia is not None:
+                aba_encontrada = nome
+                break
 
         if df_dia is not None:
-            st.success(f"✅ Escala encontrada para {nome_aba}")
+            st.success(f"✅ Escala carregada (Aba: {aba_encontrada})")
             
-            # Mapeamento flexível das colunas para garantir visualização
+            # Mapear colunas para ID, Serviço e Horário
             mapa = {}
             for col in df_dia.columns:
                 if 'id' in col: mapa[col] = 'ID'
                 elif 'serv' in col: mapa[col] = 'Serviço'
                 elif 'hor' in col: mapa[col] = 'Horário'
             
-            df_exibir = df_dia.rename(columns=mapa)
+            df_final = df_dia.rename(columns=mapa)
             
-            # Mostrar o serviço do utilizador logado
+            # Destacar o serviço do próprio utilizador
             meu_id = st.session_state['user_id']
-            # Procura o ID em qualquer coluna que contenha 'ID'
-            meu_serv = df_exibir[df_exibir['ID'].astype(str).str.contains(meu_id, na=False)]
+            meu_serv = df_final[df_final['ID'].astype(str).str.contains(meu_id, na=False)]
             
             if not meu_serv.empty:
                 st.info(f"🚩 **O TEU SERVIÇO:** {meu_serv.iloc[0]['Serviço']} | {meu_serv.iloc[0]['Horário']}")
-            
+
             st.divider()
-            st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+            
+            # Mostrar por blocos organizados
+            def bloco(titulo, palavras):
+                padrao = '|'.join(palavras).lower()
+                temp = df_final[df_final['Serviço'].str.lower().str.contains(padrao, na=False)]
+                if not temp.empty:
+                    st.subheader(f"🔹 {titulo}")
+                    st.dataframe(temp[['ID', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
+
+            bloco("Atendimento e Apoio", ["atendimento"])
+            bloco("Patrulhas e Ocorrências", ["patrulha", "po", "ocorrência"])
+            bloco("Outros Serviços", ["ronda", "secretaria", "remunerado"])
+            bloco("Ausências", ["folga", "férias", "licença", "doente"])
             
         else:
-            st.error(f"❌ Não encontrei a aba '{nome_aba}'")
-            
-            # --- BLOCO DE DIAGNÓSTICO ---
-            with st.expander("🔍 Clique aqui para Diagnóstico Técnico"):
-                st.write("A App está a tentar ler o ficheiro, mas a aba não responde.")
-                st.write("1. Verifique se a folha está PARTILHADA com o email da Service Account como EDITOR.")
-                st.write("2. Verifique se não existem linhas vazias ACIMA dos cabeçalhos ID, Serviço, Horário.")
-                
-                if st.button("Tentar ler aba 'utilizadores' para testar conexão"):
-                    teste = load_data("utilizadores")
-                    if teste is not None:
-                        st.write("Conexão OK! Consigo ler a aba 'utilizadores'.")
-                        st.write("Abas disponíveis na folha (Cabeçalhos lidos):", teste.columns.tolist())
-                    else:
-                        st.write("Erro: Não consigo ler nem a aba 'utilizadores'. Verifique as permissões.")
+            st.error(f"❌ Não foi possível encontrar a aba para o dia {data_sel.strftime('%d-%m')}")
+            st.info("💡 Dica: No Google Sheets, clique na aba com o botão direito, selecione 'Mudar nome' e coloque um apóstrofo antes: **'06-03**. Isso força o Google a tratar como texto.")
 
     if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
         st.rerun()
 
-# CONTROLO
+# 5. CONTROLO
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
-    
