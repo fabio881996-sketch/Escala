@@ -1,89 +1,62 @@
 import streamlit as st
-import gspread
-from google.oauth2.service_account import Credentials
+from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# Configuração da Página
-st.set_page_config(page_title="GNR - Gestão de Escalas", layout="wide")
+st.set_page_config(page_title="GNR Escalas", layout="wide")
 
-# --- LIGAÇÃO DIRETA AO GOOGLE (via gspread) ---
-def get_gspread_client():
-    # Usa os mesmos Secrets que já tens no Streamlit
-    scope = ["https://www.googleapis.com/auth/spreadsheets"]
-    
-    # Criar credenciais a partir do dicionário nos secrets
-    creds_dict = st.secrets["connections"]["gsheets"]
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    return gspread.authorize(creds)
-
-# URL da tua Google Sheet (Copia o link completo da barra de endereços do browser)
-# EX: https://docs.google.com/spreadsheets/d/ID_DA_TUA_SHEET/edit
-URL_SHEET = st.secrets["connections"]["gsheets"]["spreadsheet"] 
+# 1. Ligação (Simples)
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
 
-# --- LOGIN ---
+# --- BLOCO 1: LOGIN ---
 if not st.session_state["logado"]:
     st.title("🔑 Login GNR")
     with st.form("login"):
-        u = st.text_input("Email").strip().lower()
+        u = st.text_input("Email").lower().strip()
         p = st.text_input("Password", type="password")
         if st.form_submit_button("Entrar"):
-            try:
-                client = get_gspread_client()
-                sheet = client.open_by_url(URL_SHEET)
-                # Forçamos a leitura da primeira aba (index 0) para o login
-                aba_users = sheet.get_worksheet(0)
-                df_u = pd.DataFrame(aba_users.get_all_records())
-                
-                df_u.columns = [str(c).strip().lower() for c in df_u.columns]
-                user = df_u[(df_u['email'].astype(str).str.lower() == u) & (df_u['password'].astype(str) == p)]
-                
-                if not user.empty:
-                    st.session_state["logado"] = True
-                    st.session_state["nome"] = user.iloc[0]['nome']
-                    st.rerun()
-                else:
-                    st.error("Dados incorretos.")
-            except Exception as e:
-                st.error("Erro ao conectar à Google Sheet. Verifique as permissões.")
-                st.code(e)
+            # Lemos a primeira aba (Utilizadores)
+            df_u = conn.read(ttl=0)
+            df_u.columns = [str(c).strip().lower() for c in df_u.columns]
+            user = df_u[(df_u['email'] == u) & (df_u['password'].astype(str) == p)]
+            if not user.empty:
+                st.session_state["logado"] = True
+                st.session_state["nome"] = user.iloc[0]['nome']
+                st.rerun()
+            else:
+                st.error("Credenciais Erradas")
 
-# --- ÁREA DA ESCALA ---
+# --- BLOCO 2: ESCALA (SÓ APARECE APÓS LOGIN) ---
 else:
     st.sidebar.write(f"Militar: {st.session_state['nome']}")
     if st.sidebar.button("Sair"):
         st.session_state["logado"] = False
         st.rerun()
 
-    st.title("📅 Consulta de Escala Diária")
+    st.title("📅 Escala de Serviço")
     
-    # Seleção de data
-    data_sel = st.date_input("Escolha o dia", value=datetime.now())
-    nome_aba = data_sel.strftime("%d-%m") # Ex: 06-03
-
-    if st.button(f"Carregar Escala ({nome_aba})"):
-        try:
-            client = get_gspread_client()
-            sheet = client.open_by_url(URL_SHEET)
-            
-            # COMANDO DIRETO: Busca a aba pelo nome exato
-            aba_escala = sheet.worksheet(nome_aba)
-            dados = aba_escala.get_all_records()
-            
-            if dados:
-                df = pd.DataFrame(dados)
-                st.success(f"Aba '{nome_aba}' carregada com sucesso!")
-                st.dataframe(df, use_container_width=True, hide_index=True)
-            else:
-                st.warning("A aba foi encontrada mas parece não ter dados formatados em tabela.")
-                
-        except gspread.exceptions.WorksheetNotFound:
-            st.error(f"A aba '{nome_aba}' não existe na sua Google Sheet.")
-            st.info("Dica: Certifique-se que a aba se chama exatamente 06-03 (exemplo).")
-        except Exception as e:
-            st.error("Ocorreu um erro ao ler os dados.")
-            st.code(e)
+    # Criamos o nome da aba (ex: 06-03)
+    data_hoje = datetime.now().strftime("%d-%m")
+    
+    # IMPORTANTE: Usamos o parâmetro 'worksheet' diretamente no read
+    # Se a aba 06-03 não existir, ele vai dar erro aqui
+    try:
+        # Forçamos a leitura da aba específica
+        df_escala = conn.read(worksheet=data_hoje, ttl=0)
+        
+        if df_escala is not None:
+            st.subheader(f"Serviço para o dia {data_hoje}")
+            st.dataframe(df_escala, use_container_width=True, hide_index=True)
+        
+    except Exception as e:
+        st.error(f"Erro: Não encontrei a aba '{data_hoje}'")
+        st.info("Verifique se na sua Google Sheet a aba tem exatamente o nome do dia (ex: 06-03).")
+        # Se quiser testar outra aba manualmente:
+        aba_manual = st.text_input("Ou digite o nome da aba manualmente:", value=data_hoje)
+        if st.button("Tentar Carregar Aba Manual"):
+            df_manual = conn.read(worksheet=aba_manual, ttl=0)
+            st.dataframe(df_manual)
             
