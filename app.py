@@ -23,7 +23,7 @@ def login():
     st.markdown("<p style='text-align: center;'>Escala de Serviço - 50 Elementos</p>", unsafe_allow_html=True)
     
     with st.form("login_form"):
-        email = st.text_input("Email (ex: nome@gnr.pt)").strip().lower()
+        email = st.text_input("Email (institucional ex: ...@gnr.pt)").strip().lower()
         password = st.text_input("Password", type="password")
         submit = st.form_submit_button("Entrar")
 
