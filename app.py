@@ -80,16 +80,18 @@ def main_app():
             mostrar_bloco("Apoio ao Atendimento", ["Apoio Atendimento"], ordenar_hora=True, busca_exata=True)
             
             # Operacional
-            mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True)
+            mostrar_bloco("Patrulha Ocorrências", ["PO"], ordenar_hora=True)
             mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
             mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
             
             # Administrativo e Ausências
-            mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquérito", "Diligência", "Tribunal"])
+            mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquérito"])
+            mostrar_bloco("Tribunal", ["Tribunal"])
             mostrar_bloco("Folgas", ["Folga"])
             mostrar_bloco("Férias e Licenças", ["Férias", "Licença"])
             mostrar_bloco("Saúde", ["Doente"])
+            mostrar_bloco("Diligência", ["Diligência"])
             
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
