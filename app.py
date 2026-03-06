@@ -67,8 +67,8 @@ def main_app():
         if not meu_servico.empty:
             st.success(f"*O teu serviço para dia {nome_aba}:*")
             col1, col2 = st.columns(2)
-            col1.metric("Turno", meu_servico.iloc[0]['turno'])
-            col2.metric("Local", meu_servico.iloc[0]['local'])
+            col1.metric("serviço", meu_servico.iloc[0]['turno'])
+            col2.metric("horário", meu_servico.iloc[0]['local'])
         else:
             st.warning("Não tens serviço atribuído nesta data.")
 
@@ -76,7 +76,7 @@ def main_app():
         st.subheader(f"Equipa completa em {nome_aba}")
         # Ordenar por turno para ficar organizado
         resultado = resultado.sort_values(by='turno')
-        st.dataframe(resultado[['nome', 'turno', 'local']], use_container_width=True, hide_index=True)
+        st.dataframe(resultado[['nome', 'serviço', 'horário']], use_container_width=True, hide_index=True)
 
     else:
         st.error(f"⚠️ A escala para o dia {nome_aba} ainda não foi carregada no sistema.")
