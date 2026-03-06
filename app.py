@@ -4,47 +4,34 @@ import pandas as pd
 from datetime import datetime
 
 # 1. CONFIGURAÇÃO DA PÁGINA
-st.set_page_config(page_title="Sistema GNR - Escalas", page_icon="🚓", layout="wide")
+st.set_page_config(page_title="Sistema GNR - Gestão", page_icon="🚓", layout="wide")
 
-# LOGIN DO ADMIN
-EMAIL_ADMIN = "ferreira.fr@gnr.pt"
-
-# 2. CONEXÃO COM GOOGLE SHEETS
+# 2. CONEXÃO
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Erro na configuração dos Secrets.")
+    st.error("Erro nos Secrets.")
     st.stop()
 
-# 3. FUNÇÃO PARA CARREGAR DADOS (COM ELIMINAÇÃO DE CACHE)
-def load_data(aba_nome, forcar=False):
+# 3. FUNÇÃO DE LEITURA ROBUSTA
+def load_data(aba_nome):
     try:
-        # Se forçar=True, o ttl=0 garante que ele vai buscar os dados frescos à Google
-        tempo_cache = 0 if forcar else 600 
-        df = conn.read(worksheet=aba_nome, ttl=tempo_cache)
-        
+        # ttl=0 força a leitura de dados novos sem cache
+        df = conn.read(worksheet=aba_nome, ttl=0)
         if df is not None:
-            # Normalizar cabeçalhos para evitar erros de acentos/espaços
+            # Limpa nomes de colunas (tira espaços, acentos e põe minúsculas)
             df.columns = [str(c).strip().lower()
                           .replace('ç', 'c').replace('í', 'i').replace('ó', 'o') 
-                          .replace('é', 'e').replace('ã', 'a')
+                          .replace('é', 'e').replace('ã', 'a').replace('ê', 'e')
                           for c in df.columns]
-            
-            # Mapeamento flexível
-            mapa = {}
-            for col in df.columns:
-                if 'id' in col: mapa[col] = 'id'
-                elif 'serv' in col: mapa[col] = 'servico'
-                elif 'hor' in col: mapa[col] = 'horario'
-            
-            return df.rename(columns=mapa)
+            return df
         return None
-    except Exception:
+    except:
         return None
 
-# 4. TELA DE LOGIN
+# 4. LOGIN
 def login():
-    st.markdown("<h1 style='text-align: center;'>🔑 Login GNR</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align: center;'>🚓 Acesso GNR</h1>", unsafe_allow_html=True)
     with st.form("login_form"):
         u_email = st.text_input("Email").strip().lower()
         u_pass = st.text_input("Password", type="password")
@@ -59,77 +46,67 @@ def login():
                     st.session_state["user_name"] = user.iloc[0]['nome']
                     st.session_state["user_email"] = u_email
                     st.rerun()
-                else: st.error("Credenciais inválidas.")
-            else: st.error("Erro ao ler aba 'utilizadores'. Verifique a Sheet.")
+                else: st.error("Email ou Password incorretos.")
+            else: st.error("Não detetei a aba 'utilizadores'. Verifique a Sheet.")
 
-# 5. APLICAÇÃO PRINCIPAL
+# 5. APP PRINCIPAL
 def main_app():
     st.sidebar.markdown(f"### 👤 {st.session_state['user_name']}")
     
-    # BOTÃO PARA LIMPAR CACHE (Se a escala não aparecer, clicar aqui)
-    if st.sidebar.button("🔄 Forçar Atualização"):
-        st.cache_data.clear()
-        st.rerun()
+    menu = st.sidebar.radio("Navegação", ["📅 Escala Diária", "🔄 Solicitar Troca", "🛡️ Painel Admin"])
 
-    menu_opcoes = ["📅 Escala Diária", "🔄 Solicitar Troca", "📋 Meus Pedidos"]
-    if st.session_state['user_email'] == EMAIL_ADMIN:
-        menu_opcoes.append("🛡️ Painel Admin")
-    
-    menu = st.sidebar.radio("Navegação", menu_opcoes)
-
-    # --- ESCALA DIÁRIA ---
     if menu == "📅 Escala Diária":
-        st.title("📅 Escala de Serviço Diária")
-        data_sel = st.date_input("Escolha o dia:", value=datetime.now(), format="DD/MM/YYYY")
-        
-        # Tenta os dois formatos comuns: "06-03" e "6-3"
-        aba_alvo = data_sel.strftime("%d-%m")
-        aba_alternativa = f"{data_sel.day}-{data_sel.month}"
-        
-        df_dia = load_data(aba_alvo)
-        if df_dia is None:
-            df_dia = load_data(aba_alternativa)
+        st.title("📅 Escala de Serviço")
+        data_sel = st.date_input("Data:", value=datetime.now())
+        nome_aba = data_sel.strftime("%d-%m") # Tenta "06-03"
+
+        df_dia = load_data(nome_aba)
 
         if df_dia is not None:
-            # Limpar espaços dentro das células
-            for col in ['id', 'servico', 'horario']:
-                if col in df_dia.columns:
-                    df_dia[col] = df_dia[col].fillna("---").astype(str).str.strip()
-
-            # Mostrar o teu serviço
+            st.success(f"✅ Escala encontrada para {nome_aba}")
+            
+            # Mapeamento flexível das colunas para garantir visualização
+            mapa = {}
+            for col in df_dia.columns:
+                if 'id' in col: mapa[col] = 'ID'
+                elif 'serv' in col: mapa[col] = 'Serviço'
+                elif 'hor' in col: mapa[col] = 'Horário'
+            
+            df_exibir = df_dia.rename(columns=mapa)
+            
+            # Mostrar o serviço do utilizador logado
             meu_id = st.session_state['user_id']
-            meu_serv = df_dia[df_dia['id'].str.contains(meu_id, na=False)]
+            # Procura o ID em qualquer coluna que contenha 'ID'
+            meu_serv = df_exibir[df_exibir['ID'].astype(str).str.contains(meu_id, na=False)]
+            
             if not meu_serv.empty:
-                st.success(f"📌 **O TEU SERVIÇO:** {meu_serv.iloc[0]['servico']} | {meu_serv.iloc[0]['horario']}")
-
+                st.info(f"🚩 **O TEU SERVIÇO:** {meu_serv.iloc[0]['Serviço']} | {meu_serv.iloc[0]['Horário']}")
+            
             st.divider()
-
-            # Lógica de Blocos
-            def mostrar_bloco(titulo, termos):
-                padrao = '|'.join(termos).lower()
-                temp = df_dia[df_dia['servico'].str.lower().str.contains(padrao, na=False)]
-                if not temp.empty:
-                    st.subheader(f"🔹 {titulo}")
-                    agrupado = temp.groupby(['servico', 'horario'])['id'].apply(lambda x: ', '.join(x)).reset_index()
-                    st.dataframe(agrupado[['id', 'servico', 'horario']], use_container_width=True, hide_index=True)
-
-            mostrar_bloco("Atendimento / Apoio", ["atendimento"])
-            mostrar_bloco("Patrulhas / PO", ["patrulha", "po"])
-            mostrar_bloco("Administrativo / Outros", ["secretaria", "pronto", "ronda", "remunerado"])
-            mostrar_bloco("Folgas e Ausências", ["folga", "ferias", "licenca", "doente"])
+            st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+            
         else:
-            st.warning(f"⚠️ Aba '{aba_alvo}' não encontrada.")
-            st.info("Verifique se o nome da aba na Google Sheet é exatamente **06-03**.")
-
-    # --- RESTO DO CÓDIGO (TROCAS E ADMIN) ---
-    elif menu == "🔄 Solicitar Troca":
-        st.info("Funcionalidade de troca ativa. Grave os dados na aba 'trocas'.")
-        # (O código de gravação de trocas que já tínhamos)
+            st.error(f"❌ Não encontrei a aba '{nome_aba}'")
+            
+            # --- BLOCO DE DIAGNÓSTICO ---
+            with st.expander("🔍 Clique aqui para Diagnóstico Técnico"):
+                st.write("A App está a tentar ler o ficheiro, mas a aba não responde.")
+                st.write("1. Verifique se a folha está PARTILHADA com o email da Service Account como EDITOR.")
+                st.write("2. Verifique se não existem linhas vazias ACIMA dos cabeçalhos ID, Serviço, Horário.")
+                
+                if st.button("Tentar ler aba 'utilizadores' para testar conexão"):
+                    teste = load_data("utilizadores")
+                    if teste is not None:
+                        st.write("Conexão OK! Consigo ler a aba 'utilizadores'.")
+                        st.write("Abas disponíveis na folha (Cabeçalhos lidos):", teste.columns.tolist())
+                    else:
+                        st.write("Erro: Não consigo ler nem a aba 'utilizadores'. Verifique as permissões.")
 
     if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
         st.rerun()
 
+# CONTROLO
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
