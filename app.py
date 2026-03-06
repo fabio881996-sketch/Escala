@@ -62,22 +62,22 @@ def main_app():
 
             # --- ORGANIZAÇÃO DA ESCALA GERAL ---
 
-            # 1. ATENDIMENTO
+            # ATENDIMENTO
             mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True)
             mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True)
             
-            # 2. OPERACIONAL SEPARADO (Como solicitado)
-            mostrar_bloco("PO (Posto Móvel / Outros)", ["PO"], ordenar_hora=True)
+            # OPERACIONAL SEPARADO (Termo PO alterado para Patrulha Ocorrências)
+            mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True)
             mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True)
             mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
             
-            # 3. REMUNERADOS
+            # REMUNERADOS
             mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
             
-            # 4. ADMINISTRATIVO E APOIO
+            # ADMINISTRATIVO E APOIO
             mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquéritos", "Diligência", "Tribunal"])
             
-            # 5. FOLGAS E AUSÊNCIAS
+            # FOLGAS E AUSÊNCIAS
             mostrar_bloco("Folgas", ["Folga Semanal", "Folga Complementar"])
             mostrar_bloco("Férias e Licenças", ["Férias", "Outras Licenças"])
             mostrar_bloco("Saúde", ["Doentes"])
@@ -92,7 +92,6 @@ def main_app():
         df_dia_t = load_sheet(nome_aba_t)
 
         if df_dia_t is not None:
-            # Lista de serviços que NÃO permitem troca
             indisponivel = ["folga semanal", "folga complementar", "férias", "outras licenças", "doentes", "diligência", "tribunal", "inquéritos", "secretaria", "pronto"]
             
             meu_df = df_dia_t[df_dia_t['id'].astype(str) == st.session_state['user_id']]
@@ -100,7 +99,7 @@ def main_app():
             if not meu_df.empty and meu_df.iloc[0]['serviço'].lower() not in indisponivel:
                 meu_s, meu_h = meu_df.iloc[0]['serviço'], meu_df.iloc[0]['horário']
                 
-                # Colegas que PODEM trocar (Atendimento, Apoio, PO, Patrulha, Ronda, Remunerado)
+                # Colegas que PODEM trocar (Incluindo Patrulha Ocorrências)
                 df_colegas = df_dia_t[
                     (df_dia_t['id'].astype(str) != st.session_state['user_id']) & 
                     (~df_dia_t['serviço'].str.lower().isin(indisponivel))
@@ -128,4 +127,3 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
-    
