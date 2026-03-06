@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-st.set_page_config(page_title="Sistema de Escalas GNR", page_icon="🚓", layout="centered")
+st.set_page_config(page_title="Sistema de Escalas GNR", page_icon="🚓", layout="wide")
 
 def load_sheet(aba_nome):
     try:
@@ -35,89 +35,88 @@ def login():
 def main_app():
     st.sidebar.markdown(f"### 👤 {st.session_state['user_name']}")
     st.sidebar.info(f"ID: {st.session_state['user_id']}")
-    
     menu = st.sidebar.radio("Navegação", ["📅 Escala Diária", "🔄 Solicitar Troca"])
 
-    # --- OPÇÃO 1: ESCALA DIÁRIA ---
     if menu == "📅 Escala Diária":
-        st.title("📅 Escala Diária")
+        st.title("📅 Escala de Serviço Diária")
         data_sel = st.date_input("Consultar dia:", format="DD/MM/YYYY")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
 
         if df_dia is not None:
-            meu_servico = df_dia[df_dia['id'].astype(str) == st.session_state['user_id']]
-            if not meu_servico.empty:
-                st.success(f"📌 *O TEU SERVIÇO:* {meu_servico.iloc[0]['serviço']} | {meu_servico.iloc[0]['horário']}")
+            # 1. O MEU SERVIÇO (Destaque)
+            meu_df = df_dia[df_dia['id'].astype(str) == st.session_state['user_id']]
+            if not meu_df.empty:
+                st.success(f"📌 *O TEU SERVIÇO:* {meu_df.iloc[0]['serviço']} | {meu_df.iloc[0]['horário']}")
+
+            st.divider()
             
-            st.subheader(f"👥 Equipa em Serviço - {nome_aba}")
-            # Mostra apenas ID, Serviço e Horário para todos
-            st.dataframe(df_dia[['id', 'serviço', 'horário']].sort_values(by='horário'), use_container_width=True, hide_index=True)
+            # --- FUNÇÃO PARA MOSTRAR BLOCOS ---
+            def mostrar_bloco(titulo, lista_servicos, ordenar_hora=False):
+                # Filtra os serviços que pertencem a este bloco (case-insensitive)
+                temp_df = df_dia[df_dia['serviço'].str.lower().isin([s.lower() for s in lista_servicos])]
+                if not temp_df.empty:
+                    st.subheader(f"🔹 {titulo}")
+                    if ordenar_hora:
+                        temp_df = temp_df.sort_values(by='horário')
+                    st.dataframe(temp_df[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+
+            # --- ORGANIZAÇÃO POR CATEGORIAS ---
+            
+            # BLOCO 1: Operacional / Atendimento (Ordenado por Horário)
+            mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True)
+            mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True)
+            mostrar_bloco("PO / Patrulha / Ronda", ["PO", "Patrulha", "Ronda"], ordenar_hora=True)
+            mostrar_bloco("Remunerado", ["Remunerado"], ordenar_hora=True)
+            
+            # BLOCO 2: Administrativo e Outros
+            mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquéritos", "Diligência", "Tribunal"])
+            
+            # BLOCO 3: Ausências e Licenças
+            mostrar_bloco("Folgas", ["Folga Semanal", "Folga Complementar"])
+            mostrar_bloco("Férias e Licenças", ["Férias", "Outras Licenças"])
+            mostrar_bloco("Saúde", ["Doentes"])
+
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
-    # --- OPÇÃO 2: SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Troca de Serviço")
-        
-        data_t = st.date_input("Data do serviço a trocar", format="DD/MM/YYYY")
+        data_t = st.date_input("Data do serviço", format="DD/MM/YYYY")
         nome_aba_t = data_t.strftime("%d-%m")
         df_dia_t = load_sheet(nome_aba_t)
 
         if df_dia_t is not None:
-            # Palavras que indicam que o utilizador NÃO pode trocar serviço
-            indisponivel = ["folga", "férias", "ferias", "pronto", "inquéritos", "inqueritos", "secretaria"]
+            # Filtro de quem NÃO pode trocar (indisponíveis)
+            indisponivel = ["folga semanal", "folga complementar", "férias", "outras licenças", "doentes", "diligência", "tribunal", "inquéritos", "secretaria", "pronto"]
             
-            # 1. Verificar o meu próprio serviço
             meu_df = df_dia_t[df_dia_t['id'].astype(str) == st.session_state['user_id']]
             
-            if meu_df.empty:
-                st.warning("Não constas na escala deste dia.")
-            elif meu_df.iloc[0]['serviço'].lower() in indisponivel:
-                st.error(f"Estás de '{meu_df.iloc[0]['serviço']}'. Não podes solicitar trocas nesta condição.")
-            else:
-                meu_s = meu_df.iloc[0]['serviço']
-                meu_h = meu_df.iloc[0]['horário']
-                st.info(f"*O teu serviço:* {meu_s} ({meu_h})")
-
-                # 2. Filtrar APENAS colegas com quem é POSSÍVEL trocar
+            if not meu_df.empty and meu_df.iloc[0]['serviço'].lower() not in indisponivel:
+                meu_s, meu_h = meu_df.iloc[0]['serviço'], meu_df.iloc[0]['horário']
+                
+                # Colegas disponíveis (apenas Atendimento, Patrulha, PO, Remunerado)
                 df_colegas = df_dia_t[
                     (df_dia_t['id'].astype(str) != st.session_state['user_id']) & 
                     (~df_dia_t['serviço'].str.lower().isin(indisponivel))
                 ].copy()
 
                 if not df_colegas.empty:
-                    # Criar a etiqueta de seleção: "ID - SERVIÇO (HORÁRIO)"
                     df_colegas['display'] = df_colegas['id'].astype(str) + " - " + df_colegas['serviço'] + " (" + df_colegas['horário'] + ")"
-                    
                     with st.form("form_troca"):
-                        selecionado = st.selectbox("Escolha o colega para trocar serviço:", df_colegas['display'].tolist())
-                        
-                        # Recuperar dados do colega escolhido para o relatório final
-                        id_escolhido = selecionado.split(" - ")[0]
-                        dados_c = df_colegas[df_colegas['id'].astype(str) == id_escolhido].iloc[0]
-                        
-                        motivo = st.text_area("Indique o motivo da troca:")
-                        
-                        if st.form_submit_button("Gerar Mensagem de Troca"):
-                            texto_final = (
-                                f"📝 PEDIDO DE TROCA DE SERVIÇO\n"
-                                f"📅 DATA: {nome_aba_t}\n\n"
-                                f"✅ REQUERENTE (Sair):\n"
-                                f"ID {st.session_state['user_id']} -> {meu_s} ({meu_h})\n\n"
-                                f"🔄 SUBSTITUTO (Entrar):\n"
-                                f"ID {id_escolhido} -> {dados_c['serviço']} ({dados_c['horário']})\n\n"
-                                f"💭 MOTIVO: {motivo}"
-                            )
-                            st.subheader("Pedido Gerado:")
-                            st.code(texto_final)
-                            st.success("Copia o texto acima e envia para validação.")
+                        selecao = st.selectbox("Trocar com:", df_colegas['display'].tolist())
+                        motivo = st.text_area("Motivo:")
+                        if st.form_submit_button("Gerar Pedido"):
+                            id_c = selecao.split(" - ")[0]
+                            c_info = df_colegas[df_colegas['id'].astype(str) == id_c].iloc[0]
+                            msg = f"PEDIDO DE TROCA ({nome_aba_t}):\nSair: ID {st.session_state['user_id']} ({meu_s})\nEntrar: ID {id_c} ({c_info['serviço']})\nMotivo: {motivo}"
+                            st.code(msg)
                 else:
-                    st.warning("Não existem outros elementos no terreno disponíveis para troca neste dia.")
-        else:
-            st.error(f"A escala para {nome_aba_t} ainda não existe.")
+                    st.warning("Sem colegas operacionais disponíveis para troca.")
+            else:
+                st.error("Não podes solicitar trocas nesta condição ou data.")
 
-    if st.sidebar.button("Terminar Sessão"):
+    if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
         st.rerun()
 
