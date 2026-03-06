@@ -4,21 +4,17 @@ import pandas as pd
 from datetime import datetime
 
 # 1. CONFIGURAÇÃO
-st.set_page_config(page_title="GNR - Sistema de Escalas", layout="wide")
+st.set_page_config(page_title="GNR - Sistema de Gestão", layout="wide")
 
 # 2. CONEXÃO
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data(aba_nome):
     try:
-        # ttl=0 para garantir dados frescos
+        # ttl=0 garante que não usamos lixo da memória (cache)
         df = conn.read(worksheet=aba_nome, ttl=0)
         if df is not None:
-            # Normalizar cabeçalhos (remover espaços e acentos)
-            df.columns = [str(c).strip().lower()
-                          .replace('ç', 'c').replace('í', 'i').replace('ó', 'o') 
-                          .replace('é', 'e').replace('ã', 'a').replace('ê', 'e')
-                          for c in df.columns]
+            df.columns = [str(c).strip().lower() for c in df.columns]
             return df
         return None
     except:
@@ -40,59 +36,54 @@ def login():
                     st.session_state["user_id"] = str(user.iloc[0]['id']).strip()
                     st.session_state["user_name"] = user.iloc[0]['nome']
                     st.rerun()
-                else: st.error("Email ou Password incorretos.")
-            else: st.error("Erro: Aba 'utilizadores' não encontrada.")
+                else: st.error("Credenciais incorretas.")
+            else: st.error("Erro: Não consigo ler a aba 'utilizadores'. Verifique a partilha da folha.")
 
 # 4. APP PRINCIPAL
 def main_app():
     st.sidebar.write(f"👤 {st.session_state['user_name']}")
-    menu = st.sidebar.radio("Menu", ["📅 Escala", "🔄 Trocas", "🛡️ Admin"])
+    menu = st.sidebar.radio("Navegação", ["📅 Escala Diária", "🔄 Trocas", "🛡️ Admin"])
 
-    if menu == "📅 Escala":
-        st.title("📅 Escala Diária")
-        data_sel = st.date_input("Selecione o dia", value=datetime.now())
+    if menu == "📅 Escala Diária":
+        st.title("📅 Escala de Serviço")
+        data_sel = st.date_input("Escolha o dia", value=datetime.now())
         
-        # LISTA DE POSSÍVEIS NOMES PARA A ABA
-        # O código vai tentar todos estes até um funcionar
-        tentativas = [
-            data_sel.strftime("%d-%m"),       # 06-03
-            data_sel.strftime("%-d-%-m"),     # 6-3
-            data_sel.strftime("%d/%m"),       # 06/03
-            f"{data_sel.day}-{data_sel.month}",# 6-3 (manual)
-            "0" + data_sel.strftime("%d-%m") if data_sel.day < 10 else data_sel.strftime("%d-%m")
-        ]
+        # O código vai tentar encontrar a aba, não importa como se chame
+        dia = data_sel.strftime("%d")
+        mes = data_sel.strftime("%m")
+        
+        # Tenta formatos: "06-03", "6-3", "06/03", "6/3"
+        possibilidades = [f"{dia}-{mes}", f"{int(dia)}-{int(mes)}", f"{dia}/{mes}", f"{int(dia)}/{int(mes)}"]
         
         df_dia = None
-        aba_encontrada = ""
+        aba_final = ""
         
-        for nome in tentativas:
-            df_dia = load_data(nome)
+        for p in possibilidades:
+            df_dia = load_data(p)
             if df_dia is not None:
-                aba_encontrada = nome
+                aba_final = p
                 break
 
         if df_dia is not None:
-            st.success(f"✅ Escala carregada (Aba: {aba_encontrada})")
+            st.success(f"✅ Escala carregada com sucesso (Aba: {aba_final})")
             
-            # Mapear colunas para ID, Serviço e Horário
+            # Limpeza técnica de colunas
             mapa = {}
             for col in df_dia.columns:
                 if 'id' in col: mapa[col] = 'ID'
                 elif 'serv' in col: mapa[col] = 'Serviço'
                 elif 'hor' in col: mapa[col] = 'Horário'
-            
             df_final = df_dia.rename(columns=mapa)
-            
-            # Destacar o serviço do próprio utilizador
+
+            # Mostrar o serviço do utilizador logado
             meu_id = st.session_state['user_id']
             meu_serv = df_final[df_final['ID'].astype(str).str.contains(meu_id, na=False)]
-            
             if not meu_serv.empty:
                 st.info(f"🚩 **O TEU SERVIÇO:** {meu_serv.iloc[0]['Serviço']} | {meu_serv.iloc[0]['Horário']}")
 
             st.divider()
             
-            # Mostrar por blocos organizados
+            # Organização por Blocos
             def bloco(titulo, palavras):
                 padrao = '|'.join(palavras).lower()
                 temp = df_final[df_final['Serviço'].str.lower().str.contains(padrao, na=False)]
@@ -100,20 +91,21 @@ def main_app():
                     st.subheader(f"🔹 {titulo}")
                     st.dataframe(temp[['ID', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
 
-            bloco("Atendimento e Apoio", ["atendimento"])
-            bloco("Patrulhas e Ocorrências", ["patrulha", "po", "ocorrência"])
-            bloco("Outros Serviços", ["ronda", "secretaria", "remunerado"])
+            bloco("Atendimento", ["atendimento"])
+            bloco("Patrulhas e PO", ["patrulha", "po"])
+            bloco("Outros", ["ronda", "secretaria", "pronto", "remunerado"])
             bloco("Ausências", ["folga", "férias", "licença", "doente"])
             
         else:
-            st.error(f"❌ Não foi possível encontrar a aba para o dia {data_sel.strftime('%d-%m')}")
-            st.info("💡 Dica: No Google Sheets, clique na aba com o botão direito, selecione 'Mudar nome' e coloque um apóstrofo antes: **'06-03**. Isso força o Google a tratar como texto.")
+            st.error(f"❌ Não encontrei a aba para o dia {dia}-{mes}")
+            st.warning("⚠️ Verificação Crítica: A primeira linha da aba '06-03' na Google Sheet TEM de ser os cabeçalhos (ID, Serviço, Horário).")
 
     if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
         st.rerun()
 
-# 5. CONTROLO
+# CONTROLO
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
+    
