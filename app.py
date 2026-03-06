@@ -80,7 +80,7 @@ def main_app():
             mostrar_bloco("Apoio ao Atendimento", ["Apoio Atendimento"], ordenar_hora=True, busca_exata=True)
             
             # Operacional
-            mostrar_bloco("Patrulha Ocorrências", ["PO"], ordenar_hora=True)
+            mostrar_bloco("Patrulha Ocorrências", ["PO"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
             mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
