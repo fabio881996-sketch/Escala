@@ -18,7 +18,7 @@ def login():
         u_pass = st.text_input("Password", type="password")
         if st.form_submit_button("Entrar"):
             try:
-                # O Erro 400 acontece aqui se o nome da aba estiver errado
+                # O Erro 400 acontece aqui se o nome da aba ou link estiverem errados
                 df = conn.read(worksheet="utilizadores", ttl=0)
                 df.columns = [str(c).strip().lower() for c in df.columns]
                 
@@ -34,7 +34,7 @@ def login():
                 else:
                     st.error("Credenciais incorretas.")
             except Exception as e:
-                st.error("🚨 Erro de Acesso: Verifique se a aba se chama 'utilizadores' e se partilhou a folha.")
+                st.error("🚨 Erro de Acesso: Verifique o nome da aba e a partilha da folha.")
                 st.expander("Detalhe Técnico").write(e)
 
 if "logged_in" not in st.session_state:
@@ -47,5 +47,5 @@ else:
     if st.sidebar.button("Sair"):
         st.session_state["logged_in"] = False
         st.rerun()
-    st.success("Conectado com sucesso!")
+    st.success("Conectado com sucesso! A ligação à base de dados está ativa.")
     
