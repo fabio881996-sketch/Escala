@@ -2,26 +2,30 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="GNR - Sistema", layout="wide")
+st.set_page_config(page_title="GNR - Sistema de Escalas", layout="wide")
 
-# Conectar
-conn = st.connection("gsheets", type=GSheetsConnection)
+# 1. CONEXÃO
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    st.error("Erro nos Secrets. Verifique a formatação.")
+    st.stop()
 
-def login():
-    st.title("🔑 Portal GNR")
+# 2. LOGIN
+if "logado" not in st.session_state:
+    st.session_state["logado"] = False
+
+if not st.session_state["logado"]:
+    st.title("🚓 Sistema GNR - Acesso")
     
-    # Botão de emergência para limpar cache se nada der
-    if st.button("Limpar Memória da App (Cache)"):
-        st.cache_data.clear()
-        st.rerun()
-
     with st.form("login_form"):
         u_email = st.text_input("Email").strip().lower()
         u_pass = st.text_input("Password", type="password")
         
         if st.form_submit_button("Entrar"):
             try:
-                # Tentamos ler SEM especificar a aba primeiro para ver se a ligação geral dá
+                # Tentamos ler a aba 'utilizadores'
+                # Se mudaste o nome na Google Sheet para 'dados', muda aqui para "dados"
                 df_u = conn.read(worksheet="utilizadores", ttl=0)
                 
                 if df_u is not None:
@@ -34,24 +38,29 @@ def login():
                         st.session_state["user_nome"] = user.iloc[0]['nome']
                         st.rerun()
                     else:
-                        st.error("Utilizador ou senha incorretos.")
+                        st.error("Credenciais incorretas.")
             except Exception as e:
-                st.error("🚨 Erro de Comunicação (400)")
-                st.info("Tente o seguinte na sua Google Sheet:")
-                st.markdown("""
-                1. **Mude o nome da aba** de `utilizadores` para `dados`.
-                2. **Mude o nome da aba** de `06-03` para `escala`.
-                3. Verifique se o email da conta de serviço é **Editor**.
-                """)
+                st.error("🚨 Erro 404/400: A App não encontra a Folha ou a Aba.")
+                st.info("Verifique se o ID no link dos Secrets está correto e se a aba se chama 'utilizadores'.")
                 st.code(str(e))
 
-if "logado" not in st.session_state:
-    st.session_state["logado"] = False
-
-if not st.session_state["logado"]:
-    login()
+# 3. APP PRINCIPAL
 else:
-    st.success(f"Bem-vindo, {st.session_state['user_nome']}")
-    if st.button("Sair"):
+    st.sidebar.success(f"Logado como: {st.session_state['user_nome']}")
+    st.title("📅 Escala de Serviço")
+    
+    # Seletor de data para o dia 06-03
+    data_sel = st.date_input("Consultar dia:", value=pd.to_datetime("2026-03-06"))
+    aba_dia = data_sel.strftime("%d-%m") # Formata como 06-03
+
+    if st.button(f"Ver Escala {aba_dia}"):
+        try:
+            df_escala = conn.read(worksheet=aba_dia, ttl=0)
+            st.dataframe(df_escala, use_container_width=True)
+        except:
+            st.warning(f"Aba '{aba_dia}' não encontrada. Verifique o nome na Sheet.")
+
+    if st.sidebar.button("Sair"):
         st.session_state["logado"] = False
         st.rerun()
+        
