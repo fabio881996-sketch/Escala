@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 from datetime import datetime
 
@@ -10,30 +11,6 @@ def load_sheet(aba_nome):
         csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
         df = pd.read_csv(csv_url)
         df.columns = [c.strip().lower() for c in df.columns]
-        return df
-    except:
-        return None
-
-def login():
-    st.markdown("<h1 style='text-align: center;'>🔑 Acesso à Escala</h1>", unsafe_allow_html=True)
-    with st.form("login_form"):
-        email_i = st.text_input("Email").strip().lower()
-        pass_i = st.text_input("Password", type="password")
-        if st.f…
-[20:55, 06/03/2026] Fábio Ferreira: import streamlit as st
-import pandas as pd
-from datetime import datetime
-
-st.set_page_config(page_title="Sistema de Escalas GNR", page_icon="🚓", layout="wide")
-
-def load_sheet(aba_nome):
-    try:
-        url = st.secrets["gsheet_url"]
-        base_url = url.split('/edit')[0]
-        csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
-        df = pd.read_csv(csv_url)
-        df.columns = [c.strip().lower() for c in df.columns]
-        # Garantir que o ID é sempre string para a concatenação
         df['id'] = df['id'].astype(str)
         return df
     except:
@@ -68,34 +45,22 @@ def main_app():
         df_dia = load_sheet(nome_aba)
 
         if df_dia is not None:
-            # Destaque individual (procura o ID antes de agrupar)
             meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
             if not meu_df.empty:
-                st.success(f"📌 *O TEU SERVIÇO:* {meu_df.iloc[0]['serviço']} | {meu_df.iloc[0]['horário']}")
+                st.success(f"📌 **O TEU SERVIÇO:** {meu_df.iloc[0]['serviço']} | {meu_df.iloc[0]['horário']}")
 
             st.divider()
             
-            # --- FUNÇÃO DE EXIBIÇÃO POR BLOCO COM AGRUPAMENTO ---
             def mostrar_bloco(titulo, lista_servicos, ordenar_hora=False):
-                # Filtra os serviços
                 temp_df = df_dia[df_dia['serviço'].str.lower().isin([s.lower() for s in lista_servicos])].copy()
-                
                 if not temp_df.empty:
                     st.subheader(f"🔹 {titulo}")
-                    
-                    # AGRUPAMENTO: Junta IDs com o mesmo serviço e horário
-                    # Exemplo: ID 101, 102 | Patrulha | 08:00-16:00
                     agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
-                    
-                    # Reorganizar colunas para ID aparecer primeiro
                     agrupado = agrupado[['id', 'serviço', 'horário']]
-                    
                     if ordenar_hora:
                         agrupado = agrupado.sort_values(by='horário')
-                    
                     st.dataframe(agrupado, use_container_width=True, hide_index=True)
 
-            # --- ORGANIZAÇÃO DA ESCALA ---
             mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True)
             mostrar_bloco("Apoio ao Atendimento", ["Apoio ao Atendimento"], ordenar_hora=True)
             mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True)
@@ -121,11 +86,7 @@ def main_app():
             
             if not meu_df.empty and meu_df.iloc[0]['serviço'].lower() not in indisponivel:
                 meu_s, meu_h = meu_df.iloc[0]['serviço'], meu_df.iloc[0]['horário']
-                
-                df_colegas = df_dia_t[
-                    (df_dia_t['id'] != st.session_state['user_id']) & 
-                    (~df_dia_t['serviço'].str.lower().isin(indisponivel))
-                ].copy()
+                df_colegas = df_dia_t[(df_dia_t['id'] != st.session_state['user_id']) & (~df_dia_t['serviço'].str.lower().isin(indisponivel))].copy()
 
                 if not df_colegas.empty:
                     df_colegas['display'] = df_colegas['id'] + " - " + df_colegas['serviço'] + " (" + df_colegas['horário'] + ")"
@@ -149,5 +110,4 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
-    
     
