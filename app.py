@@ -2,67 +2,71 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 
-st.set_page_config(page_title="GNR - Sistema de Gestão", layout="wide")
+# Configuração da Página
+st.set_page_config(page_title="GNR - Sistema de Escalas", layout="wide")
 
-# Inicializar conexão
+# Conectar
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Erro Crítico nos Secrets. Verifique a formatação TOML.")
+    st.error("Erro na ligação. Verifique os Secrets.")
     st.stop()
 
-# FUNÇÃO PARA LER DADOS
-def load_sheet(nome_aba):
+# Função para ler com tratamento de erro robusto
+def extrair_dados(nome_folha):
     try:
-        # ttl=0 obriga a ler dados frescos da Google
-        df = conn.read(worksheet=nome_aba, ttl=0)
-        return df
+        # Tentamos ler a aba. Se der erro 400, o problema é o nome.
+        return conn.read(worksheet=nome_folha, ttl=0)
     except Exception as e:
-        st.error(f"Não consegui ler a aba: {nome_aba}")
         return None
 
-# TELA DE LOGIN
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
+# LÓGICA DE LOGIN
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
 
-if not st.session_state["logged_in"]:
-    st.title("🔑 Login GNR")
-    with st.form("login_form"):
-        u_email = st.text_input("Email").strip().lower()
-        u_pass = st.text_input("Password", type="password")
+if not st.session_state["autenticado"]:
+    st.title("🔑 Portal GNR")
+    with st.form("login"):
+        user_input = st.text_input("Utilizador (Email)").strip().lower()
+        pass_input = st.text_input("Senha", type="password")
         
         if st.form_submit_button("Entrar"):
-            df_u = load_sheet("utilizadores")
+            # Tentativa de ler 'utilizadores'
+            df_u = extrair_dados("utilizadores")
+            
             if df_u is not None:
-                # Normalizar colunas para evitar erros de nomes
+                # Padronizar colunas (remover espaços e pôr em minúsculas)
                 df_u.columns = [str(c).strip().lower() for c in df_u.columns]
                 
-                # Procura o utilizador
-                user = df_u[(df_u['email'].astype(str).str.lower() == u_email) & 
-                            (df_u['password'].astype(str) == str(u_pass))]
+                # Verificar credenciais
+                check = df_u[(df_u['email'].astype(str).str.lower() == user_input) & 
+                             (df_u['password'].astype(str) == str(pass_input))]
                 
-                if not user.empty:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user_name"] = user.iloc[0]['nome']
+                if not check.empty:
+                    st.session_state["autenticado"] = True
+                    st.session_state["nome"] = check.iloc[0]['nome']
                     st.rerun()
                 else:
-                    st.error("Email ou Password incorretos.")
+                    st.error("Credenciais inválidas.")
             else:
-                st.warning("Dica: Verifique se a aba se chama exatamente 'utilizadores' na Google Sheet.")
+                st.error("❌ Erro 400: Não consegui aceder à aba 'utilizadores'.")
+                st.info("Verifique se a aba na Google Sheet não tem espaços no nome (ex: 'utilizadores ').")
 
-# APP PRINCIPAL (SÓ APARECE APÓS LOGIN)
+# APP APÓS LOGIN
 else:
-    st.sidebar.success(f"Utilizador: {st.session_state['user_name']}")
+    st.sidebar.success(f"Bem-vindo, {st.session_state['nome']}")
     st.title("📅 Escala de Serviço")
     
-    # Tenta ler a escala do dia 06-03
-    if st.button("Carregar Escala 06-03"):
-        df_escala = load_sheet("06-03")
+    # Botão para carregar o dia 06-03
+    if st.button("Ver Escala 06-03"):
+        df_escala = extrair_dados("06-03")
         if df_escala is not None:
-            st.success("Escala carregada!")
-            st.dataframe(df_escala, use_container_width=True)
+            st.success("Dados carregados!")
+            st.table(df_escala) # st.table é mais simples para testar leitura
+        else:
+            st.warning("Não foi possível carregar a aba '06-03'. Verifique o nome na Sheet.")
 
     if st.sidebar.button("Sair"):
-        st.session_state["logged_in"] = False
+        st.session_state["autenticado"] = False
         st.rerun()
         
