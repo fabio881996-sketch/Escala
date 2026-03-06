@@ -62,31 +62,31 @@ else:
         data_sel = st.date_input("Selecione o dia:", value=datetime.now())
         nome_aba = data_sel.strftime("escala_%d_%m")
         
-        st.info(f"A procurar na aba: **{nome_aba}**")
+        col1, col2 = st.columns(2)
+        with col1:
+            btn_carregar = st.button("🔍 Carregar Escala")
+        with col2:
+            btn_limpar = st.button("🧹 Limpar Cache (Se der erro)")
 
-        # Botão para carregar dados
-        if st.button(f"Carregar Escala"):
-            # Limpamos o cache apenas para esta operação para forçar leitura nova
-            st.cache_data.clear() 
-            
+        if btn_limpar:
+            st.cache_data.clear()
+            st.rerun()
+
+        if btn_carregar:
             try:
-                # Tenta ler a aba específica
-                df_escala = conn.read(worksheet=nome_aba, ttl=0)
+                # Tentativa de leitura direta
+                # Usamos um TTL muito baixo para evitar que o Streamlit use dados antigos
+                df_escala = conn.read(worksheet=nome_aba, ttl="1s")
                 
                 if df_escala is not None and not df_escala.empty:
                     st.success(f"Escala de {data_sel.strftime('%d/%m/%Y')} carregada!")
                     st.dataframe(df_escala, use_container_width=True, hide_index=True)
                 else:
-                    st.warning("A aba existe, mas parece estar vazia.")
+                    st.warning(f"A aba '{nome_aba}' foi encontrada mas está vazia.")
             except Exception as e:
-                st.error(f"Não foi possível carregar a aba '{nome_aba}'.")
-                st.markdown("""
-                **Verificações rápidas na Google Sheet:**
-                1. O nome da aba é exatamente `escala_06_03`? (Sem espaços extras)
-                2. Existem **células mescladas** (unidas)? Se sim, desfaça-as.
-                3. A folha tem filtros ativos? Desative-os.
-                """)
-                with st.expander("Detalhes do Erro"):
+                st.error(f"Erro ao ler a aba '{nome_aba}'")
+                st.info("Verifique se o nome na Google Sheet não tem espaços invisíveis no fim.")
+                with st.expander("Ver Erro Detalhado"):
                     st.code(e)
 
     with tab2:
@@ -98,6 +98,13 @@ else:
             
             if st.form_submit_button("Submeter Pedido"):
                 try:
+                    # Lê os pedidos existentes
+                    try:
+                        df_antigo = conn.read(worksheet="pedidos_troca", ttl=0)
+                    except:
+                        # Se a aba não existir, criamos um DataFrame vazio com colunas
+                        df_antigo = pd.DataFrame(columns=["data_pedido", "quem_pede", "com_quem", "dia_servico", "motivo", "estado"])
+
                     novo_registo = pd.DataFrame([{
                         "data_pedido": datetime.now().strftime("%d/%m/%Y %H:%M"),
                         "quem_pede": st.session_state["user_nome"],
@@ -107,15 +114,12 @@ else:
                         "estado": "PENDENTE"
                     }])
 
-                    # Lê a aba de pedidos
-                    df_antigo = conn.read(worksheet="pedidos_troca", ttl=0)
                     df_final = pd.concat([df_antigo, novo_registo], ignore_index=True)
                     
-                    # Atualiza a Sheet
                     conn.update(worksheet="pedidos_troca", data=df_final)
                     st.success("✅ Pedido enviado com sucesso!")
                     st.balloons()
                 except Exception as e:
-                    st.error("Erro ao gravar pedido na aba 'pedidos_troca'.")
+                    st.error("Erro ao gravar pedido. Verifique se a aba 'pedidos_troca' existe.")
                     st.code(e)
                     
