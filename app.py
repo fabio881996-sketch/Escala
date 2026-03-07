@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA FINAL APROVADA (SIDEBAR ANTRACITE / TEXTO BRANCO)
+# 2. CSS - ESTÉTICA FINAL APROVADA
 st.markdown("""
     <style>
     .stApp { background-color: #ECEFF1; }
@@ -141,44 +141,60 @@ def main_app():
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
-    # --- CONSULTA GERAL COM SEPARAÇÃO DE APOIO ---
+    # --- CONSULTA GERAL COM LÓGICA DE EXCLUSÃO ---
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
+        
         if df_dia is not None:
-            def mostrar_bloco(titulo, keywords):
+            # Criamos um "balde" de dados que vai sendo esvaziado
+            if 'df_restante' not in st.session_state or st.session_state.get('last_date') != nome_aba:
+                st.session_state['df_restante'] = df_dia.copy()
+                st.session_state['last_date'] = nome_aba
+
+            # Função interna para filtrar por exclusão
+            def filtrar_e_mostrar(titulo, keywords):
+                # Filtra apenas militares que ainda estão no "balde"
                 padrao = '|'.join(keywords).lower()
-                temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+                df_atual = st.session_state['df_restante']
+                
+                temp_df = df_atual[df_atual['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+                
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+                    
+                    # Remove militares encontrados para não repetirem nos próximos blocos
+                    st.session_state['df_restante'] = df_atual[~df_atual['id'].isin(temp_df['id'])]
+
+            # Resetar o balde antes de começar a mostrar os blocos
+            st.session_state['df_restante'] = df_dia.copy()
+
+            # --- ORDEM DE PRIORIDADE ---
+            # 1. Apoio primeiro (importante ser antes de Atendimento)
+            filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
             
-            # --- SEPARAÇÃO DOS BLOCOS SOLICITADA ---
-            # 1. Atendimento 
-            mostrar_bloco("Atendimento", ["atendimento"])
-            
-            # 2. Apoio ao Atendimento
-            mostrar_bloco("Apoio ao Atendimento", ["apoio"])
+            # 2. Atendimento
+            filtrar_e_mostrar("Atendimento", ["atendimento"])
 
             # 3. Patrulhas
-            mostrar_bloco("Patrulhas", ["po", "patrulha", "ronda"])
+            filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda"])
             
-            # 4. Renumerados
-            mostrar_bloco("Renumerados", ["renumerado"])
+            # 4. Remunerados
+            filtrar_e_mostrar("Remunerados", ["remunerado", "gratificado"])
             
-            # 5. Outros Serviços
-            mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina"])
-            
-            # 6. Folga
-            mostrar_bloco("Folga", ["folga semanal", "folga complementar"])
+            # 5. Folgas
+            filtrar_e_mostrar("Folga", ["folga"])
 
-            # 7. Ausentes
-            mostrar_bloco("Ausentes", [ "férias", "licença", "doente", "diligência"])
+            # 6. Ausentes
+            filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência"])
 
-            
+            # 7. Administrativo e Outros (O que sobrar)
+            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
+
         else:
             st.error("Dia não disponível.")
 
@@ -209,3 +225,4 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
+    
