@@ -10,84 +10,75 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS CUSTOMIZADO - SIDEBAR CLARA E TEXTO ESCURO
+# 2. CSS - FOCO NO CINZA MÉDIO (ANTRACITE)
 st.markdown("""
     <style>
     /* Fundo Geral da App */
-    .stApp { background-color: #FFFFFF; }
+    .stApp { background-color: #ECEFF1; }
     
-    /* BARRA LATERAL - FUNDO CLARO */
+    /* BARRA LATERAL - CINZA MÉDIO PROFISSIONAL */
     [data-testid="stSidebar"] {
-        background-color: #F8F9FA !important;
-        border-right: 1px solid #E0E0E0;
+        background-color: #455A64 !important;
+        border-right: 1px solid #37474F;
     }
     
-    /* Card do Perfil na Sidebar - Branco com Sombra */
+    /* Card do Perfil na Sidebar */
     .profile-card {
-        background: #FFFFFF;
+        background: #37474F;
         padding: 20px;
         border-radius: 12px;
         margin-bottom: 25px;
-        border: 1px solid #E0E0E0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         text-align: center;
     }
     
-    /* Textos na Sidebar - AGORA ESCUROS */
+    /* Textos na Sidebar - VOLTAM A SER BRANCOS PARA CONTRASTE */
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] .stMarkdown p {
-        color: #2C3E50 !important;
+    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] label {
+        color: #FFFFFF !important;
     }
     
     /* Estilo das Opções do Menu (Radio) */
     div[data-testid="stSidebarUserContent"] .stRadio label {
-        color: #444444 !important;
+        color: #CFD8DC !important;
         background-color: transparent;
         padding: 10px 15px;
         border-radius: 8px;
         transition: all 0.2s;
-        font-weight: 500;
         margin-bottom: 5px;
     }
     
     /* Hover nas opções do menu */
     div[data-testid="stSidebarUserContent"] .stRadio label:hover {
-        background-color: #E9ECEF !important;
-        color: #000000 !important;
-    }
-    
-    /* Opção Selecionada (Destaque Azul Suave) */
-    div[data-testid="stWidgetLabel"] p {
-        color: #6C757D !important;
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 1px;
+        background-color: #546E7A !important;
+        color: #FFFFFF !important;
     }
 
     /* Botões na Sidebar */
     .stButton>button {
-        background-color: #FFFFFF;
-        color: #2C3E50;
-        border: 1px solid #D1D1D1;
+        background-color: #37474F;
+        color: #FFFFFF;
+        border: 1px solid #546E7A;
         font-weight: 600;
     }
     .stButton>button:hover {
-        background-color: #F8F9FA;
-        border-color: #2C3E50;
-        color: #2C3E50;
+        background-color: #455A64;
+        border-color: #FFFFFF;
     }
     
     /* Card de Serviço (Área Principal) */
     .status-card {
-        background: #F8F9FA;
+        background: #FFFFFF;
         padding: 25px;
         border-radius: 15px;
-        border-left: 6px solid #1E88E5; /* Azul GNR */
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        border-top: 6px solid #455A64;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
     
-    h1 { color: #2C3E50; }
+    h1 { color: #263238; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -134,13 +125,13 @@ def main_app():
         st.markdown(f"""
             <div class="profile-card">
                 <div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div>
-                <p style="color: #6C757D; font-size: 0.7rem; margin:0; font-weight: bold;">MILITAR AUTENTICADO</p>
+                <p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p>
                 <h2 style="margin:0; font-size: 1.1rem;">{st.session_state['user_nome_completo']}</h2>
-                <p style="color: #6C757D; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p>
+                <p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p>
             </div>
         """, unsafe_allow_html=True)
         
-        menu = st.radio("MENU DE NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
+        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
         
         st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("🚪 Terminar Sessão"):
@@ -150,7 +141,7 @@ def main_app():
     # --- MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
-        data_sel = st.date_input("Escolher data:", format="DD/MM/YYYY")
+        data_sel = st.date_input("Data:", format="DD/MM/YYYY")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         if df_dia is not None:
@@ -158,18 +149,18 @@ def main_app():
             if not meu_df.empty:
                 st.markdown(f"""
                 <div class="status-card">
-                    <h1 style="margin:0; color: #1E88E5; font-size: 2.2rem;">{meu_df.iloc[0]['serviço']}</h1>
-                    <p style="margin-top:10px; font-size: 1.3rem; color: #444444;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p>
+                    <h1 style="margin:0; color: #455A64; font-size: 2.2rem;">{meu_df.iloc[0]['serviço']}</h1>
+                    <p style="margin-top:10px; font-size: 1.3rem; color: #546E7A;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Não consta serviço escalado para este dia.")
+                st.warning("⚠️ Não consta serviço para este dia.")
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
-        data_sel = st.date_input("Consultar dia:", format="DD/MM/YYYY", key="geral")
+        data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         if df_dia is not None:
@@ -202,7 +193,7 @@ def main_app():
                     df_colegas['display'] = df_colegas['id'] + " - " + df_colegas['serviço']
                     with st.form("form_troca"):
                         colega = st.selectbox("Trocar com:", df_colegas['display'].tolist())
-                        motivo = st.text_input("Motivo da troca:")
+                        motivo = st.text_input("Motivo:")
                         if st.form_submit_button("GERAR MENSAGEM"):
                             id_c = colega.split(" - ")[0]
                             msg = f"*SOLICITAÇÃO DE TROCA ({nome_aba_t})*\n\n👉 *SAIR:* {st.session_state['user_nome_completo']} ({meu_s})\n👉 *ENTRAR:* ID {id_c}\n📝 *MOTIVO:* {motivo}"
