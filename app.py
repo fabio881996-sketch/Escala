@@ -183,8 +183,8 @@ def main_app():
             # 3. Patrulhas
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda"])
             
-            # 4. Remunerados
-            filtrar_e_mostrar("Remunerados", ["remunerado", "gratificado"])
+            # 4. Remunerados (Ajustado para apanhar várias formas de escrita)
+            filtrar_e_mostrar("Remunerados", ["remunerado", "renumerado", "gratificado", "grat"])
             
             # 5. Folgas
             filtrar_e_mostrar("Folga", ["folga"])
