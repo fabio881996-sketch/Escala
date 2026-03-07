@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - MANTENDO TUDO IGUAL (SUBTÍTULOS BRANCOS E BOTÃO SAIR)
+# 2. CSS - TUDO IGUAL (SUBTÍTULOS BRANCOS E BOTÃO SAIR)
 st.markdown("""
     <style>
     /* FUNDO DA PÁGINA */
@@ -72,13 +72,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Função de Carregamento
+# 3. Função de Carregamento - CORREÇÃO DO .0 AQUI
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
         base_url = url.split('/edit')[0]
         csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
-        df = pd.read_csv(csv_url)
+        # Forçamos o pandas a ler tudo como STRING para evitar o .0 nos números
+        df = pd.read_csv(csv_url, dtype=str) 
         df.columns = [c.strip().lower() for c in df.columns]
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("nan", "")
@@ -157,9 +158,7 @@ def main_app():
         st.title("👥 Lista de Efetivo")
         df_u = load_sheet("utilizadores")
         if df_u is not None:
-            # --- ÚNICA ALTERAÇÃO: ORDEM E COLUNAS SOLICITADAS ---
             colunas_finais = ["id", "nim", "posto", "nome", "email", "telemóvel"]
-            # Filtramos apenas as colunas que existem para evitar erros caso falte alguma na folha
             colunas_existentes = [c for c in colunas_finais if c in df_u.columns]
             st.dataframe(df_u[colunas_existentes], use_container_width=True, hide_index=True)
 
