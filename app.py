@@ -166,22 +166,18 @@ def main_app():
             # 3. Patrulhas
             mostrar_bloco("Patrulhas", ["po", "patrulha", "ronda"])
             
-            # 3. Renumerados
+            # 4. Renumerados
             mostrar_bloco("Renumerados", ["renumerado"])
             
-            # 3. Outros Serviços
+            # 5. Outros Serviços
             mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina"])
             
-            # 3. Outros Serviços
-            mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto"])
-            
-            # 7. Folga
+            # 6. Folga
             mostrar_bloco("Folga", ["folga semanal", "folga complementar"])
 
-            # 8. Ausentes
+            # 7. Ausentes
             mostrar_bloco("Ausentes", [ "férias", "licença", "doente", "diligência"])
 
-        
             
         else:
             st.error("Dia não disponível.")
