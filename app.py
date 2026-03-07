@@ -99,7 +99,7 @@ def main_app():
             mostrar_bloco("Atendimento", ["Atendimento"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Apoio ao Atendimento", ["Apoio Atendimento", "Apoio ao Atendimento"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Patrulha Ocorrências", ["Patrulha Ocorrências", "PO"], ordenar_hora=True, busca_exata=True)
-            mostrar_bloco("Patrulha", ["Patrulha"], ordenar_hora=True, busca_exata=True)
+            mostrar_bloco("Patrulha", ["Patrulha", "tiro"], ordenar_hora=True, busca_exata=True)
             mostrar_bloco("Ronda", ["Ronda"], ordenar_hora=True)
             mostrar_bloco("Serviços Remunerados", ["Remunerado"], ordenar_hora=True)
             mostrar_bloco("Administrativo e Apoio", ["Secretaria", "Pronto", "Inquérito"])
