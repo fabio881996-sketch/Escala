@@ -10,12 +10,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - CORREÇÃO CRÍTICA PARA TEXTO DO RADIO (MENU) A BRANCO
+# 2. CSS - ESTÉTICA FINAL APROVADA (SIDEBAR ANTRACITE / TEXTO BRANCO)
 st.markdown("""
     <style>
     .stApp { background-color: #ECEFF1; }
     
-    /* BARRA LATERAL */
+    /* BARRA LATERAL - CINZA ANTRACITE */
     [data-testid="stSidebar"] {
         background-color: #455A64 !important;
         border-right: 1px solid #37474F;
@@ -31,7 +31,7 @@ st.markdown("""
         text-align: center;
     }
 
-    /* FORÇAR TUDO NA SIDEBAR A BRANCO (Incluindo os itens do Menu Radio) */
+    /* TEXTOS SIDEBAR A BRANCO */
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] p,
@@ -41,14 +41,6 @@ st.markdown("""
     div[data-baseweb="radio"] span {
         color: #FFFFFF !important;
         font-weight: 500 !important;
-    }
-    
-    /* Efeito de Seleção e Hover no Menu */
-    div[data-testid="stSidebarUserContent"] .stRadio label {
-        background-color: transparent;
-        padding: 8px 12px;
-        border-radius: 8px;
-        transition: 0.2s;
     }
     
     div[data-testid="stSidebarUserContent"] .stRadio label:hover {
@@ -149,6 +141,7 @@ def main_app():
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
+    # --- CONSULTA GERAL COM SEPARAÇÃO DE APOIO ---
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
@@ -163,8 +156,17 @@ def main_app():
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
             
-            mostrar_bloco("Operacional e Patrulhas", ["atendimento", "patrulha", "po", "ronda"])
-            mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto"])
+            # --- SEPARAÇÃO DOS BLOCOS SOLICITADA ---
+            # 1. Patrulhas e Atendimento Direto
+            mostrar_bloco("Atendimento e Patrulhas", ["atendimento", "patrulha", "po", "ronda", "vtr"])
+            
+            # 2. NOVO: Apoio ao Atendimento
+            mostrar_bloco("Apoio ao Atendimento", ["apoio", "permanência", "reforço"])
+            
+            # 3. Outros Serviços
+            mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina"])
+            
+            # 4. Inoperacionais
             mostrar_bloco("Inoperacionais", ["folga", "férias", "licença", "doente"])
         else:
             st.error("Dia não disponível.")
@@ -196,4 +198,3 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
-    
