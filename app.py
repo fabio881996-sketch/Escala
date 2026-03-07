@@ -10,15 +10,38 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA FINAL
+# 2. CSS - ESTÉTICA FINAL (Com ajuste no Login)
 st.markdown("""
     <style>
     .stApp { background-color: #ECEFF1; }
+    
+    /* SIDEBAR (Mantida Original) */
     [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
     .profile-card { background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
     [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { color: #FFFFFF !important; font-weight: 500 !important; }
+    
+    /* BOTÕES GERAIS */
     .stButton>button { background-color: #37474F; color: #FFFFFF; border: 1px solid #546E7A; }
+    
+    /* CARDS DE CONTEÚDO */
     .status-card { background: #FFFFFF; padding: 25px; border-radius: 15px; border-top: 6px solid #455A64; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+    /* --- ALTERAÇÃO: ESTILO DO LOGIN --- */
+    div[data-testid="stForm"] {
+        background-color: #455A64;
+        border-radius: 15px;
+        padding: 40px;
+        border: 1px solid #37474F;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p {
+        color: white !important;
+    }
+    /* Estilo dos campos de input dentro do login */
+    div[data-testid="stForm"] input {
+        background-color: #FFFFFF !important;
+        color: #263238 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -39,13 +62,16 @@ def load_sheet(aba_nome):
 # 4. Login
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.5, 1])
+    _, col2, _ = st.columns([1, 1.2, 1]) # Coluna central um pouco mais estreita para o login
     with col2:
-        st.markdown("<h1 style='text-align: center;'>🚓 Escala de Serviço - Posto Famalicão</h1>", unsafe_allow_html=True)
         with st.form("login_form"):
+            st.markdown("<h1 style='text-align: center; font-size: 1.8rem;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; opacity: 0.8;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
-            if st.form_submit_button("ENTRAR NO PORTAL", use_container_width=True):
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
                 df_u = load_sheet("utilizadores")
                 if df_u is not None:
                     user = df_u[(df_u['email'].str.lower() == email_i) & (df_u['password'] == str(pass_i))]
@@ -90,11 +116,7 @@ def main_app():
             def filtrar_e_mostrar(titulo, keywords, excluir=True):
                 nonlocal df_restante
                 padrao = '|'.join(keywords).lower()
-                
-                # Se for Remunerado, ele pode repetir (excluir=False), 
-                # mas não mostramos se o militar estiver de férias/doente/etc noutra linha
                 df_busca = df_dia if not excluir else df_restante
-                
                 temp_df = df_busca[df_busca['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 
                 if not temp_df.empty:
@@ -105,29 +127,17 @@ def main_app():
                     if excluir:
                         df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
 
-            # --- BLOCOS POR ORDEM DE PRIORIDADE ---
-            
-            # 1, 2, 3: Serviços base
             filtrar_e_mostrar("Atendimento", ["atendimento"])
             filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
-            
-            # 4. REMUNERADOS (Permite repetição de ID)
             filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"], excluir=False)
-            
-            # 5. Folgas
             filtrar_e_mostrar("Folga", ["folga"])
-            
-            # 6. Ausentes (Estes "ganham" a qualquer outro serviço principal)
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
-            
-            # 7. Resto
             filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando"])
         else:
             st.error("Dia não disponível.")
 
     elif menu == "🔄 Solicitar Troca":
-        # ... (Mantém-se igual ao anterior)
         pass
 
 # Inicialização
