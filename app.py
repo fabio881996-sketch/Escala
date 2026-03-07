@@ -173,27 +173,29 @@ def main_app():
             # Resetar o balde antes de começar a mostrar os blocos
             st.session_state['df_restante'] = df_dia.copy()
 
-            # --- ORDEM DE PRIORIDADE ---
-            # 1. Apoio primeiro (importante ser antes de Atendimento)
-            filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
+           # --- ORDEM DE PRIORIDADE CORRIGIDA E REFORÇADA ---
+            
+            # 1. Apoio primeiro
+            filtrar_e_mostrar("Apoio ao Atendimento", ["apoio", "permanência"])
             
             # 2. Atendimento
             filtrar_e_mostrar("Atendimento", ["atendimento"])
 
             # 3. Patrulhas
-            filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda"])
+            filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
             
-            # 4. Remunerados (Ajustado para apanhar várias formas de escrita)
-            filtrar_e_mostrar("Remunerados", ["remunerado", "renumerado", "gratificado", "grat"])
+            # 4. REMUNERADOS (REFORÇADO)
+            # Procura por 'remu', 'renu' ou 'grat' - assim apanha qualquer variação
+            filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"])
             
             # 5. Folgas
             filtrar_e_mostrar("Folga", ["folga"])
 
             # 6. Ausentes
-            filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência"])
+            filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
 
-            # 7. Administrativo e Outros (O que sobrar)
-            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
+            # 7. Administrativo e Tudo o resto
+            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "instrução"])
 
         else:
             st.error("Dia não disponível.")
