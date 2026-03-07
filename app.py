@@ -10,13 +10,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - FOCO NO CINZA MÉDIO (ANTRACITE)
+# 2. CSS - REFINAMENTO FINAL: TEXTOS DA SIDEBAR A BRANCO
 st.markdown("""
     <style>
     /* Fundo Geral da App */
     .stApp { background-color: #ECEFF1; }
     
-    /* BARRA LATERAL - CINZA MÉDIO PROFISSIONAL */
+    /* BARRA LATERAL - CINZA ANTRACITE */
     [data-testid="stSidebar"] {
         background-color: #455A64 !important;
         border-right: 1px solid #37474F;
@@ -33,27 +33,29 @@ st.markdown("""
         text-align: center;
     }
     
-    /* Textos na Sidebar - VOLTAM A SER BRANCOS PARA CONTRASTE */
+    /* TODOS OS TEXTOS DA SIDEBAR A BRANCO */
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3,
     [data-testid="stSidebar"] .stMarkdown p,
-    [data-testid="stSidebar"] label {
+    [data-testid="stSidebar"] label,
+    [data-testid="stWidgetLabel"] p {
         color: #FFFFFF !important;
     }
     
-    /* Estilo das Opções do Menu (Radio) */
+    /* Estilo das Opções do Menu (Radio) - TEXTO A BRANCO */
     div[data-testid="stSidebarUserContent"] .stRadio label {
-        color: #CFD8DC !important;
+        color: #FFFFFF !important; 
         background-color: transparent;
         padding: 10px 15px;
         border-radius: 8px;
         transition: all 0.2s;
         margin-bottom: 5px;
+        font-weight: 500;
     }
     
     /* Hover nas opções do menu */
     div[data-testid="stSidebarUserContent"] .stRadio label:hover {
-        background-color: #546E7A !important;
+        background-color: rgba(255, 255, 255, 0.15) !important;
         color: #FFFFFF !important;
     }
 
@@ -65,8 +67,9 @@ st.markdown("""
         font-weight: 600;
     }
     .stButton>button:hover {
-        background-color: #455A64;
+        background-color: #546E7A;
         border-color: #FFFFFF;
+        color: #FFFFFF;
     }
     
     /* Card de Serviço (Área Principal) */
@@ -119,18 +122,19 @@ def login():
                 else:
                     st.error("⚠️ Erro de base de dados.")
 
-# 5. App
+# 5. App Principal
 def main_app():
     with st.sidebar:
         st.markdown(f"""
             <div class="profile-card">
                 <div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div>
                 <p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p>
-                <h2 style="margin:0; font-size: 1.1rem;">{st.session_state['user_nome_completo']}</h2>
+                <h2 style="margin:0; font-size: 1.1rem; color: white;">{st.session_state['user_nome_completo']}</h2>
                 <p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p>
             </div>
         """, unsafe_allow_html=True)
         
+        # Menu com texto forçado a branco via CSS
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
         
         st.markdown("<br><br>", unsafe_allow_html=True)
