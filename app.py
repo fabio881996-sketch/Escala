@@ -10,19 +10,74 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA FINAL (EXATAMENTE O TEU CODIGO)
+# 2. CSS - ESTÉTICA "TOP" RECUPERADA
 st.markdown("""
     <style>
-    .stApp { background-color: #ECEFF1; }
-    [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
-    .profile-card { background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { color: #FFFFFF !important; font-weight: 500 !important; }
-    .stButton>button { background-color: #37474F; color: #FFFFFF; border: 1px solid #546E7A; }
-    .status-card { background: #FFFFFF; padding: 25px; border-radius: 15px; border-top: 6px solid #455A64; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    /* Fundo da página em cinza claro para destacar os blocos */
+    .stApp { 
+        background-color: #ECEFF1; 
+    }
     
-    /* APENAS ESTA ADIÇÃO PARA O LOGIN FICAR ESCURO COMO A SIDEBAR */
-    div[data-testid="stForm"] { background-color: #455A64; border-radius: 15px; color: white; }
-    div[data-testid="stForm"] p, div[data-testid="stForm"] label { color: white !important; }
+    /* BARRA LATERAL (Não mexer - Está Top) */
+    [data-testid="stSidebar"] { 
+        background-color: #455A64 !important; 
+        border-right: 1px solid #37474F; 
+    }
+    
+    /* LOGIN (Não mexer - Conforme pedido) */
+    div[data-testid="stForm"] { 
+        background-color: #455A64; 
+        border-radius: 15px; 
+        color: white; 
+        padding: 30px;
+    }
+    div[data-testid="stForm"] p, div[data-testid="stForm"] label, div[data-testid="stForm"] h1 { 
+        color: white !important; 
+    }
+
+    /* CARD DE PERFIL NA SIDEBAR */
+    .profile-card { 
+        background: #37474F; 
+        padding: 20px; 
+        border-radius: 12px; 
+        margin-bottom: 25px; 
+        border: 1px solid rgba(255,255,255,0.1); 
+        text-align: center; 
+    }
+    
+    /* ESTILO DOS BLOCOS (EXPANDERS) */
+    .st-expander {
+        background-color: #FFFFFF !important;
+        border: 1px solid #D1D9E0 !important;
+        border-radius: 10px !important;
+        margin-bottom: 10px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05) !important;
+    }
+
+    /* TEXTOS SIDEBAR */
+    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, 
+    div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { 
+        color: #FFFFFF !important; 
+        font-weight: 500 !important; 
+    }
+    
+    /* BOTÕES */
+    .stButton>button { 
+        background-color: #37474F; 
+        color: #FFFFFF; 
+        border: 1px solid #546E7A; 
+        border-radius: 8px;
+    }
+
+    /* CARD DE SERVIÇO INDIVIDUAL (Aquele que aparece no Minha Escala) */
+    .status-card { 
+        background: #FFFFFF; 
+        padding: 25px; 
+        border-radius: 15px; 
+        border-top: 6px solid #455A64; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -40,14 +95,14 @@ def load_sheet(aba_nome):
     except:
         return None
 
-# 4. Login (Com as cores da sidebar aplicadas via CSS acima)
+# 4. Login (PROTEGIDO - Não mexer)
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.5, 1])
     with col2:
         with st.form("login_form"):
-            st.markdown("<h1 style='text-align: center; color: white;'>🚓 Escala de Serviço</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: white;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center;'>🚓 Escala de Serviço</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
             if st.form_submit_button("ENTRAR NO PORTAL", use_container_width=True):
@@ -67,13 +122,14 @@ def main_app():
     with st.sidebar:
         st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
         
-        # MENU ATUALIZADO
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
         
+        st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("🚪 Terminar Sessão"):
             st.session_state["logged_in"] = False
             st.rerun()
 
+    # --- NAVEGAÇÃO ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         data_sel = st.date_input("Data:", format="DD/MM/YYYY")
@@ -111,10 +167,9 @@ def main_app():
             filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"], excluir=False)
             filtrar_e_mostrar("Folga", ["folga"])
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
-            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando"])
+            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
         else: st.error("Dia não disponível.")
 
-    # --- NOVO MENU: LISTA EFETIVO ---
     elif menu == "👥 Lista Efetivo":
         st.title("👥 Efetivo do Posto")
         df_efetivo = load_sheet("utilizadores")
