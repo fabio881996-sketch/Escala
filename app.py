@@ -10,15 +10,62 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA FINAL
+# 2. CSS - ESTÉTICA (Login renovado + Sidebar e Cards)
 st.markdown("""
     <style>
     .stApp { background-color: #ECEFF1; }
-    [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
-    .profile-card { background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { color: #FFFFFF !important; font-weight: 500 !important; }
-    .stButton>button { background-color: #37474F; color: #FFFFFF; border: 1px solid #546E7A; }
-    .status-card { background: #FFFFFF; padding: 25px; border-radius: 15px; border-top: 6px solid #455A64; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    
+    /* BARRA LATERAL */
+    [data-testid="stSidebar"] { 
+        background-color: #455A64 !important; 
+        border-right: 1px solid #37474F; 
+    }
+    
+    /* LOGIN - ESTILO IGUAL À SIDEBAR */
+    div[data-testid="stForm"] {
+        background-color: #455A64;
+        padding: 30px;
+        border-radius: 15px;
+        border: 1px solid #37474F;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+    div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p {
+        color: white !important;
+    }
+    
+    /* CARD DE PERFIL */
+    .profile-card { 
+        background: #37474F; 
+        padding: 20px; 
+        border-radius: 12px; 
+        margin-bottom: 25px; 
+        border: 1px solid rgba(255,255,255,0.1); 
+        text-align: center; 
+    }
+    
+    /* TEXTOS SIDEBAR A BRANCO */
+    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, 
+    div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { 
+        color: #FFFFFF !important; 
+        font-weight: 500 !important; 
+    }
+    
+    /* Botões */
+    .stButton>button { 
+        background-color: #37474F; 
+        color: #FFFFFF; 
+        border: 1px solid #546E7A; 
+    }
+    
+    /* Card de Serviço Principal */
+    .status-card { 
+        background: #FFFFFF; 
+        padding: 25px; 
+        border-radius: 15px; 
+        border-top: 6px solid #455A64; 
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -36,16 +83,17 @@ def load_sheet(aba_nome):
     except:
         return None
 
-# 4. Login
+# 4. Login Renovado
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.5, 1])
+    _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center;'>🚓 Escala de Serviço - Posto Famalicão</h1>", unsafe_allow_html=True)
         with st.form("login_form"):
+            st.markdown("<h1 style='text-align: center; color: white;'>🚓 Portal GNR</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #B0BEC5;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
-            if st.form_submit_button("ENTRAR NO PORTAL", use_container_width=True):
+            if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
                 df_u = load_sheet("utilizadores")
                 if df_u is not None:
                     user = df_u[(df_u['email'].str.lower() == email_i) & (df_u['password'] == str(pass_i))]
@@ -61,7 +109,11 @@ def login():
 def main_app():
     with st.sidebar:
         st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
-        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
+        
+        # ADICIONADO "LISTA EFETIVO" AO MENU
+        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
+        
+        st.markdown("<br><br>", unsafe_allow_html=True)
         if st.button("🚪 Terminar Sessão"):
             st.session_state["logged_in"] = False
             st.rerun()
@@ -83,52 +135,60 @@ def main_app():
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
-        
         if df_dia is not None:
             df_restante = df_dia.copy()
-
             def filtrar_e_mostrar(titulo, keywords, excluir=True):
                 nonlocal df_restante
                 padrao = '|'.join(keywords).lower()
-                
-                # Se for Remunerado, ele pode repetir (excluir=False), 
-                # mas não mostramos se o militar estiver de férias/doente/etc noutra linha
                 df_busca = df_dia if not excluir else df_restante
-                
                 temp_df = df_busca[df_busca['serviço'].str.lower().str.contains(padrao, na=False)].copy()
-                
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                    
                     if excluir:
                         df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
 
-            # --- BLOCOS POR ORDEM DE PRIORIDADE ---
-            
-            # 1, 2, 3: Serviços base
             filtrar_e_mostrar("Atendimento", ["atendimento"])
             filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
-            
-            # 4. REMUNERADOS (Permite repetição de ID)
             filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"], excluir=False)
-            
-            # 5. Folgas
             filtrar_e_mostrar("Folga", ["folga"])
-            
-            # 6. Ausentes (Estes "ganham" a qualquer outro serviço principal)
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
-            
-            # 7. Resto
-            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando"])
-        else:
-            st.error("Dia não disponível.")
+            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
+        else: st.error("Dia não disponível.")
+
+    # NOVO MENU: LISTA EFETIVO
+    elif menu == "👥 Lista Efetivo":
+        st.title("👥 Efetivo do Posto")
+        df_efetivo = load_sheet("utilizadores")
+        if df_efetivo is not None:
+            # Organiza as colunas conforme pedido
+            colunas_ordem = ['id', 'posto', 'nome', 'telemóvel', 'email', 'password']
+            # Garante que só mostra colunas que existem na sheet para evitar erros
+            cols_existentes = [c for c in colunas_ordem if c in df_efetivo.columns]
+            st.dataframe(df_efetivo[cols_existentes], use_container_width=True, hide_index=True)
+        else: st.error("Não foi possível carregar a lista de utilizadores.")
 
     elif menu == "🔄 Solicitar Troca":
-        # ... (Mantém-se igual ao anterior)
-        pass
+        st.title("🔄 Solicitação de Troca")
+        data_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
+        nome_aba_t = data_t.strftime("%d-%m")
+        df_dia_t = load_sheet(nome_aba_t)
+        if df_dia_t is not None:
+            meu_df = df_dia_t[df_dia_t['id'] == st.session_state['user_id']]
+            if not meu_df.empty:
+                meu_s = meu_df.iloc[0]['serviço']
+                df_colegas = df_dia_t[(df_dia_t['id'] != st.session_state['user_id']) & (~df_dia_t['serviço'].str.lower().str.contains('folga|férias|doente|licença'))]
+                if not df_colegas.empty:
+                    df_colegas['display'] = df_colegas['id'] + " - " + df_colegas['serviço']
+                    with st.form("form_troca"):
+                        colega = st.selectbox("Trocar com:", df_colegas['display'].tolist())
+                        motivo = st.text_input("Motivo:")
+                        if st.form_submit_button("GERAR MENSAGEM"):
+                            id_c = colega.split(" - ")[0]
+                            st.code(f"*SOLICITAÇÃO DE TROCA ({nome_aba_t})*\n\n👉 *SAIR:* {st.session_state['user_nome_completo']} ({meu_s})\n👉 *ENTRAR:* ID {id_c}\n📝 *MOTIVO:* {motivo}", language="text")
+            else: st.error("Não estás escalado neste dia.")
 
 # Inicialização
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
