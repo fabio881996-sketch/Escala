@@ -10,52 +10,48 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA FINAL (Fundo Cinza Gelo + Texto de Alto Contraste)
+# 2. CSS - ESTÉTICA FINAL (Ajuste de cor nos blocos/expanders)
 st.markdown("""
     <style>
-    /* FUNDO DA PÁGINA */
+    /* FUNDO DA PÁGINA - Cinza Gelo */
     .stApp { background-color: #F0F2F5; }
     
-    /* AJUSTE DE TEXTO PARA CONTRASTE (Página Principal) */
-    h1, h2, h3, p, span, label { 
-        color: #1A1C1E !important; 
+    /* BLOCOS (EXPANDERS) - MAIS CLAROS (Branco Puro) */
+    .st-expander {
+        background-color: #FFFFFF !important;
+        border: 1px solid #E1E4E8 !important;
+        border-radius: 12px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+        margin-bottom: 10px !important;
     }
     
-    /* SIDEBAR (Mantida Dark - Texto Branco) */
-    [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
-    .profile-card { background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; border: 1px solid rgba(255,255,255,0.1); text-align: center; }
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { 
-        color: #FFFFFF !important; 
+    /* CABEÇALHO DO BLOCO - Mantém contraste alto */
+    .streamlit-expanderHeader {
+        background-color: #FFFFFF !important;
+        color: #1A1C1E !important;
+        font-weight: 600 !important;
+        border-radius: 12px !important;
     }
-    
-    /* BOTÕES GERAIS */
-    .stButton>button { background-color: #37474F; color: #FFFFFF; border: 1px solid #546E7A; }
-    
-    /* CARDS DE CONTEÚDO (Texto Escuro sobre Fundo Branco) */
-    .status-card { 
-        background: #FFFFFF; 
-        padding: 25px; 
-        border-radius: 15px; 
-        border-top: 6px solid #455A64; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
-    }
-    .status-card h1 { color: #1A1C1E !important; }
-    .status-card p { color: #455A64 !important; }
 
-    /* ESTILO DO LOGIN (Mantido Dark - Texto Branco) */
+    /* AJUSTE DE TEXTO GERAL */
+    h1, h2, h3, p, span, label { color: #1A1C1E !important; }
+    
+    /* SIDEBAR (Mantida Dark) */
+    [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
+    .profile-card { background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; }
+    [data-testid="stSidebar"] * { color: #FFFFFF !important; }
+    
+    /* LOGIN (Mantido Dark) */
     div[data-testid="stForm"] {
         background-color: #455A64;
         border-radius: 15px;
         padding: 40px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.2);
     }
-    div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p {
-        color: white !important;
-    }
+    div[data-testid="stForm"] * { color: white !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Função de Carregamento
+# 3. Funções de Carregamento
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
@@ -66,8 +62,7 @@ def load_sheet(aba_nome):
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("nan", "")
         return df
-    except:
-        return None
+    except: return None
 
 # 4. Login
 def login():
@@ -76,7 +71,6 @@ def login():
     with col2:
         with st.form("login_form"):
             st.markdown("<h1 style='text-align: center;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
             if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
@@ -88,29 +82,17 @@ def login():
                         st.session_state["user_id"] = user.iloc[0]['id']
                         st.session_state["user_nome_completo"] = f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}".strip()
                         st.rerun()
-                    else: st.error("❌ Credenciais incorretas.")
 
 # 5. App Principal
 def main_app():
     with st.sidebar:
         st.markdown(f"""<div class="profile-card"><div style="font-size: 35px;">👮‍♂️</div><h2 style="margin:0; font-size: 1.1rem;">{st.session_state['user_nome_completo']}</h2><p>ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
-        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
+        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
         if st.button("🚪 Terminar Sessão"):
             st.session_state["logged_in"] = False
             st.rerun()
 
-    if menu == "📅 Minha Escala":
-        st.title("📅 O Teu Serviço")
-        data_sel = st.date_input("Data:", format="DD/MM/YYYY")
-        nome_aba = data_sel.strftime("%d-%m")
-        df_dia = load_sheet(nome_aba)
-        if df_dia is not None:
-            meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
-            if not meu_df.empty:
-                st.markdown(f"""<div class="status-card"><h1>{meu_df.iloc[0]['serviço']}</h1><p>🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p></div>""", unsafe_allow_html=True)
-            else: st.warning("⚠️ Não consta serviço.")
-
-    elif menu == "🔍 Consulta Geral":
+    if menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
@@ -118,25 +100,28 @@ def main_app():
         
         if df_dia is not None:
             df_restante = df_dia.copy()
-
-            def filtrar_e_mostrar(titulo, keywords, excluir=True):
+            def filtrar_e_mostrar(titulo, keywords):
                 nonlocal df_restante
                 padrao = '|'.join(keywords).lower()
-                df_busca = df_dia if not excluir else df_restante
-                temp_df = df_busca[df_busca['serviço'].str.lower().str.contains(padrao, na=False)].copy()
-                
+                temp_df = df_restante[df_restante['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
+                    # O bloco agora é Branco Puro para contrastar com o fundo cinza
                     with st.expander(f"🔹 {titulo}", expanded=True):
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                    if excluir:
-                        df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
+                    df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
 
             filtrar_e_mostrar("Atendimento", ["atendimento"])
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
-            filtrar_e_mostrar("Remunerados", ["remu", "grat"], excluir=False)
-            filtrar_e_mostrar("Folga", ["folga"])
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência"])
+            filtrar_e_mostrar("Outros", [""])
+        else: st.error("Escala não disponível.")
+
+    elif menu == "👥 Lista Efetivo":
+        st.title("👥 Lista de Efetivo")
+        df_ef = load_sheet("utilizadores")
+        if df_ef is not None:
+            st.dataframe(df_ef[['id', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
 
 # Inicialização
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
