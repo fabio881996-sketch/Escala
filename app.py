@@ -1,88 +1,78 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+from datetime import datetime
 
-# Configuração da página
-st.set_page_config(page_title="Sistema GNR", layout="wide", page_icon="🚓")
+st.set_page_config(page_title="GNR - Portal de Escalas", layout="wide")
 
-# Estabelecer conexão
+# Ligação simplificada
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error("Erro na conexão. Verifique os Secrets.")
+    st.error("Erro na ligação. Verifique os Secrets.")
     st.stop()
 
-# Inicializar estado da sessão
 if "logado" not in st.session_state:
     st.session_state["logado"] = False
-if "user_nome" not in st.session_state:
-    st.session_state["user_nome"] = ""
 
 # --- LOGIN ---
 if not st.session_state["logado"]:
-    st.title("🚓 Acesso ao Sistema")
+    st.title("🔑 Login GNR")
     
     with st.form("login_form"):
         u_email = st.text_input("Email").strip().lower()
-        u_pass = st.text_input("Palavra-passe", type="password")
+        u_pass = st.text_input("Password", type="password")
         
         if st.form_submit_button("Entrar"):
-            # Limpa o cache para ler dados novos dos utilizadores
             st.cache_data.clear()
             try:
-                # Lemos a aba 'utilizadores'
+                # Lemos a aba 'utilizadores' (id, password, email, nome)
                 df_u = conn.read(worksheet="utilizadores", ttl=0)
-                
-                # Normalizar colunas (garante que id, password, email, nome são lidos corretamente)
                 df_u.columns = [str(c).strip().lower() for c in df_u.columns]
                 
-                # Validar credenciais
-                user = df_u[(df_u['email'] == u_email) & (df_u['password'].astype(str) == u_pass)]
+                user = df_u[
+                    (df_u['email'].astype(str).str.lower() == u_email) & 
+                    (df_u['password'].astype(str) == u_pass)
+                ]
                 
                 if not user.empty:
                     st.session_state["logado"] = True
-                    st.session_state["user_nome"] = user.iloc[0]['nome']
-                    st.success(f"Bem-vindo, {st.session_state['user_nome']}!")
+                    st.session_state["nome"] = user.iloc[0]['nome']
                     st.rerun()
                 else:
-                    st.error("Email ou Palavra-passe incorretos.")
+                    st.error("Email ou Password incorretos.")
             except Exception as e:
-                st.error("Erro ao ler aba 'utilizadores'. Verifique o nome da aba na Sheet.")
+                st.error("Erro ao ler aba 'utilizadores'. Verifique o nome na Sheet.")
 
-# --- ÁREA LOGADA (ESCALA) ---
+# --- ÁREA DA ESCALA ---
 else:
-    st.sidebar.title(f"Militar: {st.session_state['user_nome']}")
+    st.sidebar.write(f"Militar: **{st.session_state['nome']}**")
     if st.sidebar.button("Sair"):
         st.session_state["logado"] = False
         st.rerun()
 
-    st.title("📅 Escala de Serviço")
+    st.title("📅 Consulta de Escala")
     
-    # Instrução visual
-    st.info("Clique no botão abaixo para carregar os dados atualizados da aba 'escala'.")
+    # Definimos o dia que queres procurar
+    dia_procurado = "06-03"
+    
+    st.info(f"A carregar escala do dia: **{dia_procurado}**")
 
-    if st.button("🔄 Carregar Escala"):
-        # Limpa o cache para forçar a mudança de aba (Reset do erro 400)
+    # Botão para visualizar
+    if st.button(f"Visualizar Escala {dia_procurado}"):
         st.cache_data.clear()
-        
         try:
-            # Lemos a aba 'escala'
-            df_escala = conn.read(worksheet="escala", ttl=0)
+            # PROCURA A ABA 06-03
+            df_escala = conn.read(worksheet=dia_procurado, ttl=0)
             
             if df_escala is not None and not df_escala.empty:
-                st.success("Dados da escala carregados!")
+                st.success(f"Dados do dia {dia_procurado} carregados!")
                 st.dataframe(df_escala, use_container_width=True, hide_index=True)
             else:
-                st.warning("A aba 'escala' está vazia.")
+                st.warning(f"A aba '{dia_procurado}' parece estar vazia.")
                 
         except Exception as e:
-            st.error("Não foi possível carregar a aba 'escala'.")
-            st.markdown("""
-            **Verificações rápidas:**
-            1. A aba na Google Sheet chama-se exatamente `escala`?
-            2. Existem células mescladas? (Se sim, use o botão 'Unmerge').
-            3. A primeira linha tem os títulos das colunas?
-            """)
-            with st.expander("Erro Técnico Detalhado"):
+            st.error(f"Não foi possível encontrar a aba '{dia_procurado}'.")
+            st.info(f"Garante que na Google Sheet a aba tem exatamente o nome: {dia_procurado}")
+            with st.expander("Ver erro técnico"):
                 st.code(e)
-                
