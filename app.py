@@ -10,18 +10,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA (Login renovado + Sidebar e Cards)
+# 2. CSS - REPOSTA ESTÉTICA ANTERIOR + NOVO LOGIN
 st.markdown("""
     <style>
     .stApp { background-color: #ECEFF1; }
     
-    /* BARRA LATERAL */
-    [data-testid="stSidebar"] { 
-        background-color: #455A64 !important; 
-        border-right: 1px solid #37474F; 
+    /* BARRA LATERAL - ANTRACITE */
+    [data-testid="stSidebar"] {
+        background-color: #455A64 !important;
+        border-right: 1px solid #37474F;
     }
     
-    /* LOGIN - ESTILO IGUAL À SIDEBAR */
+    /* NOVO LOGIN - ESTILO SIDEBAR (Pedido agora) */
     div[data-testid="stForm"] {
         background-color: #455A64;
         padding: 30px;
@@ -32,39 +32,43 @@ st.markdown("""
     div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p {
         color: white !important;
     }
-    
-    /* CARD DE PERFIL */
-    .profile-card { 
-        background: #37474F; 
-        padding: 20px; 
-        border-radius: 12px; 
-        margin-bottom: 25px; 
-        border: 1px solid rgba(255,255,255,0.1); 
-        text-align: center; 
+
+    /* CARD DE PERFIL (SIDEBAR) */
+    .profile-card {
+        background: #37474F;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 25px;
+        border: 1px solid rgba(255,255,255,0.1);
+        text-align: center;
     }
-    
+
     /* TEXTOS SIDEBAR A BRANCO */
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, [data-testid="stSidebar"] p, 
-    [data-testid="stSidebar"] label, [data-testid="stWidgetLabel"] p, 
-    div[data-baseweb="radio"] div, div[data-baseweb="radio"] span { 
-        color: #FFFFFF !important; 
-        font-weight: 500 !important; 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] label,
+    [data-testid="stWidgetLabel"] p,
+    div[data-baseweb="radio"] div,
+    div[data-baseweb="radio"] span {
+        color: #FFFFFF !important;
+        font-weight: 500 !important;
     }
     
     /* Botões */
-    .stButton>button { 
-        background-color: #37474F; 
-        color: #FFFFFF; 
-        border: 1px solid #546E7A; 
+    .stButton>button {
+        background-color: #37474F;
+        color: #FFFFFF;
+        border: 1px solid #546E7A;
     }
     
-    /* Card de Serviço Principal */
-    .status-card { 
-        background: #FFFFFF; 
-        padding: 25px; 
-        border-radius: 15px; 
-        border-top: 6px solid #455A64; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
+    /* CARD DE SERVIÇO (MAIN) */
+    .status-card {
+        background: #FFFFFF;
+        padding: 25px;
+        border-radius: 15px;
+        border-top: 6px solid #455A64;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -83,14 +87,14 @@ def load_sheet(aba_nome):
     except:
         return None
 
-# 4. Login Renovado
+# 4. Login (Estilo Sidebar)
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
         with st.form("login_form"):
-            st.markdown("<h1 style='text-align: center; color: white;'>🚓 Portal GNR</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #B0BEC5;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center;'>🚓 Portal GNR</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
             if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
@@ -102,15 +106,24 @@ def login():
                         st.session_state["user_id"] = user.iloc[0]['id']
                         st.session_state["user_nome_completo"] = f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}".strip()
                         st.rerun()
-                    else: st.error("❌ Credenciais incorretas.")
-                else: st.error("⚠️ Erro de base de dados.")
+                    else:
+                        st.error("❌ Credenciais incorretas.")
+                else:
+                    st.error("⚠️ Erro de base de dados.")
 
 # 5. App Principal
 def main_app():
     with st.sidebar:
-        st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="profile-card">
+                <div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div>
+                <p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p>
+                <h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2>
+                <p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p>
+            </div>
+        """, unsafe_allow_html=True)
         
-        # ADICIONADO "LISTA EFETIVO" AO MENU
+        # Menu com a nova opção de Efetivo
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
         
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -118,6 +131,7 @@ def main_app():
             st.session_state["logged_in"] = False
             st.rerun()
 
+    # --- MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         data_sel = st.date_input("Data:", format="DD/MM/YYYY")
@@ -126,10 +140,18 @@ def main_app():
         if df_dia is not None:
             meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
             if not meu_df.empty:
-                st.markdown(f"""<div class="status-card"><h1 style="margin:0; color: #455A64; font-size: 2.2rem;">{meu_df.iloc[0]['serviço']}</h1><p style="margin-top:10px; font-size: 1.3rem; color: #546E7A;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p></div>""", unsafe_allow_html=True)
-            else: st.warning("⚠️ Não consta serviço para este dia.")
-        else: st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
+                st.markdown(f"""
+                <div class="status-card">
+                    <h1 style="margin:0; color: #455A64; font-size: 2.2rem;">{meu_df.iloc[0]['serviço']}</h1>
+                    <p style="margin-top:10px; font-size: 1.3rem; color: #546E7A;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.warning("⚠️ Não consta serviço para este dia.")
+        else:
+            st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
+    # --- CONSULTA GERAL (Exatamente como estava) ---
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
@@ -156,20 +178,21 @@ def main_app():
             filtrar_e_mostrar("Folga", ["folga"])
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
             filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
-        else: st.error("Dia não disponível.")
+        else:
+            st.error("Dia não disponível.")
 
-    # NOVO MENU: LISTA EFETIVO
+    # --- NOVO MENU: LISTA EFETIVO ---
     elif menu == "👥 Lista Efetivo":
         st.title("👥 Efetivo do Posto")
         df_efetivo = load_sheet("utilizadores")
         if df_efetivo is not None:
-            # Organiza as colunas conforme pedido
             colunas_ordem = ['id', 'posto', 'nome', 'telemóvel', 'email', 'password']
-            # Garante que só mostra colunas que existem na sheet para evitar erros
             cols_existentes = [c for c in colunas_ordem if c in df_efetivo.columns]
             st.dataframe(df_efetivo[cols_existentes], use_container_width=True, hide_index=True)
-        else: st.error("Não foi possível carregar a lista de utilizadores.")
+        else:
+            st.error("Erro ao carregar lista.")
 
+    # --- SOLICITAR TROCA (Exatamente como estava) ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitação de Troca")
         data_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
@@ -188,7 +211,8 @@ def main_app():
                         if st.form_submit_button("GERAR MENSAGEM"):
                             id_c = colega.split(" - ")[0]
                             st.code(f"*SOLICITAÇÃO DE TROCA ({nome_aba_t})*\n\n👉 *SAIR:* {st.session_state['user_nome_completo']} ({meu_s})\n👉 *ENTRAR:* ID {id_c}\n📝 *MOTIVO:* {motivo}", language="text")
-            else: st.error("Não estás escalado neste dia.")
+            else:
+                st.error("Não estás escalado neste dia.")
 
 # Inicialização
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
