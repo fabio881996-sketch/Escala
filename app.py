@@ -4,82 +4,80 @@ from datetime import datetime
 
 # 1. Configuração de Página
 st.set_page_config(
-    page_title="GNR - Sistema de Gestão de Escalas",
+    page_title="GNR - Escalas de Serviço",
     page_icon="🚓",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS AVANÇADO - O segredo da beleza está aqui
+# 2. CSS - REFINAMENTO DE CORES
 st.markdown("""
     <style>
-    /* Fundo Geral */
-    .stApp { background-color: #f4f7f6; }
+    /* Fundo da aplicação */
+    .stApp { background-color: #F4F6F7; }
     
-    /* BARRA LATERAL CUSTOMIZADA */
+    /* BARRA LATERAL - AZUL NAVY PROFISSIONAL */
     [data-testid="stSidebar"] {
-        background-image: linear-gradient(180deg, #2c3e50 0%, #000000 100%);
-        color: white;
-        border-right: 1px solid rgba(255,255,255,0.1);
-        min-width: 300px !important;
+        background-color: #1B2631 !important;
+        border-right: 2px solid #2C3E50;
     }
     
-    /* Card do Perfil na Sidebar */
+    /* Card do Perfil */
     .profile-card {
-        background: rgba(255, 255, 255, 0.05);
+        background: #2C3E50;
         padding: 20px;
-        border-radius: 15px;
+        border-radius: 12px;
         margin-bottom: 25px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        text-align: center;
+        border: 1px solid #34495E;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     }
     
-    /* Títulos e Textos na Sidebar */
-    [data-testid="stSidebar"] .stMarkdown h2 {
-        color: #ffffff !important;
-        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-        margin-bottom: 5px;
+    /* Títulos na Sidebar */
+    [data-testid="stSidebar"] h2 {
+        color: #FFFFFF !important;
+        font-size: 1.2rem !important;
+        font-weight: 600 !important;
+        margin-bottom: 0px !important;
     }
     
-    /* Estilo do Menu Radio */
-    .stRadio [data-testid="stWidgetLabel"] p {
-        color: #bdc3c7 !important;
-        font-weight: bold;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-    }
-    
+    /* Ajuste do Radio Menu */
     div[data-testid="stSidebarUserContent"] .stRadio label {
+        color: #D5DBDB !important;
         background-color: transparent;
-        color: #ecf0f1 !important;
-        padding: 10px 15px;
-        border-radius: 8px;
-        transition: all 0.3s;
-        margin-bottom: 5px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        margin-bottom: 4px;
+        transition: 0.2s ease;
     }
     
     div[data-testid="stSidebarUserContent"] .stRadio label:hover {
-        background-color: rgba(255, 255, 255, 0.1);
-        transform: translateX(5px);
+        background-color: #2E4053 !important;
+        color: #FFFFFF !important;
     }
 
-    /* Botões */
+    /* Estilo dos Botões (Sair e Login) */
     .stButton>button {
-        border-radius: 8px;
-        font-weight: 600;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background-color: #2C3E50;
+        color: white;
+        border: 1px solid #566573;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #1B2631;
+        border-color: #FFFFFF;
+        color: white;
     }
     
-    /* Card de Status (Escala) */
+    /* Card de Serviço (Main) */
     .status-card {
         background: white;
         padding: 25px;
         border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        border-left: 6px solid #2ecc71;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        border-top: 5px solid #27AE60; /* Verde Esmeralda */
     }
+    
+    h1, h3 { color: #1B2631; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -97,16 +95,16 @@ def load_sheet(aba_nome):
     except:
         return None
 
-# 4. Lógica de Login
+# 4. Login
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 2, 1])
+    _, col2, _ = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #2c3e50;'>🚓 Portal GNR</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>🚓 Sistema de Escalas</h1>", unsafe_allow_html=True)
         with st.form("login_form"):
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
-            if st.form_submit_button("ACEDER AO SISTEMA"):
+            if st.form_submit_button("ENTRAR NO PORTAL", use_container_width=True):
                 df_u = load_sheet("utilizadores")
                 if df_u is not None:
                     user = df_u[(df_u['email'].str.lower() == email_i) & (df_u['password'] == str(pass_i))]
@@ -118,32 +116,29 @@ def login():
                     else:
                         st.error("❌ Credenciais incorretas.")
                 else:
-                    st.error("⚠️ Erro de ligação.")
+                    st.error("⚠️ Erro de base de dados.")
 
-# 5. Aplicação Principal
+# 5. App
 def main_app():
-    # SIDEBAR DESIGNER
     with st.sidebar:
         st.markdown(f"""
             <div class="profile-card">
-                <div style="font-size: 40px; margin-bottom: 10px;">👮‍♂️</div>
+                <p style="color: #ABB2B9; font-size: 0.8rem; margin:0;">MILITAR ATIVO</p>
                 <h2>{st.session_state['user_nome_completo']}</h2>
-                <p style="color: #95a5a6; font-size: 14px;">Militar ID: {st.session_state['user_id']}</p>
+                <p style="color: #85929E; font-size: 0.85rem; margin-top:5px;">ID: {st.session_state['user_id']}</p>
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
+        menu = st.radio("CONSULTAS", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
         
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("🚪 Terminar Sessão"):
+        st.divider()
+        if st.button("🚪 Terminar Sessão", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # --- MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
-        data_sel = st.date_input("Data:", format="DD/MM/YYYY")
+        data_sel = st.date_input("Data da escala:", format="DD/MM/YYYY")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         if df_dia is not None:
@@ -151,37 +146,37 @@ def main_app():
             if not meu_df.empty:
                 st.markdown(f"""
                 <div class="status-card">
-                    <span style="color: #27ae60; font-weight: bold; text-transform: uppercase; font-size: 12px;">Serviço Confirmado</span>
-                    <h1 style="margin:5px 0; color: #2c3e50; font-size: 32px;">{meu_df.iloc[0]['serviço']}</h1>
-                    <p style="margin:0; font-size: 18px; color: #7f8c8d;">🕒 <b>Horário:</b> {meu_df.iloc[0]['horário']}</p>
+                    <p style="color: #27AE60; font-weight: bold; margin-bottom: 5px;">CONFIRMADO</p>
+                    <h1 style="margin:0; font-size: 2.5rem;">{meu_df.iloc[0]['serviço']}</h1>
+                    <p style="margin-top:10px; font-size: 1.2rem; color: #566573;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p>
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.warning("⚠️ Não constas na escala para este dia.")
+                st.warning("⚠️ Não consta serviço para este dia.")
         else:
             st.info(f"ℹ️ Escala de {nome_aba} não disponível.")
 
-    # --- CONSULTA GERAL ---
     elif menu == "🔍 Consulta Geral":
-        st.title("🔍 Escala Completa")
-        data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
+        st.title("🔍 Escala Geral")
+        data_sel = st.date_input("Consultar dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         if df_dia is not None:
-            def mostrar_bloco(titulo, lista_keywords):
-                padrao = '|'.join(lista_keywords).lower()
+            def mostrar_bloco(titulo, keywords):
+                padrao = '|'.join(keywords).lower()
                 temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
+                        # Agrupamento para leitura limpa
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-            mostrar_bloco("Atendimento e Patrulhas", ["atendimento", "patrulha", "po", "ronda"])
-            mostrar_bloco("Administrativo / Apoio", ["secretaria", "tribunal", "inquérito", "pronto"])
-            mostrar_bloco("Ausências", ["folga", "férias", "licença", "doente"])
+            
+            mostrar_bloco("Operacional e Patrulhas", ["atendimento", "patrulha", "po", "ronda"])
+            mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto"])
+            mostrar_bloco("Inoperacionais", ["folga", "férias", "licença", "doente"])
         else:
-            st.error("Escala não encontrada.")
+            st.error("Dia não disponível.")
 
-    # --- SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitação de Troca")
         data_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
@@ -190,22 +185,22 @@ def main_app():
         if df_dia_t is not None:
             meu_df = df_dia_t[df_dia_t['id'] == st.session_state['user_id']]
             if not meu_df.empty:
-                meu_s, meu_h = meu_df.iloc[0]['serviço'], meu_df.iloc[0]['horário']
+                meu_s = meu_df.iloc[0]['serviço']
                 indisp = ["folga", "férias", "doente", "licença"]
                 df_colegas = df_dia_t[(df_dia_t['id'] != st.session_state['user_id']) & (~df_dia_t['serviço'].str.lower().str.contains('|'.join(indisp)))]
                 if not df_colegas.empty:
                     df_colegas['display'] = df_colegas['id'] + " - " + df_colegas['serviço']
                     with st.form("form_troca"):
                         colega = st.selectbox("Trocar com:", df_colegas['display'].tolist())
-                        motivo = st.text_input("Motivo:")
-                        if st.form_submit_button("GERAR MENSAGEM"):
+                        motivo = st.text_input("Motivo da troca:")
+                        if st.form_submit_button("GERAR MENSAGEM PARA WHATSAPP"):
                             id_c = colega.split(" - ")[0]
                             msg = f"*SOLICITAÇÃO DE TROCA ({nome_aba_t})*\n\n👉 *SAIR:* {st.session_state['user_nome_completo']} ({meu_s})\n👉 *ENTRAR:* ID {id_c}\n📝 *MOTIVO:* {motivo}"
                             st.code(msg, language="text")
             else:
-                st.error("Não estás escalado para este dia.")
+                st.error("Não estás escalado neste dia.")
 
-# Inicialização
+# Init
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
