@@ -10,33 +10,32 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - O NOVO LOOK "TOP" (LIMPO E PROFISSIONAL)
+# 2. CSS - AJUSTE FINAL DE TONS (BLOCOS CINZA CLARO)
 st.markdown("""
     <style>
-    /* FUNDO DA PÁGINA - Cinza Gelo (Clean) */
+    /* FUNDO DA PÁGINA - Branco Puro */
     .stApp { 
-        background-color: #F0F2F5 !important; 
+        background-color: #FFFFFF !important; 
     }
     
-    /* BLOCOS (EXPANDERS) - BRANCO PURO E SEM BORDAS PESADAS */
+    /* BLOCOS (EXPANDERS) - O CINZA CLARO QUE PEDISTE */
     .st-expander {
-        background-color: #FFFFFF !important;
-        border: 1px solid #E1E4E8 !important;
-        border-radius: 12px !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.02) !important;
-        margin-bottom: 12px !important;
+        background-color: #F8F9FA !important; /* Cinza muito claro e limpo */
+        border: 1px solid #E9ECEF !important;
+        border-radius: 10px !important;
+        box-shadow: none !important;
+        margin-bottom: 10px !important;
     }
     
-    /* CABEÇALHO DO BLOCO - Texto Escuro e Nítido */
+    /* CABEÇALHO DO BLOCO - Mantém o tom cinza claro mas com texto bem visível */
     .streamlit-expanderHeader {
-        background-color: #FFFFFF !important;
-        color: #2C3E50 !important;
-        font-weight: 700 !important;
-        font-size: 1.05rem !important;
-        border-radius: 12px !important;
+        background-color: #F8F9FA !important;
+        color: #212529 !important; /* Texto quase preto para contraste */
+        font-weight: 600 !important;
+        border-radius: 10px !important;
     }
 
-    /* BARRA LATERAL (INTOCADA - Como gostavas) */
+    /* BARRA LATERAL (INTOCADA) */
     [data-testid="stSidebar"] { 
         background-color: #455A64 !important; 
     }
@@ -45,36 +44,30 @@ st.markdown("""
         padding: 20px; 
         border-radius: 12px; 
         margin-bottom: 25px; 
-        border: 1px solid rgba(255,255,255,0.1); 
         text-align: center; 
     }
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] p, [data-testid="stSidebar"] label { 
-        color: #FFFFFF !important; 
-    }
 
-    /* LOGIN (INTOCADO - Estilo Sidebar) */
+    /* LOGIN (INTOCADO) */
     div[data-testid="stForm"] { 
         background-color: #455A64; 
         border-radius: 15px; 
         padding: 30px; 
     }
-    div[data-testid="stForm"] * { color: white !important; }
+    div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p { 
+        color: white !important; 
+    }
 
-    /* CARD DE SERVIÇO (Minha Escala) */
+    /* CARD DE SERVIÇO (Minha Escala) - Branco para contrastar com o fundo */
     .status-card { 
-        background: #FFFFFF; 
+        background: #F8F9FA; 
         padding: 25px; 
         border-radius: 15px; 
         border-left: 6px solid #455A64; 
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
     }
-    
-    /* Ajuste de Texto na página principal para contraste */
-    h1, h2, h3 { color: #2C3E50 !important; }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Funções de Dados e Login (Mantidas exatamente iguais)
+# 3. Funções de Dados
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
@@ -87,15 +80,16 @@ def load_sheet(aba_nome):
         return df
     except: return None
 
+# 4. Login
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.5, 1])
     with col2:
         with st.form("login_form"):
-            st.markdown("<h1 style='text-align: center;'>🚓 Escala de Serviço</h1>", unsafe_allow_html=True)
+            st.markdown("<h1 style='text-align: center;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
-            if st.form_submit_button("ENTRAR NO PORTAL", use_container_width=True):
+            if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
                 df_u = load_sheet("utilizadores")
                 if df_u is not None:
                     user = df_u[(df_u['email'].str.lower() == email_i) & (df_u['password'] == str(pass_i))]
@@ -105,10 +99,10 @@ def login():
                         st.session_state["user_nome_completo"] = f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}".strip()
                         st.rerun()
 
-# 4. App Principal
+# 5. App Principal
 def main_app():
     with st.sidebar:
-        st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
+        st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem; margin:0;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
         if st.button("🚪 Terminar Sessão"):
             st.session_state["logged_in"] = False
@@ -122,26 +116,20 @@ def main_app():
         if df_dia is not None:
             meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
             if not meu_df.empty:
-                st.markdown(f"""<div class="status-card"><h1 style="margin:0; color: #2C3E50;">{meu_df.iloc[0]['serviço']}</h1><p style="margin-top:10px; font-size: 1.2rem; color: #546E7A;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p></div>""", unsafe_allow_html=True)
+                st.markdown(f"""<div class="status-card"><h1>{meu_df.iloc[0]['serviço']}</h1><p>🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p></div>""", unsafe_allow_html=True)
 
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
-        data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
+        data_sel = st.date_input("Escolher dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         if df_dia is not None:
-            df_restante = df_dia.copy()
-            def filtrar_e_mostrar(titulo, keywords, excluir=True):
-                nonlocal df_restante
+            def filtrar_e_mostrar(titulo, keywords):
                 padrao = '|'.join(keywords).lower()
-                df_busca = df_dia if not excluir else df_restante
-                temp_df = df_busca[df_busca['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+                temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
-                        agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
-                        st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                    if excluir:
-                        df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
+                        st.dataframe(temp_df[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
 
             filtrar_e_mostrar("Atendimento", ["atendimento"])
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
