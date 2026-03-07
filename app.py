@@ -84,7 +84,7 @@ def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.5, 1])
     with col2:
-        st.markdown("<h1 style='text-align: center;'>🚓 Sistema de Escalas</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='text-align: center;'>🚓 Escala de Serviço - Posto Famalicão</h1>", unsafe_allow_html=True)
         with st.form("login_form"):
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
@@ -157,17 +157,32 @@ def main_app():
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
             
             # --- SEPARAÇÃO DOS BLOCOS SOLICITADA ---
-            # 1. Patrulhas e Atendimento Direto
-            mostrar_bloco("Atendimento e Patrulhas", ["atendimento", "patrulha", "po", "ronda", "vtr"])
+            # 1. Atendimento 
+            mostrar_bloco("Atendimento", ["atendimento"])
             
-            # 2. NOVO: Apoio ao Atendimento
-            mostrar_bloco("Apoio ao Atendimento", ["apoio", "permanência", "reforço"])
+            # 2. Apoio ao Atendimento
+            mostrar_bloco("Apoio ao Atendimento", ["apoio"])
+
+            # 3. Patrulhas
+            mostrar_bloco("Patrulhas", ["po", "patrulha", "ronda"])
+            
+            # 3. Renumerados
+            mostrar_bloco("Renumerados", ["renumerado"])
             
             # 3. Outros Serviços
             mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina"])
             
-            # 4. Inoperacionais
-            mostrar_bloco("Inoperacionais", ["folga", "férias", "licença", "doente"])
+            # 3. Outros Serviços
+            mostrar_bloco("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto"])
+            
+            # 7. Folga
+            mostrar_bloco("Folga", ["folga semanal", "folga complementar"])
+
+            # 8. Ausentes
+            mostrar_bloco("Ausentes", [ "férias", "licença", "doente", "diligência"])
+
+        
+            
         else:
             st.error("Dia não disponível.")
 
