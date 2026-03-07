@@ -173,20 +173,20 @@ def main_app():
             # Resetar o balde antes de começar a mostrar os blocos
             st.session_state['df_restante'] = df_dia.copy()
 
-           # --- ORDEM DE PRIORIDADE CORRIGIDA E REFORÇADA ---
+           # --- NOVA ORDEM DE PRIORIDADE (REMUNERADOS NO TOPO) ---
             
-            # 1. Apoio primeiro
+            # 1. REMUNERADOS (Verifica primeiro que tudo)
+            # Apanha: 'remu', 'renu', 'grat', 'extra'
+            filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"])
+            
+            # 2. Apoio ao Atendimento
             filtrar_e_mostrar("Apoio ao Atendimento", ["apoio", "permanência"])
             
-            # 2. Atendimento
+            # 3. Atendimento
             filtrar_e_mostrar("Atendimento", ["atendimento"])
 
-            # 3. Patrulhas
+            # 4. Patrulhas
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
-            
-            # 4. REMUNERADOS (REFORÇADO)
-            # Procura por 'remu', 'renu' ou 'grat' - assim apanha qualquer variação
-            filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"])
             
             # 5. Folgas
             filtrar_e_mostrar("Folga", ["folga"])
@@ -194,9 +194,9 @@ def main_app():
             # 6. Ausentes
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
 
-            # 7. Administrativo e Tudo o resto
+            # 7. Administrativo e Tudo o resto (O que sobrar no "balde")
             filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "instrução"])
-
+            
         else:
             st.error("Dia não disponível.")
 
