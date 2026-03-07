@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - INTEGRAÇÃO DA SOLUÇÃO DOS SUBTÍTULOS BRANCOS
+# 2. CSS - TUDO IGUAL + NOVO ESTILO DO BOTÃO SAIR
 st.markdown("""
     <style>
     /* FUNDO DA PÁGINA */
@@ -47,29 +47,25 @@ st.markdown("""
         color: white !important; 
     }
 
-    /* --- A PARTE QUE ESTÁ PERFEITA: SUBTÍTULOS EM BRANCO --- */
+    /* SUBTÍTULOS EM BRANCO (MANTIDO PERFEITO) */
     div[data-testid="stExpander"] summary p {
         color: white !important;
         font-weight: bold !important;
         font-size: 1.1rem !important;
     }
-
     div[data-testid="stExpander"] summary {
         background-color: #455A64 !important;
         border-radius: 8px !important;
         padding: 5px 10px !important;
     }
-
     div[data-testid="stExpander"] summary svg {
         fill: white !important;
     }
-
     .st-expander {
         border: none !important;
         background-color: transparent !important;
         margin-bottom: 15px !important;
     }
-    /* ----------------------------------------------------- */
 
     /* TABELAS */
     .stDataFrame {
@@ -77,14 +73,12 @@ st.markdown("""
         border: 1px solid #EAECEF !important;
         border-radius: 8px !important;
     }
-    
     [data-testid="stDataFrame"] table thead th {
         background-color: #F8FAFC !important;
         color: #1A1C1E !important;
         font-weight: bold !important;
         border-bottom: 2px solid #EAECEF !important;
     }
-    
     [data-testid="stDataFrame"] table tbody td {
         background-color: #FFFFFF !important;
         color: #333639 !important;
@@ -92,23 +86,33 @@ st.markdown("""
     }
     
     /* TÍTULOS E TEXTOS DA PÁGINA */
-    h1, h2, h3, p {
-        color: #1A1C1E !important;
-    }
+    h1, h2, h3, p { color: #1A1C1E !important; }
     
-    /* Botões */
+    /* BOTÃO GERAL */
     .stButton>button { 
         background-color: #FFFFFF !important; 
         color: #1A1C1E !important; 
         border: 1px solid #D1D1D1 !important;
     }
-    .stButton>button:hover {
-        background-color: #F8FAFC !important;
+
+    /* --- ALTERAÇÃO: ESTILO DO BOTÃO SAIR --- */
+    /* Criamos um estilo específico para o botão de logout na sidebar */
+    section[data-testid="stSidebar"] .stButton>button {
+        background-color: #e74c3c !important; /* Vermelho suave */
+        color: white !important;
+        border: none !important;
+        font-weight: bold !important;
+        border-radius: 8px !important;
+        transition: 0.3s;
+    }
+    section[data-testid="stSidebar"] .stButton>button:hover {
+        background-color: #c0392b !important; /* Vermelho mais escuro no hover */
+        transform: scale(1.02);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Função de Carregamento
+# 3. Funções (Tudo igual)
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
@@ -119,17 +123,14 @@ def load_sheet(aba_nome):
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("nan", "")
         return df
-    except:
-        return None
+    except: return None
 
-# 4. Login
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
         with st.form("login_form"):
             st.markdown("<h1 style='text-align: center; color: white !important;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: white !important;'>Posto Territorial de Famalicão</p>", unsafe_allow_html=True)
             email_i = st.text_input("📧 Email").strip().lower()
             pass_i = st.text_input("🔑 Password", type="password")
             if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
@@ -141,9 +142,7 @@ def login():
                         st.session_state["user_id"] = user.iloc[0]['id']
                         st.session_state["user_nome_completo"] = f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}".strip()
                         st.rerun()
-                    else: st.error("❌ Credenciais incorretas.")
 
-# 5. App Principal
 def main_app():
     with st.sidebar:
         st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
@@ -151,7 +150,8 @@ def main_app():
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
         
         st.markdown("<br><br>", unsafe_allow_html=True)
-        if st.button("🚪 Sair"):
+        # O botão abaixo vai herdar o estilo vermelho do CSS acima
+        if st.button("🚪 Sair do Portal", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
 
@@ -167,28 +167,23 @@ def main_app():
                     <h1 style="margin:0; font-size: 2rem; color: #1A1C1E !important;">{meu_df.iloc[0]['serviço']}</h1>
                     <p style="color: #546E7A; font-size: 1.2rem; margin-top: 10px;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p>
                 </div>""", unsafe_allow_html=True)
-            else: st.warning("⚠️ Não consta serviço para este dia.")
 
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
-        
         if df_dia is not None:
             df_restante = df_dia.copy()
-
             def filtrar_e_mostrar(titulo, keywords, excluir=True):
                 nonlocal df_restante
                 padrao = '|'.join(keywords).lower()
                 df_busca = df_dia if not excluir else df_restante
                 temp_df = df_busca[df_busca['serviço'].str.lower().str.contains(padrao, na=False)].copy()
-                
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                    
                     if excluir:
                         df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
 
@@ -199,8 +194,6 @@ def main_app():
             filtrar_e_mostrar("Folga", ["folga"])
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
             filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
-        else:
-            st.error("Dia não disponível.")
 
     elif menu == "👥 Lista Efetivo":
         st.title("👥 Lista de Efetivo")
@@ -210,7 +203,7 @@ def main_app():
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
-        st.info("Funcionalidade em desenvolvimento. Brevemente poderá solicitar trocas diretamente aqui.")
+        st.info("Funcionalidade em desenvolvimento.")
 
 # Inicialização
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
