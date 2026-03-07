@@ -10,10 +10,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - ESTÉTICA FINAL (Com ajuste no Login)
+# 2. CSS - ESTÉTICA FINAL (Alteração: Apenas cor de fundo da página)
 st.markdown("""
     <style>
-    .stApp { background-color: #ECEFF1; }
+    /* ALTERAÇÃO: Fundo da página em Cinza Gelo para destacar os elementos */
+    .stApp { background-color: #F0F2F5; }
     
     /* SIDEBAR (Mantida Original) */
     [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
@@ -26,7 +27,7 @@ st.markdown("""
     /* CARDS DE CONTEÚDO */
     .status-card { background: #FFFFFF; padding: 25px; border-radius: 15px; border-top: 6px solid #455A64; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 
-    /* --- ALTERAÇÃO: ESTILO DO LOGIN --- */
+    /* ESTILO DO LOGIN (Mantido conforme o anterior) */
     div[data-testid="stForm"] {
         background-color: #455A64;
         border-radius: 15px;
@@ -37,7 +38,6 @@ st.markdown("""
     div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p {
         color: white !important;
     }
-    /* Estilo dos campos de input dentro do login */
     div[data-testid="stForm"] input {
         background-color: #FFFFFF !important;
         color: #263238 !important;
@@ -62,7 +62,7 @@ def load_sheet(aba_nome):
 # 4. Login
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.2, 1]) # Coluna central um pouco mais estreita para o login
+    _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
         with st.form("login_form"):
             st.markdown("<h1 style='text-align: center; font-size: 1.8rem;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
