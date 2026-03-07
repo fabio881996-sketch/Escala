@@ -10,69 +10,59 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - REFINAMENTO FINAL: TEXTOS DA SIDEBAR A BRANCO
+# 2. CSS - CORREÇÃO CRÍTICA PARA TEXTO DO RADIO (MENU) A BRANCO
 st.markdown("""
     <style>
-    /* Fundo Geral da App */
     .stApp { background-color: #ECEFF1; }
     
-    /* BARRA LATERAL - CINZA ANTRACITE */
+    /* BARRA LATERAL */
     [data-testid="stSidebar"] {
         background-color: #455A64 !important;
         border-right: 1px solid #37474F;
     }
     
-    /* Card do Perfil na Sidebar */
+    /* CARD DE PERFIL */
     .profile-card {
         background: #37474F;
         padding: 20px;
         border-radius: 12px;
         margin-bottom: 25px;
         border: 1px solid rgba(255,255,255,0.1);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         text-align: center;
     }
-    
-    /* TODOS OS TEXTOS DA SIDEBAR A BRANCO */
+
+    /* FORÇAR TUDO NA SIDEBAR A BRANCO (Incluindo os itens do Menu Radio) */
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] .stMarkdown p,
+    [data-testid="stSidebar"] p,
     [data-testid="stSidebar"] label,
-    [data-testid="stWidgetLabel"] p {
+    [data-testid="stWidgetLabel"] p,
+    div[data-baseweb="radio"] div,
+    div[data-baseweb="radio"] span {
         color: #FFFFFF !important;
+        font-weight: 500 !important;
     }
     
-    /* Estilo das Opções do Menu (Radio) - TEXTO A BRANCO */
+    /* Efeito de Seleção e Hover no Menu */
     div[data-testid="stSidebarUserContent"] .stRadio label {
-        color: #FFFFFF !important; 
         background-color: transparent;
-        padding: 10px 15px;
+        padding: 8px 12px;
         border-radius: 8px;
-        transition: all 0.2s;
-        margin-bottom: 5px;
-        font-weight: 500;
+        transition: 0.2s;
     }
     
-    /* Hover nas opções do menu */
     div[data-testid="stSidebarUserContent"] .stRadio label:hover {
-        background-color: rgba(255, 255, 255, 0.15) !important;
-        color: #FFFFFF !important;
+        background-color: rgba(255, 255, 255, 0.1) !important;
     }
 
-    /* Botões na Sidebar */
+    /* Botões */
     .stButton>button {
         background-color: #37474F;
         color: #FFFFFF;
         border: 1px solid #546E7A;
-        font-weight: 600;
-    }
-    .stButton>button:hover {
-        background-color: #546E7A;
-        border-color: #FFFFFF;
-        color: #FFFFFF;
     }
     
-    /* Card de Serviço (Área Principal) */
+    /* Card de Serviço Principal */
     .status-card {
         background: #FFFFFF;
         padding: 25px;
@@ -80,8 +70,6 @@ st.markdown("""
         border-top: 6px solid #455A64;
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
-    
-    h1 { color: #263238; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -129,12 +117,11 @@ def main_app():
             <div class="profile-card">
                 <div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div>
                 <p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p>
-                <h2 style="margin:0; font-size: 1.1rem; color: white;">{st.session_state['user_nome_completo']}</h2>
+                <h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2>
                 <p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p>
             </div>
         """, unsafe_allow_html=True)
         
-        # Menu com texto forçado a branco via CSS
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Solicitar Troca"])
         
         st.markdown("<br><br>", unsafe_allow_html=True)
