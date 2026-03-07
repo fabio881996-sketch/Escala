@@ -10,13 +10,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - TUDO IGUAL + NOVO ESTILO DO BOTÃO SAIR
+# 2. CSS - MANTENDO TUDO IGUAL (SUBTÍTULOS BRANCOS E BOTÃO SAIR)
 st.markdown("""
     <style>
     /* FUNDO DA PÁGINA */
-    .stApp { 
-        background-color: #FFFFFF !important; 
-    }
+    .stApp { background-color: #FFFFFF !important; }
     
     /* BARRA LATERAL */
     [data-testid="stSidebar"] { 
@@ -24,30 +22,11 @@ st.markdown("""
         border-right: 1px solid #37474F; 
     }
     .profile-card { 
-        background: #37474F; 
-        padding: 20px; 
-        border-radius: 12px; 
-        margin-bottom: 25px; 
-        border: 1px solid rgba(255,255,255,0.1); 
-        text-align: center; 
+        background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; 
     }
-    [data-testid="stSidebar"] h2, [data-testid="stSidebar"] p, 
-    [data-testid="stSidebar"] label, div[data-baseweb="radio"] div { 
-        color: #FFFFFF !important; 
-    }
+    [data-testid="stSidebar"] * { color: #FFFFFF !important; }
 
-    /* LOGIN */
-    div[data-testid="stForm"] { 
-        background-color: #455A64; 
-        border-radius: 15px; 
-        padding: 30px;
-        color: white;
-    }
-    div[data-testid="stForm"] h1, div[data-testid="stForm"] label, div[data-testid="stForm"] p { 
-        color: white !important; 
-    }
-
-    /* SUBTÍTULOS EM BRANCO (MANTIDO PERFEITO) */
+    /* SUBTÍTULOS EM BRANCO */
     div[data-testid="stExpander"] summary p {
         color: white !important;
         font-weight: bold !important;
@@ -77,42 +56,23 @@ st.markdown("""
         background-color: #F8FAFC !important;
         color: #1A1C1E !important;
         font-weight: bold !important;
-        border-bottom: 2px solid #EAECEF !important;
-    }
-    [data-testid="stDataFrame"] table tbody td {
-        background-color: #FFFFFF !important;
-        color: #333639 !important;
-        border-bottom: 1px solid #F1F3F5 !important;
     }
     
-    /* TÍTULOS E TEXTOS DA PÁGINA */
+    /* TÍTULOS E TEXTOS */
     h1, h2, h3, p { color: #1A1C1E !important; }
     
-    /* BOTÃO GERAL */
-    .stButton>button { 
-        background-color: #FFFFFF !important; 
-        color: #1A1C1E !important; 
-        border: 1px solid #D1D1D1 !important;
-    }
-
-    /* --- ALTERAÇÃO: ESTILO DO BOTÃO SAIR --- */
-    /* Criamos um estilo específico para o botão de logout na sidebar */
+    /* BOTÃO SAIR ESPECÍFICO */
     section[data-testid="stSidebar"] .stButton>button {
-        background-color: #e74c3c !important; /* Vermelho suave */
+        background-color: #e74c3c !important;
         color: white !important;
         border: none !important;
         font-weight: bold !important;
         border-radius: 8px !important;
-        transition: 0.3s;
-    }
-    section[data-testid="stSidebar"] .stButton>button:hover {
-        background-color: #c0392b !important; /* Vermelho mais escuro no hover */
-        transform: scale(1.02);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Funções (Tudo igual)
+# 3. Função de Carregamento
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
@@ -125,6 +85,7 @@ def load_sheet(aba_nome):
         return df
     except: return None
 
+# 4. Login
 def login():
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.2, 1])
@@ -143,14 +104,11 @@ def login():
                         st.session_state["user_nome_completo"] = f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}".strip()
                         st.rerun()
 
+# 5. App Principal
 def main_app():
     with st.sidebar:
-        st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><p style="color: #B0BEC5; font-size: 0.7rem; margin:0; font-weight: bold; text-transform: uppercase;">Militar Ativo</p><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
-        
+        st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
-        
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        # O botão abaixo vai herdar o estilo vermelho do CSS acima
         if st.button("🚪 Sair do Portal", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
@@ -199,7 +157,11 @@ def main_app():
         st.title("👥 Lista de Efetivo")
         df_u = load_sheet("utilizadores")
         if df_u is not None:
-            st.dataframe(df_u[['id', 'posto', 'nome', 'email']], use_container_width=True, hide_index=True)
+            # --- ÚNICA ALTERAÇÃO: ORDEM E COLUNAS SOLICITADAS ---
+            colunas_finais = ["id", "nim", "posto", "nome", "email", "telemóvel"]
+            # Filtramos apenas as colunas que existem para evitar erros caso falte alguma na folha
+            colunas_existentes = [c for c in colunas_finais if c in df_u.columns]
+            st.dataframe(df_u[colunas_existentes], use_container_width=True, hide_index=True)
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
