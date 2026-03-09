@@ -26,8 +26,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- LISTA DE ADMINISTRADORES ---
+# --- CONFIGURAÇÕES ---
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
+
+# Lista de serviços que NÃO podem ser trocados
+SERVICOS_EXCLUIDOS = [
+    "inquérito", "secretaria", "pronto", "férias", 
+    "licença", "doente", "tribunal", "diligência"
+]
 
 # --- 2. FUNÇÕES DE DADOS ---
 def get_client():
@@ -131,7 +137,6 @@ else:
             
             troca = pd.DataFrame()
             if not df_trocas.empty and 'data' in df_trocas.columns:
-                # Procura se o utilizador é a ORIGEM ou o DESTINO da troca para mostrar no cartão
                 troca = df_trocas[(df_trocas['data'] == d_str) & (df_trocas['id_origem'].astype(str) == st.session_state['user_id'])]
             
             if not troca.empty:
@@ -197,23 +202,37 @@ else:
         if not df_d.empty:
             meu = df_d[df_d['id'].astype(str) == st.session_state['user_id']]
             if not meu.empty:
-                meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
-                st.info(f"O teu serviço original: {meu_s}")
+                meu_servico_texto = meu.iloc[0]['serviço'].lower()
                 
-                colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
-                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
-                
-                with st.form("f_t"):
-                    c_sel = st.selectbox("Com quem trocaste o serviço?", opcoes)
-                    if st.form_submit_button("CONFIRMAR E GRAVAR TROCA"):
-                        id_c = c_sel.split(" - ")[0]
-                        serv_c = c_sel.split(" - ", 1)[1] 
-                        if salvar_troca([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]):
-                            st.success("Troca registada com sucesso!"); st.balloons()
+                # Bloqueia se o PRÓPRIO utilizador estiver num serviço excluído
+                if any(ext in meu_servico_texto for ext in SERVICOS_EXCLUIDOS):
+                    st.warning(f"⚠️ O teu serviço atual ({meu.iloc[0]['serviço']}) não permite trocas pelo portal.")
+                else:
+                    meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
+                    st.info(f"Teu serviço: {meu_s}")
+                    
+                    # Filtra colegas que NÃO estão nos serviços excluídos
+                    colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
+                    
+                    # Aplica o filtro de exclusão na lista de colegas
+                    filtro_exclusao = '|'.join(SERVICOS_EXCLUIDOS).lower()
+                    colegas_validos = colegas[~colegas['serviço'].str.lower().str.contains(filtro_exclusao, na=False)]
+                    
+                    if not colegas_validos.empty:
+                        opcoes = colegas_validos.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                        with st.form("f_t"):
+                            c_sel = st.selectbox("Com quem trocaste?", opcoes)
+                            if st.form_submit_button("GRAVAR TROCA"):
+                                id_c = c_sel.split(" - ")[0]
+                                serv_c = c_sel.split(" - ", 1)[1] 
+                                if salvar_troca([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]):
+                                    st.success("Troca registada!"); st.balloons()
+                    else:
+                        st.warning("Não existem colegas com serviços passíveis de troca nesta data.")
             else:
-                st.warning("⚠️ Não tens serviço atribuído neste dia na escala carregada.")
+                st.warning("⚠️ Não tens serviço atribuído neste dia.")
         else:
-            st.error(f"🛑 Atenção: A escala para o dia {d_t.strftime('%d/%m')} ainda não foi carregada.")
+            st.error(f"🛑 Escala para {d_t.strftime('%d/%m')} ainda não carregada.")
 
     elif menu == "📜 Minhas Trocas":
         st.title("📜 Minhas Trocas")
@@ -222,8 +241,8 @@ else:
                                (df_trocas['id_destino'].astype(str) == st.session_state['user_id'])]
             if not minhas.empty:
                 st.dataframe(minhas, use_container_width=True, hide_index=True)
-            else: st.info("Não tens trocas registadas no histórico.")
-        else: st.info("Não existem trocas registadas.")
+            else: st.info("Sem trocas no histórico.")
+        else: st.info("Sem trocas registadas.")
 
     elif menu == "📜 Trocas Registadas (ADMIN)":
         st.title("📜 Gestão de Trocas (ADMIN)")
@@ -239,9 +258,9 @@ else:
                     if st.button("❌ Apagar", key=f"del_{idx}"):
                         if apagar_troca_gsheet(idx):
                             st.success("Apagada!"); st.rerun()
-                        else: st.error("Erro ao apagar.")
+                        else: st.error("Erro.")
                 st.markdown("---")
-        else: st.info("Não existem trocas registadas.")
+        else: st.info("Sem trocas registadas.")
 
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
