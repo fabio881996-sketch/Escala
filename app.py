@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURAÇÃO E ESTILO VISUAL ---
+# --- 1. CONFIGURAÇÃO E ESTILO ---
 st.set_page_config(page_title="GNR - Portal de Escalas", page_icon="🚓", layout="wide")
 
 st.markdown("""
@@ -12,11 +12,7 @@ st.markdown("""
     .stApp { background-color: #F8F9FA !important; }
     [data-testid="stSidebar"] { background-color: #455A64 !important; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; }
-    
-    /* Login */
     div[data-testid="stForm"] { background-color: #455A64; border-radius: 15px; padding: 30px; color: white; }
-    
-    /* Cards */
     .card-servico { 
         background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; 
         border-left: 6px solid #455A64; margin-bottom: 10px; color: #333;
@@ -92,7 +88,6 @@ else:
             d_str = dt.strftime('%d/%m/%Y')
             label = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
             
-            # Ver se eu troquei este dia
             troca = pd.DataFrame()
             if not df_trocas.empty and 'data' in df_trocas.columns:
                 troca = df_trocas[(df_trocas['data'] == d_str) & (df_trocas['id_origem'].astype(str) == st.session_state['user_id'])]
@@ -116,15 +111,41 @@ else:
 
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
-        data_g = st.date_input("Dia:", format="DD/MM/YYYY")
-        df_g = load_data(data_g.strftime("%d-%m"))
-        if not df_g.empty:
-            for _, r in df_g.iterrows():
-                is_me = str(r['id']) == st.session_state['user_id']
-                st.markdown(f"""<div class="card-servico {'card-meu' if is_me else ''}">
-                    <small>ID: {r['id']}</small> | <b>{r['horário']}</b>
-                    <h4 style="margin:5px 0;">{r['serviço']}</h4>
-                </div>""", unsafe_allow_html=True)
+        data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
+        nome_aba = data_sel.strftime("%d-%m")
+        df_dia = load_data(nome_aba)
+        
+        if not df_dia.empty:
+            df_restante = df_dia.copy()
+
+            def filtrar_e_mostrar(titulo, keywords, excluir=True):
+                nonlocal df_restante
+                padrao = '|'.join(keywords).lower()
+                # Filtrar
+                temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+                
+                # Se excluir for True, garantimos que não mostramos quem já apareceu em categorias anteriores
+                if excluir:
+                    temp_df = temp_df[temp_df['id'].isin(df_restante['id'])]
+
+                if not temp_df.empty:
+                    with st.expander(f"🔹 {titulo}", expanded=True):
+                        # Agrupar IDs que fazem o mesmo serviço no mesmo horário
+                        agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
+                        st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+                    
+                    if excluir:
+                        df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
+
+            filtrar_e_mostrar("Atendimento", ["atendimento"])
+            filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
+            filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
+            filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"], excluir=False)
+            filtrar_e_mostrar("Folga", ["folga"])
+            filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
+            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
+        else:
+            st.warning("Nenhum dado encontrado para este dia.")
 
     elif menu == "🔄 Registar Troca":
         st.title("🔄 Registar Troca Permanente")
@@ -155,5 +176,4 @@ else:
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
-        if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
-            
+        if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)            
