@@ -116,34 +116,33 @@ else:
         df_dia = load_data(nome_aba)
         
         if not df_dia.empty:
-            df_restante = df_dia.copy()
+            df_atual = df_dia.copy()
 
-            def filtrar_e_mostrar(titulo, keywords, excluir=True):
-                nonlocal df_restante
+            def mostrar_grupo(titulo, keywords, df_base, excluir=True):
                 padrao = '|'.join(keywords).lower()
-                # Filtrar
-                temp_df = df_dia[df_dia['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+                # Procura as palavras-chave no serviço
+                temp_df = df_base[df_base['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 
-                # Se excluir for True, garantimos que não mostramos quem já apareceu em categorias anteriores
-                if excluir:
-                    temp_df = temp_df[temp_df['id'].isin(df_restante['id'])]
-
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
-                        # Agrupar IDs que fazem o mesmo serviço no mesmo horário
+                        # Agrupa IDs que fazem o mesmo serviço
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
                     
                     if excluir:
-                        df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
+                        # Retorna o DataFrame sem os militares que já foram mostrados
+                        return df_base[~df_base['id'].isin(temp_df['id'])]
+                return df_base
 
-            filtrar_e_mostrar("Atendimento", ["atendimento"])
-            filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
-            filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
-            filtrar_e_mostrar("Remunerados", ["remu", "renu", "grat", "extra"], excluir=False)
-            filtrar_e_mostrar("Folga", ["folga"])
-            filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
-            filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
+            # Executa os filtros por ordem de prioridade
+            df_atual = mostrar_grupo("Atendimento", ["atendimento"], df_atual)
+            df_atual = mostrar_grupo("Apoio ao Atendimento", ["apoio"], df_atual)
+            df_atual = mostrar_grupo("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_atual)
+            # Remunerados não excluem o pessoal da lista (excluir=False)
+            _ = mostrar_grupo("Remunerados", ["remu", "renu", "grat", "extra"], df_atual, excluir=False)
+            df_atual = mostrar_grupo("Folga", ["folga"], df_atual)
+            df_atual = mostrar_grupo("Ausentes", ["férias", "licença", "doente", "diligência", "falta"], df_atual)
+            df_atual = mostrar_grupo("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"], df_atual)
         else:
             st.warning("Nenhum dado encontrado para este dia.")
 
@@ -176,4 +175,5 @@ else:
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
-        if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)            
+        if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
+            
