@@ -4,34 +4,58 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 
-# --- 1. CONFIGURAÇÃO E ESTILO VISUAL ---
+# --- 1. CONFIGURAÇÃO E ESTILO VISUAL (LOGIN E APP) ---
 st.set_page_config(page_title="GNR - Portal de Escalas", page_icon="🚓", layout="wide")
 
 st.markdown("""
     <style>
+    /* Fundo Geral da App */
     .stApp { background-color: #F8F9FA !important; }
+    
+    /* Barra Lateral */
     [data-testid="stSidebar"] { background-color: #455A64 !important; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; }
     
-    /* Títulos da App (Azul Escuro GNR) */
+    /* Títulos Gerais (Azul Escuro GNR) */
     h1, h2, h3, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3 { 
         color: #2C3E50 !important; 
         font-weight: 700 !important; 
     }
     
-    /* Texto dos Expanders */
+    /* CORREÇÃO DO FORMULÁRIO DE LOGIN */
+    div[data-testid="stForm"] {
+        background-color: #455A64 !important; 
+        border-radius: 15px !important;
+        padding: 40px !important;
+        box-shadow: 0px 10px 25px rgba(0,0,0,0.3) !important;
+        color: white !important;
+    }
+    
+    /* Forçar texto branco dentro do Login */
+    div[data-testid="stForm"] h1, 
+    div[data-testid="stForm"] h2, 
+    div[data-testid="stForm"] label,
+    div[data-testid="stForm"] p { 
+        color: #FFFFFF !important; 
+    }
+    
+    /* Inputs Brancos para contraste no Login */
+    div[data-testid="stForm"] input {
+        background-color: #FFFFFF !important;
+        color: #333333 !important;
+    }
+
+    /* ESTILO DOS EXPANDERS (ESCALA GERAL) */
     .streamlit-expanderHeader { 
         background-color: #FFFFFF !important; 
         color: #2C3E50 !important; 
         font-weight: bold !important;
         border: 1px solid #DDE1E6 !important;
         border-radius: 8px !important;
+        margin-bottom: 5px;
     }
 
-    div[data-testid="stForm"] h1, div[data-testid="stForm"] h2 { 
-        color: white !important; 
-    }
-
+    /* CARDS DA "MINHA ESCALA" */
     .card-servico { 
         background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; 
         border-left: 6px solid #455A64; margin-bottom: 10px; color: #333;
@@ -81,19 +105,19 @@ def salvar_troca(linha):
     except:
         return False
 
-# --- 3. LOGIN ---
+# --- 3. LÓGICA DE LOGIN ---
 if "logged_in" not in st.session_state: 
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
     st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.2, 1])
+    _, col2, _ = st.columns([1, 1.5, 1])
     with col2:
-        with st.form("login"):
-            st.markdown("<h1 style='text-align:center;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
-            u = st.text_input("Email").strip().lower()
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("ENTRAR", use_container_width=True):
+        with st.form("login_form"):
+            st.markdown("<h1 style='text-align:center; margin-bottom:20px;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
+            u = st.text_input("Email de Acesso").strip().lower()
+            p = st.text_input("Palavra-passe", type="password")
+            if st.form_submit_button("ENTRAR NO PORTAL", use_container_width=True):
                 df_u = load_data("utilizadores")
                 if not df_u.empty:
                     user = df_u[(df_u['email'].str.lower() == u) & (df_u['password'] == p)]
@@ -104,14 +128,17 @@ if not st.session_state["logged_in"]:
                             "user_nome": f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}"
                         })
                         st.rerun()
-                    else: st.error("Dados incorretos.")
-                else: st.error("Erro ao carregar utilizadores.")
+                    else: st.error("Utilizador ou password incorretos.")
+                else: st.error("Erro técnico: Não foi possível carregar a base de utilizadores.")
 else:
-    # --- 4. APP PRINCIPAL ---
+    # --- 4. INTERFACE PRINCIPAL ---
     with st.sidebar:
-        st.markdown(f"### 👮‍♂️ {st.session_state['user_nome']}\n**ID:** {st.session_state['user_id']}")
-        menu = st.radio("MENU", ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Registar Troca", "📜 Trocas Registadas", "👥 Efetivo"])
-        if st.button("Sair"): 
+        st.markdown(f"### 👮‍♂️ {st.session_state['user_nome']}")
+        st.markdown(f"**ID:** {st.session_state['user_id']}")
+        st.markdown("---")
+        menu = st.radio("MENU DE NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Registar Troca", "📜 Trocas Registadas", "👥 Efetivo"])
+        st.markdown("<br>"*5, unsafe_allow_html=True)
+        if st.button("Sair do Sistema", use_container_width=True): 
             st.session_state["logged_in"] = False
             st.rerun()
 
@@ -164,7 +191,6 @@ else:
                     if any(m_orig):
                         df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
                         df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄 c/ {t['id_destino']})"
-                    
                     m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
                     if any(m_dest):
                         df_atual.loc[m_dest, 'serviço'] = t['servico_origem']
@@ -190,36 +216,36 @@ else:
             df_atual = mostrar_grupo("Ausentes", ["férias", "licença", "doente", "diligência", "falta"], df_atual)
             df_atual = mostrar_grupo("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"], df_atual)
         else:
-            st.warning("Nenhum dado encontrado para este dia.")
+            st.warning("Não existem dados de escala para este dia.")
 
     elif menu == "🔄 Registar Troca":
         st.title("🔄 Registar Troca")
-        d_t = st.date_input("Data da troca:", format="DD/MM/YYYY")
+        d_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
         df_d = load_data(d_t.strftime("%d-%m"))
         if not df_d.empty:
             meu = df_d[df_d['id'].astype(str) == st.session_state['user_id']]
             if not meu.empty:
                 meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
-                st.info(f"O teu serviço: {meu_s}")
+                st.info(f"O teu serviço original: {meu_s}")
                 colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
                 opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
-                with st.form("f_t"):
-                    c_sel = st.selectbox("Com quem trocaste?", opcoes)
-                    if st.form_submit_button("GRAVAR TROCA"):
+                with st.form("form_troca"):
+                    c_sel = st.selectbox("Trocar com qual colega?", opcoes)
+                    if st.form_submit_button("CONFIRMAR TROCA"):
                         id_c = c_sel.split(" - ")[0]
                         serv_c = c_sel.split(" - ", 1)[1]
                         if salvar_troca([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]):
-                            st.success("Gravado com sucesso!"); st.balloons()
-            else: st.warning("Não tens serviço neste dia.")
+                            st.success("Troca registada com sucesso!"); st.balloons()
+            else: st.warning("Não tens serviço atribuído neste dia para efetuar uma troca.")
 
     elif menu == "📜 Trocas Registadas":
         st.title("📜 Histórico de Trocas")
         if not df_trocas.empty:
             st.dataframe(df_trocas, use_container_width=True, hide_index=True)
-        else: st.info("Nenhuma troca registada.")
+        else: st.info("Ainda não existem trocas registadas no sistema.")
 
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
         if not df_u.empty: 
-            st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
+            st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], use_container_width=True, hide_index=True)
