@@ -10,6 +10,10 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Inicialização da lista de trocas na sessão (para o novo menu)
+if "historico_trocas" not in st.session_state:
+    st.session_state["historico_trocas"] = []
+
 # 2. CSS - BASE INALTERÁVEL
 st.markdown("""
     <style>
@@ -74,11 +78,12 @@ def login():
 def main_app():
     with st.sidebar:
         st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
-        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Troquei", "🔄 Solicitar Troca"])
+        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Troquei", "📜 As Minhas Trocas", "🔄 Solicitar Troca"])
         if st.button("🚪 Sair do Portal", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
 
+    # --- ABA MINHA ESCALA (MANTIDA) ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         st.subheader("Próximos Serviços")
@@ -95,16 +100,8 @@ def main_app():
                     label_dia = "HOJE" if i == 0 else data_verificar.strftime("%d/%m (%a)")
                     st.markdown(f"""<div style="background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px;"><span style="color: #455A64; font-weight: bold; font-size: 0.9rem;">{label_dia}</span><h3 style="margin:0; color: #1A1C1E !important;">{meu_df.iloc[0]['serviço']}</h3><p style="color: #546E7A; margin:0;">🕒 {meu_df.iloc[0]['horário']}</p></div>""", unsafe_allow_html=True)
         if not encontrou_algum: st.info("Não foram encontrados serviços escalados.")
-        st.divider()
-        st.subheader("Consultar outra data")
-        data_sel = st.date_input("Escolha o dia:", format="DD/MM/YYYY")
-        nome_aba_sel = data_sel.strftime("%d-%m")
-        df_sel = load_sheet(nome_aba_sel)
-        if df_sel is not None:
-            meu_df_sel = df_sel[df_sel['id'] == st.session_state['user_id']]
-            if not meu_df_sel.empty: st.success(f"Nesse dia estarás de: **{meu_df_sel.iloc[0]['serviço']}** ({meu_df_sel.iloc[0]['horário']})")
-            else: st.warning("Não constas na escala deste dia.")
 
+    # --- ABA CONSULTA GERAL (MANTIDA) ---
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY", key="geral")
@@ -130,6 +127,7 @@ def main_app():
             filtrar_e_mostrar("Ausentes", ["férias", "licença", "doente", "diligência", "falta"])
             filtrar_e_mostrar("Administrativo e Outros", ["secretaria", "tribunal", "inquérito", "pronto", "oficina", "comando", "permanência"])
 
+    # --- ABA LISTA EFETIVO (MANTIDA) ---
     elif menu == "👥 Lista Efetivo":
         st.title("👥 Lista de Efetivo")
         df_u = load_sheet("utilizadores")
@@ -138,9 +136,9 @@ def main_app():
             colunas_existentes = [c for c in colunas_finais if c in df_u.columns]
             st.dataframe(df_u[colunas_existentes], use_container_width=True, hide_index=True)
 
+    # --- ABA TROQUEI (COM FILTRO DE AUSENTES) ---
     elif menu == "🔄 Troquei":
         st.title("🔄 Registar Troca Efetuada")
-        
         data_troca = st.date_input("1. Data do serviço a trocar:", format="DD/MM/YYYY")
         nome_aba = data_troca.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
@@ -155,27 +153,47 @@ def main_app():
                 servico_atual = meu_serv.iloc[0]['serviço']
                 horario_atual = meu_serv.iloc[0]['horário']
             
-            df_colegas = df_dia[df_dia['id'] != st.session_state['user_id']]
-            # Agora incluímos o Horário na lista de colegas
+            # --- FILTRO DE EXCLUSÃO SOLICITADO ---
+            excluir = ["férias", "doente", "licença", "diligência", "tribunal", "inquérito", "secretaria", "pronto", "falta"]
+            padrao_excluir = '|'.join(excluir).lower()
+            
+            df_colegas = df_dia[
+                (df_dia['id'] != st.session_state['user_id']) & 
+                (~df_dia['serviço'].str.lower().str.contains(padrao_excluir, na=False))
+            ]
             opcoes_colegas = df_colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
 
         with st.form("form_troquei"):
-            # Mostra o teu serviço e horário de forma clara
             texto_teu_servico = f"**{servico_atual}**" if horario_atual == "" else f"**{servico_atual}** ({horario_atual})"
             st.info(f"O teu serviço escalado: {texto_teu_servico}")
             
             if opcoes_colegas:
-                colega_selecionado = st.selectbox("2. Com quem trocou (ID - Serviço - Horário):", opcoes_colegas)
-                observacoes = st.text_area("3. Notas/Observações (opcional):")
+                colega_selecionado = st.selectbox("2. Com quem trocou (Filtrado: Apenas ativos/folgas):", opcoes_colegas)
+                observacoes = st.text_area("3. Notas/Observações:")
                 
-                if st.form_submit_button("CONFIRMAR REGISTO DE TROCA"):
-                    if servico_atual == "Não encontrado":
-                        st.error("Não podes registar uma troca num dia em que não tens serviço escalado.")
-                    else:
-                        st.success(f"Troca registada: Tu ({texto_teu_servico}) <-> Colega ({colega_selecionado})")
+                if st.form_submit_button("CONFIRMAR REGISTO"):
+                    nova_troca = {
+                        "Data": data_troca.strftime('%d/%m/%Y'),
+                        "O Meu Serviço": texto_teu_servico,
+                        "Colega/Serviço": colega_selecionado,
+                        "Notas": observacoes,
+                        "Registo": datetime.now().strftime("%d/%m %H:%M")
+                    }
+                    st.session_state["historico_trocas"].append(nova_troca)
+                    st.success("Troca registada com sucesso!")
             else:
-                st.warning("Não há escalas disponíveis ou colegas encontrados para esta data.")
+                st.warning("Não há colegas disponíveis para troca nesta data (ou estão todos ausentes/administrativos).")
                 st.form_submit_button("VERIFICAR DATA", disabled=True)
+
+    # --- NOVO MENU: AS MINHAS TROCAS ---
+    elif menu == "📜 As Minhas Trocas":
+        st.title("📜 Histórico de Trocas Registadas")
+        if st.session_state["historico_trocas"]:
+            df_hist = pd.DataFrame(st.session_state["historico_trocas"])
+            st.dataframe(df_hist, use_container_width=True, hide_index=True)
+            st.caption("Nota: Estes registos são temporários e visíveis apenas durante a sessão atual.")
+        else:
+            st.info("Ainda não registaste nenhuma troca nesta sessão.")
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
