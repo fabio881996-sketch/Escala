@@ -4,36 +4,71 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 
-# --- CONFIGURAÇÃO E VISUAL ORIGINAL ---
+# --- 1. CONFIGURAÇÃO E ESTILO VISUAL ORIGINAL ---
 st.set_page_config(page_title="GNR - Portal de Escalas", page_icon="🚓", layout="wide")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #FFFFFF !important; }
+    .stApp { background-color: #F8F9FA !important; }
     [data-testid="stSidebar"] { background-color: #455A64 !important; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; }
-    div[data-testid="stForm"] { background-color: #455A64; border-radius: 15px; padding: 30px; color: white; }
+    
+    /* Estilo do Formulário de Login */
+    div[data-testid="stForm"] { 
+        background-color: #455A64; 
+        border-radius: 15px; 
+        padding: 30px; 
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.3);
+    }
     div[data-testid="stForm"] * { color: white !important; }
-    .card-servico { background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); color: #455A64; }
-    .troca-tag { background-color: #FFD54F; color: black; padding: 2px 10px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; }
+    
+    /* Estilo dos Blocos (Cards) */
+    .card-servico { 
+        background: #FFFFFF; 
+        padding: 18px; 
+        border-radius: 10px; 
+        border: 1px solid #EAECEF; 
+        border-left: 6px solid #455A64; 
+        margin-bottom: 12px; 
+        box-shadow: 2px 2px 8px rgba(0,0,0,0.05);
+        color: #263238;
+    }
+    .card-meu { border-left-color: #1E88E5 !important; background-color: #E3F2FD !important; }
+    .card-troca { border-left-color: #FFD54F !important; }
+    .troca-tag { 
+        background-color: #FFD54F; 
+        color: black; 
+        padding: 3px 12px; 
+        border-radius: 20px; 
+        font-weight: bold; 
+        font-size: 0.75rem; 
+        float: right;
+    }
+    .horario-text { color: #546E7A; font-size: 0.9rem; font-weight: 500; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNÇÕES DE DADOS ---
+# --- 2. FUNÇÕES DE LIGAÇÃO AO GOOGLE SHEETS ---
 def get_client():
-    scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-    return gspread.authorize(creds)
+    try:
+        scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Erro de Credenciais: {e}")
+        return None
 
 def load_data(aba_nome):
+    # Tenta via CSV (Leitura rápida)
     try:
-        # Tenta leitura rápida via CSV
         base_url = st.secrets["gsheet_url"].split('/edit')[0]
         csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
         df = pd.read_csv(csv_url, dtype=str)
         df.columns = [c.strip().lower() for c in df.columns]
-        return df.fillna("")
+        df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+        return df.replace("nan", "")
     except:
+        # Fallback via API se o CSV falhar ou aba for privada
         try:
             client = get_client()
             sh = client.open_by_url(st.secrets["gsheet_url"])
@@ -41,7 +76,7 @@ def load_data(aba_nome):
             df = pd.DataFrame(worksheet.get_all_records()).astype(str)
             df.columns = [c.strip().lower() for c in df.columns]
             return df
-        except: return pd.DataFrame() # Retorna vazio se a aba não existir
+        except: return pd.DataFrame()
 
 def salvar_troca(linha):
     try:
@@ -51,47 +86,52 @@ def salvar_troca(linha):
         worksheet.append_row(linha)
         return True
     except Exception as e:
-        st.error(f"Erro ao gravar: {e}")
+        st.error(f"Erro ao gravar no Excel: {e}")
         return False
 
-# --- LÓGICA DE ACESSO ---
-if "logged_in" not in st.session_state: 
+# --- 3. LÓGICA DE LOGIN ---
+if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    # LOGIN VISUAL CENTRADO
     st.markdown("<br><br>", unsafe_allow_html=True)
     _, col2, _ = st.columns([1, 1.2, 1])
     with col2:
         with st.form("login_form"):
             st.markdown("<h1 style='text-align: center; color: white;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
-            u = st.text_input("📧 Email").strip().lower()
-            p = st.text_input("🔑 Password", type="password").strip()
-            if st.form_submit_button("ENTRAR", use_container_width=True):
+            u_in = st.text_input("📧 Email").strip().lower()
+            p_in = st.text_input("🔑 Password", type="password").strip()
+            if st.form_submit_button("ENTRAR NO SISTEMA", use_container_width=True):
                 df_u = load_data("utilizadores")
                 if not df_u.empty:
-                    user = df_u[(df_u['email'].str.lower() == u) & (df_u['password'] == p)]
-                    if not user.empty:
+                    user_match = df_u[(df_u['email'].str.lower() == u_in) & (df_u['password'] == p_in)]
+                    if not user_match.empty:
+                        res = user_match.iloc[0]
                         st.session_state.update({
-                            "logged_in": True, 
-                            "user_id": str(user.iloc[0]['id']), 
-                            "user_nome": f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}"
+                            "logged_in": True,
+                            "user_id": str(res['id']),
+                            "user_nome": f"{res['posto']} {res['nome']}"
                         })
                         st.rerun()
-                    else: st.error("Dados incorretos.")
-                else: st.error("Erro ao carregar utilizadores.")
+                    else: st.error("Email ou Password incorretos.")
+                else: st.error("Não foi possível validar utilizadores.")
+
+# --- 4. APP APÓS LOGIN ---
 else:
-    # --- APP PRINCIPAL ---
     with st.sidebar:
-        st.markdown(f"""<div style="text-align:center; padding:10px;">
-            <h3 style="margin:0;">👮‍♂️ {st.session_state['user_nome']}</h3>
-            <p style="font-size:0.8rem; opacity:0.8;">ID: {st.session_state['user_id']}</p>
+        st.markdown(f"""<div style="text-align:center; padding:15px; background:#37474F; border-radius:10px; margin-bottom:20px;">
+            <div style="font-size:45px;">👮‍♂️</div>
+            <h3 style="color:white; margin:0;">{st.session_state['user_nome']}</h3>
+            <p style="color:#B0BEC5; font-size:0.85rem; margin:0;">ID Militar: {st.session_state['user_id']}</p>
         </div>""", unsafe_allow_html=True)
+        
         menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "🔄 Registar Troca", "👥 Efetivo"])
-        if st.button("🚪 Sair", use_container_width=True):
+        st.markdown("---")
+        if st.button("🚪 Sair do Sistema", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
 
+    # Carregar trocas globais
     df_trocas = load_data("registos_trocas")
 
     if menu == "📅 Minha Escala":
@@ -101,97 +141,97 @@ else:
         for i in range(8):
             data_v = hoje + timedelta(days=i)
             d_str = data_v.strftime('%d/%m/%Y')
-            aba_dia = data_v.strftime("%d-%m")
+            label = "HOJE" if i == 0 else data_v.strftime("%d/%m (%a)")
             
-            # PROTEÇÃO CONTRA COLUNA 'DATA' INEXISTENTE
+            # Verificar se há troca registada para mim neste dia
             t_ativa = None
             if not df_trocas.empty and 'data' in df_trocas.columns:
                 f = df_trocas[(df_trocas['data'] == d_str) & (df_trocas['id_origem'].astype(str) == st.session_state['user_id'])]
                 if not f.empty: t_ativa = f.iloc[0]
 
-            df_dia = load_data(aba_dia)
-            label = "HOJE" if i == 0 else data_v.strftime("%d/%m (%a)")
-
             if t_ativa is not None:
-                st.markdown(f"""<div class="card-servico" style="border-left-color: #FFD54F;">
-                    <b>{label}</b> <span class="troca-tag">TROCA</span><br>
-                    <h3 style="margin:0;">{t_ativa['servico_destino']}</h3>
-                    <p style="margin:0; font-size:0.8rem;">Em vez de: {t_ativa['servico_origem']}</p>
+                st.markdown(f"""<div class="card-servico card-troca">
+                    <span class="troca-tag">TROCA EFETUADA</span>
+                    <span style="font-weight:bold;">{label}</span>
+                    <h3 style="margin:8px 0;">{t_ativa['servico_destino']}</h3>
+                    <p style="margin:0; font-style:italic; font-size:0.85rem;">Substitui o teu serviço original: {t_ativa['servico_origem']}</p>
                 </div>""", unsafe_allow_html=True)
-            elif not df_dia.empty:
-                meu = df_dia[df_dia['id'].astype(str) == st.session_state['user_id']]
-                if not meu.empty:
-                    st.markdown(f"""<div class="card-servico">
-                        <b>{label}</b><br>
-                        <h3 style="margin:0;">{meu.iloc[0]['serviço']}</h3>
-                        <p style="margin:0;">{meu.iloc[0]['horário']}</p>
-                    </div>""", unsafe_allow_html=True)
-
-    elif menu == "🔄 Registar Troca":
-        st.title("🔄 Registar Troca Permanente")
-        data_sel = st.date_input("Data da troca:", format="DD/MM/YYYY")
-        df_dia = load_data(data_sel.strftime("%d-%m"))
-        
-        if not df_dia.empty:
-            meu = df_dia[df_dia['id'].astype(str) == st.session_state['user_id']]
-            if not meu.empty:
-                meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
-                st.info(f"Serviço original: **{meu_s}**")
-                
-                colegas = df_dia[df_dia['id'].astype(str) != st.session_state['user_id']]
-                lista = colegas.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
-                
-                with st.form("form_troca"):
-                    c_sel = st.selectbox("Com quem trocaste?", lista)
-                    if st.form_submit_button("GRAVAR NO EXCEL", use_container_width=True):
-                        id_c = c_sel.split(" - ")[0]
-                        serv_c = c_sel.split(" - ", 1)[1]
-                        dados = [data_sel.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]
-                        
-                        if salvar_troca(dados):
-                            st.success("Gravado! A escala já está atualizada.")
-                            st.balloons()
-            else: st.warning("Não tens serviço neste dia.")
+            else:
+                df_dia = load_data(data_v.strftime("%d-%m"))
+                if not df_dia.empty:
+                    meu_s = df_dia[df_dia['id'].astype(str) == st.session_state['user_id']]
+                    if not meu_s.empty:
+                        st.markdown(f"""<div class="card-servico card-meu">
+                            <span style="font-weight:bold;">{label}</span>
+                            <h3 style="margin:8px 0;">{meu_s.iloc[0]['serviço']}</h3>
+                            <span class="horario-text">🕒 {meu_s.iloc[0]['horário']}</span>
+                        </div>""", unsafe_allow_html=True)
 
     elif menu == "🔍 Consulta Geral":
-        st.title("🔍 Escala Geral")
-        data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY")
-        d_str = data_sel.strftime('%d/%m/%Y')
-        df_dia = load_data(data_sel.strftime("%d-%m"))
+        st.title("🔍 Escala de Serviço Geral")
+        data_g = st.date_input("Selecionar Dia:", value=datetime.now(), format="DD/MM/YYYY")
+        d_str_g = data_g.strftime('%d/%m/%Y')
+        df_g = load_data(data_g.strftime("%d-%m"))
         
-        if not df_dia.empty:
-            # Aplicar trocas visuais na lista geral
-            if not df_trocas.empty and 'data' in df_trocas.columns:
-                trocas_dia = df_trocas[df_trocas['data'] == d_str]
-                for _, t in trocas_dia.iterrows():
-                    m_orig = df_dia['id'].astype(str) == str(t['id_origem'])
-                    m_dest = df_dia['id'].astype(str) == str(t['id_destino'])
-                    if any(m_orig) and any(m_dest):
-                        # Marcar como trocado visualmente
-                        df_dia.loc[m_orig, 'serviço'] = f"{t['servico_destino']} 🔄"
-                        df_dia.loc[m_dest, 'serviço'] = f"{t['servico_origem']} 🔄"
-
-            # Desenhar os Blocos (Cards) em vez de tabela
-            for _, row in df_dia.iterrows():
-                is_me = row['id'].astype(str) == st.session_state['user_id']
-                border_color = "#1E88E5" if is_me else "#455A64"
-                bg_color = "#E3F2FD" if is_me else "#FFFFFF"
+        if not df_g.empty:
+            # Processar trocas visuais na lista geral
+            for _, row in df_g.iterrows():
+                servico_final = row['serviço']
+                horario_final = row['horário']
+                is_troca = False
                 
-                st.markdown(f"""
-                    <div class="card-servico" style="border-left-color: {border_color}; background-color: {bg_color};">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="font-weight: bold; color: #263238;">ID: {row['id']}</span>
-                            <span style="color: #546E7A; font-size: 0.9rem;">{row['horário']}</span>
-                        </div>
-                        <h3 style="margin: 5px 0; color: #263238;">{row['serviço']}</h3>
+                if not df_trocas.empty and 'data' in df_trocas.columns:
+                    # Se eu sou a origem da troca
+                    t_orig = df_trocas[(df_trocas['data'] == d_str_g) & (df_trocas['id_origem'].astype(str) == str(row['id']))]
+                    if not t_orig.empty:
+                        servico_final = f"{t_orig.iloc[0]['servico_destino']} 🔄"
+                        is_troca = True
+                
+                is_me = str(row['id']) == st.session_state['user_id']
+                css_class = "card-meu" if is_me else ""
+                
+                st.markdown(f"""<div class="card-servico {css_class}">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-weight:bold; color:#455A64;">ID: {row['id']}</span>
+                        <span class="horario-text">{horario_final}</span>
                     </div>
-                """, unsafe_allow_html=True)
+                    <h3 style="margin:5px 0;">{servico_final}</h3>
+                </div>""", unsafe_allow_html=True)
         else:
-            st.warning("Não há escala carregada para este dia.")
+            st.warning("Nenhum serviço escalado para este dia.")
+
+    elif menu == "🔄 Registar Troca":
+        st.title("🔄 Registar Troca no Sistema")
+        st.write("Usa este formulário para oficializar uma troca direta com um colega.")
+        
+        d_troca = st.date_input("Data do serviço a trocar:", format="DD/MM/YYYY")
+        df_d = load_data(d_troca.strftime("%d-%m"))
+        
+        if not df_d.empty:
+            meu_serv = df_d[df_d['id'].astype(str) == st.session_state['user_id']]
+            if not meu_serv.empty:
+                meu_original = f"{meu_serv.iloc[0]['serviço']} ({meu_serv.iloc[0]['horário']})"
+                st.success(f"O teu serviço: **{meu_original}**")
+                
+                colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
+                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                
+                with st.form("form_troca_final"):
+                    c_sel = st.selectbox("Com quem trocaste?", opcoes)
+                    if st.form_submit_button("GRAVAR TROCA NO EXCEL", use_container_width=True):
+                        id_c = c_sel.split(" - ")[0]
+                        serv_c = c_sel.split(" - ", 1)[1]
+                        
+                        linha = [d_troca.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_original, id_c, serv_c]
+                        
+                        if salvar_troca(linha):
+                            st.success("Troca registada com sucesso! Os cards foram atualizados.")
+                            st.balloons()
+            else: st.warning("Não tens serviço escalado para este dia.")
+        else: st.error("Não existe escala criada para este dia no Excel.")
 
     elif menu == "👥 Efetivo":
-        st.title("👥 Efetivo")
-        df_u = load_data("utilizadores")
-        if not df_u.empty:
-            st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], use_container_width=True, hide_index=True)
-            
+        st.title("👥 Efetivo do Posto")
+        df_ef = load_data("utilizadores")
+        if not df_ef.empty:
+            st.dataframe(df_ef[['id', 'posto', 'nome', 'telemóvel']], use_container_width=True, hide_index=True)         
