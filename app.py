@@ -44,7 +44,8 @@ def load_sheet(aba_nome):
         for col in df.columns:
             df[col] = df[col].astype(str).str.strip().replace("nan", "")
         return df
-    except: return None
+    except:
+        return None
 
 # 4. Login
 def login():
@@ -74,8 +75,12 @@ def main_app():
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # Carregar base de trocas permanente
-    df_trocas_permanente = load_sheet("registos_trocas")
+    # Carregar base de trocas e validar colunas
+    df_trocas = load_sheet("registos_trocas")
+    colunas_esperadas = ['data', 'id_origem', 'servico_origem', 'id_destino', 'servico_destino']
+    
+    # Validação: Só ativa a lógica de trocas se a aba tiver as colunas certas
+    tem_trocas = df_trocas is not None and all(c in df_trocas.columns for c in colunas_esperadas)
 
     # --- ABA MINHA ESCALA ---
     if menu == "📅 Minha Escala":
@@ -86,10 +91,9 @@ def main_app():
             data_str = data_v.strftime('%d/%m/%Y')
             nome_aba = data_v.strftime("%d-%m")
             
-            # Procurar troca na aba permanente
             troca_ativa = None
-            if df_trocas_permanente is not None and not df_trocas_permanente.empty:
-                t_filter = df_trocas_permanente[(df_trocas_permanente['data'] == data_str) & (df_trocas_permanente['id_origem'] == st.session_state['user_id'])]
+            if tem_trocas:
+                t_filter = df_trocas[(df_trocas['data'] == data_str) & (df_trocas['id_origem'] == st.session_state['user_id'])]
                 if not t_filter.empty:
                     troca_ativa = t_filter.iloc[0]
 
@@ -111,7 +115,7 @@ def main_app():
                 label = "HOJE" if i == 0 else data_v.strftime("%d/%m (%a)")
                 st.markdown(f"""<div style="background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px;"><span style="color: #455A64; font-weight: bold; font-size: 0.9rem;">{label}</span>{status_html}<h3 style="margin:0; color: #1A1C1E !important;">{servico_exibir}</h3>{detalhe_html}</div>""", unsafe_allow_html=True)
 
-    # --- ABA CONSULTA GERAL (COM REFLEXO DAS TROCAS) ---
+    # --- ABA CONSULTA GERAL ---
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
         data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY")
@@ -119,19 +123,15 @@ def main_app():
         df_dia = load_sheet(data_sel.strftime("%d-%m"))
         
         if df_dia is not None:
-            # Aplicar trocas da aba permanente à visualização geral
-            if df_trocas_permanente is not None and not df_trocas_permanente.empty:
-                trocas_dia = df_trocas_permanente[df_trocas_permanente['data'] == data_str_sel]
+            if tem_trocas:
+                trocas_dia = df_trocas[df_trocas['data'] == data_str_sel]
                 for _, t in trocas_dia.iterrows():
-                    # Marcar visualmente no DataFrame quem trocou
-                    mask_origem = df_dia['id'] == t['id_origem']
-                    mask_destino = df_dia['id'] == t['id_destino']
-                    
-                    if any(mask_origem) and any(mask_destino):
-                        # Swap de serviços para exibição
-                        serv_original_origem = df_dia.loc[mask_origem, 'serviço'].values[0]
-                        df_dia.loc[mask_origem, 'serviço'] = f"{t['servico_destino']} (T)"
-                        df_dia.loc[mask_destino, 'serviço'] = f"{serv_original_origem} (T)"
+                    m_orig = df_dia['id'] == t['id_origem']
+                    m_dest = df_dia['id'] == t['id_destino']
+                    if any(m_orig) and any(m_dest):
+                        s_orig = df_dia.loc[m_orig, 'serviço'].values[0]
+                        df_dia.loc[m_orig, 'serviço'] = f"{t['servico_destino']} (T)"
+                        df_dia.loc[m_dest, 'serviço'] = f"{s_orig} (T)"
 
             df_restante = df_dia.copy()
             def filtrar_e_mostrar(titulo, keywords):
@@ -149,23 +149,13 @@ def main_app():
             filtrar_e_mostrar("Folga", ["folga"])
             filtrar_e_mostrar("Outros", [""])
 
-    # --- ABA TROQUEI (AVISO DE ESCRITA) ---
-    elif menu == "🔄 Troquei":
-        st.title("🔄 Registar Troca Efetuada")
-        st.warning("⚠️ Para a troca ser permanente, deves registar os dados na aba 'registos_trocas' da tua Google Sheet.")
-        data_troca = st.date_input("Data do serviço:", format="DD/MM/YYYY")
-        df_dia = load_sheet(data_troca.strftime("%d-%m"))
-        if df_dia is not None:
-            meu_serv = df_dia[df_dia['id'] == st.session_state['user_id']]
-            if not meu_serv.empty:
-                st.info(f"O teu serviço: **{meu_serv.iloc[0]['serviço']}** ({meu_serv.iloc[0]['horário']})")
-
     elif menu == "📜 Trocas Registadas":
-        st.title("📜 Histórico Permanente (Aba registos_trocas)")
-        if df_trocas_permanente is not None:
-            st.dataframe(df_trocas_permanente, use_container_width=True, hide_index=True)
-        else: st.error("Aba 'registos_trocas' não encontrada.")
+        st.title("📜 Trocas em Sistema")
+        if df_trocas is not None:
+            st.dataframe(df_trocas, use_container_width=True, hide_index=True)
+        else: st.info("A aba 'registos_trocas' está vazia ou não foi encontrada.")
 
+    # --- ABA LISTA EFETIVO ---
     elif menu == "👥 Lista Efetivo":
         st.title("👥 Lista de Efetivo")
         df_u = load_sheet("utilizadores")
