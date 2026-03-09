@@ -22,7 +22,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
-SERVICOS_EXCLUIDOS = ["inquérito", "secretaria", "pronto", "férias", "licença", "doente", "tribunal", "diligência"]
+SERVICOS_EXCLUIDOS = ["inquérito", "secretaria", "pronto", "férias", "licença", "doente", "diligência"] # Tribunal removido para permitir trocas se quiseres
 
 # --- 2. FUNÇÕES DE DADOS ---
 def get_client():
@@ -85,8 +85,6 @@ if not st.session_state["logged_in"]:
                     else: st.error("Dados incorretos.")
 else:
     df_trocas = load_data("registos_trocas")
-    
-    # Notificações
     ped_m = 0; ped_a = 0
     if not df_trocas.empty and 'status' in df_trocas.columns:
         ped_m = len(df_trocas[(df_trocas['status'] == 'Pendente_Militar') & (df_trocas['id_destino'] == st.session_state['user_id'])])
@@ -108,71 +106,15 @@ else:
             st.session_state["logged_in"] = False
             st.rerun()
 
-   # --- 4. ESCALA GERAL (TRIBUNAL NOS OUTROS) ---
-if menu == "🔍 Escala Geral":
-    st.title("🔍 Escala Geral")
-    data_sel = st.date_input("Data:", format="DD/MM/YYYY")
-    df_dia = load_data(data_sel.strftime("%d-%m"))
-    
-    if not df_dia.empty:
-        df_atual = df_dia.copy()
-        df_atual['id_display'] = df_atual['id'].astype(str)
-        
-        # Aplicar Trocas Aprovadas
-        if not df_trocas.empty and 'status' in df_trocas.columns:
-            trocas_v = df_trocas[(df_trocas['data'] == data_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
-            for _, t in trocas_v.iterrows():
-                m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
-                if any(m_orig): 
-                    df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
-                    df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄)"
-                m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
-                if any(m_dest): 
-                    df_atual.loc[m_dest, 'serviço'] = t['servico_origem']
-                    df_atual.loc[m_dest, 'id_display'] = f"{t['id_destino']} (🔄)"
+    # --- 4. LÓGICA DE MENUS (CORREÇÃO DE INDENTAÇÃO) ---
 
-        def mostrar_seccao(titulo, keywords, df_fonte):
-            padrao = '|'.join(keywords).lower()
-            temp = df_fonte[df_fonte['serviço'].str.lower().str.contains(padrao, na=False)].copy()
-            if not temp.empty:
-                with st.expander(f"🔹 {titulo}", expanded=True):
-                    agrupado = temp.groupby(['serviço', 'horário'], sort=False)['id_display'].apply(lambda x: ', '.join(x)).reset_index()
-                    st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                return df_fonte[~df_fonte['id'].isin(temp['id'])]
-            return df_fonte
-
-        # EXECUÇÃO DA HIERARQUIA
-        df_p = df_atual.copy()
-        df_p = mostrar_seccao("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_p)
-        df_p = mostrar_seccao("Atendimento", ["atendimento"], df_p)
-        df_p = mostrar_seccao("Apoio ao Atendimento", ["apoio"], df_p)
-        df_p = mostrar_seccao("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_p)
-        
-        # DEFINIÇÃO DE QUEM É REALMENTE AUSENTE/FOLGA (Tribunal removido daqui)
-        # Agora o Tribunal não sendo apanhado aqui, vai sobrar para os "Outros"
-        df_finais = df_p[df_p['serviço'].str.lower().str.contains("folga|férias|licença|doente|diligência|remu|grat", na=False)]
-        df_sobra = df_p[~df_p['id'].isin(df_finais['id'])]
-        
-        # "Outros Serviços" (Onde o Tribunal vai aparecer agora)
-        _ = mostrar_seccao("Outros Serviços", [""], df_sobra)
-        
-        # Secções de encerramento
-        df_finais = mostrar_seccao("Remunerados", ["remu", "grat"], df_finais)
-        df_finais = mostrar_seccao("Folga", ["folga"], df_finais)
-        _ = mostrar_seccao("Ausentes", ["férias", "licença", "doente", "diligência"], df_finais)
-        
-    else: st.warning("Sem dados para esta data.")
-        
-    # --- 5. MINHA ESCALA ---
-    elif menu == "📅 Minha Escala":
+    if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hoje = datetime.now()
         for i in range(8):
             dt = hoje + timedelta(days=i)
             d_str = dt.strftime('%d/%m/%Y')
             label = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
-            
-            # Lógica de Troca Aprovada
             troca_v = pd.DataFrame()
             if not df_trocas.empty and 'status' in df_trocas.columns:
                 troca_v = df_trocas[(df_trocas['data'] == d_str) & (df_trocas['id_origem'].astype(str) == st.session_state['user_id']) & (df_trocas['status'] == 'Aprovada')]
@@ -187,23 +129,61 @@ if menu == "🔍 Escala Geral":
                     if not meu.empty:
                         st.markdown(f'<div class="card-servico card-meu"><b>{label}</b><br><h3>{meu.iloc[0]["serviço"]}</h3><span>🕒 {meu.iloc[0]["horário"]}</span></div>', unsafe_allow_html=True)
 
-    # --- 6. PEDIDOS RECEBIDOS (VISIBILIDADE) ---
+    elif menu == "🔍 Escala Geral":
+        st.title("🔍 Escala Geral")
+        data_sel = st.date_input("Data:", format="DD/MM/YYYY")
+        df_dia = load_data(data_sel.strftime("%d-%m"))
+        
+        if not df_dia.empty:
+            df_atual = df_dia.copy()
+            df_atual['id_display'] = df_atual['id'].astype(str)
+            if not df_trocas.empty and 'status' in df_trocas.columns:
+                trocas_v = df_trocas[(df_trocas['data'] == data_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
+                for _, t in trocas_v.iterrows():
+                    m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
+                    if any(m_orig): df_atual.loc[m_orig, 'serviço'] = t['servico_destino']; df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄)"
+                    m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
+                    if any(m_dest): df_atual.loc[m_dest, 'serviço'] = t['servico_origem']; df_atual.loc[m_dest, 'id_display'] = f"{t['id_destino']} (🔄)"
+
+            def mostrar_seccao(titulo, keywords, df_fonte):
+                padrao = '|'.join(keywords).lower()
+                temp = df_fonte[df_fonte['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+                if not temp.empty:
+                    with st.expander(f"🔹 {titulo}", expanded=True):
+                        agrupado = temp.groupby(['serviço', 'horário'], sort=False)['id_display'].apply(lambda x: ', '.join(x)).reset_index()
+                        st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+                    return df_fonte[~df_fonte['id'].isin(temp['id'])]
+                return df_fonte
+
+            df_p = df_atual.copy()
+            df_p = mostrar_seccao("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_p)
+            df_p = mostrar_seccao("Atendimento", ["atendimento"], df_p)
+            df_p = mostrar_seccao("Apoio ao Atendimento", ["apoio"], df_p)
+            df_p = mostrar_seccao("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_p)
+            
+            # Tribunal vai para os Outros (sobra)
+            df_finais = df_p[df_p['serviço'].str.lower().str.contains("folga|férias|licença|doente|diligência|remu|grat", na=False)]
+            df_sobra = df_p[~df_p['id'].isin(df_finais['id'])]
+            
+            _ = mostrar_seccao("Outros Serviços (Inc. Tribunal)", [""], df_sobra)
+            df_finais = mostrar_seccao("Remunerados", ["remu", "grat"], df_finais)
+            df_finais = mostrar_seccao("Folga", ["folga"], df_finais)
+            _ = mostrar_seccao("Ausentes", ["férias", "licença", "doente", "diligência"], df_finais)
+        else:
+            st.warning("Sem dados para esta data.")
+
     elif "Pedidos Recebidos" in menu:
         st.title("📥 Pedidos para Aceitar")
         if not df_trocas.empty and 'status' in df_trocas.columns:
             minhas = df_trocas[(df_trocas['status'] == 'Pendente_Militar') & (df_trocas['id_destino'] == st.session_state['user_id'])]
             if not minhas.empty:
                 for idx, row in minhas.iterrows():
-                    with st.container():
-                        st.markdown(f"""<div class="card-servico card-troca"><span class="texto-pedido">📅 <b>{row['data']}</b><br>ID {row['id_origem']} quer trocar.<br><b>Recebes:</b> {row['servico_origem']}<br><b>Dás:</b> {row['servico_destino']}</span></div>""", unsafe_allow_html=True)
-                        c1, c2 = st.columns(2)
-                        if c1.button("✅ ACEITAR", key=f"ac_{idx}"):
-                            atualizar_status_gsheet(idx, "Pendente_Admin"); st.rerun()
-                        if c2.button("❌ RECUSAR", key=f"re_{idx}"):
-                            atualizar_status_gsheet(idx, "Recusada"); st.rerun()
+                    st.markdown(f'<div class="card-servico card-troca"><span class="texto-pedido">📅 <b>{row["data"]}</b><br>ID {row["id_origem"]} quer trocar.<br><b>Recebes:</b> {row["servico_origem"]}<br><b>Dás:</b> {row["servico_destino"]}</span></div>', unsafe_allow_html=True)
+                    c1, c2 = st.columns(2)
+                    if c1.button("✅ ACEITAR", key=f"ac_{idx}"): atualizar_status_gsheet(idx, "Pendente_Admin"); st.rerun()
+                    if c2.button("❌ RECUSAR", key=f"re_{idx}"): atualizar_status_gsheet(idx, "Recusada"); st.rerun()
             else: st.info("Sem pedidos.")
 
-    # --- 7. VALIDAR TROCAS (INFO COMPLETA) ---
     elif "Validar Trocas" in menu:
         st.title("⚖️ Validação Admin")
         if not df_trocas.empty and 'status' in df_trocas.columns:
@@ -213,28 +193,33 @@ if menu == "🔍 Escala Geral":
                 st.write(f"Militar {row['id_origem']} vai para {row['servico_destino']}")
                 st.write(f"Militar {row['id_destino']} vai para {row['servico_origem']}")
                 c1, c2 = st.columns(2)
-                if c1.button("✔️ VALIDAR", key=f"ok_{idx}"):
-                    atualizar_status_gsheet(idx, "Aprovada"); st.rerun()
-                if c2.button("🚫 REJEITAR", key=f"no_{idx}"):
-                    atualizar_status_gsheet(idx, "Rejeitada_Admin"); st.rerun()
+                if c1.button("✔️ VALIDAR", key=f"ok_{idx}"): atualizar_status_gsheet(idx, "Aprovada"); st.rerun()
+                if c2.button("🚫 REJEITAR", key=f"no_{idx}"): atualizar_status_gsheet(idx, "Rejeitada_Admin"); st.rerun()
 
-    # --- OUTROS MENUS ---
     elif menu == "🔄 Solicitar Troca":
-        # ... (Mantém-se a lógica de seleção de data e colega já funcional)
-        st.title("🔄 Nova Solicitação")
-        d_t = st.date_input("Data:", format="DD/MM/YYYY")
+        st.title("🔄 Solicitar Nova Troca")
+        d_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
         df_d = load_data(d_t.strftime("%d-%m"))
         if not df_d.empty:
             meu = df_d[df_d['id'].astype(str) == st.session_state['user_id']]
             if not meu.empty:
+                meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
+                st.info(f"O teu serviço: {meu_s}")
                 colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
-                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
-                c_sel = st.selectbox("Trocar com:", opcoes)
-                if st.button("Enviar Pedido"):
-                    # Lógica de salvar_troca_gsheet...
-                    st.success("Enviado!")
+                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                with st.form("f_solic"):
+                    c_sel = st.selectbox("Trocar com?", opcoes)
+                    if st.form_submit_button("ENVIAR PEDIDO"):
+                        id_c = c_sel.split(" - ")[0]
+                        serv_c = c_sel.split(" - ", 1)[1]
+                        df_u = load_data("utilizadores")
+                        email_c = df_u[df_u['id'].astype(str) == id_c]['email'].values[0]
+                        if salvar_troca_gsheet([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c, "Pendente_Militar", email_c]):
+                            st.success("Pedido enviado!"); st.balloons()
+            else: st.warning("Não tens serviço neste dia.")
 
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
-        st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
+        if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
+            
