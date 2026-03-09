@@ -4,47 +4,29 @@ import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 
-# --- 1. BLOCO DE ASPETO VISUAL (CONCLUÍDO) ---
+# --- 1. BLOCO DE ASPETO VISUAL (BLOQUEADO) ---
 st.set_page_config(page_title="GNR - Portal de Escalas", page_icon="🚓", layout="wide")
 
 st.markdown("""
     <style>
     .stApp { background-color: #F8F9FA !important; }
     [data-testid="stSidebar"] { background-color: #455A64 !important; }
-    
-    /* Nome na lateral mais claro (Branco Brilhante) */
     .sidebar-nome { color: #FFFFFF !important; font-size: 1.2rem; font-weight: bold; margin-bottom: 0px; }
     .sidebar-id { color: #D1D1D1 !important; font-size: 0.9rem; }
-    
     [data-testid="stSidebar"] * { color: #FFFFFF !important; }
     h1, h2, h3 { color: #2C3E50 !important; font-weight: 700 !important; }
-    
-    div[data-testid="stForm"] {
-        background-color: #455A64 !important; 
-        border-radius: 15px !important;
-        padding: 40px !important;
-        color: white !important;
-    }
-    
+    div[data-testid="stForm"] { background-color: #455A64 !important; border-radius: 15px !important; padding: 40px !important; color: white !important; }
     div[data-testid="stForm"] h1, div[data-testid="stForm"] label { color: #FFFFFF !important; }
     div[data-testid="stForm"] input { background-color: #FFFFFF !important; color: #333333 !important; }
-
-    .streamlit-expanderHeader { 
-        background-color: #FFFFFF !important; 
-        color: #2C3E50 !important; 
-        font-weight: bold !important;
-        border: 1px solid #DDE1E6 !important;
-        border-radius: 8px !important;
-    }
-
-    .card-servico { 
-        background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; 
-        border-left: 6px solid #455A64; margin-bottom: 10px; color: #333;
-    }
+    .streamlit-expanderHeader { background-color: #FFFFFF !important; color: #2C3E50 !important; font-weight: bold !important; border: 1px solid #DDE1E6 !important; border-radius: 8px !important; }
+    .card-servico { background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 6px solid #455A64; margin-bottom: 10px; color: #333; }
     .card-meu { border-left-color: #1E88E5 !important; background-color: #F0F7FF !important; }
     .card-troca { border-left-color: #FFD54F !important; background-color: #FFFDE7 !important; }
     </style>
     """, unsafe_allow_html=True)
+
+# --- LISTA DE ADMINISTRADORES ---
+ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
 
 # --- 2. FUNÇÕES DE DADOS ---
 def get_client():
@@ -82,6 +64,18 @@ def salvar_troca(linha):
         return False
     except: return False
 
+def apagar_troca_gsheet(index_linha):
+    try:
+        client = get_client()
+        if client:
+            sh = client.open_by_url(st.secrets["gsheet_url"])
+            aba = sh.worksheet("registos_trocas")
+            # +2 porque gspread é base 1 e o pandas tem header
+            aba.delete_rows(index_linha + 2)
+            return True
+        return False
+    except: return False
+
 # --- 3. LOGIN ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
@@ -98,16 +92,30 @@ if not st.session_state["logged_in"]:
                 if not df_u.empty:
                     user = df_u[(df_u['email'].str.lower() == u) & (df_u['password'] == p)]
                     if not user.empty:
-                        st.session_state.update({"logged_in": True, "user_id": str(user.iloc[0]['id']), "user_nome": f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}"})
+                        st.session_state.update({
+                            "logged_in": True, 
+                            "user_id": str(user.iloc[0]['id']), 
+                            "user_nome": f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}",
+                            "user_email": u,
+                            "is_admin": u in ADMINS
+                        })
                         st.rerun()
                     else: st.error("Dados incorretos.")
 else:
     # --- 4. INTERFACE ---
     with st.sidebar:
         st.markdown(f'<p class="sidebar-nome">👮‍♂️ {st.session_state["user_nome"]}</p>', unsafe_allow_html=True)
-        st.markdown(f'<p class="sidebar-id">ID: {st.session_state["user_id"]}</p>', unsafe_allow_html=True)
+        st.markdown(f'<p class="sidebar-id">ID: {st.session_state["user_id"]} {"(ADMIN)" if st.session_state["is_admin"] else ""}</p>', unsafe_allow_html=True)
         st.markdown("---")
-        menu = st.radio("MENU", ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Registar Troca", "📜 Trocas Registadas", "👥 Efetivo"])
+        
+        opcoes_menu = ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Registar Troca"]
+        if st.session_state["is_admin"]:
+            opcoes_menu.append("📜 Trocas Registadas (ADMIN)")
+        else:
+            opcoes_menu.append("📜 Minhas Trocas")
+        opcoes_menu.append("👥 Efetivo")
+        
+        menu = st.radio("MENU", opcoes_menu)
         if st.button("Sair", use_container_width=True): 
             st.session_state["logged_in"] = False
             st.rerun()
@@ -192,11 +200,33 @@ else:
                             st.success("Gravado!"); st.balloons()
             else: st.warning("Sem serviço.")
 
-    elif menu == "📜 Trocas Registadas":
-        st.title("📜 Histórico")
-        st.dataframe(df_trocas, use_container_width=True, hide_index=True)
+    elif menu == "📜 Minhas Trocas":
+        st.title("📜 Minhas Trocas")
+        if not df_trocas.empty:
+            minhas = df_trocas[(df_trocas['id_origem'].astype(str) == st.session_state['user_id']) | 
+                               (df_trocas['id_destino'].astype(str) == st.session_state['user_id'])]
+            if not minhas.empty:
+                st.dataframe(minhas, use_container_width=True, hide_index=True)
+            else: st.info("Não tens trocas registadas.")
+        else: st.info("Não existem trocas.")
+
+    elif menu == "📜 Trocas Registadas (ADMIN)":
+        st.title("📜 Gestão de Trocas (ADMIN)")
+        if not df_trocas.empty:
+            for idx, row in df_trocas.iterrows():
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.write(f"📅 **{row['data']}** | ID {row['id_origem']} ↔ ID {row['id_destino']} | {row['servico_origem']} → {row['servico_destino']}")
+                with col2:
+                    if st.button("❌ Apagar", key=f"del_{idx}"):
+                        if apagar_troca_gsheet(idx):
+                            st.success("Apagada!"); st.rerun()
+                        else: st.error("Erro ao apagar.")
+                st.markdown("---")
+        else: st.info("Não existem trocas.")
 
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
         if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
+            
