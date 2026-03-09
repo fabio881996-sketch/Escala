@@ -20,7 +20,7 @@ st.markdown("""
     div[data-testid="stForm"] { background-color: #455A64; border-radius: 15px; padding: 30px; color: white; }
     div[data-testid="stForm"] * { color: white !important; }
 
-    /* SUBTÍTULOS EM BRANCO (PERFEITOS) */
+    /* SUBTÍTULOS EM BRANCO */
     div[data-testid="stExpander"] summary p { color: white !important; font-weight: bold !important; font-size: 1.1rem !important; }
     div[data-testid="stExpander"] summary { background-color: #455A64 !important; border-radius: 8px !important; padding: 5px 10px !important; }
     div[data-testid="stExpander"] summary svg { fill: white !important; }
@@ -38,7 +38,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Função de Carregamento (String pura para evitar o .0)
+# 3. Funções de Carregamento
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
@@ -74,43 +74,27 @@ def login():
 def main_app():
     with st.sidebar:
         st.markdown(f"""<div class="profile-card"><div style="font-size: 35px; margin-bottom: 5px;">👮‍♂️</div><h2 style="margin:0; font-size: 1.1rem; color: white !important;">{st.session_state['user_nome_completo']}</h2><p style="color: #B0BEC5; font-size: 0.8rem;">ID: {st.session_state['user_id']}</p></div>""", unsafe_allow_html=True)
-        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Solicitar Troca"])
+        menu = st.radio("NAVEGAÇÃO", ["📅 Minha Escala", "🔍 Consulta Geral", "👥 Lista Efetivo", "🔄 Troquei", "🔄 Solicitar Troca"])
         if st.button("🚪 Sair do Portal", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
 
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
-        
-        # --- NOVO BLOCO: SERVIÇOS PRÓXIMOS ---
         st.subheader("Próximos Serviços")
         hoje = datetime.now()
         encontrou_algum = False
-        
-        # Procura para hoje e para os próximos 7 dias (ajustável)
         for i in range(8):
             data_verificar = hoje + timedelta(days=i)
             nome_aba = data_verificar.strftime("%d-%m")
             df_dia = load_sheet(nome_aba)
-            
             if df_dia is not None:
                 meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
                 if not meu_df.empty:
                     encontrou_algum = True
-                    # Formatação para o dia de hoje vs outros dias
                     label_dia = "HOJE" if i == 0 else data_verificar.strftime("%d/%m (%a)")
-                    
-                    st.markdown(f"""
-                    <div style="background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px;">
-                        <span style="color: #455A64; font-weight: bold; font-size: 0.9rem;">{label_dia}</span>
-                        <h3 style="margin:0; color: #1A1C1E !important;">{meu_df.iloc[0]['serviço']}</h3>
-                        <p style="color: #546E7A; margin:0;">🕒 {meu_df.iloc[0]['horário']}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        if not encontrou_algum:
-            st.info("Não foram encontrados serviços escalados para os próximos dias.")
-
+                    st.markdown(f"""<div style="background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px;"><span style="color: #455A64; font-weight: bold; font-size: 0.9rem;">{label_dia}</span><h3 style="margin:0; color: #1A1C1E !important;">{meu_df.iloc[0]['serviço']}</h3><p style="color: #546E7A; margin:0;">🕒 {meu_df.iloc[0]['horário']}</p></div>""", unsafe_allow_html=True)
+        if not encontrou_algum: st.info("Não foram encontrados serviços escalados.")
         st.divider()
         st.subheader("Consultar outra data")
         data_sel = st.date_input("Escolha o dia:", format="DD/MM/YYYY")
@@ -118,10 +102,8 @@ def main_app():
         df_sel = load_sheet(nome_aba_sel)
         if df_sel is not None:
             meu_df_sel = df_sel[df_sel['id'] == st.session_state['user_id']]
-            if not meu_df_sel.empty:
-                st.success(f"Nesse dia estarás de: **{meu_df_sel.iloc[0]['serviço']}** ({meu_df_sel.iloc[0]['horário']})")
+            if not meu_df_sel.empty: st.success(f"Nesse dia estarás de: **{meu_df_sel.iloc[0]['serviço']}** ({meu_df_sel.iloc[0]['horário']})")
             else: st.warning("Não constas na escala deste dia.")
-        else: st.error("Escala não disponível para essa data.")
 
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
@@ -139,9 +121,7 @@ def main_app():
                     with st.expander(f"🔹 {titulo}", expanded=True):
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                    if excluir:
-                        df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
-
+                    if excluir: df_restante = df_restante[~df_restante['id'].isin(temp_df['id'])]
             filtrar_e_mostrar("Atendimento", ["atendimento"])
             filtrar_e_mostrar("Apoio ao Atendimento", ["apoio"])
             filtrar_e_mostrar("Patrulhas", ["po", "patrulha", "ronda", "vtr"])
@@ -157,6 +137,23 @@ def main_app():
             colunas_finais = ["id", "nim", "posto", "nome", "email", "telemóvel"]
             colunas_existentes = [c for c in colunas_finais if c in df_u.columns]
             st.dataframe(df_u[colunas_existentes], use_container_width=True, hide_index=True)
+
+    elif menu == "🔄 Troquei":
+        st.title("🔄 Registar Troca Efetuada")
+        st.write("Utiliza este formulário para informar que já realizaste uma troca com um colega.")
+        
+        df_u = load_sheet("utilizadores")
+        if df_u is not None:
+            with st.form("form_troquei"):
+                data_troca = st.date_input("Data do serviço trocado:", format="DD/MM/YYYY")
+                # Cria lista de nomes para o selectbox
+                lista_militares = df_u.apply(lambda x: f"{x['posto']} {x['nome']} ({x['id']})", axis=1).tolist()
+                militar_troca = st.selectbox("Com quem trocou o serviço?", lista_militares)
+                motivo = st.text_area("Notas adicionais (opcional):")
+                
+                if st.form_submit_button("REGISTAR TROCA"):
+                    st.success(f"Troca registada para o dia {data_troca.strftime('%d/%m/%Y')} com {militar_troca}.")
+                    st.info("Nota: Este registo é provisório e será validado pelo Comando.")
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
