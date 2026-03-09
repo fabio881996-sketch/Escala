@@ -119,30 +119,32 @@ else:
         if not df_dia.empty:
             df_atual = df_dia.copy()
 
-            # --- APLICAR TROCAS NA LISTA GERAL ANTES DE FILTRAR ---
+            # --- APLICAR TROCAS DETALHADAS NA LISTA GERAL ---
             if not df_trocas.empty and 'data' in df_trocas.columns:
                 trocas_do_dia = df_trocas[df_trocas['data'] == d_str_sel]
                 for _, t in trocas_do_dia.iterrows():
-                    # Origem (quem deu o serviço)
+                    # Militar Origem
                     idx_o = df_atual.index[df_atual['id'].astype(str) == str(t['id_origem'])].tolist()
-                    if idx_o: df_atual.at[idx_o[0], 'serviço'] = f"{t['servico_destino']} (🔄 Troca)"
+                    if idx_o: 
+                        df_atual.at[idx_o[0], 'serviço'] = f"{t['servico_destino']} (Troca c/ ID {t['id_destino']})"
                     
-                    # Destino (quem recebeu o serviço)
+                    # Militar Destino
                     idx_d = df_atual.index[df_atual['id'].astype(str) == str(t['id_destino'])].tolist()
-                    if idx_d: df_atual.at[idx_d[0], 'serviço'] = f"{t['servico_origem']} (🔄 Troca)"
+                    if idx_d: 
+                        df_atual.at[idx_d[0], 'serviço'] = f"{t['servico_origem']} (Troca c/ ID {t['id_origem']})"
 
             def mostrar_grupo(titulo, keywords, df_base, excluir=True):
                 padrao = '|'.join(keywords).lower()
                 temp_df = df_base[df_base['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
-                        agrupado = temp_df.groupby(['serviço', 'horário'])['id'].apply(lambda x: ', '.join(x)).reset_index()
-                        st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+                        # Mostrar coluna 'id', 'serviço' (que agora tem o detalhe da troca) e 'horário'
+                        st.dataframe(temp_df[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
                     if excluir:
                         return df_base[~df_base['id'].isin(temp_df['id'])]
                 return df_base
 
-            # Exibição por Categorias
+            # Categorias
             df_atual = mostrar_grupo("Atendimento", ["atendimento"], df_atual)
             df_atual = mostrar_grupo("Apoio ao Atendimento", ["apoio"], df_atual)
             df_atual = mostrar_grupo("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_atual)
