@@ -22,6 +22,9 @@ st.markdown("""
     .card-servico { background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 6px solid #455A64; margin-bottom: 10px; color: #333; }
     .card-meu { border-left-color: #1E88E5 !important; background-color: #F0F7FF !important; }
     .card-troca { border-left-color: #FFD54F !important; background-color: #FFFDE7 !important; }
+    
+    /* Correção para o texto do Admin ser legível */
+    .texto-admin { color: #2C3E50 !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -70,7 +73,6 @@ def apagar_troca_gsheet(index_linha):
         if client:
             sh = client.open_by_url(st.secrets["gsheet_url"])
             aba = sh.worksheet("registos_trocas")
-            # +2 porque gspread é base 1 e o pandas tem header
             aba.delete_rows(index_linha + 2)
             return True
         return False
@@ -101,6 +103,7 @@ if not st.session_state["logged_in"]:
                         })
                         st.rerun()
                     else: st.error("Dados incorretos.")
+                else: st.error("Erro ao carregar utilizadores.")
 else:
     # --- 4. INTERFACE ---
     with st.sidebar:
@@ -108,11 +111,9 @@ else:
         st.markdown(f'<p class="sidebar-id">ID: {st.session_state["user_id"]} {"(ADMIN)" if st.session_state["is_admin"] else ""}</p>', unsafe_allow_html=True)
         st.markdown("---")
         
-        opcoes_menu = ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Registar Troca"]
+        opcoes_menu = ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Registar Troca", "📜 Minhas Trocas"]
         if st.session_state["is_admin"]:
             opcoes_menu.append("📜 Trocas Registadas (ADMIN)")
-        else:
-            opcoes_menu.append("📜 Minhas Trocas")
         opcoes_menu.append("👥 Efetivo")
         
         menu = st.radio("MENU", opcoes_menu)
@@ -216,7 +217,11 @@ else:
             for idx, row in df_trocas.iterrows():
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    st.write(f"📅 **{row['data']}** | ID {row['id_origem']} ↔ ID {row['id_destino']} | {row['servico_origem']} → {row['servico_destino']}")
+                    # Uso de HTML com classe CSS para garantir cor escura do texto
+                    st.markdown(f"""<div class="texto-admin">
+                        📅 <b>{row['data']}</b> | ID {row['id_origem']} ↔ ID {row['id_destino']} <br>
+                        {row['servico_origem']} → {row['servico_destino']}
+                    </div>""", unsafe_allow_html=True)
                 with col2:
                     if st.button("❌ Apagar", key=f"del_{idx}"):
                         if apagar_troca_gsheet(idx):
@@ -229,4 +234,3 @@ else:
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
         if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
-            
