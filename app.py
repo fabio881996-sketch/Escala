@@ -131,16 +131,17 @@ else:
             
             troca = pd.DataFrame()
             if not df_trocas.empty and 'data' in df_trocas.columns:
+                # Procura se o utilizador é a ORIGEM ou o DESTINO da troca para mostrar no cartão
                 troca = df_trocas[(df_trocas['data'] == d_str) & (df_trocas['id_origem'].astype(str) == st.session_state['user_id'])]
             
             if not troca.empty:
                 t = troca.iloc[0]
-                # Mostra o Serviço+Horário em destaque e o ID do militar logo abaixo
                 st.markdown(f"""
                 <div class="card-servico card-troca">
                     <b>{label}</b><br>
                     <h3>{t["servico_destino"]}</h3>
-                    <p style="margin:0; font-weight: bold; color: #2C3E50;">🔄 Troca com Militar ID {t["id_destino"]}</p>
+                    <p style="margin:0; font-size:0.9rem; color: #555;">🔙 Serviço Original: {t["servico_origem"]}</p>
+                    <p style="margin:5px 0 0 0; font-weight: bold; color: #2C3E50;">🔄 Troca com Militar ID {t["id_destino"]}</p>
                 </div>
                 """, unsafe_allow_html=True)
             else:
@@ -193,7 +194,6 @@ else:
         d_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
         df_d = load_data(d_t.strftime("%d-%m"))
         
-        # VALIDAÇÃO: Verifica se a escala do dia existe
         if not df_d.empty:
             meu = df_d[df_d['id'].astype(str) == st.session_state['user_id']]
             if not meu.empty:
@@ -207,13 +207,13 @@ else:
                     c_sel = st.selectbox("Com quem trocaste o serviço?", opcoes)
                     if st.form_submit_button("CONFIRMAR E GRAVAR TROCA"):
                         id_c = c_sel.split(" - ")[0]
-                        serv_c = c_sel.split(" - ", 1)[1] # Já inclui Serviço (Horário)
+                        serv_c = c_sel.split(" - ", 1)[1] 
                         if salvar_troca([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]):
                             st.success("Troca registada com sucesso!"); st.balloons()
             else:
                 st.warning("⚠️ Não tens serviço atribuído neste dia na escala carregada.")
         else:
-            st.error(f"🛑 Atenção: A escala para o dia {d_t.strftime('%d/%m')} ainda não foi carregada no sistema. Fala com um administrador.")
+            st.error(f"🛑 Atenção: A escala para o dia {d_t.strftime('%d/%m')} ainda não foi carregada.")
 
     elif menu == "📜 Minhas Trocas":
         st.title("📜 Minhas Trocas")
