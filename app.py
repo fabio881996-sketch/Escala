@@ -141,38 +141,38 @@ def main_app():
     elif menu == "🔄 Troquei":
         st.title("🔄 Registar Troca Efetuada")
         
-        # 1. Selecionar a Data (fora do form para atualizar o serviço em tempo real)
         data_troca = st.date_input("1. Data do serviço a trocar:", format="DD/MM/YYYY")
         nome_aba = data_troca.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         
         servico_atual = "Não encontrado"
+        horario_atual = ""
         opcoes_colegas = []
 
         if df_dia is not None:
-            # Procurar o meu serviço
             meu_serv = df_dia[df_dia['id'] == st.session_state['user_id']]
             if not meu_serv.empty:
                 servico_atual = meu_serv.iloc[0]['serviço']
+                horario_atual = meu_serv.iloc[0]['horário']
             
-            # Criar lista de colegas: "ID - SERVIÇO"
-            # Excluímos o próprio utilizador da lista de troca
             df_colegas = df_dia[df_dia['id'] != st.session_state['user_id']]
-            opcoes_colegas = df_colegas.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
+            # Agora incluímos o Horário na lista de colegas
+            opcoes_colegas = df_colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
 
-        # 2. Formulário de confirmação
         with st.form("form_troquei"):
-            st.info(f"O teu serviço escalado para este dia: **{servico_atual}**")
+            # Mostra o teu serviço e horário de forma clara
+            texto_teu_servico = f"**{servico_atual}**" if horario_atual == "" else f"**{servico_atual}** ({horario_atual})"
+            st.info(f"O teu serviço escalado: {texto_teu_servico}")
             
             if opcoes_colegas:
-                colega_selecionado = st.selectbox("2. Com quem trocou (ID - Serviço do Colega):", opcoes_colegas)
+                colega_selecionado = st.selectbox("2. Com quem trocou (ID - Serviço - Horário):", opcoes_colegas)
                 observacoes = st.text_area("3. Notas/Observações (opcional):")
                 
                 if st.form_submit_button("CONFIRMAR REGISTO DE TROCA"):
                     if servico_atual == "Não encontrado":
                         st.error("Não podes registar uma troca num dia em que não tens serviço escalado.")
                     else:
-                        st.success(f"Troca registada: Tu ({servico_atual}) <-> Colega ({colega_selecionado})")
+                        st.success(f"Troca registada: Tu ({texto_teu_servico}) <-> Colega ({colega_selecionado})")
             else:
                 st.warning("Não há escalas disponíveis ou colegas encontrados para esta data.")
                 st.form_submit_button("VERIFICAR DATA", disabled=True)
