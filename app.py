@@ -27,7 +27,6 @@ st.markdown("""
     /* SUBTÍTULOS EM BRANCO */
     div[data-testid="stExpander"] summary p { color: white !important; font-weight: bold !important; font-size: 1.1rem !important; }
     div[data-testid="stExpander"] summary { background-color: #455A64 !important; border-radius: 8px !important; padding: 5px 10px !important; }
-    div[data-testid="stExpander"] summary svg { fill: white !important; }
 
     /* TABELAS */
     .stDataFrame { background-color: #FFFFFF !important; border: 1px solid #EAECEF !important; border-radius: 8px !important; }
@@ -49,6 +48,12 @@ st.markdown("""
         font-weight: bold;
         margin-left: 10px;
         vertical-align: middle;
+    }
+    .info-troca-detalhe {
+        font-size: 0.85rem;
+        color: #546E7A !important;
+        margin-top: 5px;
+        font-style: italic;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -94,7 +99,7 @@ def main_app():
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # --- ABA MINHA ESCALA (CORRIGIDA) ---
+    # --- ABA MINHA ESCALA (MELHORADA COM DETALHES DA TROCA) ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         st.subheader("Próximos Serviços")
@@ -106,21 +111,21 @@ def main_app():
             data_str = data_verificar.strftime('%d/%m/%Y')
             nome_aba = data_verificar.strftime("%d-%m")
             
-            # 1. Verificar se há troca registada
             troca_ativa = next((t for t in st.session_state["historico_trocas"] if t["Data"] == data_str), None)
-            
-            # 2. Carregar escala original
             df_dia = load_sheet(nome_aba)
+            
             servico_exibir = None
+            detalhe_troca_html = ""
             status_html = ""
 
             if troca_ativa:
-                # Se há troca, extraímos o serviço que recebemos do colega
+                # O que estás a fazer agora
                 servico_exibir = troca_ativa["Colega/Serviço"].split(" - ", 1)[1]
+                # O que entregaste e a quem
+                detalhe_troca_html = f"""<div class="info-troca-detalhe">🔄 Trocaste o teu <b>{troca_ativa['Meu_Serv_Original']}</b> com o <b>ID {troca_ativa['ID_Colega']}</b></div>"""
                 status_html = '<span class="troca-tag">TROCA REGISTADA</span>'
                 encontrou_algum = True
             elif df_dia is not None:
-                # Se não há troca, procuramos o serviço normal
                 meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
                 if not meu_df.empty:
                     servico_exibir = f"{meu_df.iloc[0]['serviço']} ({meu_df.iloc[0]['horário']})"
@@ -132,11 +137,41 @@ def main_app():
                 <div style="background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px;">
                     <span style="color: #455A64; font-weight: bold; font-size: 0.9rem;">{label_dia}</span>{status_html}
                     <h3 style="margin:0; color: #1A1C1E !important;">{servico_exibir}</h3>
+                    {detalhe_troca_html}
                 </div>
                 """, unsafe_allow_html=True)
         
         if not encontrou_algum:
-            st.info("Não foram encontrados serviços ou trocas para os próximos dias.")
+            st.info("Não foram encontrados serviços ou trocas.")
+
+    # --- ABA TROQUEI (AJUSTADA PARA GUARDAR MAIS DADOS) ---
+    elif menu == "🔄 Troquei":
+        st.title("🔄 Registar Troca Efetuada")
+        data_troca = st.date_input("Data do serviço:", format="DD/MM/YYYY")
+        df_dia = load_sheet(data_troca.strftime("%d-%m"))
+        if df_dia is not None:
+            meu_serv = df_dia[df_dia['id'] == st.session_state['user_id']]
+            if not meu_serv.empty:
+                meu_serv_txt = f"{meu_serv.iloc[0]['serviço']} ({meu_serv.iloc[0]['horário']})"
+                st.info(f"O teu serviço: **{meu_serv_txt}**")
+                
+                excluir = ["férias", "doente", "licença", "tribunal", "secretaria", "pronto", "falta"]
+                df_colegas = df_dia[(df_dia['id'] != st.session_state['user_id']) & (~df_dia['serviço'].str.lower().str.contains('|'.join(excluir)))]
+                opcoes = df_colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                
+                with st.form("f_troca"):
+                    colega_full = st.selectbox("Com quem trocou?", opcoes)
+                    if st.form_submit_button("REGISTAR TROCA"):
+                        # Extrair o ID do colega da string "ID - Serviço (Horário)"
+                        id_colega = colega_full.split(" - ")[0]
+                        st.session_state["historico_trocas"].append({
+                            "Data": data_troca.strftime('%d/%m/%Y'),
+                            "Colega/Serviço": colega_full,
+                            "ID_Colega": id_colega,
+                            "Meu_Serv_Original": meu_serv_txt
+                        })
+                        st.success("Troca registada com sucesso!")
+        else: st.error("Escala não encontrada para este dia.")
 
     # --- RESTO DAS ABAS (MANTIDAS) ---
     elif menu == "🔍 Consulta Geral":
@@ -145,14 +180,11 @@ def main_app():
         nome_aba = data_sel.strftime("%d-%m")
         df_dia = load_sheet(nome_aba)
         if df_dia is not None:
-            # Lógica de Troca Visual na Geral (Simplificada)
             data_str_sel = data_sel.strftime('%d/%m/%Y')
             for t in st.session_state["historico_trocas"]:
                 if t["Data"] == data_str_sel:
-                    id_colega = t["Colega/Serviço"].split(" - ")[0]
-                    # Marca quem trocou com (T)
                     df_dia.loc[df_dia['id'] == st.session_state['user_id'], 'serviço'] += " (T)"
-                    df_dia.loc[df_dia['id'] == id_colega, 'serviço'] += " (T)"
+                    df_dia.loc[df_dia['id'] == t['ID_Colega'], 'serviço'] += " (T)"
 
             df_restante = df_dia.copy()
             def filtrar_e_mostrar(titulo, keywords):
@@ -170,23 +202,6 @@ def main_app():
             filtrar_e_mostrar("Folga", ["folga"])
             filtrar_e_mostrar("Outros", [""])
 
-    elif menu == "🔄 Troquei":
-        st.title("🔄 Registar Troca Efetuada")
-        data_troca = st.date_input("Data do serviço:", format="DD/MM/YYYY")
-        df_dia = load_sheet(data_troca.strftime("%d-%m"))
-        if df_dia is not None:
-            meu_serv = df_dia[df_dia['id'] == st.session_state['user_id']]
-            if not meu_serv.empty:
-                st.info(f"O teu serviço: **{meu_serv.iloc[0]['serviço']}** ({meu_serv.iloc[0]['horário']})")
-                excluir = ["férias", "doente", "licença", "tribunal", "secretaria", "pronto", "falta"]
-                df_colegas = df_dia[(df_dia['id'] != st.session_state['user_id']) & (~df_dia['serviço'].str.lower().str.contains('|'.join(excluir)))]
-                opcoes = df_colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
-                with st.form("f_troca"):
-                    colega = st.selectbox("Com quem trocou?", opcoes)
-                    if st.form_submit_button("REGISTAR TROCA"):
-                        st.session_state["historico_trocas"].append({"Data": data_troca.strftime('%d/%m/%Y'), "Colega/Serviço": colega})
-                        st.success("Troca registada! Verifica agora a aba 'Minha Escala'.")
-
     elif menu == "📜 As Minhas Trocas":
         st.title("📜 Histórico desta Sessão")
         if st.session_state["historico_trocas"]:
@@ -203,5 +218,4 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
-    
     
