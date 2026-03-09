@@ -108,60 +108,61 @@ else:
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # --- 4. ESCALA GERAL (ORDEM CORRIGIDA) ---
-    if menu == "🔍 Escala Geral":
-        st.title("🔍 Escala Geral")
-        data_sel = st.date_input("Data:", format="DD/MM/YYYY")
-        df_dia = load_data(data_sel.strftime("%d-%m"))
+   # --- 4. ESCALA GERAL (TRIBUNAL NOS OUTROS) ---
+if menu == "🔍 Escala Geral":
+    st.title("🔍 Escala Geral")
+    data_sel = st.date_input("Data:", format="DD/MM/YYYY")
+    df_dia = load_data(data_sel.strftime("%d-%m"))
+    
+    if not df_dia.empty:
+        df_atual = df_dia.copy()
+        df_atual['id_display'] = df_atual['id'].astype(str)
         
-        if not df_dia.empty:
-            df_atual = df_dia.copy()
-            df_atual['id_display'] = df_atual['id'].astype(str)
-            
-            # Aplicar Trocas Aprovadas
-            if not df_trocas.empty and 'status' in df_trocas.columns:
-                trocas_v = df_trocas[(df_trocas['data'] == data_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
-                for _, t in trocas_v.iterrows():
-                    m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
-                    if any(m_orig): 
-                        df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
-                        df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄)"
-                    m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
-                    if any(m_dest): 
-                        df_atual.loc[m_dest, 'serviço'] = t['servico_origem']
-                        df_atual.loc[m_dest, 'id_display'] = f"{t['id_destino']} (🔄)"
+        # Aplicar Trocas Aprovadas
+        if not df_trocas.empty and 'status' in df_trocas.columns:
+            trocas_v = df_trocas[(df_trocas['data'] == data_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
+            for _, t in trocas_v.iterrows():
+                m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
+                if any(m_orig): 
+                    df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
+                    df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄)"
+                m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
+                if any(m_dest): 
+                    df_atual.loc[m_dest, 'serviço'] = t['servico_origem']
+                    df_atual.loc[m_dest, 'id_display'] = f"{t['id_destino']} (🔄)"
 
-            def mostrar_seccao(titulo, keywords, df_fonte):
-                padrao = '|'.join(keywords).lower()
-                temp = df_fonte[df_fonte['serviço'].str.lower().str.contains(padrao, na=False)].copy()
-                if not temp.empty:
-                    with st.expander(f"🔹 {titulo}", expanded=True):
-                        agrupado = temp.groupby(['serviço', 'horário'], sort=False)['id_display'].apply(lambda x: ', '.join(x)).reset_index()
-                        st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
-                    return df_fonte[~df_fonte['id'].isin(temp['id'])]
-                return df_fonte
+        def mostrar_seccao(titulo, keywords, df_fonte):
+            padrao = '|'.join(keywords).lower()
+            temp = df_fonte[df_fonte['serviço'].str.lower().str.contains(padrao, na=False)].copy()
+            if not temp.empty:
+                with st.expander(f"🔹 {titulo}", expanded=True):
+                    agrupado = temp.groupby(['serviço', 'horário'], sort=False)['id_display'].apply(lambda x: ', '.join(x)).reset_index()
+                    st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+                return df_fonte[~df_fonte['id'].isin(temp['id'])]
+            return df_fonte
 
-            # A ORDEM QUE DEFINISTE:
-            df_processo = df_atual.copy()
-            df_processo = mostrar_seccao("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_processo)
-            df_processo = mostrar_seccao("Atendimento", ["atendimento"], df_processo)
-            df_processo = mostrar_seccao("Apoio ao Atendimento", ["apoio"], df_processo)
-            df_processo = mostrar_seccao("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_processo)
-            
-            # Capturar Folgas e Ausentes para garantir que os "Outros" não os apanham
-            df_finais = df_processo[df_processo['serviço'].str.lower().str.contains("folga|férias|licença|doente|tribunal|diligência|remu|grat", na=False)]
-            df_sobra = df_processo[~df_processo['id'].isin(df_finais['id'])]
-            
-            # Outros entre Patrulhas e Folgas
-            _ = mostrar_seccao("Outros Serviços", [""], df_sobra)
-            
-            # Folgas e Ausentes
-            df_finais = mostrar_seccao("Remunerados", ["remu", "grat"], df_finais)
-            df_finais = mostrar_seccao("Folga", ["folga"], df_finais)
-            _ = mostrar_seccao("Ausentes", ["férias", "licença", "doente", "tribunal", "diligência"], df_finais)
-            
-        else: st.warning("Sem dados para esta data.")
-
+        # EXECUÇÃO DA HIERARQUIA
+        df_p = df_atual.copy()
+        df_p = mostrar_seccao("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_p)
+        df_p = mostrar_seccao("Atendimento", ["atendimento"], df_p)
+        df_p = mostrar_seccao("Apoio ao Atendimento", ["apoio"], df_p)
+        df_p = mostrar_seccao("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_p)
+        
+        # DEFINIÇÃO DE QUEM É REALMENTE AUSENTE/FOLGA (Tribunal removido daqui)
+        # Agora o Tribunal não sendo apanhado aqui, vai sobrar para os "Outros"
+        df_finais = df_p[df_p['serviço'].str.lower().str.contains("folga|férias|licença|doente|diligência|remu|grat", na=False)]
+        df_sobra = df_p[~df_p['id'].isin(df_finais['id'])]
+        
+        # "Outros Serviços" (Onde o Tribunal vai aparecer agora)
+        _ = mostrar_seccao("Outros Serviços", [""], df_sobra)
+        
+        # Secções de encerramento
+        df_finais = mostrar_seccao("Remunerados", ["remu", "grat"], df_finais)
+        df_finais = mostrar_seccao("Folga", ["folga"], df_finais)
+        _ = mostrar_seccao("Ausentes", ["férias", "licença", "doente", "diligência"], df_finais)
+        
+    else: st.warning("Sem dados para esta data.")
+        
     # --- 5. MINHA ESCALA ---
     elif menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
