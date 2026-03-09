@@ -14,6 +14,10 @@ st.markdown("""
     .sidebar-nome { color: #FFFFFF !important; font-size: 1.2rem; font-weight: bold; }
     .sidebar-id { color: #D1D1D1 !important; font-size: 0.9rem; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; }
+    
+    /* Títulos dos Expanders em Azul Escuro para visibilidade */
+    .st-emotion-cache-p64bsy p { color: #1E3A8A !important; font-weight: bold !important; font-size: 1.1rem !important; }
+    
     .card-servico { background: white; padding: 15px; border-radius: 10px; border-left: 6px solid #455A64; margin-bottom: 10px; color: #333; border: 1px solid #EAECEF; }
     .card-meu { border-left-color: #1E88E5 !important; background-color: #F0F7FF !important; }
     .card-troca { border-left-color: #FFD54F !important; background-color: #FFFDE7 !important; }
@@ -22,7 +26,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
-SERVICOS_EXCLUIDOS = ["inquérito", "secretaria", "pronto", "férias", "licença", "doente", "diligência"] # Tribunal removido para permitir trocas se quiseres
+SERVICOS_EXCLUIDOS = ["inquérito", "secretaria", "pronto", "férias", "licença", "doente", "diligência"]
 
 # --- 2. FUNÇÕES DE DADOS ---
 def get_client():
@@ -106,7 +110,7 @@ else:
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # --- 4. LÓGICA DE MENUS (CORREÇÃO DE INDENTAÇÃO) ---
+    # --- 4. LÓGICA DE MENUS ---
 
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
@@ -149,7 +153,7 @@ else:
                 padrao = '|'.join(keywords).lower()
                 temp = df_fonte[df_fonte['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp.empty:
-                    with st.expander(f"🔹 {titulo}", expanded=True):
+                    with st.expander(f"🔹 {titulo.upper()}", expanded=True):
                         agrupado = temp.groupby(['serviço', 'horário'], sort=False)['id_display'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
                     return df_fonte[~df_fonte['id'].isin(temp['id'])]
@@ -222,4 +226,3 @@ else:
         st.title("👥 Efetivo")
         df_u = load_data("utilizadores")
         if not df_u.empty: st.dataframe(df_u[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
-            
