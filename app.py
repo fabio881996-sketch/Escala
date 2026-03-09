@@ -10,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - BASE INALTERÁVEL (Subtítulos brancos, Botão Sair vermelho, etc)
+# 2. CSS - BASE INALTERÁVEL
 st.markdown("""
     <style>
     .stApp { background-color: #FFFFFF !important; }
@@ -140,20 +140,26 @@ def main_app():
 
     elif menu == "🔄 Troquei":
         st.title("🔄 Registar Troca Efetuada")
-        st.write("Utiliza este formulário para informar que já realizaste uma troca com um colega.")
+        st.write("Indica os detalhes da troca de serviço já realizada.")
         
         df_u = load_sheet("utilizadores")
         if df_u is not None:
             with st.form("form_troquei"):
-                data_troca = st.date_input("Data do serviço trocado:", format="DD/MM/YYYY")
-                # Cria lista de nomes para o selectbox
-                lista_militares = df_u.apply(lambda x: f"{x['posto']} {x['nome']} ({x['id']})", axis=1).tolist()
-                militar_troca = st.selectbox("Com quem trocou o serviço?", lista_militares)
-                motivo = st.text_area("Notas adicionais (opcional):")
+                col1, col2 = st.columns(2)
+                with col1:
+                    data_troca = st.date_input("Data do serviço:", format="DD/MM/YYYY")
+                with col2:
+                    servico_original = st.text_input("Serviço original (Ex: Patrulha, Atendimento)", placeholder="O que ias fazer?")
                 
-                if st.form_submit_button("REGISTAR TROCA"):
-                    st.success(f"Troca registada para o dia {data_troca.strftime('%d/%m/%Y')} com {militar_troca}.")
-                    st.info("Nota: Este registo é provisório e será validado pelo Comando.")
+                # Lista de IDs para o selectbox
+                lista_ids = df_u['id'].tolist()
+                id_militar_troca = st.selectbox("ID do Militar com quem trocou:", lista_ids)
+                
+                motivo = st.text_area("Observações/Notas:")
+                
+                if st.form_submit_button("REGISTAR INFORMAÇÃO"):
+                    st.success(f"Troca de **{servico_original}** no dia **{data_troca.strftime('%d/%m/%Y')}** com o **ID {id_militar_troca}** registada com sucesso.")
+                    st.info("Informação enviada para verificação.")
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
@@ -163,4 +169,3 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
-    
