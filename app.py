@@ -135,8 +135,14 @@ else:
             
             if not troca.empty:
                 t = troca.iloc[0]
-                # Aqui o 'servico_destino' já inclui o horário porque foi gravado assim no menu de trocas
-                st.markdown(f'<div class="card-servico card-troca"><b>{label}</b><br><h3>{t["servico_destino"]}</h3><p>Troca c/ ID {t["id_destino"]}</p></div>', unsafe_allow_html=True)
+                # Mostra o Serviço+Horário em destaque e o ID do militar logo abaixo
+                st.markdown(f"""
+                <div class="card-servico card-troca">
+                    <b>{label}</b><br>
+                    <h3>{t["servico_destino"]}</h3>
+                    <p style="margin:0; font-weight: bold; color: #2C3E50;">🔄 Troca com Militar ID {t["id_destino"]}</p>
+                </div>
+                """, unsafe_allow_html=True)
             else:
                 df_dia = load_data(dt.strftime("%d-%m"))
                 if not df_dia.empty:
@@ -157,7 +163,6 @@ else:
                 for _, t in trocas_do_dia.iterrows():
                     m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
                     if any(m_orig):
-                        # Nota: t['servico_destino'] já vem com horário do registo
                         df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
                         df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄 c/ {t['id_destino']})"
                     m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
@@ -170,7 +175,6 @@ else:
                 temp_df = df_base[df_base['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
-                        # Se o serviço já tem o horário (vindo de troca), não precisamos da coluna horário repetida
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id_display'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
                     if excluir: return df_base[~df_base['id'].isin(temp_df['id'])]
@@ -186,25 +190,30 @@ else:
 
     elif menu == "🔄 Registar Troca":
         st.title("🔄 Registar Troca")
-        d_t = st.date_input("Data:", format="DD/MM/YYYY")
+        d_t = st.date_input("Data do serviço:", format="DD/MM/YYYY")
         df_d = load_data(d_t.strftime("%d-%m"))
+        
+        # VALIDAÇÃO: Verifica se a escala do dia existe
         if not df_d.empty:
             meu = df_d[df_d['id'].astype(str) == st.session_state['user_id']]
             if not meu.empty:
                 meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
-                st.info(f"Teu serviço: {meu_s}")
+                st.info(f"O teu serviço original: {meu_s}")
+                
                 colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
-                # Aqui adicionamos o HORÁRIO na lista de seleção para não haver dúvidas
                 opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                
                 with st.form("f_t"):
-                    c_sel = st.selectbox("Trocar com?", opcoes)
-                    if st.form_submit_button("GRAVAR"):
+                    c_sel = st.selectbox("Com quem trocaste o serviço?", opcoes)
+                    if st.form_submit_button("CONFIRMAR E GRAVAR TROCA"):
                         id_c = c_sel.split(" - ")[0]
-                        # serv_c passa a conter Serviço + Horário
-                        serv_c = c_sel.split(" - ", 1)[1]
+                        serv_c = c_sel.split(" - ", 1)[1] # Já inclui Serviço (Horário)
                         if salvar_troca([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]):
-                            st.success("Gravado!"); st.balloons()
-            else: st.warning("Sem serviço.")
+                            st.success("Troca registada com sucesso!"); st.balloons()
+            else:
+                st.warning("⚠️ Não tens serviço atribuído neste dia na escala carregada.")
+        else:
+            st.error(f"🛑 Atenção: A escala para o dia {d_t.strftime('%d/%m')} ainda não foi carregada no sistema. Fala com um administrador.")
 
     elif menu == "📜 Minhas Trocas":
         st.title("📜 Minhas Trocas")
@@ -213,8 +222,8 @@ else:
                                (df_trocas['id_destino'].astype(str) == st.session_state['user_id'])]
             if not minhas.empty:
                 st.dataframe(minhas, use_container_width=True, hide_index=True)
-            else: st.info("Não tens trocas registadas.")
-        else: st.info("Não existem trocas.")
+            else: st.info("Não tens trocas registadas no histórico.")
+        else: st.info("Não existem trocas registadas.")
 
     elif menu == "📜 Trocas Registadas (ADMIN)":
         st.title("📜 Gestão de Trocas (ADMIN)")
@@ -232,7 +241,7 @@ else:
                             st.success("Apagada!"); st.rerun()
                         else: st.error("Erro ao apagar.")
                 st.markdown("---")
-        else: st.info("Não existem trocas.")
+        else: st.info("Não existem trocas registadas.")
 
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
