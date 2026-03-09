@@ -140,26 +140,42 @@ def main_app():
 
     elif menu == "🔄 Troquei":
         st.title("🔄 Registar Troca Efetuada")
-        st.write("Indica os detalhes da troca de serviço já realizada.")
         
-        df_u = load_sheet("utilizadores")
-        if df_u is not None:
-            with st.form("form_troquei"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    data_troca = st.date_input("Data do serviço:", format="DD/MM/YYYY")
-                with col2:
-                    servico_original = st.text_input("Serviço original (Ex: Patrulha, Atendimento)", placeholder="O que ias fazer?")
+        # 1. Selecionar a Data (fora do form para atualizar o serviço em tempo real)
+        data_troca = st.date_input("1. Data do serviço a trocar:", format="DD/MM/YYYY")
+        nome_aba = data_troca.strftime("%d-%m")
+        df_dia = load_sheet(nome_aba)
+        
+        servico_atual = "Não encontrado"
+        opcoes_colegas = []
+
+        if df_dia is not None:
+            # Procurar o meu serviço
+            meu_serv = df_dia[df_dia['id'] == st.session_state['user_id']]
+            if not meu_serv.empty:
+                servico_atual = meu_serv.iloc[0]['serviço']
+            
+            # Criar lista de colegas: "ID - SERVIÇO"
+            # Excluímos o próprio utilizador da lista de troca
+            df_colegas = df_dia[df_dia['id'] != st.session_state['user_id']]
+            opcoes_colegas = df_colegas.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
+
+        # 2. Formulário de confirmação
+        with st.form("form_troquei"):
+            st.info(f"O teu serviço escalado para este dia: **{servico_atual}**")
+            
+            if opcoes_colegas:
+                colega_selecionado = st.selectbox("2. Com quem trocou (ID - Serviço do Colega):", opcoes_colegas)
+                observacoes = st.text_area("3. Notas/Observações (opcional):")
                 
-                # Lista de IDs para o selectbox
-                lista_ids = df_u['id'].tolist()
-                id_militar_troca = st.selectbox("ID do Militar com quem trocou:", lista_ids)
-                
-                motivo = st.text_area("Observações/Notas:")
-                
-                if st.form_submit_button("REGISTAR INFORMAÇÃO"):
-                    st.success(f"Troca de **{servico_original}** no dia **{data_troca.strftime('%d/%m/%Y')}** com o **ID {id_militar_troca}** registada com sucesso.")
-                    st.info("Informação enviada para verificação.")
+                if st.form_submit_button("CONFIRMAR REGISTO DE TROCA"):
+                    if servico_atual == "Não encontrado":
+                        st.error("Não podes registar uma troca num dia em que não tens serviço escalado.")
+                    else:
+                        st.success(f"Troca registada: Tu ({servico_atual}) <-> Colega ({colega_selecionado})")
+            else:
+                st.warning("Não há escalas disponíveis ou colegas encontrados para esta data.")
+                st.form_submit_button("VERIFICAR DATA", disabled=True)
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
@@ -169,3 +185,4 @@ def main_app():
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if not st.session_state["logged_in"]: login()
 else: main_app()
+    
