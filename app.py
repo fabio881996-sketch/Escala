@@ -155,10 +155,39 @@ else:
 
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
-        data_g = st.date_input("Ver dia:", format="DD/MM/YYYY")
-        df_g = load_data(data_g.strftime("%d-%m"))
-        if not df_g.empty:
-            st.dataframe(df_g[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+        data_sel = st.date_input("Ver dia:", format="DD/MM/YYYY")
+        d_str = data_sel.strftime('%d/%m/%Y')
+        df_dia = load_data(data_sel.strftime("%d-%m"))
+        
+        if not df_dia.empty:
+            # Aplicar trocas visuais na lista geral
+            if not df_trocas.empty and 'data' in df_trocas.columns:
+                trocas_dia = df_trocas[df_trocas['data'] == d_str]
+                for _, t in trocas_dia.iterrows():
+                    m_orig = df_dia['id'].astype(str) == str(t['id_origem'])
+                    m_dest = df_dia['id'].astype(str) == str(t['id_destino'])
+                    if any(m_orig) and any(m_dest):
+                        # Marcar como trocado visualmente
+                        df_dia.loc[m_orig, 'serviço'] = f"{t['servico_destino']} 🔄"
+                        df_dia.loc[m_dest, 'serviço'] = f"{t['servico_origem']} 🔄"
+
+            # Desenhar os Blocos (Cards) em vez de tabela
+            for _, row in df_dia.iterrows():
+                is_me = row['id'].astype(str) == st.session_state['user_id']
+                border_color = "#1E88E5" if is_me else "#455A64"
+                bg_color = "#E3F2FD" if is_me else "#FFFFFF"
+                
+                st.markdown(f"""
+                    <div class="card-servico" style="border-left-color: {border_color}; background-color: {bg_color};">
+                        <div style="display: flex; justify-content: space-between;">
+                            <span style="font-weight: bold; color: #263238;">ID: {row['id']}</span>
+                            <span style="color: #546E7A; font-size: 0.9rem;">{row['horário']}</span>
+                        </div>
+                        <h3 style="margin: 5px 0; color: #263238;">{row['serviço']}</h3>
+                    </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.warning("Não há escala carregada para este dia.")
 
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
