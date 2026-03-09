@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # 1. Configuração de Página
 st.set_page_config(
@@ -10,75 +10,40 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 2. CSS - TUDO IGUAL (SUBTÍTULOS BRANCOS E BOTÃO SAIR)
+# 2. CSS - BASE INALTERÁVEL (Subtítulos brancos, Botão Sair vermelho, etc)
 st.markdown("""
     <style>
-    /* FUNDO DA PÁGINA */
     .stApp { background-color: #FFFFFF !important; }
-    
-    /* BARRA LATERAL */
-    [data-testid="stSidebar"] { 
-        background-color: #455A64 !important; 
-        border-right: 1px solid #37474F; 
-    }
-    .profile-card { 
-        background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; 
-    }
+    [data-testid="stSidebar"] { background-color: #455A64 !important; border-right: 1px solid #37474F; }
+    .profile-card { background: #37474F; padding: 20px; border-radius: 12px; margin-bottom: 25px; text-align: center; }
     [data-testid="stSidebar"] * { color: #FFFFFF !important; }
+    div[data-testid="stForm"] { background-color: #455A64; border-radius: 15px; padding: 30px; color: white; }
+    div[data-testid="stForm"] * { color: white !important; }
 
-    /* SUBTÍTULOS EM BRANCO */
-    div[data-testid="stExpander"] summary p {
-        color: white !important;
-        font-weight: bold !important;
-        font-size: 1.1rem !important;
-    }
-    div[data-testid="stExpander"] summary {
-        background-color: #455A64 !important;
-        border-radius: 8px !important;
-        padding: 5px 10px !important;
-    }
-    div[data-testid="stExpander"] summary svg {
-        fill: white !important;
-    }
-    .st-expander {
-        border: none !important;
-        background-color: transparent !important;
-        margin-bottom: 15px !important;
-    }
+    /* SUBTÍTULOS EM BRANCO (PERFEITOS) */
+    div[data-testid="stExpander"] summary p { color: white !important; font-weight: bold !important; font-size: 1.1rem !important; }
+    div[data-testid="stExpander"] summary { background-color: #455A64 !important; border-radius: 8px !important; padding: 5px 10px !important; }
+    div[data-testid="stExpander"] summary svg { fill: white !important; }
+    .st-expander { border: none !important; background-color: transparent !important; margin-bottom: 15px !important; }
 
     /* TABELAS */
-    .stDataFrame {
-        background-color: #FFFFFF !important;
-        border: 1px solid #EAECEF !important;
-        border-radius: 8px !important;
-    }
-    [data-testid="stDataFrame"] table thead th {
-        background-color: #F8FAFC !important;
-        color: #1A1C1E !important;
-        font-weight: bold !important;
-    }
+    .stDataFrame { background-color: #FFFFFF !important; border: 1px solid #EAECEF !important; border-radius: 8px !important; }
+    [data-testid="stDataFrame"] table thead th { background-color: #F8FAFC !important; color: #1A1C1E !important; font-weight: bold !important; }
     
-    /* TÍTULOS E TEXTOS */
     h1, h2, h3, p { color: #1A1C1E !important; }
     
-    /* BOTÃO SAIR ESPECÍFICO */
     section[data-testid="stSidebar"] .stButton>button {
-        background-color: #e74c3c !important;
-        color: white !important;
-        border: none !important;
-        font-weight: bold !important;
-        border-radius: 8px !important;
+        background-color: #e74c3c !important; color: white !important; border: none !important; font-weight: bold !important; border-radius: 8px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. Função de Carregamento - CORREÇÃO DO .0 AQUI
+# 3. Função de Carregamento (String pura para evitar o .0)
 def load_sheet(aba_nome):
     try:
         url = st.secrets["gsheet_url"]
         base_url = url.split('/edit')[0]
         csv_url = f"{base_url}/gviz/tq?tqx=out:csv&sheet={aba_nome}"
-        # Forçamos o pandas a ler tudo como STRING para evitar o .0 nos números
         df = pd.read_csv(csv_url, dtype=str) 
         df.columns = [c.strip().lower() for c in df.columns]
         for col in df.columns:
@@ -116,16 +81,47 @@ def main_app():
 
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
-        data_sel = st.date_input("Data:", format="DD/MM/YYYY")
-        nome_aba = data_sel.strftime("%d-%m")
-        df_dia = load_sheet(nome_aba)
-        if df_dia is not None:
-            meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
-            if not meu_df.empty:
-                st.markdown(f"""<div style="background: #FFFFFF; padding: 25px; border-radius: 12px; border: 1px solid #EAECEF; border-left: 5px solid #455A64;">
-                    <h1 style="margin:0; font-size: 2rem; color: #1A1C1E !important;">{meu_df.iloc[0]['serviço']}</h1>
-                    <p style="color: #546E7A; font-size: 1.2rem; margin-top: 10px;">🕒 Horário: <b>{meu_df.iloc[0]['horário']}</b></p>
-                </div>""", unsafe_allow_html=True)
+        
+        # --- NOVO BLOCO: SERVIÇOS PRÓXIMOS ---
+        st.subheader("Próximos Serviços")
+        hoje = datetime.now()
+        encontrou_algum = False
+        
+        # Procura para hoje e para os próximos 7 dias (ajustável)
+        for i in range(8):
+            data_verificar = hoje + timedelta(days=i)
+            nome_aba = data_verificar.strftime("%d-%m")
+            df_dia = load_sheet(nome_aba)
+            
+            if df_dia is not None:
+                meu_df = df_dia[df_dia['id'] == st.session_state['user_id']]
+                if not meu_df.empty:
+                    encontrou_algum = True
+                    # Formatação para o dia de hoje vs outros dias
+                    label_dia = "HOJE" if i == 0 else data_verificar.strftime("%d/%m (%a)")
+                    
+                    st.markdown(f"""
+                    <div style="background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 5px solid #455A64; margin-bottom: 10px;">
+                        <span style="color: #455A64; font-weight: bold; font-size: 0.9rem;">{label_dia}</span>
+                        <h3 style="margin:0; color: #1A1C1E !important;">{meu_df.iloc[0]['serviço']}</h3>
+                        <p style="color: #546E7A; margin:0;">🕒 {meu_df.iloc[0]['horário']}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        if not encontrou_algum:
+            st.info("Não foram encontrados serviços escalados para os próximos dias.")
+
+        st.divider()
+        st.subheader("Consultar outra data")
+        data_sel = st.date_input("Escolha o dia:", format="DD/MM/YYYY")
+        nome_aba_sel = data_sel.strftime("%d-%m")
+        df_sel = load_sheet(nome_aba_sel)
+        if df_sel is not None:
+            meu_df_sel = df_sel[df_sel['id'] == st.session_state['user_id']]
+            if not meu_df_sel.empty:
+                st.success(f"Nesse dia estarás de: **{meu_df_sel.iloc[0]['serviço']}** ({meu_df_sel.iloc[0]['horário']})")
+            else: st.warning("Não constas na escala deste dia.")
+        else: st.error("Escala não disponível para essa data.")
 
     elif menu == "🔍 Consulta Geral":
         st.title("🔍 Escala Geral")
