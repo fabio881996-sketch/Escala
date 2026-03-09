@@ -118,33 +118,40 @@ else:
         
         if not df_dia.empty:
             df_atual = df_dia.copy()
+            # Criamos uma coluna temporária para mostrar o ID com nota de troca
+            df_atual['id_display'] = df_atual['id'].astype(str)
 
-            # --- APLICAR TROCAS DETALHADAS NA LISTA GERAL ---
+            # --- PROCESSAR NOTAS DE TROCA ---
             if not df_trocas.empty and 'data' in df_trocas.columns:
                 trocas_do_dia = df_trocas[df_trocas['data'] == d_str_sel]
                 for _, t in trocas_do_dia.iterrows():
-                    # Militar Origem
-                    idx_o = df_atual.index[df_atual['id'].astype(str) == str(t['id_origem'])].tolist()
-                    if idx_o: 
-                        df_atual.at[idx_o[0], 'serviço'] = f"{t['servico_destino']} (Troca c/ ID {t['id_destino']})"
+                    # Para quem deu o serviço
+                    m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
+                    if any(m_orig):
+                        df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
+                        df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄 c/ {t['id_destino']})"
                     
-                    # Militar Destino
-                    idx_d = df_atual.index[df_atual['id'].astype(str) == str(t['id_destino'])].tolist()
-                    if idx_d: 
-                        df_atual.at[idx_d[0], 'serviço'] = f"{t['servico_origem']} (Troca c/ ID {t['id_origem']})"
+                    # Para quem recebeu
+                    m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
+                    if any(m_dest):
+                        df_atual.loc[m_dest, 'serviço'] = t['servico_origem']
+                        df_atual.loc[m_dest, 'id_display'] = f"{t['id_destino']} (🔄 c/ {t['id_origem']})"
 
             def mostrar_grupo(titulo, keywords, df_base, excluir=True):
                 padrao = '|'.join(keywords).lower()
                 temp_df = df_base[df_base['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
-                        # Mostrar coluna 'id', 'serviço' (que agora tem o detalhe da troca) e 'horário'
-                        st.dataframe(temp_df[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
+                        # REAGRUPAR: Junta os 'id_display' que têm o mesmo serviço e horário
+                        agrupado = temp_df.groupby(['serviço', 'horário'])['id_display'].apply(lambda x: ', '.join(x)).reset_index()
+                        # Renomear para ID para ficar bonito na tabela
+                        agrupado = agrupado.rename(columns={'id_display': 'id'})
+                        st.dataframe(agrupado[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
                     if excluir:
                         return df_base[~df_base['id'].isin(temp_df['id'])]
                 return df_base
 
-            # Categorias
+            # Categorias por ordem
             df_atual = mostrar_grupo("Atendimento", ["atendimento"], df_atual)
             df_atual = mostrar_grupo("Apoio ao Atendimento", ["apoio"], df_atual)
             df_atual = mostrar_grupo("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_atual)
