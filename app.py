@@ -22,8 +22,6 @@ st.markdown("""
     .card-servico { background: #FFFFFF; padding: 15px; border-radius: 10px; border: 1px solid #EAECEF; border-left: 6px solid #455A64; margin-bottom: 10px; color: #333; }
     .card-meu { border-left-color: #1E88E5 !important; background-color: #F0F7FF !important; }
     .card-troca { border-left-color: #FFD54F !important; background-color: #FFFDE7 !important; }
-    
-    /* Correção para o texto do Admin ser legível */
     .texto-admin { color: #2C3E50 !important; }
     </style>
     """, unsafe_allow_html=True)
@@ -130,11 +128,14 @@ else:
             dt = hoje + timedelta(days=i)
             d_str = dt.strftime('%d/%m/%Y')
             label = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
+            
             troca = pd.DataFrame()
             if not df_trocas.empty and 'data' in df_trocas.columns:
                 troca = df_trocas[(df_trocas['data'] == d_str) & (df_trocas['id_origem'].astype(str) == st.session_state['user_id'])]
+            
             if not troca.empty:
                 t = troca.iloc[0]
+                # Aqui o 'servico_destino' já inclui o horário porque foi gravado assim no menu de trocas
                 st.markdown(f'<div class="card-servico card-troca"><b>{label}</b><br><h3>{t["servico_destino"]}</h3><p>Troca c/ ID {t["id_destino"]}</p></div>', unsafe_allow_html=True)
             else:
                 df_dia = load_data(dt.strftime("%d-%m"))
@@ -156,6 +157,7 @@ else:
                 for _, t in trocas_do_dia.iterrows():
                     m_orig = df_atual['id'].astype(str) == str(t['id_origem'])
                     if any(m_orig):
+                        # Nota: t['servico_destino'] já vem com horário do registo
                         df_atual.loc[m_orig, 'serviço'] = t['servico_destino']
                         df_atual.loc[m_orig, 'id_display'] = f"{t['id_origem']} (🔄 c/ {t['id_destino']})"
                     m_dest = df_atual['id'].astype(str) == str(t['id_destino'])
@@ -168,6 +170,7 @@ else:
                 temp_df = df_base[df_base['serviço'].str.lower().str.contains(padrao, na=False)].copy()
                 if not temp_df.empty:
                     with st.expander(f"🔹 {titulo}", expanded=True):
+                        # Se o serviço já tem o horário (vindo de troca), não precisamos da coluna horário repetida
                         agrupado = temp_df.groupby(['serviço', 'horário'])['id_display'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(agrupado.rename(columns={'id_display': 'id'})[['id', 'serviço', 'horário']], use_container_width=True, hide_index=True)
                     if excluir: return df_base[~df_base['id'].isin(temp_df['id'])]
@@ -191,11 +194,13 @@ else:
                 meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
                 st.info(f"Teu serviço: {meu_s}")
                 colegas = df_d[df_d['id'].astype(str) != st.session_state['user_id']]
-                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
+                # Aqui adicionamos o HORÁRIO na lista de seleção para não haver dúvidas
+                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
                 with st.form("f_t"):
                     c_sel = st.selectbox("Trocar com?", opcoes)
                     if st.form_submit_button("GRAVAR"):
                         id_c = c_sel.split(" - ")[0]
+                        # serv_c passa a conter Serviço + Horário
                         serv_c = c_sel.split(" - ", 1)[1]
                         if salvar_troca([d_t.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_c, serv_c]):
                             st.success("Gravado!"); st.balloons()
@@ -217,7 +222,6 @@ else:
             for idx, row in df_trocas.iterrows():
                 col1, col2 = st.columns([4, 1])
                 with col1:
-                    # Uso de HTML com classe CSS para garantir cor escura do texto
                     st.markdown(f"""<div class="texto-admin">
                         📅 <b>{row['data']}</b> | ID {row['id_origem']} ↔ ID {row['id_destino']} <br>
                         {row['servico_origem']} → {row['servico_destino']}
