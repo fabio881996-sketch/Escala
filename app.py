@@ -25,7 +25,7 @@ st.markdown("""
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
 IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
 
-# --- 2. FUNÇÕES DE DADOS COM CACHE ---
+# --- 2. FUNÇÕES DE DADOS ---
 @st.cache_data(ttl=300)
 def load_data(aba_nome):
     try:
@@ -178,8 +178,18 @@ else:
                 temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
                 if not temp.empty:
                     with st.expander(f"🔹 {tit.upper()}", expanded=True):
-                        col_disp = ['serviço', 'horário', 'id_disp'] + (['viatura', 'rádio', 'indicativo rádio', 'observações'] if mostrar_extras else [])
-                        ag = temp.groupby(col_disp, sort=False).size().reset_index().drop(columns=[0])
+                        cols_ag = ['serviço', 'horário']
+                        if mostrar_extras:
+                            ag = temp.groupby(cols_ag, sort=False).agg({
+                                'id_disp': lambda x: ', '.join(x),
+                                'viatura': lambda x: ', '.join(x.unique()),
+                                'rádio': lambda x: ', '.join(x.unique()),
+                                'indicativo rádio': lambda x: ', '.join(x.unique()),
+                                'observações': lambda x: ', '.join(x.unique())
+                            }).reset_index()
+                        else:
+                            ag = temp.groupby(cols_ag, sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+                        
                         st.dataframe(ag.rename(columns={'id_disp': 'Militar (Atual 🔄 Original)'}), use_container_width=True, hide_index=True)
                     return df_f[~df_f['id'].isin(temp['id'])]
                 return df_f
@@ -259,4 +269,3 @@ else:
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         st.dataframe(df_util[['id', 'posto', 'nome', 'telemóvel']], hide_index=True, use_container_width=True)
-        
