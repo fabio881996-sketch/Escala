@@ -79,7 +79,7 @@ def gerar_pdf_troca(dados):
     pdf.multi_cell(190, 10, txt.encode('latin-1', 'replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- FUNÇÃO DO PDF COM FILTROS LIMADOS ---
+# --- FUNÇÃO DO PDF COM AGRUPAMENTO E FILTROS REFINADOS ---
 def gerar_pdf_escala_dia(data_str, df_original):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
@@ -89,31 +89,23 @@ def gerar_pdf_escala_dia(data_str, df_original):
     def clean(txt):
         return str(txt).encode('latin-1', 'replace').decode('latin-1')
 
-    # Cabeçalho Oficial
+    # Cabeçalho
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 5, clean("POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO"), ln=True)
     pdf.set_font("Arial", "B", 13)
     pdf.cell(0, 10, clean(f"ESCALA DE SERVIÇO PARA O DIA {data_str.upper()}"), border="B", ln=True, align='C')
     pdf.ln(4)
 
-    # Lógica de Filtros Refinada
+    # Filtros Estanques
     servicos = df_original['serviço'].str.lower()
-    
     df_aus = df_original[servicos.str.contains("férias|licença|doente|folga", na=False)]
     df_adm = df_original[servicos.str.contains("pronto|secretaria|inquérito|comando|diligência|tribunal", na=False)]
-    
-    # Atendimento (sem apoios)
     df_at = df_original[servicos.str.contains("atendimento", na=False) & ~servicos.str.contains("apoio", na=False)]
-    
-    # Apoio ao Atendimento
     df_apoi = df_original[servicos.str.contains("apoio", na=False)]
-    
-    # Patrulhas e Instrução (sem atendimentos)
     df_pat = df_original[servicos.str.contains("po|patrulha|ronda|vtr|auto|expediente|tiro|instrução", na=False) & ~servicos.str.contains("atendimento|apoio", na=False)]
-    
     df_remu = df_original[servicos.str.contains("remu|grat", na=False)]
 
-    # 1. TOPO: AUSÊNCIAS E OUTRAS SITUAÇÕES
+    # 1. AUSÊNCIAS E ADM
     y_topo = pdf.get_y()
     pdf.set_font("Arial", "B", 8)
     pdf.set_fill_color(240, 240, 240)
@@ -140,29 +132,33 @@ def gerar_pdf_escala_dia(data_str, df_original):
     
     pdf.set_y(max(y_f_aus, pdf.get_y()) + 4)
 
-    # 2. ATENDIMENTO E APOIO (Lado a Lado)
-    y_at = pdf.get_y()
+    # 2. ATENDIMENTO E APOIO (Lado a Lado + Agrupamento)
+    y_at_start = pdf.get_y()
     pdf.set_font("Arial", "B", 8)
     pdf.cell(92, 6, clean(" ATENDIMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
-    pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(62, 5, "MILITAR", 1, 1, 'C')
+    pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(62, 5, "MILITAR(ES)", 1, 1, 'C')
     pdf.set_font("Arial", "", 7)
-    for _, r in df_at.iterrows():
-        pdf.cell(30, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(62, 5, clean(r['id_disp']), 1, 1, 'L')
+    if not df_at.empty:
+        ag_at = df_at.groupby(['horário', 'serviço'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        for _, r in ag_at.iterrows():
+            pdf.cell(30, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(62, 5, clean(r['id_disp']), 1, 1, 'L')
     
     y_f_at = pdf.get_y()
-    pdf.set_xy(107, y_at)
+    pdf.set_xy(107, y_at_start)
     pdf.set_font("Arial", "B", 8)
     pdf.cell(93, 6, clean(" APOIO AO ATENDIMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
-    pdf.set_x(107); pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(63, 5, "MILITAR", 1, 1, 'C')
+    pdf.set_x(107); pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(63, 5, "MILITAR(ES)", 1, 1, 'C')
     pdf.set_font("Arial", "", 7)
-    for _, r in df_apoi.iterrows():
-        pdf.set_x(107); pdf.cell(30, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(63, 5, clean(r['id_disp']), 1, 1, 'L')
+    if not df_apoi.empty:
+        ag_apoi = df_apoi.groupby(['horário', 'serviço'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        for _, r in ag_apoi.iterrows():
+            pdf.set_x(107); pdf.cell(30, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(63, 5, clean(r['id_disp']), 1, 1, 'L')
     
     pdf.set_y(max(y_f_at, pdf.get_y()) + 4)
 
-    # 3. PATRULHAS (Puras: PO, Apeadas, Auto, Expediente, Tiro, Instrução, Ronda)
+    # 3. PATRULHAS (Agrupamento por Horário/Serviço/Viatura)
     pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 6, clean(" PATRULHAS E POLICIAMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
@@ -171,12 +167,19 @@ def gerar_pdf_escala_dia(data_str, df_original):
     for i, h in enumerate(h_p): pdf.cell(w_p[i], 5, h, 1, 0, 'C')
     pdf.ln(5)
     pdf.set_font("Arial", "", 7)
-    for _, r in df_pat.iterrows():
-        pdf.cell(w_p[0], 5, clean(r['horário']), 1, 0, 'C')
-        pdf.cell(w_p[1], 5, clean(r['id_disp']), 1, 0, 'L')
-        pdf.cell(w_p[2], 5, clean(r['serviço'].upper()), 1, 0, 'L')
-        pdf.cell(w_p[3], 5, clean(r.get('indicativo rádio', r.get('rádio', ''))), 1, 0, 'C')
-        pdf.cell(w_p[4], 5, clean(r.get('viatura', '')), 1, 1, 'C')
+    
+    if not df_pat.empty:
+        ag_pat = df_pat.groupby(['horário', 'serviço', 'indicativo rádio', 'rádio', 'viatura'], as_index=False).agg({
+            'id_disp': lambda x: ', '.join(x),
+            'observações': lambda x: ' | '.join([v for v in x if v])
+        })
+        for _, r in ag_pat.iterrows():
+            pdf.cell(w_p[0], 5, clean(r['horário']), 1, 0, 'C')
+            pdf.cell(w_p[1], 5, clean(r['id_disp']), 1, 0, 'L')
+            pdf.cell(w_p[2], 5, clean(r['serviço'].upper()), 1, 0, 'L')
+            indic = r['indicativo rádio'] if r['indicativo rádio'] else r['rádio']
+            pdf.cell(w_p[3], 5, clean(indic), 1, 0, 'C')
+            pdf.cell(w_p[4], 5, clean(r['viatura']), 1, 1, 'C')
 
     # 4. REMUNERADOS
     if not df_remu.empty:
@@ -186,28 +189,30 @@ def gerar_pdf_escala_dia(data_str, df_original):
         pdf.set_font("Arial", "B", 7)
         pdf.cell(25, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(60, 5, "MILITARES", 1, 0, 'C'); pdf.cell(105, 5, "OBSERVAÇÃO", 1, 1, 'C')
         pdf.set_font("Arial", "", 7)
-        for _, r in df_remu.iterrows():
+        ag_remu = df_remu.groupby(['horário', 'serviço', 'observações'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        for _, r in ag_remu.iterrows():
             pdf.cell(25, 5, clean(r['horário']), 1, 0, 'C')
             pdf.cell(60, 5, clean(r['id_disp']), 1, 0, 'L')
-            pdf.cell(105, 5, clean(r.get('observações', '')), 1, 1, 'L')
+            pdf.cell(105, 5, clean(r['observações']), 1, 1, 'L')
 
-    # 5. OBSERVAÇÕES DE PATRULHA (No fundo)
-    obs_p = df_pat[df_pat['observações'] != ""]
-    if not obs_p.empty:
-        pdf.ln(4)
-        pdf.set_font("Arial", "B", 8)
-        pdf.cell(0, 6, clean(" OBSERVAÇÕES DE PATRULHA"), 1, 1, 'L', True)
-        pdf.set_font("Arial", "B", 7)
-        pdf.cell(30, 5, "INDICATIVO", 1, 0, 'C'); pdf.cell(160, 5, "DETALHE DA OBSERVAÇÃO", 1, 1, 'C')
-        pdf.set_font("Arial", "", 7)
-        for _, r in obs_p.iterrows():
-            indic = r.get('indicativo rádio', r.get('rádio', 'S/I'))
-            pdf.cell(30, 5, clean(indic), 1, 0, 'C')
-            pdf.multi_cell(160, 5, clean(r['observações']), border=1)
+    # 5. OBSERVAÇÕES NO FUNDO
+    if not df_pat.empty:
+        obs_p = ag_pat[ag_pat['observações'] != ""]
+        if not obs_p.empty:
+            pdf.ln(4)
+            pdf.set_font("Arial", "B", 8)
+            pdf.cell(0, 6, clean(" OBSERVAÇÕES DE PATRULHA"), 1, 1, 'L', True)
+            pdf.set_font("Arial", "B", 7)
+            pdf.cell(30, 5, "INDICATIVO", 1, 0, 'C'); pdf.cell(160, 5, "DETALHE DA OBSERVAÇÃO", 1, 1, 'C')
+            pdf.set_font("Arial", "", 7)
+            for _, r in obs_p.iterrows():
+                indic = r['indicativo rádio'] if r['indicativo rádio'] else r['rádio']
+                pdf.cell(30, 5, clean(indic if indic else "S/I"), 1, 0, 'C')
+                pdf.multi_cell(160, 5, clean(r['observações']), border=1)
 
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- 3. RESTO DO CÓDIGO (LOGIN E MENUS MANTIDOS) ---
+# --- 3. LOGIN E INTERFACE (WEB) ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
