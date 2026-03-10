@@ -84,27 +84,60 @@ def gerar_pdf_troca(dados):
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="R")
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-def gerar_pdf_escala_dia(data, df_agrupado):
-    pdf = FPDF(orientation='L')
+def gerar_pdf_escala_dia(data_str, df_original):
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.add_page()
-    pdf.set_font("Arial", "B", 18)
-    pdf.cell(270, 10, f"Escala de Servico - {data}", ln=True, align="C")
+    
+    # Cabeçalho formatado como o modelo enviado
+    pdf.set_font("Arial", "B", 10)
+    pdf.cell(0, 5, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO", ln=True, align='L')
     pdf.ln(5)
-    pdf.set_font("Arial", "B", 9)
-    pdf.set_fill_color(200, 220, 255)
-    headers = ["Servico", "Hora", "Militar", "Viatura", "Radio", "Indicativo", "Obs"]
-    widths = [40, 20, 60, 30, 20, 30, 70]
-    for i, h in enumerate(headers): pdf.cell(widths[i], 10, h, 1, 0, 'C', True)
-    pdf.ln(10)
-    pdf.set_font("Arial", "", 8)
-    for _, row in df_agrupado.iterrows():
-        pdf.cell(40, 10, str(row['serviço']), 1)
-        pdf.cell(20, 10, str(row['horário']), 1)
-        pdf.cell(60, 10, str(row['id_disp']), 1)
-        pdf.cell(30, 10, str(row.get('viatura', '')), 1)
-        pdf.cell(20, 10, str(row.get('rádio', '')), 1)
-        pdf.cell(30, 10, str(row.get('indicativo rádio', '')), 1)
-        pdf.cell(70, 10, str(row.get('observações', '')), 1, 1)
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 10, f"ESCALA DE SERVIÇO DIA {data_str.upper()}", ln=True, align='C')
+    pdf.ln(5)
+
+    def draw_section_table(title, headers, data_list, widths):
+        pdf.set_font("Arial", "B", 9)
+        pdf.set_fill_color(230, 230, 230)
+        pdf.cell(sum(widths), 7, title, 1, 1, 'L', True)
+        pdf.set_font("Arial", "B", 8)
+        for i, h in enumerate(headers):
+            pdf.cell(widths[i], 6, h, 1, 0, 'C', True)
+        pdf.ln(6)
+        pdf.set_font("Arial", "", 8)
+        for row in data_list:
+            for i, val in enumerate(row):
+                pdf.cell(widths[i], 6, str(val), 1)
+            pdf.ln(6)
+        pdf.ln(4)
+
+    # 1. Ausentes e Situações
+    aus_p = ["férias", "licença", "folga", "doente", "diligência", "tribunal"]
+    df_aus = df_original[df_original['serviço'].str.lower().str.contains('|'.join(aus_p), na=False)]
+    if not df_aus.empty:
+        pdf.set_font("Arial", "B", 9)
+        pdf.cell(0, 6, "OUTRAS SITUAÇÕES / AUSÊNCIAS", 1, 1, 'L', True)
+        pdf.set_font("Arial", "", 8)
+        texto_aus = ", ".join([f"{r['serviço'].upper()}: {r['id_disp']}" for _, r in df_aus.iterrows()])
+        pdf.multi_cell(0, 6, texto_aus, 1)
+        pdf.ln(5)
+
+    # 2. Atendimento
+    df_at = df_original[df_original['serviço'].str.lower().str.contains("atendimento", na=False)]
+    if not df_at.empty:
+        draw_section_table("ATENDIMENTO", ["HORÁRIO", "MILITAR"], 
+                           df_at[['horário', 'id_disp']].values.tolist(), [40, 150])
+
+    # 3. Patrulhas
+    df_pat = df_original[df_original['serviço'].str.lower().str.contains("po|patrulha|ronda|vtr", na=False)]
+    if not df_pat.empty:
+        pat_data = []
+        for _, r in df_pat.iterrows():
+            h = r['horário'].split('/') if '/' in r['horário'] else [r['horário'], ""]
+            pat_data.append([h[0], h[1] if len(h)>1 else "", r['id_disp'], r.get('indicativo rádio', ''), r.get('viatura', ''), r.get('observações', '')])
+        draw_section_table("PATRULHAS", ["INÍCIO", "FIM", "MILITARES", "INDICATIVO", "VIATURA", "OBS"], 
+                           pat_data, [20, 20, 50, 30, 25, 45])
+
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- 3. LOGIN ---
@@ -139,7 +172,7 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- 📅 MINHA ESCALA (CORREÇÃO: SEM GRUPOS) ---
+    # --- 📅 MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now()
@@ -156,7 +189,6 @@ else:
             else:
                 df_d = load_data(dt.strftime("%d-%m"))
                 if not df_d.empty:
-                    # Filtro direto pelo ID sem passar por lógica de grupos
                     m = df_d[df_d['id'].astype(str) == u_at]
                     if not m.empty: 
                         st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
@@ -177,7 +209,9 @@ else:
                     m_d = df_at['id'].astype(str) == str(t['id_destino'])
                     if any(m_d): df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
-            st.download_button("📥 Descarregar PDF", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf")
+            st.download_button("📥 Descarregar Escala Oficial (PDF)", 
+                               gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at), 
+                               file_name=f"Escala_Oficial_{d_sel.strftime('%d_%m')}.pdf")
 
             def mostrar_sec_geral(tit, keys, df_f, mostrar_extras=False):
                 p = '|'.join(keys).lower()
@@ -291,7 +325,7 @@ else:
                         dados_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": val_por, "data_val": val_em}
                         st.download_button(label="📥 Descarregar Guia de Troca", data=gerar_pdf_troca(dados_pdf), file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf", mime="application/pdf", key=f"hist_pdf_{idx}")
 
-    # --- 👥 EFETIVO (ORDEM: ID, NIM, POSTO, NOME, TELEMOVEL, EMAIL) ---
+    # --- 👥 EFETIVO (ORDEM: id, nim, posto, nome, telemóvel, email) ---
     elif menu == "👥 Efetivo":
         st.title("👥 Lista de Contactos")
         st.dataframe(df_util[['id', 'nim', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
