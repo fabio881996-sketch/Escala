@@ -211,7 +211,7 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.rect(0, 0, 210, 30, 'F')
     pdf.set_font("Arial", "B", 18)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 30, "GNR - Comprovativo de Troca de Servico", ln=True, align="C")
+    pdf.cell(190, 30, "GNR - Comprovativo de Troca de Servico", 0, 1, 'C')
     pdf.set_text_color(0, 0, 0)
     pdf.ln(10)
     pdf.set_font("Arial", "", 11)
@@ -226,26 +226,29 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.ln(15)
     pdf.set_font("Arial", "I", 9)
     pdf.set_text_color(100, 100, 100)
-    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="R")
+    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def gerar_pdf_escala_dia(data: str, df_agrupado: pd.DataFrame) -> bytes:
     pdf = FPDF(orientation='L')
     pdf.add_page()
+    # Cabeçalho
     pdf.set_fill_color(26, 43, 74)
     pdf.rect(0, 0, 297, 22, 'F')
     pdf.set_font("Arial", "B", 16)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(277, 22, f"GNR - Escala de Servico  |  {data}", ln=True, align="C")
+    pdf.cell(277, 22, f"GNR - Escala de Servico  |  {data}", 0, 1, 'C')
     pdf.set_text_color(0, 0, 0)
     pdf.ln(4)
+    # Linha de cabeçalho da tabela
     pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(220, 230, 245)
-    headers = ["Serviço", "Horário", "Militar", "Viatura", "Rádio", "Indicativo", "Observações"]
+    headers = ["Servico", "Horario", "Militar", "Viatura", "Radio", "Indicativo", "Observacoes"]
     widths  = [45, 22, 65, 32, 22, 32, 59]
     for i, h in enumerate(headers):
         pdf.cell(widths[i], 10, h, 1, 0, 'C', True)
     pdf.ln(10)
+    # Linhas de dados
     pdf.set_font("Arial", "", 8)
     fill = False
     for _, row in df_agrupado.iterrows():
@@ -253,13 +256,13 @@ def gerar_pdf_escala_dia(data: str, df_agrupado: pd.DataFrame) -> bytes:
             pdf.set_fill_color(245, 248, 255)
         else:
             pdf.set_fill_color(255, 255, 255)
-        pdf.cell(45, 9, str(row['serviço']),                border=1, new_x="RIGHT", new_y="TOP", fill=fill)
-        pdf.cell(22, 9, str(row['horário']),                border=1, new_x="RIGHT", new_y="TOP", fill=fill)
-        pdf.cell(65, 9, str(row['id_disp']),                border=1, new_x="RIGHT", new_y="TOP", fill=fill)
-        pdf.cell(32, 9, str(row.get('viatura', '')),        border=1, new_x="RIGHT", new_y="TOP", fill=fill)
-        pdf.cell(22, 9, str(row.get('rádio', '')),          border=1, new_x="RIGHT", new_y="TOP", fill=fill)
-        pdf.cell(32, 9, str(row.get('indicativo rádio','')),border=1, new_x="RIGHT", new_y="TOP", fill=fill)
-        pdf.cell(59, 9, str(row.get('observações', '')),    border=1, new_x="LMARGIN", new_y="NEXT", fill=fill)
+        pdf.cell(45, 9, str(row['serviço']),                 1, 0, '', fill)
+        pdf.cell(22, 9, str(row['horário']),                 1, 0, '', fill)
+        pdf.cell(65, 9, str(row['id_disp']),                 1, 0, '', fill)
+        pdf.cell(32, 9, str(row.get('viatura', '')),         1, 0, '', fill)
+        pdf.cell(22, 9, str(row.get('rádio', '')),           1, 0, '', fill)
+        pdf.cell(32, 9, str(row.get('indicativo rádio','')), 1, 0, '', fill)
+        pdf.cell(59, 9, str(row.get('observações', '')),     1, 1, '', fill)
         fill = not fill
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
