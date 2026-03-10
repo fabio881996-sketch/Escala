@@ -139,7 +139,7 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- 📅 MINHA ESCALA (CORRIGIDO: APENAS CARTÃO INDIVIDUAL) ---
+    # --- 📅 MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now()
@@ -148,16 +148,12 @@ else:
             dt = hj + timedelta(days=i)
             d_s = dt.strftime('%d/%m/%Y')
             lbl = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
-            
-            # Verificar se há trocas para este dia
             tr_v = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & ((df_trocas['id_origem'].astype(str) == u_at) | (df_trocas['id_destino'].astype(str) == u_at))] if not df_trocas.empty else pd.DataFrame()
-            
             if not tr_v.empty:
                 t = tr_v.iloc[0]
                 s_ex, era, com = (t['servico_destino'], t['servico_origem'], t['id_destino']) if str(t['id_origem']) == u_at else (t['servico_origem'], t['servico_destino'], t['id_origem'])
                 st.markdown(f'<div class="card-servico card-troca"><b>{lbl}</b><br><h3>{s_ex}</h3><p style="margin:0;">🔙 Troca de: {era}</p><p style="margin:0; font-weight:bold;">🔄 Com ID: {com}</p></div>', unsafe_allow_html=True)
             else:
-                # Carregar o dia bruto sem qualquer processamento de grupos
                 df_d = load_data(dt.strftime("%d-%m"))
                 if not df_d.empty:
                     m = df_d[df_d['id'].astype(str) == u_at]
@@ -264,7 +260,7 @@ else:
             if c1.button("✔️ VALIDAR", key=f"ok_{idx}"): atualizar_status_gsheet(idx, "Aprovada", st.session_state['user_nome']); st.rerun()
             if c2.button("🚫 REJEITAR", key=f"no_{idx}"): atualizar_status_gsheet(idx, "Rejeitada", st.session_state['user_nome']); st.rerun()
 
-    # --- 📜 HISTÓRICO DE TROCAS (DETALHADO) ---
+    # --- 📜 HISTÓRICO DE TROCAS ---
     elif menu == "📜 Trocas Validadas":
         st.title("📜 Histórico de Trocas Aprovadas")
         if df_trocas.empty:
@@ -294,8 +290,9 @@ else:
                         dados_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": val_por, "data_val": val_em}
                         st.download_button(label="📥 Descarregar Guia de Troca", data=gerar_pdf_troca(dados_pdf), file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf", mime="application/pdf", key=f"hist_pdf_{idx}")
 
-    # --- 👥 EFETIVO ---
+    # --- 👥 EFETIVO (NIM ADICIONADO) ---
     elif menu == "👥 Efetivo":
         st.title("👥 Lista de Contactos")
-        st.dataframe(df_util[['posto', 'nome', 'telemóvel']], use_container_width=True, hide_index=True)
+        # Inclui nim, id, posto, nome, telemóvel e email
+        st.dataframe(df_util[['nim', 'id', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
         
