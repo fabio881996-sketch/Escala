@@ -67,39 +67,92 @@ def salvar_troca_gsheet(linha):
         return True
     except: return False
 
-# --- 3. FUNÇÃO DO PDF (MANTÉM TUDO CONFORME ESTAVA BEM) ---
+# --- 3. FUNÇÃO DO PDF COMPLETA ---
 def gerar_pdf_escala_dia(data_str, df_original):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     def clean(txt): return str(txt).encode('latin-1', 'replace').decode('latin-1')
+
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 5, clean("POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO"), ln=True)
     pdf.set_font("Arial", "B", 13)
     pdf.cell(0, 10, clean(f"ESCALA DE SERVIÇO PARA O DIA {data_str.upper()}"), border="B", ln=True, align='C')
     pdf.ln(4)
-    # [Lógica do PDF omitida aqui por brevidade, mas mantida idêntica à versão anterior funcional]
+
+    servicos = df_original['serviço'].str.lower()
+    df_aus = df_original[servicos.str.contains("férias|licença|doente|folga", na=False)]
+    df_adm = df_original[servicos.str.contains("pronto|secretaria|inquérito|comando|diligência|tribunal", na=False)]
+    df_at = df_original[servicos.str.contains("atendimento", na=False) & ~servicos.str.contains("apoio", na=False)]
+    df_apoi = df_original[servicos.str.contains("apoio", na=False)]
+    df_pat = df_original[servicos.str.contains("po|patrulha|ronda|vtr|auto|expediente", na=False) & ~servicos.str.contains("atendimento|apoio", na=False)]
+    df_remu = df_original[servicos.str.contains("remu|grat", na=False)]
+
+    # PDF: Ausências e Adm
+    y_topo = pdf.get_y()
+    pdf.set_font("Arial", "B", 8); pdf.set_fill_color(240, 240, 240)
+    pdf.cell(92, 6, clean(" AUSÊNCIAS E FOLGAS"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "", 7)
+    if not df_aus.empty:
+        ag_aus = df_aus.groupby('serviço')['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        for _, r in ag_aus.iterrows():
+            pdf.multi_cell(92, 4, clean(f" {r['serviço'].upper()}: {r['id_disp']}"), border='LR', align='L')
+    pdf.cell(92, 1, "", border='T', ln=1)
+
+    pdf.set_xy(107, y_topo)
+    pdf.set_font("Arial", "B", 8); pdf.cell(93, 6, clean(" OUTRAS SITUAÇÕES / ADM"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "", 7)
+    if not df_adm.empty:
+        ag_adm = df_adm.groupby(['serviço', 'horário'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        for _, r in ag_adm.iterrows():
+            pdf.set_x(107); pdf.multi_cell(93, 4, clean(f" {r['serviço'].upper()} ({r['horário']}): {r['id_disp']}"), border='LR', align='L')
+    pdf.set_x(107); pdf.cell(93, 1, "", border='T', ln=1)
+    
+    pdf.set_y(pdf.get_y() + 5)
+
+    # PDF: Atendimento
+    pdf.set_font("Arial", "B", 8); pdf.cell(92, 6, clean(" ATENDIMENTO"), 1, 0, 'L', True)
+    pdf.set_x(107); pdf.cell(93, 6, clean(" APOIO AO ATENDIMENTO"), 1, 1, 'L', True)
+    
+    # PDF: Patrulhas
+    pdf.ln(5); pdf.set_font("Arial", "B", 8); pdf.cell(0, 6, clean(" PATRULHAS E POLICIAMENTO"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "B", 7)
+    w = [25, 60, 45, 30, 30]
+    for h in ["HORÁRIO", "MILITARES", "SERVIÇO", "RÁDIO", "VIATURA"]: pdf.cell(w[0] if h=="HORÁRIO" else w[1] if h=="MILITARES" else w[2] if h=="SERVIÇO" else w[3], 5, h, 1, 0, 'C')
+    pdf.ln(5)
+
+    if not df_pat.empty:
+        pdf.set_font("Arial", "", 7)
+        ag_pat = df_pat.groupby(['horário', 'serviço', 'indicativo rádio', 'viatura'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        for _, r in ag_pat.iterrows():
+            pdf.cell(25, 5, clean(r['horário']), 1, 0, 'C')
+            pdf.cell(60, 5, clean(r['id_disp']), 1, 0, 'C')
+            pdf.cell(45, 5, clean(r['serviço'].upper()), 1, 0, 'C')
+            pdf.cell(30, 5, clean(r['indicativo rádio']), 1, 0, 'C')
+            pdf.cell(30, 5, clean(r['viatura']), 1, 1, 'C')
+
+    if not df_remu.empty:
+        pdf.ln(5); pdf.set_font("Arial", "B", 8); pdf.cell(0, 6, clean(" SERVIÇOS REMUNERADOS"), 1, 1, 'L', True)
+        pdf.set_font("Arial", "", 7)
+        for _, r in df_remu.iterrows():
+            pdf.cell(0, 5, clean(f"{r['horário']} - {r['serviço']}: {r['id_disp']}"), 1, 1, 'L')
+
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- 4. INTERFACE ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.5, 1])
-    with col2:
-        with st.form("login"):
-            st.markdown("<h1 style='text-align:center;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
-            u = st.text_input("Email").strip().lower()
-            p = st.text_input("Password", type="password")
-            if st.form_submit_button("ENTRAR", use_container_width=True):
-                df_u = load_data("utilizadores")
-                user = df_u[(df_u['email'].str.lower() == u) & (df_u['password'] == p)]
-                if not user.empty:
-                    st.session_state.update({"logged_in": True, "user_id": str(user.iloc[0]['id']), "user_nome": f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}", "user_email": u, "is_admin": u in ADMINS})
-                    st.rerun()
-                else: st.error("Incorreto.")
+    st.markdown("<h1 style='text-align:center;'>🚓 Portal de Escalas</h1>", unsafe_allow_html=True)
+    u = st.text_input("Email").strip().lower()
+    p = st.text_input("Password", type="password")
+    if st.button("ENTRAR", use_container_width=True):
+        df_u = load_data("utilizadores")
+        user = df_u[(df_u['email'].str.lower() == u) & (df_u['password'] == p)]
+        if not user.empty:
+            st.session_state.update({"logged_in": True, "user_id": str(user.iloc[0]['id']), "user_nome": f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}", "user_email": u, "is_admin": u in ADMINS})
+            st.rerun()
 else:
     df_trocas = load_data("registos_trocas")
     df_util = load_data("utilizadores")
@@ -124,7 +177,8 @@ else:
             else:
                 df_d = load_data(dt.strftime("%d-%m"))
                 if not df_d.empty:
-                    for _, m in df_d[df_d['id'].astype(str) == u_at].iterrows():
+                    meus = df_d[df_d['id'].astype(str) == u_at]
+                    for _, m in meus.iterrows():
                         st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m["serviço"]}</h3>🕒 {m["horário"]}</div>', unsafe_allow_html=True)
 
     elif menu == "🔍 Escala Geral":
@@ -140,6 +194,9 @@ else:
                     if any(m_o): df_at_v.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
                     if any(m_d): df_at_v.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
+            # BOTÃO DO PDF (RESTAURADO)
+            st.download_button("📥 Baixar Escala em PDF", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at_v), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", use_container_width=True)
+
             def mostrar_sec(tit, keys, df_f, remover=True):
                 p = '|'.join(keys).lower()
                 temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
@@ -150,39 +207,40 @@ else:
                 return df_f[~df_f.index.isin(temp.index)] if remover else df_f
 
             df_r = df_at_v.copy()
-            # 1. FOLGAS SEPARADAS E AUSÊNCIAS
-            df_fs = df_r[df_r['serviço'].str.lower().str.contains("folga semanal|fs", na=False)].copy()
-            df_fc = df_r[df_r['serviço'].str.lower().str.contains("folga complementar|fc", na=False)].copy()
+            # 1. FOLGAS E AUSÊNCIAS (PROCESSADAS MAS SÓ EXIBIDAS NO FIM)
+            df_fol = df_r[df_r['serviço'].str.lower().str.contains("folga", na=False)].copy()
             df_aus = df_r[df_r['serviço'].str.lower().str.contains("férias|licença|doente", na=False)].copy()
-            df_r = df_r[~df_r.index.isin(df_fs.index) & ~df_r.index.isin(df_fc.index) & ~df_r.index.isin(df_aus.index)]
+            df_r = df_r[~df_r.index.isin(df_fol.index) & ~df_r.index.isin(df_aus.index)]
 
-            # 2. GRUPOS DE SERVIÇO
+            # 2. GRUPOS ATIVOS
             df_r = mostrar_sec("Comando e Adm", ["pronto", "secretaria", "inquérito", "comando"], df_r)
             df_r = mostrar_sec("Atendimento", ["atendimento"], df_r)
             df_r = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_r)
             df_r = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr", "auto", "expediente"], df_r)
-            mostrar_sec("Remunerados", ["remu", "grat"], df_r, remover=False) # Mantém duplicidade
+            mostrar_sec("Remunerados", ["remu", "grat"], df_r, remover=False)
 
-            # 3. EXIBIÇÃO DE FOLGAS E AUSÊNCIAS NO FIM
-            if not df_fs.empty:
-                with st.expander("🟢 FOLGA SEMANAL (FS)", expanded=False): st.write(", ".join(df_fs['id_disp'].tolist()))
-            if not df_fc.empty:
-                with st.expander("🟡 FOLGA COMPLEMENTAR (FC)", expanded=False): st.write(", ".join(df_fc['id_disp'].tolist()))
+            # 3. BLOCO DE FOLGAS (DISCRIMINADAS COMO PEDIDO)
+            if not df_fol.empty:
+                with st.expander("🔹 FOLGAS", expanded=True):
+                    # Separação interna sem "bolas"
+                    df_fs = df_fol[df_fol['serviço'].str.lower().str.contains("semanal|fs", na=False)]
+                    df_fc = df_fol[df_fol['serviço'].str.lower().str.contains("complementar|fc", na=False)]
+                    if not df_fs.empty: st.write(f"**Folga Semanal:** {', '.join(df_fs['id_disp'].tolist())}")
+                    if not df_fc.empty: st.write(f"**Folga Complementar:** {', '.join(df_fc['id_disp'].tolist())}")
+            
             if not df_aus.empty:
-                with st.expander("🔴 AUSÊNCIAS", expanded=False):
+                with st.expander("🔹 AUSÊNCIAS", expanded=False):
                     st.dataframe(df_aus.groupby('serviço')['id_disp'].apply(lambda x: ', '.join(x)).reset_index(), use_container_width=True, hide_index=True)
 
     elif menu == "📜 Trocas Validadas":
-        st.title("📜 Histórico de Trocas Validadas")
+        st.title("📜 Trocas Validadas")
         if not df_trocas.empty:
             aprov = df_trocas[df_trocas['status'] == 'Aprovada'].copy()
-            if not aprov.empty:
-                st.dataframe(aprov[['data', 'id_origem', 'servico_origem', 'id_destino', 'servico_destino', 'validador_comando', 'data_validacao']].sort_values('data', ascending=False), use_container_width=True, hide_index=True)
-            else: st.info("Sem trocas no histórico.")
+            st.dataframe(aprov[['data', 'id_origem', 'servico_origem', 'id_destino', 'servico_destino', 'validador_comando']].sort_values('data', ascending=False), use_container_width=True, hide_index=True)
 
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
-        dt_s = st.date_input("Data:", format="DD/MM/YYYY")
+        dt_s = st.date_input("Data da Troca:", format="DD/MM/YYYY")
         df_d = load_data(dt_s.strftime("%d-%m"))
         if not df_d.empty:
             meus = df_d[df_d['id'].astype(str) == str(st.session_state['user_id'])]
@@ -190,16 +248,16 @@ else:
                 meu_sel = st.selectbox("O teu serviço:", meus.apply(lambda x: f"{x['serviço']} ({x['horário']})", axis=1).tolist())
                 outros = df_d[(df_d['id'].astype(str) != str(st.session_state['user_id'])) & (~df_d['serviço'].str.lower().str.contains('|'.join(IMPEDIMENTOS), na=False))]
                 alvo = st.selectbox("Trocar com:", outros.apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist())
-                if st.button("ENVIAR"):
+                if st.button("ENVIAR PEDIDO"):
                     id_d = alvo.split(" - ")[0]; em_d = df_util[df_util['id'].astype(str) == id_d]['email'].values[0]
                     salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_sel, id_d, alvo.split(" - ", 1)[1], "Pendente_Militar", em_d])
-                    st.success("Enviado!")
+                    st.success("Pedido enviado!")
 
     elif menu == "📥 Pedidos Recebidos":
         st.title("📥 Pedidos Recebidos")
         m = df_trocas[(df_trocas['status'] == 'Pendente_Militar') & (df_trocas['id_destino'].astype(str) == str(st.session_state['user_id']))]
         for idx, r in m.iterrows():
-            st.warning(f"{r['data']}: ID {r['id_origem']} ({r['servico_origem']}) quer o teu ({r['servico_destino']})")
+            st.warning(f"{r['data']}: {r['id_origem']} quer trocar {r['servico_origem']} por {r['servico_destino']}")
             if st.button("✅ ACEITAR", key=f"acc_{idx}"): atualizar_status_gsheet(idx, "Pendente_Admin"); st.rerun()
 
     elif menu == "⚖️ Validar Trocas":
