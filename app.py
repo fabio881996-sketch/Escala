@@ -249,14 +249,17 @@ def gerar_pdf_escala_dia(data: str, df_agrupado: pd.DataFrame) -> bytes:
     pdf.set_font("Arial", "", 8)
     fill = False
     for _, row in df_agrupado.iterrows():
-        pdf.set_fill_color(245, 248, 255) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(45, 9, str(row['serviço']),               1, 0, fill=fill)
-        pdf.cell(22, 9, str(row['horário']),               1, 0, fill=fill)
-        pdf.cell(65, 9, str(row['id_disp']),               1, 0, fill=fill)
-        pdf.cell(32, 9, str(row.get('viatura', '')),        1, 0, fill=fill)
-        pdf.cell(22, 9, str(row.get('rádio', '')),          1, 0, fill=fill)
-        pdf.cell(32, 9, str(row.get('indicativo rádio','')),1, 0, fill=fill)
-        pdf.cell(59, 9, str(row.get('observações', '')),    1, 1, fill=fill)
+        if fill:
+            pdf.set_fill_color(245, 248, 255)
+        else:
+            pdf.set_fill_color(255, 255, 255)
+        pdf.cell(45, 9, str(row['serviço']),                border=1, new_x="RIGHT", new_y="TOP", fill=fill)
+        pdf.cell(22, 9, str(row['horário']),                border=1, new_x="RIGHT", new_y="TOP", fill=fill)
+        pdf.cell(65, 9, str(row['id_disp']),                border=1, new_x="RIGHT", new_y="TOP", fill=fill)
+        pdf.cell(32, 9, str(row.get('viatura', '')),        border=1, new_x="RIGHT", new_y="TOP", fill=fill)
+        pdf.cell(22, 9, str(row.get('rádio', '')),          border=1, new_x="RIGHT", new_y="TOP", fill=fill)
+        pdf.cell(32, 9, str(row.get('indicativo rádio','')),border=1, new_x="RIGHT", new_y="TOP", fill=fill)
+        pdf.cell(59, 9, str(row.get('observações', '')),    border=1, new_x="LMARGIN", new_y="NEXT", fill=fill)
         fill = not fill
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
@@ -498,11 +501,12 @@ else:
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
+            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
             col_pdf, _ = st.columns([1, 4])
             with col_pdf:
                 st.download_button(
                     "📥 Descarregar PDF",
-                    gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at),
+                    pdf_bytes,
                     file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
                     mime="application/pdf"
                 )
@@ -699,3 +703,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
