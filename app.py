@@ -119,8 +119,7 @@ else:
     # --- 4. MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
-        hj = datetime.now()
-        u_at = str(st.session_state['user_id'])
+        hj = datetime.now(); u_at = str(st.session_state['user_id'])
         for i in range(8):
             dt = hj + timedelta(days=i); d_s = dt.strftime('%d/%m/%Y'); lbl = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
             tr_v = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & ((df_trocas['id_origem'].astype(str) == u_at) | (df_trocas['id_destino'].astype(str) == u_at))] if not df_trocas.empty else pd.DataFrame()
@@ -134,7 +133,7 @@ else:
                     m = df_d[df_d['id'].astype(str) == u_at]
                     if not m.empty: st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
 
-    # --- 5. ESCALA GERAL (MELHORADA COM IDs DE TROCA) ---
+    # --- 5. ESCALA GERAL (CORREÇÃO DOS IDs SEM ALTERAR SERVIÇOS/HORÁRIOS) ---
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel = st.date_input("Data:", format="DD/MM/YYYY")
@@ -144,21 +143,23 @@ else:
             if not df_trocas.empty:
                 tr_v = df_trocas[(df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
                 for _, t in tr_v.iterrows():
+                    # Mantemos o Serviço e Horário originais da linha, apenas mudamos o ID_disp
                     m_o = df_at['id'].astype(str) == str(t['id_origem'])
                     if any(m_o): 
-                        df_at.loc[m_o, 'serviço'] = t['servico_destino']
-                        df_at.loc[m_o, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}" # EXIBE QUEM ESTÁ NO LUGAR DE QUEM
+                        # Quem era o ID_Origem agora mostra o ID_Destino (porque o destino veio fazer este posto)
+                        df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
                     m_d = df_at['id'].astype(str) == str(t['id_destino'])
                     if any(m_d): 
-                        df_at.loc[m_d, 'serviço'] = t['servico_origem']
-                        df_at.loc[m_d, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
+                        # Quem era o ID_Destino agora mostra o ID_Origem
+                        df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
             def mostrar_sec(tit, keys, df_f):
                 p = '|'.join(keys).lower(); temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
                 if not temp.empty:
                     with st.expander(f"🔹 {tit.upper()}", expanded=True):
+                        # Agrupamos apenas para exibição, mantendo serviço e horário originais da escala
                         ag = temp.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
-                        st.dataframe(ag.rename(columns={'id_disp': 'ID / Troca'}), use_container_width=True, hide_index=True)
+                        st.dataframe(ag.rename(columns={'id_disp': 'Militar (Atual 🔄 Original)'}), use_container_width=True, hide_index=True)
                     return df_f[~df_f['id'].isin(temp['id'])]
                 return df_f
 
@@ -223,7 +224,7 @@ else:
                 if c2.button("🚫 REJEITAR", key=f"no_{idx}"): atualizar_status_gsheet(idx, "Rejeitada", st.session_state['user_nome']); st.rerun()
         else: st.info("Nada pendente.")
 
-    # --- 9. TROCAS VALIDADAS (MELHORADO COM INFO DETALHADA) ---
+    # --- 9. TROCAS VALIDADAS ---
     elif menu == "📜 Trocas Validadas":
         st.title("📜 Histórico de Trocas")
         aprv = df_trocas[df_trocas['status'] == 'Aprovada']
@@ -232,9 +233,7 @@ else:
                 def get_n(id_m):
                     res = df_util[df_util['id'].astype(str) == str(id_m)]
                     return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
-                
                 n_o = get_n(r['id_origem']); n_d = get_n(r['id_destino'])
-                
                 with st.expander(f"📅 {r['data']} | {n_o} ↔️ {n_d}"):
                     col_a, col_b = st.columns(2)
                     with col_a:
@@ -245,12 +244,9 @@ else:
                         st.write("**Militar de Destino:**")
                         st.write(f"ID: {r['id_destino']} - {n_d}")
                         st.write(f"Serviço Anterior: {r['servico_destino']}")
-                    
                     st.write("---")
                     st.write(f"⚖️ **Validado por:** {r.get('validador', 'N/A')} em {r.get('data_validacao', 'N/A')}")
-                    
                     d_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": r.get('validador', 'N/A'), "data_val": r.get('data_validacao', 'N/A')}
-                    
                     if st.button("Gerar PDF Comprovativo", key=f"pdf_{idx}"):
                         pdf_b = gerar_pdf_troca(d_pdf)
                         st.download_button("📥 Descarregar PDF", pdf_b, file_name=f"Troca_{r['data'].replace('/','_')}.pdf", mime="application/pdf")
