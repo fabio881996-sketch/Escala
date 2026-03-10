@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from fpdf import FPDF
 import io
 
-# --- 1. CONFIGURAÇÃO E ESTILO (SEM ALTERAÇÕES) ---
+# --- 1. CONFIGURAÇÃO E ESTILO ---
 st.set_page_config(page_title="GNR - Portal de Escalas", page_icon="🚓", layout="wide")
 
 st.markdown("""
@@ -75,36 +75,36 @@ def gerar_pdf_troca(dados):
     pdf.cell(190, 10, "Comprovativo de Troca de Servico", ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", "", 12)
-    # Limpeza de caracteres para evitar erro no latin-1 da troca
     txt = f"Certifica-se que o militar {dados['nome_origem']} (ID {dados['id_origem']}), requereu a troca do servico '{dados['serv_orig']}' pelo servico '{dados['serv_dest']}' do militar {dados['nome_destino']} (ID {dados['id_destino']}), para o dia {dados['data']}. Validado por {dados['validador']} em {dados['data_val']}."
     pdf.multi_cell(190, 10, txt.encode('latin-1', 'replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- FUNÇÃO DO PDF CORRIGIDA PARA UTF-8 (RESOLVE O ERRO UNICODE) ---
+# --- FUNÇÃO DO PDF REESTRUTURADA CONFORME PEDIDO ---
 def gerar_pdf_escala_dia(data_str, df_original):
-    # Usamos o modo 'latin-1' com substituição mas garantimos que o conteúdo é limpo
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Função interna para limpar texto para PDF padrão
     def clean(txt):
         return str(txt).encode('latin-1', 'replace').decode('latin-1')
 
+    # Cabeçalho Oficial
     pdf.set_font("Arial", "B", 9)
     pdf.cell(0, 5, clean("POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO"), ln=True)
     pdf.set_font("Arial", "B", 13)
     pdf.cell(0, 10, clean(f"ESCALA DE SERVIÇO PARA O DIA {data_str.upper()}"), border="B", ln=True, align='C')
     pdf.ln(4)
 
+    # Separação de Dados
     df_aus = df_original[df_original['serviço'].str.lower().str.contains("férias|licença|doente|folga", na=False)]
-    df_adm = df_original[df_original['serviço'].str.lower().str.contains("pronto|secretaria|inquérito|comando", na=False)]
-    df_at = df_original[df_original['serviço'].str.lower().str.contains("atendimento|apoio", na=False)]
-    df_pat = df_original[df_original['serviço'].str.lower().str.contains("po|patrulha|ronda|vtr|auto|diligência|tribunal", na=False)]
+    df_adm = df_original[df_original['serviço'].str.lower().str.contains("pronto|secretaria|inquérito|comando|diligência|tribunal", na=False)]
+    df_at = df_original[df_original['serviço'].str.lower().str.contains("atendimento", na=False)]
+    df_apoi = df_original[df_original['serviço'].str.lower().str.contains("apoio", na=False)]
+    df_pat = df_original[df_original['serviço'].str.lower().str.contains("po|patrulha|ronda|vtr|auto", na=False)]
     df_remu = df_original[df_original['serviço'].str.lower().str.contains("remu|grat", na=False)]
 
-    # 1. AUSÊNCIAS E COMANDO
+    # 1. TOPO: AUSÊNCIAS E OUTRAS SITUAÇÕES (Lado a Lado)
     y_topo = pdf.get_y()
     pdf.set_font("Arial", "B", 8)
     pdf.set_fill_color(240, 240, 240)
@@ -116,10 +116,10 @@ def gerar_pdf_escala_dia(data_str, df_original):
             pdf.multi_cell(92, 4, clean(f"{r['serviço'].upper()}: {r['id_disp']}"), border='LR')
     pdf.cell(92, 1, "", border='T', ln=1)
 
-    y_final_aus = pdf.get_y()
+    y_f_aus = pdf.get_y()
     pdf.set_xy(107, y_topo)
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(93, 6, clean(" COMANDO E ADMINISTRATIVOS"), 1, 1, 'L', True)
+    pdf.cell(93, 6, clean(" OUTRAS SITUAÇÕES / ADM"), 1, 1, 'L', True)
     pdf.set_font("Arial", "", 7)
     if not df_adm.empty:
         ag_adm = df_adm.groupby(['serviço', 'horário'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
@@ -129,57 +129,77 @@ def gerar_pdf_escala_dia(data_str, df_original):
     pdf.set_x(107)
     pdf.cell(93, 1, "", border='T', ln=1)
     
-    pdf.set_y(max(y_final_aus, pdf.get_y()) + 4)
+    pdf.set_y(max(y_f_aus, pdf.get_y()) + 4)
 
-    # 2. ATENDIMENTO
+    # 2. ATENDIMENTO E APOIO (Lado a Lado em duas tabelas)
+    y_at = pdf.get_y()
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 6, clean(" ATENDIMENTO AO PÚBLICO"), 1, 1, 'L', True)
+    pdf.cell(92, 6, clean(" ATENDIMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
-    pdf.cell(35, 5, "HORÁRIO", 1, 0, 'C')
-    pdf.cell(155, 5, "MILITAR(ES)", 1, 1, 'C')
+    pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(62, 5, "MILITAR", 1, 1, 'C')
     pdf.set_font("Arial", "", 7)
     for _, r in df_at.iterrows():
-        pdf.cell(35, 5, clean(r['horário']), 1, 0, 'C')
-        pdf.cell(155, 5, clean(r['id_disp']), 1, 1, 'L')
-    pdf.ln(3)
-
-    # 3. PATRULHAS
+        pdf.cell(30, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(62, 5, clean(r['id_disp']), 1, 1, 'L')
+    
+    y_f_at = pdf.get_y()
+    pdf.set_xy(107, y_at)
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 6, clean(" PATRULHAS E OUTROS SERVIÇOS"), 1, 1, 'L', True)
+    pdf.cell(93, 6, clean(" APOIO AO ATENDIMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
-    w = [22, 63, 25, 25, 55]
-    h_titles = ["HORÁRIO", "MILITARES", "RÁDIO", "VIATURA", "SERVIÇO / OBS"]
-    for i, h in enumerate(h_titles): pdf.cell(w[i], 5, h, 1, 0, 'C')
+    pdf.set_x(107); pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(63, 5, "MILITAR", 1, 1, 'C')
+    pdf.set_font("Arial", "", 7)
+    for _, r in df_apoi.iterrows():
+        pdf.set_x(107); pdf.cell(30, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(63, 5, clean(r['id_disp']), 1, 1, 'L')
+    
+    pdf.set_y(max(y_f_at, pdf.get_y()) + 4)
+
+    # 3. PATRULHAS (Horário | Militares | Serviço | Rádio | Viatura)
+    pdf.set_font("Arial", "B", 8)
+    pdf.cell(0, 6, clean(" PATRULHAS E POLICIAMENTO"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "B", 7)
+    # Larguras: 22 (Hora) + 65 (Mil) + 43 (Serv) + 30 (Rad) + 30 (Vtr) = 190mm
+    w_p = [22, 65, 43, 30, 30]
+    h_p = ["HORÁRIO", "MILITARES", "SERVIÇO", "RÁDIO/INDIC.", "VIATURA"]
+    for i, h in enumerate(h_p): pdf.cell(w_p[i], 5, h, 1, 0, 'C')
     pdf.ln(5)
     pdf.set_font("Arial", "", 7)
     for _, r in df_pat.iterrows():
-        pdf.cell(w[0], 5, clean(r['horário']), 1, 0, 'C')
-        pdf.cell(w[1], 5, clean(r['id_disp']), 1, 0, 'L')
-        pdf.cell(w[2], 5, clean(r.get('indicativo rádio', r.get('rádio', ''))), 1, 0, 'C')
-        pdf.cell(w[3], 5, clean(r.get('viatura', '')), 1, 0, 'C')
-        pdf.cell(w[4], 5, clean(f"{r['serviço'].upper()} {r.get('observações', '')}"[:40]), 1, 1, 'L')
+        pdf.cell(w_p[0], 5, clean(r['horário']), 1, 0, 'C')
+        pdf.cell(w_p[1], 5, clean(r['id_disp']), 1, 0, 'L')
+        pdf.cell(w_p[2], 5, clean(r['serviço'].upper()), 1, 0, 'L')
+        pdf.cell(w_p[3], 5, clean(r.get('indicativo rádio', r.get('rádio', ''))), 1, 0, 'C')
+        pdf.cell(w_p[4], 5, clean(r.get('viatura', '')), 1, 1, 'C')
 
-    # 4. REMUNERADOS
+    # 4. REMUNERADOS (Horário | Militares | Observação)
     if not df_remu.empty:
-        pdf.ln(3)
+        pdf.ln(4)
         pdf.set_font("Arial", "B", 8)
         pdf.cell(0, 6, clean(" SERVIÇOS REMUNERADOS"), 1, 1, 'L', True)
+        pdf.set_font("Arial", "B", 7)
+        pdf.cell(25, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(60, 5, "MILITARES", 1, 0, 'C'); pdf.cell(105, 5, "OBSERVAÇÃO", 1, 1, 'C')
         pdf.set_font("Arial", "", 7)
         for _, r in df_remu.iterrows():
-            pdf.cell(190, 5, clean(f"{r['horário']} - {r['id_disp']} - {r['serviço'].upper()}"), 1, 1, 'L')
+            pdf.cell(25, 5, clean(r['horário']), 1, 0, 'C')
+            pdf.cell(60, 5, clean(r['id_disp']), 1, 0, 'L')
+            pdf.cell(105, 5, clean(r.get('observações', '')), 1, 1, 'L')
 
-    # 5. OBSERVAÇÕES NO FUNDO
-    todas_obs = df_original[df_original['observações'] != ""]['observações'].unique()
-    if len(todas_obs) > 0:
-        pdf.set_y(-35)
+    # 5. TABELA DE OBSERVAÇÕES DE PATRULHA (No fundo)
+    obs_p = df_pat[df_pat['observações'] != ""]
+    if not obs_p.empty:
+        pdf.ln(4)
         pdf.set_font("Arial", "B", 8)
-        pdf.cell(0, 5, "OBSERVAÇÕES GERAIS:", border="T", ln=True)
-        pdf.set_font("Arial", "I", 7)
-        pdf.multi_cell(0, 4, clean(" | ".join(todas_obs)))
+        pdf.cell(0, 6, clean(" OBSERVAÇÕES DE PATRULHA"), 1, 1, 'L', True)
+        pdf.set_font("Arial", "B", 7)
+        pdf.cell(30, 5, "INDICATIVO", 1, 0, 'C'); pdf.cell(160, 5, "DETALHE DA OBSERVAÇÃO", 1, 1, 'C')
+        pdf.set_font("Arial", "", 7)
+        for _, r in obs_p.iterrows():
+            indic = r.get('indicativo rádio', r.get('rádio', 'S/I'))
+            pdf.cell(30, 5, clean(indic), 1, 0, 'C')
+            pdf.multi_cell(160, 5, clean(r['observações']), border=1)
 
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- 3. LOGIN (FIEI AO ORIGINAL) ---
+# --- 3. LOGIN E MENUS (MANTIDOS IGUAIS) ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
@@ -231,16 +251,16 @@ else:
         d_sel = st.date_input("Data:", format="DD/MM/YYYY")
         df_dia = load_data(d_sel.strftime("%d-%m"))
         if not df_dia.empty:
-            df_at = df_dia.copy(); df_at['id_disp'] = df_at['id'].astype(str)
+            df_at_v = df_dia.copy(); df_at_v['id_disp'] = df_at_v['id'].astype(str)
             if not df_trocas.empty:
                 tr_v = df_trocas[(df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
                 for _, t in tr_v.iterrows():
-                    m_o = df_at['id'].astype(str) == str(t['id_origem'])
-                    if any(m_o): df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
-                    m_d = df_at['id'].astype(str) == str(t['id_destino'])
-                    if any(m_d): df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+                    m_o = df_at_v['id'].astype(str) == str(t['id_origem'])
+                    if any(m_o): df_at_v.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
+                    m_d = df_at_v['id'].astype(str) == str(t['id_destino'])
+                    if any(m_d): df_at_v.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
-            st.download_button("📥 Descarregar Escala Oficial (PDF)", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", use_container_width=True)
+            st.download_button("📥 Descarregar Escala Oficial (PDF)", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at_v), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", use_container_width=True)
 
             def mostrar_sec_geral(tit, keys, df_f, mostrar_extras=False):
                 p = '|'.join(keys).lower(); temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
@@ -248,26 +268,26 @@ else:
                     with st.expander(f"🔹 {tit.upper()}", expanded=True):
                         cols_ag = ['serviço', 'horário']
                         if mostrar_extras:
-                            ag = temp.groupby(cols_ag, sort=False).agg({'id_disp': lambda x: ', '.join(x), 'viatura': lambda x: ', '.join(x.unique()), 'rádio': lambda x: ', '.join(x.unique()), 'indicativo rádio': lambda x: ', '.join(x.unique()), 'observações': lambda x: ', '.join(x.unique())}).reset_index()
+                            ag = temp.groupby(cols_ag, sort=False).agg({'id_disp': lambda x: ', '.join(x), 'viatura': lambda x: ', '.join(x.unique()), 'indicativo rádio': lambda x: ', '.join(x.unique()), 'observações': lambda x: ', '.join(x.unique())}).reset_index()
                         else: ag = temp.groupby(cols_ag, sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
                         st.dataframe(ag.rename(columns={'id_disp': 'Militar'}), use_container_width=True, hide_index=True)
                     return df_f[~df_f['id'].isin(temp['id'])]
                 return df_f
 
-            df_res = df_at.copy(); df_aus = df_res[df_res['serviço'].str.lower().str.contains("férias|licença|doente|diligência|tribunal", na=False)].copy()
-            df_res = df_res[~df_res['id'].isin(df_aus['id'])]
+            df_res = df_at_v.copy(); df_aus_v = df_res[df_res['serviço'].str.lower().str.contains("férias|licença|doente|diligência|tribunal", na=False)].copy()
+            df_res = df_res[~df_res['id'].isin(df_aus_v['id'])]
             df_res = mostrar_sec_geral("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_res, False)
             df_res = mostrar_sec_geral("Atendimento", ["atendimento", "apoio"], df_res, False)
             df_res = mostrar_sec_geral("Patrulhas", ["po", "patrulha", "ronda", "vtr", "auto"], df_res, True)
-            df_remu = df_res[df_res['serviço'].str.lower().str.contains("remu|grat", na=False)].copy()
-            df_folga = df_res[df_res['serviço'].str.lower().str.contains("folga", na=False)].copy()
-            df_outros = df_res[~df_res['id'].isin(df_remu['id']) & ~df_res['id'].isin(df_folga['id'])]
-            if not df_outros.empty: mostrar_sec_geral("Outros Serviços", [""], df_outros, False)
-            if not df_remu.empty: mostrar_sec_geral("Remunerados", ["remu", "grat"], df_remu, True)
-            if not df_folga.empty: mostrar_sec_geral("Folga", ["folga"], df_folga, False)
-            if not df_aus.empty:
+            df_remu_v = df_res[df_res['serviço'].str.lower().str.contains("remu|grat", na=False)].copy()
+            df_folga_v = df_res[df_res['serviço'].str.lower().str.contains("folga", na=False)].copy()
+            df_outros_v = df_res[~df_res['id'].isin(df_remu_v['id']) & ~df_res['id'].isin(df_folga_v['id'])]
+            if not df_outros_v.empty: mostrar_sec_geral("Outros Serviços", [""], df_outros_v, False)
+            if not df_remu_v.empty: mostrar_sec_geral("Remunerados", ["remu", "grat"], df_remu_v, True)
+            if not df_folga_v.empty: mostrar_sec_geral("Folga", ["folga"], df_folga_v, False)
+            if not df_aus_v.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
-                    ag = df_aus.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+                    ag = df_aus_v.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag, use_container_width=True, hide_index=True)
 
     elif menu == "📜 Trocas Validadas":
