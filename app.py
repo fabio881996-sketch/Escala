@@ -703,7 +703,8 @@ else:
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
-            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)            col_pdf, _ = st.columns([1, 4])
+            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
+            col_pdf, _ = st.columns([1, 4])
             with col_pdf:
                 st.download_button(
                     "📥 Descarregar PDF",
