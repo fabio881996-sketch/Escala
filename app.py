@@ -157,18 +157,30 @@ else:
                 return df_f
 
             df_p = df_at.copy()
-            # Ordem de exibição: Ausentes por último
-            df_p = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_p)
-            df_p = mostrar_sec("Atendimento", ["atendimento"], df_p)
-            df_p = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_p)
-            df_p = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_p)
-            df_p = mostrar_sec("Remunerados", ["remu", "grat"], df_p)
-            df_p = mostrar_sec("Folga", ["folga"], df_p)
-            if not df_p.empty: mostrar_sec("Outros Serviços", [""], df_p)
-            # Ausentes forçado para o final
-            mostrar_sec("Ausentes", ["férias", "licença", "doente", "diligência"], df_p)
+            
+            # 1. Isolamos os Ausentes primeiro para não serem apanhados pelos "Outros"
+            df_ausentes = df_p[df_p['serviço'].str.lower().str.contains("férias|licença|doente|diligência", na=False)].copy()
+            df_restante = df_p[~df_p['id'].isin(df_ausentes['id'])]
+            
+            # 2. Processamos os outros grupos no restante
+            df_restante = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_restante)
+            df_restante = mostrar_sec("Atendimento", ["atendimento"], df_restante)
+            df_restante = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_restante)
+            df_restante = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_restante)
+            df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante)
+            df_restante = mostrar_sec("Folga", ["folga"], df_restante)
+            
+            # 3. Processamos o que sobra como "Outros"
+            if not df_restante.empty:
+                mostrar_sec("Outros Serviços", [""], df_restante)
+                
+            # 4. Mostramos Ausentes por último
+            if not df_ausentes.empty:
+                with st.expander("🔹 AUSENTES", expanded=True):
+                    ag = df_ausentes.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+                    st.dataframe(ag.rename(columns={'id_disp': 'Militar'}), use_container_width=True, hide_index=True)
         else: st.warning("Sem dados.")
-
+            
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
         dt_s = st.date_input("Data:", format="DD/MM/YYYY")
