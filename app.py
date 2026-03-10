@@ -84,6 +84,19 @@ def gerar_pdf_troca(dados):
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="R")
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
+def gerar_pdf_escala_dia(data, df_agrupado):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, f"Escala de Servico - {data}", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", "", 10)
+    for _, row in df_agrupado.iterrows():
+        pdf.cell(190, 8, f"{row['serviço']} ({row['horário']}): {row['id_disp']}", ln=True)
+    pdf.ln(10)
+    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="R")
+    return pdf.output(dest='S').encode('latin-1', 'replace')
+
 # --- 3. LOGIN ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
@@ -146,6 +159,10 @@ else:
                     m_d = df_at['id'].astype(str) == str(t['id_destino'])
                     if any(m_d): df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
+            # Botão PDF
+            ag_pdf = df_at.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+            st.download_button("📥 Descarregar PDF do Dia", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), ag_pdf), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", mime="application/pdf")
+
             def mostrar_sec(tit, keys, df_f):
                 p = '|'.join(keys).lower()
                 temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
@@ -157,24 +174,15 @@ else:
                 return df_f
 
             df_p = df_at.copy()
-            
-            # 1. Isolamos os Ausentes primeiro para não serem apanhados pelos "Outros"
             df_ausentes = df_p[df_p['serviço'].str.lower().str.contains("férias|licença|doente|diligência", na=False)].copy()
             df_restante = df_p[~df_p['id'].isin(df_ausentes['id'])]
-            
-            # 2. Processamos os outros grupos no restante
             df_restante = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_restante)
             df_restante = mostrar_sec("Atendimento", ["atendimento"], df_restante)
             df_restante = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_restante)
             df_restante = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_restante)
             df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante)
             df_restante = mostrar_sec("Folga", ["folga"], df_restante)
-            
-            # 3. Processamos o que sobra como "Outros"
-            if not df_restante.empty:
-                mostrar_sec("Outros Serviços", [""], df_restante)
-                
-            # 4. Mostramos Ausentes por último
+            if not df_restante.empty: mostrar_sec("Outros Serviços", [""], df_restante)
             if not df_ausentes.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
                     ag = df_ausentes.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
@@ -239,4 +247,5 @@ else:
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         st.dataframe(df_util[['id', 'posto', 'nome', 'telemóvel']], hide_index=True, use_container_width=True)
+        
         
