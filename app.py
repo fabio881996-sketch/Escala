@@ -195,33 +195,37 @@ else:
                 return df_f
 
             df_p = df_at.copy()
+            # SEPARAÇÃO INICIAL DOS AUSENTES
             df_ausentes = df_p[df_p['serviço'].str.lower().str.contains("férias|licença|doente|diligência|tribunal", na=False)].copy()
             df_restante = df_p[~df_p['id'].isin(df_ausentes['id'])]
             
-            # 1. SERVIÇOS OPERACIONAIS E ADMINISTRATIVOS
+            # 1. SERVIÇOS OPERACIONAIS E ADMINISTRATIVOS PRINCIPAIS
             df_restante = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_restante, False)
             df_restante = mostrar_sec("Atendimento", ["atendimento"], df_restante, False)
             df_restante = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_restante, False)
             df_restante = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_restante, True)
-            df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante, True)
             
-            # 2. OUTROS SERVIÇOS (O que não é Folga nem Ausente)
-            # Filtramos as folgas temporariamente para que o "Outros" não as apanhe
-            df_so_outros = df_restante[~df_restante['serviço'].str.lower().str.contains("folga", na=False)]
-            if not df_so_outros.empty:
-                mostrar_sec("Outros Serviços", [""], df_so_outros, False)
-                df_restante = df_restante[~df_restante['id'].isin(df_so_outros['id'])]
+            # 2. OUTROS SERVIÇOS (O que não é Remunerado, nem Folga, nem Ausente)
+            # Filtramos para mostrar primeiro o que sobra antes de Remunerados e Folgas
+            df_outros_residuais = df_restante[~df_restante['serviço'].str.lower().str.contains("remu|grat|folga", na=False)]
+            if not df_outros_residuais.empty:
+                mostrar_sec("Outros Serviços", [""], df_outros_residuais, False)
+                df_restante = df_restante[~df_restante['id'].isin(df_outros_residuais['id'])]
 
-            # 3. FOLGAS (PENÚLTIMO GRUPO)
+            # 3. REMUNERADOS (Antes das folgas)
+            df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante, True)
+
+            # 4. FOLGAS (Penúltimo grupo)
             df_restante = mostrar_sec("Folga", ["folga"], df_restante, False)
             
-            # 4. AUSENTES (ÚLTIMO GRUPO)
+            # 5. AUSENTES (Último grupo)
             if not df_ausentes.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
                     ag = df_ausentes.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag.rename(columns={'id_disp': 'Militar'}), use_container_width=True, hide_index=True)
         else: st.warning("Sem dados.")
-            
+
+    # ... (Restante do código: Solicitar Troca, Pedidos Recebidos, Validar, Histórico, Efetivo)
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
         dt_s = st.date_input("Data:", format="DD/MM/YYYY")
