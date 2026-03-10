@@ -204,6 +204,11 @@ def salvar_troca_gsheet(linha: list) -> bool:
 # ============================================================
 # 5. FUNÇÕES PDF
 # ============================================================
+def s(txt) -> str:
+    """Remove acentos e caracteres especiais para compatibilidade com fpdf/latin-1."""
+    import unicodedata
+    return unicodedata.normalize('NFKD', str(txt)).encode('latin-1', 'ignore').decode('latin-1')
+
 def gerar_pdf_troca(dados: dict) -> bytes:
     pdf = FPDF()
     pdf.add_page()
@@ -216,11 +221,11 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.ln(10)
     pdf.set_font("Arial", "", 11)
     texto = (
-        f"Certifica-se que o militar {dados['nome_origem']} (ID {dados['id_origem']}), "
-        f"requereu a troca do servico '{dados['serv_orig']}' pelo servico '{dados['serv_dest']}' "
-        f"do militar {dados['nome_destino']} (ID {dados['id_destino']}), para o dia {dados['data']}.\n\n"
+        f"Certifica-se que o militar {s(dados['nome_origem'])} (ID {s(dados['id_origem'])}), "
+        f"requereu a troca do servico '{s(dados['serv_orig'])}' pelo servico '{s(dados['serv_dest'])}' "
+        f"do militar {s(dados['nome_destino'])} (ID {s(dados['id_destino'])}), para o dia {s(dados['data'])}.\n\n"
         f"O pedido foi aceite pelo militar de destino e validado superiormente por "
-        f"{dados['validador']} no dia {dados['data_val']}."
+        f"{s(dados['validador'])} no dia {s(dados['data_val'])}."
     )
     pdf.multi_cell(190, 8, texto)
     pdf.ln(15)
@@ -256,13 +261,13 @@ def gerar_pdf_escala_dia(data: str, df_agrupado: pd.DataFrame) -> bytes:
             pdf.set_fill_color(245, 248, 255)
         else:
             pdf.set_fill_color(255, 255, 255)
-        pdf.cell(45, 9, str(row['serviço']),                 1, 0, '', fill)
-        pdf.cell(22, 9, str(row['horário']),                 1, 0, '', fill)
-        pdf.cell(65, 9, str(row['id_disp']),                 1, 0, '', fill)
-        pdf.cell(32, 9, str(row.get('viatura', '')),         1, 0, '', fill)
-        pdf.cell(22, 9, str(row.get('rádio', '')),           1, 0, '', fill)
-        pdf.cell(32, 9, str(row.get('indicativo rádio','')), 1, 0, '', fill)
-        pdf.cell(59, 9, str(row.get('observações', '')),     1, 1, '', fill)
+        pdf.cell(45, 9, s(row['serviço']),                 1, 0, '', fill)
+        pdf.cell(22, 9, s(row['horário']),                 1, 0, '', fill)
+        pdf.cell(65, 9, s(row['id_disp']),                 1, 0, '', fill)
+        pdf.cell(32, 9, s(row.get('viatura', '')),         1, 0, '', fill)
+        pdf.cell(22, 9, s(row.get('rádio', '')),           1, 0, '', fill)
+        pdf.cell(32, 9, s(row.get('indicativo rádio','')), 1, 0, '', fill)
+        pdf.cell(59, 9, s(row.get('observações', '')),     1, 1, '', fill)
         fill = not fill
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
@@ -706,4 +711,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
