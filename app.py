@@ -87,14 +87,27 @@ def gerar_pdf_troca(dados):
 def gerar_pdf_escala_dia(data, df_agrupado):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, f"Escala de Servico - {data}", ln=True, align="C")
-    pdf.ln(10)
+    # Cabeçalho
+    pdf.set_font("Arial", "B", 18)
+    pdf.cell(190, 10, "GNR - Escala de Servico", ln=True, align="C")
+    pdf.set_font("Arial", "I", 12)
+    pdf.cell(190, 10, f"Data: {data}", ln=True, align="C")
+    pdf.ln(5)
+    # Tabela estilizada
+    pdf.set_fill_color(200, 220, 255)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(60, 10, "Servico", 1, 0, 'C', True)
+    pdf.cell(30, 10, "Horario", 1, 0, 'C', True)
+    pdf.cell(100, 10, "Militares", 1, 1, 'C', True)
     pdf.set_font("Arial", "", 10)
     for _, row in df_agrupado.iterrows():
-        pdf.cell(190, 8, f"{row['serviço']} ({row['horário']}): {row['id_disp']}", ln=True)
+        pdf.cell(60, 10, str(row['serviço']), 1)
+        pdf.cell(30, 10, str(row['horário']), 1)
+        pdf.cell(100, 10, str(row['id_disp']), 1, 1)
+    # Rodapé
     pdf.ln(10)
-    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="R")
+    pdf.set_font("Arial", "I", 8)
+    pdf.cell(190, 10, f"Documento gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="C")
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- 3. LOGIN ---
@@ -247,5 +260,4 @@ else:
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         st.dataframe(df_util[['id', 'posto', 'nome', 'telemóvel']], hide_index=True, use_container_width=True)
-        
         
