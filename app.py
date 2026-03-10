@@ -13,7 +13,6 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #455A64 !important; }
     h1, h2, h3 { color: #1E3A8A !important; font-weight: 800 !important; }
     
-    /* Botão Sair - Visível e com contraste */
     .stButton > button {
         background-color: #FFFFFF !important;
         color: #000000 !important;
@@ -21,17 +20,18 @@ st.markdown("""
         font-weight: bold !important;
     }
 
-    /* Cartões de Serviço */
     .card-servico { background: white; padding: 15px; border-radius: 10px; border-left: 6px solid #455A64; margin-bottom: 10px; color: #333; border: 1px solid #EAECEF; }
     .card-meu { border-left-color: #1E88E5 !important; background-color: #F0F7FF !important; }
     .card-troca { border-left-color: #FFD54F !important; background-color: #FFFDE7 !important; }
     
-    /* Estilo dos Títulos das Secções na Escala Geral */
+    .sidebar-id { color: #D1D1D1 !important; font-size: 0.9rem; margin-top: -15px; }
     .st-emotion-cache-p64bsy p { color: #1E3A8A !important; font-weight: bold !important; }
     </style>
     """, unsafe_allow_html=True)
 
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
+# Lista de serviços com os quais NÃO se pode trocar
+IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
 
 # --- 2. FUNÇÕES DE DADOS ---
 def get_client():
@@ -94,7 +94,6 @@ if not st.session_state["logged_in"]:
 else:
     df_trocas = load_data("registos_trocas")
     
-    # Restrição de Menu baseada em ser Admin ou não
     menu_options = ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Solicitar Troca", "📥 Pedidos Recebidos"]
     if st.session_state.get("is_admin", False):
         menu_options.append("⚖️ Validar Trocas")
@@ -102,6 +101,8 @@ else:
 
     with st.sidebar:
         st.write(f"👮‍♂️ **{st.session_state['user_nome']}**")
+        st.markdown(f'<p class="sidebar-id">ID: {st.session_state["user_id"]}</p>', unsafe_allow_html=True)
+        st.write("---")
         menu = st.radio("MENU", menu_options)
         if st.button("Sair", use_container_width=True): 
             st.session_state["logged_in"] = False
@@ -185,28 +186,39 @@ else:
             _ = mostrar_seccao("Ausentes", ["férias", "licença", "doente", "diligência"], df_fin)
         else: st.warning("Sem dados.")
 
-    # --- 6. SOLICITAR TROCA ---
+    # --- 6. SOLICITAR TROCA (COM FILTRO DE INDISPONÍVEIS) ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
         dt_solic = st.date_input("Data do serviço:", format="DD/MM/YYYY")
         df_d = load_data(dt_solic.strftime("%d-%m"))
+        
         if not df_d.empty:
             meu = df_d[df_d['id'].astype(str) == str(st.session_state['user_id'])]
             if not meu.empty:
                 meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
                 st.info(f"O teu serviço: **{meu_s}**")
-                colegas = df_d[df_d['id'].astype(str) != str(st.session_state['user_id'])]
-                opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
-                with st.form("form_troca"):
-                    alvo = st.selectbox("Com quem queres trocar?", opcoes)
-                    if st.form_submit_button("ENVIAR PEDIDO"):
-                        id_dest = alvo.split(" - ")[0]
-                        serv_dest = alvo.split(" - ", 1)[1]
-                        df_u = load_data("utilizadores")
-                        email_dest = df_u[df_u['id'].astype(str) == id_dest]['email'].values[0]
-                        if salvar_troca_gsheet([dt_solic.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_dest, serv_dest, "Pendente_Militar", email_dest]):
-                            st.success("Pedido enviado!"); st.balloons()
-            else: st.warning("Não tens serviço neste dia.")
+                
+                # FILTRAR: Apenas militares que NÃO estão em tribunal, férias, doentes, etc.
+                padrao_imp = '|'.join(IMPEDIMENTOS).lower()
+                colegas = df_d[
+                    (df_d['id'].astype(str) != str(st.session_state['user_id'])) & 
+                    (~df_d['serviço'].str.lower().str.contains(padrao_imp, na=False))
+                ]
+                
+                if not colegas.empty:
+                    opcoes = colegas.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                    with st.form("form_troca"):
+                        alvo = st.selectbox("Com quem queres trocar?", opcoes)
+                        if st.form_submit_button("ENVIAR PEDIDO"):
+                            id_dest = alvo.split(" - ")[0]
+                            serv_dest = alvo.split(" - ", 1)[1]
+                            df_u = load_data("utilizadores")
+                            email_dest = df_u[df_u['id'].astype(str) == id_dest]['email'].values[0]
+                            if salvar_troca_gsheet([dt_solic.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_dest, serv_dest, "Pendente_Militar", email_dest]):
+                                st.success("Pedido enviado!"); st.balloons()
+                else:
+                    st.warning("Não existem militares disponíveis para troca neste dia.")
+            else: st.warning("Não tens serviço escalado neste dia.")
 
     # --- 7. PEDIDOS RECEBIDOS ---
     elif "Pedidos Recebidos" in menu:
