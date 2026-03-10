@@ -68,17 +68,6 @@ def salvar_troca_gsheet(linha):
         return True
     except: return False
 
-def gerar_pdf_troca(dados):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(190, 10, "Comprovativo de Troca de Servico", ln=True, align="C")
-    pdf.ln(10)
-    pdf.set_font("Arial", "", 12)
-    txt = f"Certifica-se que o militar {dados['nome_origem']} (ID {dados['id_origem']}), requereu a troca do servico '{dados['serv_orig']}' pelo servico '{dados['serv_dest']}' do militar {dados['nome_destino']} (ID {dados['id_destino']}), para o dia {dados['data']}. Validado por {dados['validador']} em {dados['data_val']}."
-    pdf.multi_cell(190, 10, txt.encode('latin-1', 'replace').decode('latin-1'))
-    return pdf.output(dest='S').encode('latin-1', 'replace')
-
 # --- 3. FUNÇÃO DO PDF (MANTÉM AS REGRAS DE CENTRAMENTO E ORDENAÇÃO) ---
 def gerar_pdf_escala_dia(data_str, df_original):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -103,10 +92,9 @@ def gerar_pdf_escala_dia(data_str, df_original):
     df_pat = df_original[servicos.str.contains("po|patrulha|ronda|vtr|auto|expediente|tiro|instrução", na=False) & ~servicos.str.contains("atendimento|apoio", na=False)]
     df_remu = df_original[servicos.str.contains("remu|grat", na=False)]
 
-    # 1. AUSÊNCIAS E ADM (Alinhado à Esquerda 'L')
+    # 1. AUSÊNCIAS (Alinhado à Esquerda 'L')
     y_topo = pdf.get_y()
-    pdf.set_font("Arial", "B", 8)
-    pdf.set_fill_color(240, 240, 240)
+    pdf.set_font("Arial", "B", 8); pdf.set_fill_color(240, 240, 240)
     pdf.cell(92, 6, clean(" AUSÊNCIAS E FOLGAS"), 1, 1, 'L', True)
     pdf.set_font("Arial", "", 7)
     if not df_aus.empty:
@@ -117,25 +105,20 @@ def gerar_pdf_escala_dia(data_str, df_original):
 
     y_f_aus = pdf.get_y()
     pdf.set_xy(107, y_topo)
-    pdf.set_font("Arial", "B", 8)
-    pdf.cell(93, 6, clean(" OUTRAS SITUAÇÕES / ADM"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "B", 8); pdf.cell(93, 6, clean(" OUTRAS SITUAÇÕES / ADM"), 1, 1, 'L', True)
     pdf.set_font("Arial", "", 7)
     if not df_adm.empty:
         ag_adm = df_adm.groupby(['serviço', 'horário'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag_adm.iterrows():
-            pdf.set_x(107)
-            pdf.multi_cell(93, 4, clean(f" {r['serviço'].upper()} ({r['horário']}): {r['id_disp']}"), border='LR', align='L')
-    pdf.set_x(107)
-    pdf.cell(93, 1, "", border='T', ln=1)
+            pdf.set_x(107); pdf.multi_cell(93, 4, clean(f" {r['serviço'].upper()} ({r['horário']}): {r['id_disp']}"), border='LR', align='L')
+    pdf.set_x(107); pdf.cell(93, 1, "", border='T', ln=1)
     
     pdf.set_y(max(y_f_aus, pdf.get_y()) + 4)
 
     # 2. ATENDIMENTO E APOIO (Centrado 'C')
     y_at_start = pdf.get_y()
-    pdf.set_font("Arial", "B", 8)
-    pdf.cell(92, 6, clean(" ATENDIMENTO"), 1, 1, 'L', True)
-    pdf.set_font("Arial", "B", 7)
-    pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(62, 5, "MILITAR(ES)", 1, 1, 'C')
+    pdf.set_font("Arial", "B", 8); pdf.cell(92, 6, clean(" ATENDIMENTO"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "B", 7); pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(62, 5, "MILITAR(ES)", 1, 1, 'C')
     pdf.set_font("Arial", "", 7)
     if not df_at.empty:
         ag_at = df_at.groupby(['horário', 'serviço'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
@@ -144,10 +127,8 @@ def gerar_pdf_escala_dia(data_str, df_original):
     
     y_f_at = pdf.get_y()
     pdf.set_xy(107, y_at_start)
-    pdf.set_font("Arial", "B", 8)
-    pdf.cell(93, 6, clean(" APOIO AO ATENDIMENTO"), 1, 1, 'L', True)
-    pdf.set_font("Arial", "B", 7)
-    pdf.set_x(107); pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(63, 5, "MILITAR(ES)", 1, 1, 'C')
+    pdf.set_font("Arial", "B", 8); pdf.cell(93, 6, clean(" APOIO AO ATENDIMENTO"), 1, 1, 'L', True)
+    pdf.set_font("Arial", "B", 7); pdf.set_x(107); pdf.cell(30, 5, "HORÁRIO", 1, 0, 'C'); pdf.cell(63, 5, "MILITAR(ES)", 1, 1, 'C')
     pdf.set_font("Arial", "", 7)
     if not df_apoi.empty:
         ag_apoi = df_apoi.groupby(['horário', 'serviço'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
@@ -156,15 +137,13 @@ def gerar_pdf_escala_dia(data_str, df_original):
     
     pdf.set_y(max(y_f_at, pdf.get_y()) + 4)
 
-    # 3. PATRULHAS (Ordenação PO -> Horário)
-    pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 6, clean(" PATRULHAS E POLICIAMENTO"), 1, 1, 'L', True)
+    # 3. PATRULHAS (Ordenação por PO -> Horário)
+    pdf.set_font("Arial", "B", 8); pdf.cell(0, 6, clean(" PATRULHAS E POLICIAMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
     w_p = [22, 65, 43, 30, 30]
     h_p = ["HORÁRIO", "MILITARES", "SERVIÇO", "RÁDIO/INDIC.", "VIATURA"]
     for i, h in enumerate(h_p): pdf.cell(w_p[i], 5, h, 1, 0, 'C')
-    pdf.ln(5)
-    pdf.set_font("Arial", "", 7)
+    pdf.ln(5); pdf.set_font("Arial", "", 7)
     
     if not df_pat.empty:
         ag_pat = df_pat.groupby(['horário', 'serviço', 'indicativo rádio', 'rádio', 'viatura'], as_index=False).agg({'id_disp': lambda x: ', '.join(x), 'observações': lambda x: ' | '.join([v for v in x if v])})
@@ -186,17 +165,6 @@ def gerar_pdf_escala_dia(data_str, df_original):
         ag_remu = df_remu.groupby(['horário', 'serviço', 'observações'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag_remu.sort_values('horário').iterrows():
             pdf.cell(25, 5, clean(r['horário']), 1, 0, 'C'); pdf.cell(60, 5, clean(r['id_disp']), 1, 0, 'C'); pdf.cell(105, 5, clean(r['observações']), 1, 1, 'C')
-
-    # 5. OBSERVAÇÕES
-    if not df_pat.empty:
-        obs_p = ag_pat[ag_pat['observações'] != ""]
-        if not obs_p.empty:
-            pdf.ln(4); pdf.set_font("Arial", "B", 8); pdf.cell(0, 6, clean(" OBSERVAÇÕES DE PATRULHA"), 1, 1, 'L', True)
-            pdf.set_font("Arial", "B", 7); pdf.cell(30, 5, "INDICATIVO", 1, 0, 'C'); pdf.cell(160, 5, "DETALHE DA OBSERVAÇÃO", 1, 1, 'C')
-            pdf.set_font("Arial", "", 7)
-            for _, r in obs_p.iterrows():
-                indic = r['indicativo rádio'] if r['indicativo rádio'] else r['rádio']
-                pdf.cell(30, 5, clean(indic if indic else "S/I"), 1, 0, 'C'); pdf.multi_cell(160, 5, clean(r['observações']), border=1, align='C')
 
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
@@ -236,15 +204,13 @@ else:
         hj = datetime.now(); u_at = str(st.session_state['user_id'])
         for i in range(8):
             dt = hj + timedelta(days=i); d_s = dt.strftime('%d/%m/%Y'); lbl = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
-            tr_v = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & ((df_trocas['id_origem'].astype(str) == u_at) | (df_trocas['id_destino'].astype(str) == u_at))] if not df_trocas.empty else pd.DataFrame()
-            if not tr_v.empty:
-                t = tr_v.iloc[0]; s_ex, era, com = (t['servico_destino'], t['servico_origem'], t['id_destino']) if str(t['id_origem']) == u_at else (t['servico_origem'], t['servico_destino'], t['id_origem'])
-                st.markdown(f'<div class="card-servico card-troca"><b>{lbl}</b><br><h3>{s_ex}</h3><p style="margin:0;">🔙 Troca de: {era}</p><p style="margin:0; font-weight:bold;">🔄 Com ID: {com}</p></div>', unsafe_allow_html=True)
-            else:
-                df_d = load_data(dt.strftime("%d-%m"))
-                if not df_d.empty:
-                    m = df_d[df_d['id'].astype(str) == u_at]
-                    if not m.empty: st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
+            df_d = load_data(dt.strftime("%d-%m"))
+            meus_servicos = df_d[df_d['id'].astype(str) == u_at] if not df_d.empty else pd.DataFrame()
+            
+            if not meus_servicos.empty:
+                for _, s in meus_servicos.iterrows():
+                    # Verifica trocas para este serviço específico
+                    st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{s["serviço"]}</h3>🕒 {s["horário"]}</div>', unsafe_allow_html=True)
 
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
@@ -252,6 +218,7 @@ else:
         df_dia = load_data(d_sel.strftime("%d-%m"))
         if not df_dia.empty:
             df_at_v = df_dia.copy(); df_at_v['id_disp'] = df_at_v['id'].astype(str)
+            # Aplicar trocas visuais
             if not df_trocas.empty:
                 tr_v = df_trocas[(df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
                 for _, t in tr_v.iterrows():
@@ -259,79 +226,63 @@ else:
                     if any(m_o): df_at_v.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
                     if any(m_d): df_at_v.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
-            st.download_button("📥 Descarregar Escala Oficial (PDF)", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at_v), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", use_container_width=True)
+            st.download_button("📥 Escala Oficial (PDF)", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at_v), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", use_container_width=True)
 
-            # --- CORREÇÃO NA LOGICA DE EXIBIÇÃO NO ECRÃ ---
-            def mostrar_sec_geral(tit, keys, df_f, mostrar_extras=False):
+            # --- NOVA LÓGICA DE EXIBIÇÃO: PERMITE DUPLICIDADE ---
+            def mostrar_bloco(tit, keys, df_total, extras=False):
                 p = '|'.join(keys).lower()
-                temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
+                # Filtra apenas os serviços que batem com as chaves
+                temp = df_total[df_total['serviço'].str.lower().str.contains(p, na=False)].copy()
                 if not temp.empty:
                     with st.expander(f"🔹 {tit.upper()}", expanded=True):
-                        cols_ag = ['serviço', 'horário']
-                        if mostrar_extras:
-                            ag = temp.groupby(cols_ag, sort=False).agg({'id_disp': lambda x: ', '.join(x), 'viatura': lambda x: ', '.join(x.unique()), 'indicativo rádio': lambda x: ', '.join(x.unique())}).reset_index()
+                        ag_cols = ['serviço', 'horário']
+                        if extras:
+                            ag = temp.groupby(ag_cols, sort=False).agg({'id_disp': lambda x: ', '.join(x), 'viatura': lambda x: '/'.join(x.unique()), 'indicativo rádio': lambda x: '/'.join(x.unique())}).reset_index()
                         else:
-                            ag = temp.groupby(cols_ag, sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
-                        st.dataframe(ag.rename(columns={'id_disp': 'Militar'}), use_container_width=True, hide_index=True)
-                return df_f[~df_f['id'].isin(temp['id'])]
+                            ag = temp.groupby(ag_cols, sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+                        st.dataframe(ag.rename(columns={'id_disp': 'Militar(es)'}), use_container_width=True, hide_index=True)
 
-            df_res = df_at_v.copy()
-            # 1. Ausências (Filtra e Remove)
-            df_aus_v = df_res[df_res['serviço'].str.lower().str.contains("férias|licença|doente|folga", na=False)].copy()
-            df_res = df_res[~df_res['id'].isin(df_aus_v['id'])]
+            # Exibição por categorias (sem remover do DF original para permitir que o militar apareça em duas categorias se necessário)
+            mostrar_bloco("Comando e Adm", ["pronto", "secretaria", "inquérito", "comando"], df_at_v)
+            mostrar_bloco("Atendimento", ["atendimento", "apoio"], df_at_v)
+            mostrar_bloco("Patrulhas", ["po", "patrulha", "ronda", "vtr", "auto", "expediente", "tiro", "instrução"], df_at_v, True)
+            mostrar_bloco("Remunerados", ["remu", "grat"], df_at_v)
             
-            # 2. Secções Definidas (Remove do df_res após mostrar)
-            df_res = mostrar_sec_geral("Comando e Administrativos", ["pronto", "secretaria", "inquérito", "comando"], df_res)
-            df_res = mostrar_sec_geral("Atendimento", ["atendimento", "apoio"], df_res)
-            df_res = mostrar_sec_geral("Patrulhas", ["po", "patrulha", "ronda", "vtr", "auto", "expediente", "tiro", "instrução"], df_res, True)
-            df_res = mostrar_sec_geral("Remunerados", ["remu", "grat"], df_res, True)
-            
-            # 3. O que sobrar (Diligências, Tribunais, etc.)
-            if not df_res.empty:
-                with st.expander("🔹 OUTRAS SITUAÇÕES", expanded=True):
-                    ag_out = df_res.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
-                    st.dataframe(ag_out.rename(columns={'id_disp': 'Militar'}), use_container_width=True, hide_index=True)
+            # Ausências e Folgas num bloco separado e discreto
+            df_aus_fol = df_at_v[df_at_v['serviço'].str.lower().str.contains("férias|licença|doente|folga", na=False)]
+            if not df_aus_fol.empty:
+                with st.expander("🔹 FOLGAS E AUSÊNCIAS", expanded=False):
+                    ag_af = df_aus_fol.groupby('serviço')['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+                    st.dataframe(ag_af, use_container_width=True, hide_index=True)
 
-            # 4. Bloco de Ausentes no fim
-            if not df_aus_v.empty:
-                with st.expander("🔹 AUSENTES E FOLGAS", expanded=False):
-                    ag_aus = df_aus_v.groupby(['serviço'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
-                    st.dataframe(ag_aus, use_container_width=True, hide_index=True)
+    elif menu == "👥 Efetivo":
+        st.title("👥 Efetivo")
+        st.dataframe(df_util[['id', 'nim', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
 
-    elif menu == "📜 Trocas Validadas":
-        st.title("📜 Histórico de Trocas Aprovadas")
-        if not df_trocas.empty:
-            aprv = df_trocas[df_trocas['status'] == 'Aprovada']
-            for idx, r in aprv.sort_index(ascending=False).iterrows():
-                def get_n(id_m):
-                    res = df_util[df_util['id'].astype(str) == str(id_m)]
-                    return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
-                n_o, n_d = get_n(r['id_origem']), get_n(r['id_destino'])
-                with st.expander(f"📅 {r['data']} | {n_o} ↔️ {n_d}"):
-                    st.write(f"**Origem:** {r['servico_origem']} | **Destino:** {r['servico_destino']}")
-                    dados_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": r.get('validador',''), "data_val": r.get('data_validacao','')}
-                    st.download_button("📥 Guia de Troca", gerar_pdf_troca(dados_pdf), file_name=f"Troca_{r['data'].replace('/','-')}.pdf", key=f"h_{idx}")
-
+    # --- SISTEMA DE TROCAS (MANTIDO) ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
         dt_s = st.date_input("Data:", format="DD/MM/YYYY")
         df_d = load_data(dt_s.strftime("%d-%m"))
         if not df_d.empty:
-            meu = df_d[df_d['id'].astype(str) == str(st.session_state['user_id'])]
-            if not meu.empty:
-                opts = df_d[(df_d['id'].astype(str) != str(st.session_state['user_id'])) & (~df_d['serviço'].str.lower().str.contains('|'.join(IMPEDIMENTOS), na=False))].apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
+            meu_df = df_d[df_d['id'].astype(str) == str(st.session_state['user_id'])]
+            if not meu_df.empty:
+                meus_opts = meu_df.apply(lambda x: f"{x['serviço']} ({x['horário']})", axis=1).tolist()
+                serv_meu = st.selectbox("O teu serviço para trocar:", meus_opts)
+                
+                outros = df_d[(df_d['id'].astype(str) != str(st.session_state['user_id'])) & (~df_d['serviço'].str.lower().str.contains('|'.join(IMPEDIMENTOS), na=False))].apply(lambda x: f"{x['id']} - {x['serviço']}", axis=1).tolist()
                 with st.form("tr"):
-                    alvo = st.selectbox("Trocar com:", opts)
-                    if st.form_submit_button("ENVIAR"):
+                    alvo = st.selectbox("Trocar com:", outros)
+                    if st.form_submit_button("ENVIAR PEDIDO"):
                         id_d = alvo.split(" - ")[0]; em_d = df_util[df_util['id'].astype(str) == id_d]['email'].values[0]
-                        salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), st.session_state['user_id'], f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})", id_d, alvo.split(" - ", 1)[1], "Pendente_Militar", em_d])
+                        salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), st.session_state['user_id'], serv_meu, id_d, alvo.split(" - ", 1)[1], "Pendente_Militar", em_d])
                         st.success("Pedido enviado!")
 
     elif menu == "📥 Pedidos Recebidos":
         st.title("📥 Pedidos por Aceitar")
         m = df_trocas[(df_trocas['status'] == 'Pendente_Militar') & (df_trocas['id_destino'].astype(str) == str(st.session_state['user_id']))]
         for idx, r in m.iterrows():
-            st.info(f"{r['data']}: ID {r['id_origem']} quer trocar.")
+            st.info(f"{r['data']}: ID {r['id_origem']} quer trocar o serviço {r['servico_origem']} pelo teu {r['servico_destino']}")
             if st.button("✅ ACEITAR", key=f"a{idx}"): atualizar_status_gsheet(idx, "Pendente_Admin"); st.rerun()
 
     elif menu == "⚖️ Validar Trocas":
@@ -339,8 +290,4 @@ else:
         for idx, r in df_trocas[df_trocas['status'] == 'Pendente_Admin'].iterrows():
             st.warning(f"Troca {r['data']}: {r['id_origem']} ↔️ {r['id_destino']}")
             if st.button("✔️ APROVAR", key=f"v{idx}"): atualizar_status_gsheet(idx, "Aprovada", st.session_state['user_nome']); st.rerun()
-
-    elif menu == "👥 Efetivo":
-        st.title("👥 Efetivo")
-        st.dataframe(df_util[['id', 'nim', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
-        
+                
