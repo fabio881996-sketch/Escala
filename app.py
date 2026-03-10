@@ -25,7 +25,7 @@ st.markdown("""
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
 IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
 
-# --- 2. FUNÇÕES DE DADOS OTIMIZADAS ---
+# --- 2. FUNÇÕES DE DADOS (CACHE) ---
 @st.cache_data(ttl=300)
 def load_data(aba_nome):
     try:
@@ -34,7 +34,7 @@ def load_data(aba_nome):
         client = gspread.authorize(creds)
         sh = client.open_by_url(st.secrets["gsheet_url"])
         df = pd.DataFrame(sh.worksheet(aba_nome).get_all_records())
-        # Normalização de colunas para evitar KeyError
+        # Normalização de colunas obrigatória para evitar KeyError
         df.columns = df.columns.str.strip().str.lower()
         return df.fillna("")
     except: return pd.DataFrame()
@@ -50,7 +50,7 @@ def atualizar_status_gsheet(index_linha, novo_status, admin_nome=""):
         if admin_nome:
             aba.update_cell(index_linha + 2, 8, admin_nome)
             aba.update_cell(index_linha + 2, 9, datetime.now().strftime("%d/%m/%Y %H:%M"))
-        st.cache_data.clear() # Limpa cache após alteração para refletir no sistema
+        st.cache_data.clear() # Limpa cache após alteração
         return True
     except: return False
 
@@ -64,6 +64,21 @@ def salvar_troca_gsheet(linha):
         st.cache_data.clear()
         return True
     except: return False
+
+def gerar_pdf_troca(dados):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(190, 10, "Comprovativo de Troca de Servico", ln=True, align="C")
+    pdf.ln(10)
+    pdf.set_font("Arial", "", 12)
+    texto = (f"Requerente: {dados['nome_origem']} (ID {dados['id_origem']})\n"
+             f"Servico Original: {dados['serv_orig']}\n\n"
+             f"Destino: {dados['nome_destino']} (ID {dados['id_destino']})\n"
+             f"Servico Aceite: {dados['serv_dest']}\n\n"
+             f"Validado por: {dados['validador']} em {dados['data_val']}.")
+    pdf.multi_cell(190, 10, texto)
+    return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- 3. LOGIN ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
@@ -84,10 +99,56 @@ if not st.session_state["logged_in"]:
                     st.rerun()
                 else: st.error("Incorreto.")
 else:
-    # Carregamento otimizado
     df_trocas = load_data("registos_trocas")
     df_util = load_data("utilizadores")
     
-    # ... [Resto da lógica de menus, mantida igual] ...
-    # O código interno de cada 'if menu ==' permanece o mesmo que tinhas, 
-    # apenas certifiquei-me que usa os df_trocas e df_util já carregados em cache.
+    menu_opt = ["📅 Minha Escala", "🔍 Escala Geral", "🔄 Solicitar Troca", "📥 Pedidos Recebidos"]
+    if st.session_state.get("is_admin"): menu_opt.extend(["⚖️ Validar Trocas", "📜 Trocas Validadas"])
+    menu_opt.append("👥 Efetivo")
+
+    with st.sidebar:
+        st.write(f"👮‍♂️ **{st.session_state['user_nome']}**")
+        menu = st.radio("MENU", menu_opt)
+        if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
+
+    # --- 4. MINHA ESCALA ---
+    if menu == "📅 Minha Escala":
+        st.title("📅 O Teu Serviço")
+        hj = datetime.now(); u_at = str(st.session_state['user_id'])
+        for i in range(8):
+            dt = hj + timedelta(days=i); d_s = dt.strftime('%d/%m/%Y'); lbl = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
+            tr_v = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & ((df_trocas['id_origem'].astype(str) == u_at) | (df_trocas['id_destino'].astype(str) == u_at))]
+            if not tr_v.empty:
+                t = tr_v.iloc[0]
+                s_ex, era, com = (t['servico_destino'], t['servico_origem'], t['id_destino']) if str(t['id_origem']) == u_at else (t['servico_origem'], t['servico_destino'], t['id_origem'])
+                st.markdown(f'<div class="card-servico card-troca"><b>{lbl}</b><br><h3>{s_ex}</h3><p style="margin:0;">🔙 Troca: {era}</p><p style="margin:0; font-weight:bold;">🔄 Com ID: {com}</p></div>', unsafe_allow_html=True)
+            else:
+                df_d = load_data(dt.strftime("%d-%m"))
+                if not df_d.empty:
+                    m = df_d[df_d['id'].astype(str) == u_at]
+                    if not m.empty: st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
+
+    # --- 5. ESCALA GERAL ---
+    elif menu == "🔍 Escala Geral":
+        st.title("🔍 Escala Geral")
+        d_sel = st.date_input("Data:", format="DD/MM/YYYY")
+        df_dia = load_data(d_sel.strftime("%d-%m"))
+        if not df_dia.empty:
+            df_at = df_dia.copy(); df_at['id_disp'] = df_at['id'].astype(str)
+            tr_v = df_trocas[(df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) & (df_trocas['status'] == 'Aprovada')]
+            for _, t in tr_v.iterrows():
+                m_o = df_at['id'].astype(str) == str(t['id_origem']); m_d = df_at['id'].astype(str) == str(t['id_destino'])
+                if any(m_o): df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
+                if any(m_d): df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+            st.dataframe(df_at[['id_disp', 'serviço', 'horário']], use_container_width=True)
+
+    # --- 6. SOLICITAR E VALIDAR (LOGICA MANTIDA) ---
+    elif menu == "⚖️ Validar Trocas":
+        pnd = df_trocas[df_trocas['status'] == 'Pendente_Admin']
+        for idx, r in pnd.iterrows():
+            if st.button(f"Validar Troca: {r['id_origem']} ↔️ {r['id_destino']}", key=f"v_{idx}"):
+                atualizar_status_gsheet(idx, "Aprovada", st.session_state['user_nome']); st.rerun()
+
+    # --- 7. OUTROS MENUS ---
+    elif menu == "👥 Efetivo":
+        st.dataframe(df_util[['id', 'posto', 'nome', 'telemóvel']], hide_index=True)
