@@ -139,7 +139,7 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- 📅 MINHA ESCALA (VISUALIZAÇÃO LIMPA) ---
+    # --- 📅 MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now()
@@ -160,7 +160,7 @@ else:
                     if not m.empty: 
                         st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
 
-    # --- 🔍 ESCALA GERAL (VISUALIZAÇÃO AGRUPADA) ---
+    # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel = st.date_input("Data:", format="DD/MM/YYYY")
@@ -200,18 +200,14 @@ else:
             df_aus = df_res[df_res['serviço'].str.lower().str.contains("férias|licença|doente|diligência|tribunal", na=False)].copy()
             df_res = df_res[~df_res['id'].isin(df_aus['id'])]
 
-            # 1. Comando e Administrativos
             df_res = mostrar_sec_geral("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_res, False)
             df_res = mostrar_sec_geral("Atendimento", ["atendimento", "apoio"], df_res, False)
-            # 2. Patrulhas
             df_res = mostrar_sec_geral("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_res, True)
             
-            # 3. Separar para garantir ordem correta (Outros -> Remunerados -> Folgas)
             df_remu = df_res[df_res['serviço'].str.lower().str.contains("remu|grat", na=False)].copy()
             df_folga = df_res[df_res['serviço'].str.lower().str.contains("folga", na=False)].copy()
             df_outros = df_res[~df_res['id'].isin(df_remu['id']) & ~df_res['id'].isin(df_folga['id'])]
 
-            # Exibição Final na Ordem Certa
             if not df_outros.empty: mostrar_sec_geral("Outros Serviços", [""], df_outros, False)
             if not df_remu.empty: mostrar_sec_geral("Remunerados", ["remu", "grat"], df_remu, True)
             if not df_folga.empty: mostrar_sec_geral("Folga", ["folga"], df_folga, False)
@@ -250,10 +246,8 @@ else:
         for idx, r in m.iterrows():
             st.markdown(f'<div class="card-servico card-troca">📅 <b>{r["data"]}</b><br>ID {r["id_origem"]} quer trocar.<br>Recebes: {r["servico_origem"]}<br>Dás: {r["servico_destino"]}</div>', unsafe_allow_html=True)
             c1, c2 = st.columns(2)
-            if c1.button("✅ ACEITAR", key=f"ac_{idx}"): 
-                atualizar_status_gsheet(idx, "Pendente_Admin"); st.rerun()
-            if c2.button("❌ RECUSAR", key=f"re_{idx}"): 
-                atualizar_status_gsheet(idx, "Recusada"); st.rerun()
+            if c1.button("✅ ACEITAR", key=f"ac_{idx}"): atualizar_status_gsheet(idx, "Pendente_Admin"); st.rerun()
+            if c2.button("❌ RECUSAR", key=f"re_{idx}"): atualizar_status_gsheet(idx, "Recusada"); st.rerun()
 
     # --- ⚖️ VALIDAR TROCAS (ADMIN) ---
     elif menu == "⚖️ Validar Trocas":
@@ -263,17 +257,38 @@ else:
         for idx, r in pnd.iterrows():
             st.warning(f"Troca: {r['data']} | ID {r['id_origem']} ↔️ ID {r['id_destino']}")
             c1, c2 = st.columns(2)
-            if c1.button("✔️ VALIDAR", key=f"ok_{idx}"): 
-                atualizar_status_gsheet(idx, "Aprovada", st.session_state['user_nome']); st.rerun()
-            if c2.button("🚫 REJEITAR", key=f"no_{idx}"): 
-                atualizar_status_gsheet(idx, "Rejeitada", st.session_state['user_nome']); st.rerun()
+            if c1.button("✔️ VALIDAR", key=f"ok_{idx}"): atualizar_status_gsheet(idx, "Aprovada", st.session_state['user_nome']); st.rerun()
+            if c2.button("🚫 REJEITAR", key=f"no_{idx}"): atualizar_status_gsheet(idx, "Rejeitada", st.session_state['user_nome']); st.rerun()
 
-    # --- 📜 HISTÓRICO ---
+    # --- 📜 HISTÓRICO DE TROCAS (DETALHADO) ---
     elif menu == "📜 Trocas Validadas":
-        st.title("📜 Histórico")
-        aprv = df_trocas[df_trocas['status'] == 'Aprovada']
-        for idx, r in aprv.iterrows():
-            st.write(f"📅 {r['data']} | ID {r['id_origem']} ↔️ ID {r['id_destino']} (Validado por: {r.get('validador', 'N/A')})")
+        st.title("📜 Histórico de Trocas Aprovadas")
+        if df_trocas.empty:
+            st.info("Ainda não existem registos de trocas.")
+        else:
+            aprv = df_trocas[df_trocas['status'] == 'Aprovada']
+            if aprv.empty:
+                st.write("Não existem trocas validadas.")
+            else:
+                for idx, r in aprv.sort_index(ascending=False).iterrows():
+                    def get_n(id_m):
+                        res = df_util[df_util['id'].astype(str) == str(id_m)]
+                        return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
+                    n_o = get_n(r['id_origem']); n_d = get_n(r['id_destino'])
+                    with st.expander(f"📅 {r['data']} | {n_o} ↔️ {n_d}"):
+                        st.markdown(f"#### Detalhes da Troca - {r['data']}")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.info(f"**Requerente:**\n\n{n_o}")
+                            st.markdown(f"**Serviço/Horário Original:**\n`{r['servico_origem']}`")
+                        with col2:
+                            st.success(f"**Substituto:**\n\n{n_d}")
+                            st.markdown(f"**Serviço/Horário Destino:**\n`{r['servico_destino']}`")
+                        st.divider()
+                        val_por = r.get('validador', 'N/A'); val_em = r.get('data_validacao', 'N/A')
+                        st.caption(f"⚖️ Validado superiormente por {val_por} em {val_em}")
+                        dados_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": val_por, "data_val": val_em}
+                        st.download_button(label="📥 Descarregar Guia de Troca", data=gerar_pdf_troca(dados_pdf), file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf", mime="application/pdf", key=f"hist_pdf_{idx}")
 
     # --- 👥 EFETIVO ---
     elif menu == "👥 Efetivo":
