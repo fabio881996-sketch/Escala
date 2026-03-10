@@ -79,7 +79,7 @@ def gerar_pdf_troca(dados):
     pdf.multi_cell(190, 10, txt.encode('latin-1', 'replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- FUNÇÃO DO PDF REESTRUTURADA CONFORME PEDIDO ---
+# --- FUNÇÃO DO PDF COM FILTROS LIMADOS ---
 def gerar_pdf_escala_dia(data_str, df_original):
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
@@ -96,15 +96,24 @@ def gerar_pdf_escala_dia(data_str, df_original):
     pdf.cell(0, 10, clean(f"ESCALA DE SERVIÇO PARA O DIA {data_str.upper()}"), border="B", ln=True, align='C')
     pdf.ln(4)
 
-    # Separação de Dados
-    df_aus = df_original[df_original['serviço'].str.lower().str.contains("férias|licença|doente|folga", na=False)]
-    df_adm = df_original[df_original['serviço'].str.lower().str.contains("pronto|secretaria|inquérito|comando|diligência|tribunal", na=False)]
-    df_at = df_original[df_original['serviço'].str.lower().str.contains("atendimento", na=False)]
-    df_apoi = df_original[df_original['serviço'].str.lower().str.contains("apoio", na=False)]
-    df_pat = df_original[df_original['serviço'].str.lower().str.contains("po|patrulha|ronda|vtr|auto", na=False)]
-    df_remu = df_original[df_original['serviço'].str.lower().str.contains("remu|grat", na=False)]
+    # Lógica de Filtros Refinada
+    servicos = df_original['serviço'].str.lower()
+    
+    df_aus = df_original[servicos.str.contains("férias|licença|doente|folga", na=False)]
+    df_adm = df_original[servicos.str.contains("pronto|secretaria|inquérito|comando|diligência|tribunal", na=False)]
+    
+    # Atendimento (sem apoios)
+    df_at = df_original[servicos.str.contains("atendimento", na=False) & ~servicos.str.contains("apoio", na=False)]
+    
+    # Apoio ao Atendimento
+    df_apoi = df_original[servicos.str.contains("apoio", na=False)]
+    
+    # Patrulhas e Instrução (sem atendimentos)
+    df_pat = df_original[servicos.str.contains("po|patrulha|ronda|vtr|auto|expediente|tiro|instrução", na=False) & ~servicos.str.contains("atendimento|apoio", na=False)]
+    
+    df_remu = df_original[servicos.str.contains("remu|grat", na=False)]
 
-    # 1. TOPO: AUSÊNCIAS E OUTRAS SITUAÇÕES (Lado a Lado)
+    # 1. TOPO: AUSÊNCIAS E OUTRAS SITUAÇÕES
     y_topo = pdf.get_y()
     pdf.set_font("Arial", "B", 8)
     pdf.set_fill_color(240, 240, 240)
@@ -131,7 +140,7 @@ def gerar_pdf_escala_dia(data_str, df_original):
     
     pdf.set_y(max(y_f_aus, pdf.get_y()) + 4)
 
-    # 2. ATENDIMENTO E APOIO (Lado a Lado em duas tabelas)
+    # 2. ATENDIMENTO E APOIO (Lado a Lado)
     y_at = pdf.get_y()
     pdf.set_font("Arial", "B", 8)
     pdf.cell(92, 6, clean(" ATENDIMENTO"), 1, 1, 'L', True)
@@ -153,11 +162,10 @@ def gerar_pdf_escala_dia(data_str, df_original):
     
     pdf.set_y(max(y_f_at, pdf.get_y()) + 4)
 
-    # 3. PATRULHAS (Horário | Militares | Serviço | Rádio | Viatura)
+    # 3. PATRULHAS (Puras: PO, Apeadas, Auto, Expediente, Tiro, Instrução, Ronda)
     pdf.set_font("Arial", "B", 8)
     pdf.cell(0, 6, clean(" PATRULHAS E POLICIAMENTO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
-    # Larguras: 22 (Hora) + 65 (Mil) + 43 (Serv) + 30 (Rad) + 30 (Vtr) = 190mm
     w_p = [22, 65, 43, 30, 30]
     h_p = ["HORÁRIO", "MILITARES", "SERVIÇO", "RÁDIO/INDIC.", "VIATURA"]
     for i, h in enumerate(h_p): pdf.cell(w_p[i], 5, h, 1, 0, 'C')
@@ -170,7 +178,7 @@ def gerar_pdf_escala_dia(data_str, df_original):
         pdf.cell(w_p[3], 5, clean(r.get('indicativo rádio', r.get('rádio', ''))), 1, 0, 'C')
         pdf.cell(w_p[4], 5, clean(r.get('viatura', '')), 1, 1, 'C')
 
-    # 4. REMUNERADOS (Horário | Militares | Observação)
+    # 4. REMUNERADOS
     if not df_remu.empty:
         pdf.ln(4)
         pdf.set_font("Arial", "B", 8)
@@ -183,7 +191,7 @@ def gerar_pdf_escala_dia(data_str, df_original):
             pdf.cell(60, 5, clean(r['id_disp']), 1, 0, 'L')
             pdf.cell(105, 5, clean(r.get('observações', '')), 1, 1, 'L')
 
-    # 5. TABELA DE OBSERVAÇÕES DE PATRULHA (No fundo)
+    # 5. OBSERVAÇÕES DE PATRULHA (No fundo)
     obs_p = df_pat[df_pat['observações'] != ""]
     if not obs_p.empty:
         pdf.ln(4)
@@ -199,7 +207,7 @@ def gerar_pdf_escala_dia(data_str, df_original):
 
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- 3. LOGIN E MENUS (MANTIDOS IGUAIS) ---
+# --- 3. RESTO DO CÓDIGO (LOGIN E MENUS MANTIDOS) ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
@@ -278,7 +286,7 @@ else:
             df_res = df_res[~df_res['id'].isin(df_aus_v['id'])]
             df_res = mostrar_sec_geral("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_res, False)
             df_res = mostrar_sec_geral("Atendimento", ["atendimento", "apoio"], df_res, False)
-            df_res = mostrar_sec_geral("Patrulhas", ["po", "patrulha", "ronda", "vtr", "auto"], df_res, True)
+            df_res = mostrar_sec_geral("Patrulhas", ["po", "patrulha", "ronda", "vtr", "auto", "expediente", "tiro", "instrução"], df_res, True)
             df_remu_v = df_res[df_res['serviço'].str.lower().str.contains("remu|grat", na=False)].copy()
             df_folga_v = df_res[df_res['serviço'].str.lower().str.contains("folga", na=False)].copy()
             df_outros_v = df_res[~df_res['id'].isin(df_remu_v['id']) & ~df_res['id'].isin(df_folga_v['id'])]
