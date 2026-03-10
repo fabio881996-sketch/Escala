@@ -139,7 +139,7 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- 📅 MINHA ESCALA ---
+    # --- 📅 MINHA ESCALA (CORREÇÃO: SEM GRUPOS) ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now()
@@ -156,6 +156,7 @@ else:
             else:
                 df_d = load_data(dt.strftime("%d-%m"))
                 if not df_d.empty:
+                    # Filtro direto pelo ID sem passar por lógica de grupos
                     m = df_d[df_d['id'].astype(str) == u_at]
                     if not m.empty: 
                         st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
@@ -290,9 +291,8 @@ else:
                         dados_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": val_por, "data_val": val_em}
                         st.download_button(label="📥 Descarregar Guia de Troca", data=gerar_pdf_troca(dados_pdf), file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf", mime="application/pdf", key=f"hist_pdf_{idx}")
 
-    # --- 👥 EFETIVO (NIM ADICIONADO) ---
+    # --- 👥 EFETIVO (ORDEM: ID, NIM, POSTO, NOME, TELEMOVEL, EMAIL) ---
     elif menu == "👥 Efetivo":
         st.title("👥 Lista de Contactos")
-        # Inclui nim, id, posto, nome, telemóvel e email
-        st.dataframe(df_util[['nim', 'id', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
+        st.dataframe(df_util[['id', 'nim', 'posto', 'nome', 'telemóvel', 'email']], use_container_width=True, hide_index=True)
         
