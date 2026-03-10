@@ -157,14 +157,16 @@ else:
                 return df_f
 
             df_p = df_at.copy()
+            # Ordem de exibição: Ausentes por último
             df_p = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_p)
             df_p = mostrar_sec("Atendimento", ["atendimento"], df_p)
             df_p = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_p)
             df_p = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_p)
             df_p = mostrar_sec("Remunerados", ["remu", "grat"], df_p)
             df_p = mostrar_sec("Folga", ["folga"], df_p)
-            df_p = mostrar_sec("Ausentes", ["férias", "licença", "doente", "diligência"], df_p)
             if not df_p.empty: mostrar_sec("Outros Serviços", [""], df_p)
+            # Ausentes forçado para o final
+            mostrar_sec("Ausentes", ["férias", "licença", "doente", "diligência"], df_p)
         else: st.warning("Sem dados.")
 
     elif menu == "🔄 Solicitar Troca":
