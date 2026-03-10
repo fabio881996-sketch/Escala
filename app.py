@@ -85,29 +85,28 @@ def gerar_pdf_troca(dados):
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 def gerar_pdf_escala_dia(data, df_agrupado):
-    pdf = FPDF()
+    pdf = FPDF(orientation='L')
     pdf.add_page()
-    # Cabeçalho
     pdf.set_font("Arial", "B", 18)
-    pdf.cell(190, 10, "GNR - Escala de Servico", ln=True, align="C")
-    pdf.set_font("Arial", "I", 12)
-    pdf.cell(190, 10, f"Data: {data}", ln=True, align="C")
+    pdf.cell(270, 10, f"Escala de Servico - {data}", ln=True, align="C")
     pdf.ln(5)
-    # Tabela estilizada
+    pdf.set_font("Arial", "B", 9)
     pdf.set_fill_color(200, 220, 255)
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(60, 10, "Servico", 1, 0, 'C', True)
-    pdf.cell(30, 10, "Horario", 1, 0, 'C', True)
-    pdf.cell(100, 10, "Militares", 1, 1, 'C', True)
-    pdf.set_font("Arial", "", 10)
-    for _, row in df_agrupado.iterrows():
-        pdf.cell(60, 10, str(row['serviço']), 1)
-        pdf.cell(30, 10, str(row['horário']), 1)
-        pdf.cell(100, 10, str(row['id_disp']), 1, 1)
-    # Rodapé
+    
+    headers = ["Servico", "Hora", "Militar", "Viatura", "Radio", "Indicativo", "Obs"]
+    widths = [40, 20, 60, 30, 20, 30, 70]
+    for i, h in enumerate(headers): pdf.cell(widths[i], 10, h, 1, 0, 'C', True)
     pdf.ln(10)
-    pdf.set_font("Arial", "I", 8)
-    pdf.cell(190, 10, f"Documento gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="C")
+    
+    pdf.set_font("Arial", "", 8)
+    for _, row in df_agrupado.iterrows():
+        pdf.cell(40, 10, str(row['serviço']), 1)
+        pdf.cell(20, 10, str(row['horário']), 1)
+        pdf.cell(60, 10, str(row['id_disp']), 1)
+        pdf.cell(30, 10, str(row.get('viatura', '')), 1)
+        pdf.cell(20, 10, str(row.get('rádio', '')), 1)
+        pdf.cell(30, 10, str(row.get('indicativo rádio', '')), 1)
+        pdf.cell(70, 10, str(row.get('observações', '')), 1, 1)
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # --- 3. LOGIN ---
@@ -172,16 +171,15 @@ else:
                     m_d = df_at['id'].astype(str) == str(t['id_destino'])
                     if any(m_d): df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
-            # Botão PDF
-            ag_pdf = df_at.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
-            st.download_button("📥 Descarregar PDF do Dia", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), ag_pdf), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", mime="application/pdf")
+            st.download_button("📥 Descarregar PDF do Dia", gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at), file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf", mime="application/pdf")
 
-            def mostrar_sec(tit, keys, df_f):
+            def mostrar_sec(tit, keys, df_f, mostrar_extras=False):
                 p = '|'.join(keys).lower()
                 temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
                 if not temp.empty:
                     with st.expander(f"🔹 {tit.upper()}", expanded=True):
-                        ag = temp.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+                        col_disp = ['serviço', 'horário', 'id_disp'] + (['viatura', 'rádio', 'indicativo rádio', 'observações'] if mostrar_extras else [])
+                        ag = temp.groupby(col_disp, sort=False).size().reset_index().drop(columns=[0])
                         st.dataframe(ag.rename(columns={'id_disp': 'Militar (Atual 🔄 Original)'}), use_container_width=True, hide_index=True)
                     return df_f[~df_f['id'].isin(temp['id'])]
                 return df_f
@@ -189,13 +187,14 @@ else:
             df_p = df_at.copy()
             df_ausentes = df_p[df_p['serviço'].str.lower().str.contains("férias|licença|doente|diligência", na=False)].copy()
             df_restante = df_p[~df_p['id'].isin(df_ausentes['id'])]
-            df_restante = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_restante)
-            df_restante = mostrar_sec("Atendimento", ["atendimento"], df_restante)
-            df_restante = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_restante)
-            df_restante = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_restante)
-            df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante)
-            df_restante = mostrar_sec("Folga", ["folga"], df_restante)
-            if not df_restante.empty: mostrar_sec("Outros Serviços", [""], df_restante)
+            
+            df_restante = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_restante, False)
+            df_restante = mostrar_sec("Atendimento", ["atendimento"], df_restante, False)
+            df_restante = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_restante, False)
+            df_restante = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_restante, True)
+            df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante, True)
+            df_restante = mostrar_sec("Folga", ["folga"], df_restante, False)
+            if not df_restante.empty: mostrar_sec("Outros Serviços", [""], df_restante, False)
             if not df_ausentes.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
                     ag = df_ausentes.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
