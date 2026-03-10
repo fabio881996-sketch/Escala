@@ -139,7 +139,7 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- 📅 MINHA ESCALA ---
+    # --- 📅 MINHA ESCALA (CORRIGIDO: APENAS CARTÃO INDIVIDUAL) ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now()
@@ -148,12 +148,16 @@ else:
             dt = hj + timedelta(days=i)
             d_s = dt.strftime('%d/%m/%Y')
             lbl = "HOJE" if i == 0 else dt.strftime("%d/%m (%a)")
+            
+            # Verificar se há trocas para este dia
             tr_v = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & ((df_trocas['id_origem'].astype(str) == u_at) | (df_trocas['id_destino'].astype(str) == u_at))] if not df_trocas.empty else pd.DataFrame()
+            
             if not tr_v.empty:
                 t = tr_v.iloc[0]
                 s_ex, era, com = (t['servico_destino'], t['servico_origem'], t['id_destino']) if str(t['id_origem']) == u_at else (t['servico_origem'], t['servico_destino'], t['id_origem'])
                 st.markdown(f'<div class="card-servico card-troca"><b>{lbl}</b><br><h3>{s_ex}</h3><p style="margin:0;">🔙 Troca de: {era}</p><p style="margin:0; font-weight:bold;">🔄 Com ID: {com}</p></div>', unsafe_allow_html=True)
             else:
+                # Carregar o dia bruto sem qualquer processamento de grupos
                 df_d = load_data(dt.strftime("%d-%m"))
                 if not df_d.empty:
                     m = df_d[df_d['id'].astype(str) == u_at]
