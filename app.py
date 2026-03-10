@@ -55,7 +55,7 @@ def atualizar_status_gsheet(index_linha, novo_status, admin_nome=""):
             dt_agora = datetime.now().strftime("%d/%m/%Y %H:%M")
             aba.update_cell(index_linha + 2, 8, admin_nome)
             aba.update_cell(index_linha + 2, 9, dt_agora)
-        st.cache_data.clear() # Limpa o cache para atualizar a app
+        st.cache_data.clear()
         return True
     except: return False
 
@@ -64,7 +64,7 @@ def salvar_troca_gsheet(linha):
         client = get_client()
         sh = client.open_by_url(st.secrets["gsheet_url"])
         sh.worksheet("registos_trocas").append_row(linha)
-        st.cache_data.clear() # Limpa o cache para atualizar a app
+        st.cache_data.clear()
         return True
     except: return False
 
@@ -116,7 +116,6 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- 4. MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now(); u_at = str(st.session_state['user_id'])
@@ -133,7 +132,6 @@ else:
                     m = df_d[df_d['id'].astype(str) == u_at]
                     if not m.empty: st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
 
-    # --- 5. ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel = st.date_input("Data:", format="DD/MM/YYYY")
@@ -149,7 +147,8 @@ else:
                     if any(m_d): df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
             
             def mostrar_sec(tit, keys, df_f):
-                p = '|'.join(keys).lower(); temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
+                p = '|'.join(keys).lower()
+                temp = df_f[df_f['serviço'].str.lower().str.contains(p, na=False)].copy()
                 if not temp.empty:
                     with st.expander(f"🔹 {tit.upper()}", expanded=True):
                         ag = temp.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
@@ -159,13 +158,15 @@ else:
 
             df_p = df_at.copy()
             df_p = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_p)
-            df_p = mostrar_sec("Atendimento", ["atendimento"], df_f=df_p)
-            df_p = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_f=df_p)
-            df_p = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_f=df_p)
-            # ... (Restante do teu layout mantido) ...
-            st.info("Escala processada com sucesso.")
+            df_p = mostrar_sec("Atendimento", ["atendimento"], df_p)
+            df_p = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_p)
+            df_p = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_p)
+            df_p = mostrar_sec("Remunerados", ["remu", "grat"], df_p)
+            df_p = mostrar_sec("Folga", ["folga"], df_p)
+            df_p = mostrar_sec("Ausentes", ["férias", "licença", "doente", "diligência"], df_p)
+            if not df_p.empty: mostrar_sec("Outros Serviços", [""], df_p)
+        else: st.warning("Sem dados.")
 
-    # --- 6. SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
         dt_s = st.date_input("Data:", format="DD/MM/YYYY")
@@ -186,7 +187,6 @@ else:
                             em_d = df_util[df_util['id'].astype(str) == id_d]['email'].values[0]
                             if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), st.session_state['user_id'], meu_s, id_d, s_d, "Pendente_Militar", em_d]): st.success("Enviado!"); st.balloons()
     
-    # --- (Restante da tua estrutura mantida como original) ---
     elif menu == "📥 Pedidos Recebidos":
         st.title("📥 Pedidos")
         m = df_trocas[(df_trocas['status'] == 'Pendente_Militar') & (df_trocas['id_destino'].astype(str) == str(st.session_state['user_id']))]
@@ -214,7 +214,11 @@ else:
                 return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
             n_o = get_n(r['id_origem']); n_d = get_n(r['id_destino'])
             with st.expander(f"📅 {r['data']} | {n_o} ↔️ {n_d}"):
-                if st.button("Gerar PDF Comprovativo", key=f"pdf_{idx}"):
+                c1, c2 = st.columns(2)
+                c1.write(f"**Requerente:** {n_o}"); c1.write(f"Serviço: {r['servico_origem']}")
+                c2.write(f"**Destino:** {n_d}"); c2.write(f"Serviço: {r['servico_destino']}")
+                st.write("---"); st.write(f"⚖️ Validado por: {r.get('validador', 'N/A')}")
+                if st.button("Gerar PDF", key=f"pdf_{idx}"):
                     d_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": r.get('validador', 'N/A'), "data_val": r.get('data_validacao', 'N/A')}
                     st.download_button("📥 Descarregar PDF", gerar_pdf_troca(d_pdf), file_name=f"Troca_{r['data'].replace('/','_')}.pdf", mime="application/pdf")
 
