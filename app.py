@@ -75,60 +75,57 @@ def gerar_pdf_troca(dados):
     pdf.cell(190, 10, "Comprovativo de Troca de Servico", ln=True, align="C")
     pdf.ln(10)
     pdf.set_font("Arial", "", 12)
-    texto = (f"Certifica-se que o militar {dados['nome_origem']} (ID {dados['id_origem']}), "
-             f"requereu a troca do servico '{dados['serv_orig']}' pelo servico '{dados['serv_dest']}' "
-             f"do militar {dados['nome_destino']} (ID {dados['id_destino']}), para o dia {dados['data']}.\n\n"
-             f"O pedido foi aceite pelo militar de destino e validado superiormente por {dados['validador']} no dia {dados['data_val']}.")
-    pdf.multi_cell(190, 10, texto)
-    pdf.ln(20)
-    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align="R")
+    # Limpeza de caracteres para evitar erro no latin-1 da troca
+    txt = f"Certifica-se que o militar {dados['nome_origem']} (ID {dados['id_origem']}), requereu a troca do servico '{dados['serv_orig']}' pelo servico '{dados['serv_dest']}' do militar {dados['nome_destino']} (ID {dados['id_destino']}), para o dia {dados['data']}. Validado por {dados['validador']} em {dados['data_val']}."
+    pdf.multi_cell(190, 10, txt.encode('latin-1', 'replace').decode('latin-1'))
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- FUNÇÃO DO PDF MELHORADA (FOCO AQUI) ---
+# --- FUNÇÃO DO PDF CORRIGIDA PARA UTF-8 (RESOLVE O ERRO UNICODE) ---
 def gerar_pdf_escala_dia(data_str, df_original):
+    # Usamos o modo 'latin-1' com substituição mas garantimos que o conteúdo é limpo
     pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
     
-    # Cabeçalho Oficial
+    # Função interna para limpar texto para PDF padrão
+    def clean(txt):
+        return str(txt).encode('latin-1', 'replace').decode('latin-1')
+
     pdf.set_font("Arial", "B", 9)
-    pdf.cell(0, 5, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO", ln=True)
+    pdf.cell(0, 5, clean("POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO"), ln=True)
     pdf.set_font("Arial", "B", 13)
-    pdf.cell(0, 10, f"ESCALA DE SERVIÇO PARA O DIA {data_str.upper()}", border="B", ln=True, align='C')
+    pdf.cell(0, 10, clean(f"ESCALA DE SERVIÇO PARA O DIA {data_str.upper()}"), border="B", ln=True, align='C')
     pdf.ln(4)
 
-    # Separação de Dados
     df_aus = df_original[df_original['serviço'].str.lower().str.contains("férias|licença|doente|folga", na=False)]
     df_adm = df_original[df_original['serviço'].str.lower().str.contains("pronto|secretaria|inquérito|comando", na=False)]
     df_at = df_original[df_original['serviço'].str.lower().str.contains("atendimento|apoio", na=False)]
     df_pat = df_original[df_original['serviço'].str.lower().str.contains("po|patrulha|ronda|vtr|auto|diligência|tribunal", na=False)]
     df_remu = df_original[df_original['serviço'].str.lower().str.contains("remu|grat", na=False)]
 
-    # 1. TOPO: AUSÊNCIAS E COMANDO/ADM (Lado a Lado)
+    # 1. AUSÊNCIAS E COMANDO
     y_topo = pdf.get_y()
-    # Coluna Esquerda: Ausências
     pdf.set_font("Arial", "B", 8)
     pdf.set_fill_color(240, 240, 240)
-    pdf.cell(92, 6, " AUSÊNCIAS E FOLGAS", 1, 1, 'L', True)
+    pdf.cell(92, 6, clean(" AUSÊNCIAS E FOLGAS"), 1, 1, 'L', True)
     pdf.set_font("Arial", "", 7)
     if not df_aus.empty:
         ag_aus = df_aus.groupby('serviço')['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag_aus.iterrows():
-            pdf.multi_cell(92, 4, f"{r['serviço'].upper()}: {r['id_disp']}", border='LR')
+            pdf.multi_cell(92, 4, clean(f"{r['serviço'].upper()}: {r['id_disp']}"), border='LR')
     pdf.cell(92, 1, "", border='T', ln=1)
 
-    # Coluna Direita: Comando/Administrativo
     y_final_aus = pdf.get_y()
     pdf.set_xy(107, y_topo)
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(93, 6, " COMANDO E ADMINISTRATIVOS", 1, 1, 'L', True)
+    pdf.cell(93, 6, clean(" COMANDO E ADMINISTRATIVOS"), 1, 1, 'L', True)
     pdf.set_font("Arial", "", 7)
     if not df_adm.empty:
         ag_adm = df_adm.groupby(['serviço', 'horário'])['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag_adm.iterrows():
             pdf.set_x(107)
-            pdf.multi_cell(93, 4, f"{r['serviço'].upper()} ({r['horário']}): {r['id_disp']}", border='LR')
+            pdf.multi_cell(93, 4, clean(f"{r['serviço'].upper()} ({r['horário']}): {r['id_disp']}"), border='LR')
     pdf.set_x(107)
     pdf.cell(93, 1, "", border='T', ln=1)
     
@@ -136,54 +133,53 @@ def gerar_pdf_escala_dia(data_str, df_original):
 
     # 2. ATENDIMENTO
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 6, " ATENDIMENTO AO PÚBLICO", 1, 1, 'L', True)
+    pdf.cell(0, 6, clean(" ATENDIMENTO AO PÚBLICO"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
     pdf.cell(35, 5, "HORÁRIO", 1, 0, 'C')
     pdf.cell(155, 5, "MILITAR(ES)", 1, 1, 'C')
     pdf.set_font("Arial", "", 7)
     for _, r in df_at.iterrows():
-        pdf.cell(35, 5, r['horário'], 1, 0, 'C')
-        pdf.cell(155, 5, r['id_disp'], 1, 1, 'L')
+        pdf.cell(35, 5, clean(r['horário']), 1, 0, 'C')
+        pdf.cell(155, 5, clean(r['id_disp']), 1, 1, 'L')
     pdf.ln(3)
 
-    # 3. PATRULHAS E OUTROS SERVIÇOS
+    # 3. PATRULHAS
     pdf.set_font("Arial", "B", 8)
-    pdf.cell(0, 6, " PATRULHAS E OUTROS SERVIÇOS", 1, 1, 'L', True)
+    pdf.cell(0, 6, clean(" PATRULHAS E OUTROS SERVIÇOS"), 1, 1, 'L', True)
     pdf.set_font("Arial", "B", 7)
-    w = [22, 63, 25, 25, 55] # Horário, Militares, Rádio, Viatura, Serv/Obs
+    w = [22, 63, 25, 25, 55]
     h_titles = ["HORÁRIO", "MILITARES", "RÁDIO", "VIATURA", "SERVIÇO / OBS"]
     for i, h in enumerate(h_titles): pdf.cell(w[i], 5, h, 1, 0, 'C')
     pdf.ln(5)
     pdf.set_font("Arial", "", 7)
     for _, r in df_pat.iterrows():
-        pdf.cell(w[0], 5, r['horário'], 1, 0, 'C')
-        pdf.cell(w[1], 5, r['id_disp'], 1, 0, 'L')
-        pdf.cell(w[2], 5, r.get('indicativo rádio', r.get('rádio', '')), 1, 0, 'C')
-        pdf.cell(w[3], 5, r.get('viatura', ''), 1, 0, 'C')
-        pdf.cell(w[4], 5, f"{r['serviço'].upper()} {r.get('observações', '')}"[:40], 1, 1, 'L')
+        pdf.cell(w[0], 5, clean(r['horário']), 1, 0, 'C')
+        pdf.cell(w[1], 5, clean(r['id_disp']), 1, 0, 'L')
+        pdf.cell(w[2], 5, clean(r.get('indicativo rádio', r.get('rádio', ''))), 1, 0, 'C')
+        pdf.cell(w[3], 5, clean(r.get('viatura', '')), 1, 0, 'C')
+        pdf.cell(w[4], 5, clean(f"{r['serviço'].upper()} {r.get('observações', '')}"[:40]), 1, 1, 'L')
 
     # 4. REMUNERADOS
     if not df_remu.empty:
         pdf.ln(3)
         pdf.set_font("Arial", "B", 8)
-        pdf.cell(0, 6, " SERVIÇOS REMUNERADOS", 1, 1, 'L', True)
+        pdf.cell(0, 6, clean(" SERVIÇOS REMUNERADOS"), 1, 1, 'L', True)
         pdf.set_font("Arial", "", 7)
         for _, r in df_remu.iterrows():
-            pdf.cell(190, 5, f"{r['horário']} - {r['id_disp']} - {r['serviço'].upper()} ({r.get('observações','')})", 1, 1, 'L')
+            pdf.cell(190, 5, clean(f"{r['horário']} - {r['id_disp']} - {r['serviço'].upper()}"), 1, 1, 'L')
 
     # 5. OBSERVAÇÕES NO FUNDO
     todas_obs = df_original[df_original['observações'] != ""]['observações'].unique()
     if len(todas_obs) > 0:
-        pdf.set_y(-35) # Posiciona a 35mm do fim da página
+        pdf.set_y(-35)
         pdf.set_font("Arial", "B", 8)
         pdf.cell(0, 5, "OBSERVAÇÕES GERAIS:", border="T", ln=True)
         pdf.set_font("Arial", "I", 7)
-        obs_text = " | ".join(todas_obs)
-        pdf.multi_cell(0, 4, obs_text)
+        pdf.multi_cell(0, 4, clean(" | ".join(todas_obs)))
 
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-# --- 3. LOGIN (SEM ALTERAÇÕES) ---
+# --- 3. LOGIN (FIEI AO ORIGINAL) ---
 if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
 if not st.session_state["logged_in"]:
@@ -215,7 +211,6 @@ else:
         menu = st.radio("MENU", menu_opt)
         if st.button("Sair"): st.session_state["logged_in"] = False; st.rerun()
 
-    # --- MINHA ESCALA (SEM ALTERAÇÕES) ---
     if menu == "📅 Minha Escala":
         st.title("📅 O Teu Serviço")
         hj = datetime.now(); u_at = str(st.session_state['user_id'])
@@ -231,7 +226,6 @@ else:
                     m = df_d[df_d['id'].astype(str) == u_at]
                     if not m.empty: st.markdown(f'<div class="card-servico card-meu"><b>{lbl}</b><br><h3>{m.iloc[0]["serviço"]}</h3>🕒 {m.iloc[0]["horário"]}</div>', unsafe_allow_html=True)
 
-    # --- ESCALA GERAL (WEB RESTAURADA) ---
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel = st.date_input("Data:", format="DD/MM/YYYY")
@@ -276,7 +270,6 @@ else:
                     ag = df_aus.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag, use_container_width=True, hide_index=True)
 
-    # --- HISTÓRICO (SEM ALTERAÇÕES) ---
     elif menu == "📜 Trocas Validadas":
         st.title("📜 Histórico de Trocas Aprovadas")
         if not df_trocas.empty:
@@ -293,7 +286,6 @@ else:
                     dados_pdf = {"data": r['data'], "id_origem": r['id_origem'], "nome_origem": n_o, "serv_orig": r['servico_origem'], "id_destino": r['id_destino'], "nome_destino": n_d, "serv_dest": r['servico_destino'], "validador": val_por, "data_val": val_em}
                     st.download_button("📥 Guia de Troca", gerar_pdf_troca(dados_pdf), file_name=f"Troca_{r['data'].replace('/','-')}.pdf", key=f"h_{idx}")
 
-    # --- RESTANTES MENUS (IDEM) ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca")
         dt_s = st.date_input("Data:", format="DD/MM/YYYY"); df_d = load_data(dt_s.strftime("%d-%m"))
