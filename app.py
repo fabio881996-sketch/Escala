@@ -198,15 +198,18 @@ else:
             df_ausentes = df_p[df_p['serviço'].str.lower().str.contains("férias|licença|doente|diligência", na=False)].copy()
             df_restante = df_p[~df_p['id'].isin(df_ausentes['id'])]
             
+            # --- Hierarquia de visualização atualizada ---
             df_restante = mostrar_sec("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_restante, False)
             df_restante = mostrar_sec("Atendimento", ["atendimento"], df_restante, False)
             df_restante = mostrar_sec("Apoio ao Atendimento", ["apoio"], df_restante, False)
             df_restante = mostrar_sec("Patrulhas", ["po", "patrulha", "ronda", "vtr"], df_restante, True)
             df_restante = mostrar_sec("Remunerados", ["remu", "grat"], df_restante, True)
-            df_restante = mostrar_sec("Folga", ["folga"], df_restante, False)
+            df_restante = mostrar_sec("Folga", ["folga"], df_restante, False) # Antes dos ausentes
+            
             if not df_restante.empty: mostrar_sec("Outros Serviços", [""], df_restante, False)
+            
             if not df_ausentes.empty:
-                with st.expander("🔹 AUSENTES", expanded=True):
+                with st.expander("🔹 AUSENTES", expanded=True): # Por último
                     ag = df_ausentes.groupby(['serviço', 'horário'], sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag.rename(columns={'id_disp': 'Militar'}), use_container_width=True, hide_index=True)
         else: st.warning("Sem dados.")
@@ -269,3 +272,4 @@ else:
     elif menu == "👥 Efetivo":
         st.title("👥 Efetivo")
         st.dataframe(df_util[['id', 'posto', 'nome', 'telemóvel']], hide_index=True, use_container_width=True)
+        
