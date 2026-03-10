@@ -267,34 +267,34 @@ def get_nome_militar(df_util: pd.DataFrame, id_m) -> str:
     res = df_util[df_util['id'].astype(str) == str(id_m)]
     return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
 
-def secao_escala_geral(titulo: str, keys: list, df_f: pd.DataFrame, mostrar_extras: bool = False) -> pd.DataFrame:
-    """Mostra uma secção da escala geral e devolve o df filtrado (sem as linhas já mostradas)."""
-    pattern = '|'.join(keys).lower() if keys and keys[0] else None
-    if pattern:
-        temp = df_f[df_f['serviço'].str.lower().str.contains(pattern, na=False)].copy()
-    else:
-        temp = df_f.copy()
-    if temp.empty:
-        return df_f
+def filtrar_secao(keys: list, df_f: pd.DataFrame) -> tuple:
+    """Filtra linhas pelo padrão de keys. Devolve (df_secção, df_restante)."""
+    pattern = '|'.join(k for k in keys if k).lower()
+    if not pattern:
+        return pd.DataFrame(), df_f
+    mask = df_f['serviço'].str.lower().str.contains(pattern, na=False)
+    return df_f[mask].copy(), df_f[~mask].copy()
+
+def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False):
+    """Renderiza uma secção da escala num expander."""
+    if df_sec.empty:
+        return
     with st.expander(f"🔹 {titulo.upper()}", expanded=True):
         cols_ag = ['serviço', 'horário']
         if mostrar_extras:
-            ag = temp.groupby(cols_ag, sort=False).agg({
-                'id_disp':           lambda x: ', '.join(x),
-                'viatura':           lambda x: ', '.join(x.unique()),
-                'rádio':             lambda x: ', '.join(x.unique()),
-                'indicativo rádio':  lambda x: ', '.join(x.unique()),
-                'observações':       lambda x: ', '.join(x.unique()),
-            }).reset_index()
+            agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
+            for col in ['viatura', 'rádio', 'indicativo rádio', 'observações']:
+                if col in df_sec.columns:
+                    agg_dict[col] = lambda x: ', '.join(x.dropna().unique())
+            ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
         else:
-            ag = temp.groupby(cols_ag, sort=False)['id_disp'] \
-                     .apply(lambda x: ', '.join(x)).reset_index()
+            ag = df_sec.groupby(cols_ag, sort=False)['id_disp'] \
+                       .apply(lambda x: ', '.join(x)).reset_index()
         st.dataframe(
             ag.rename(columns={'id_disp': 'Militar'}),
             use_container_width=True,
             hide_index=True
         )
-    return df_f[~df_f['id'].isin(temp['id'])]
 
 # ============================================================
 # 7. LOGIN
@@ -406,13 +406,18 @@ else:
     # --- 📅 MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 A Minha Escala")
-        st.caption(f"Próximos 8 dias para **{u_nome}**")
+        st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
         hj = datetime.now()
 
-        for i in range(8):
+        # Percorre dias a partir de hoje até não encontrar mais abas com dados
+        dias_sem_dados = 0
+        i = 0
+        encontrou_algum = False
+
+        while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
             dt  = hj + timedelta(days=i)
             d_s = dt.strftime('%d/%m/%Y')
-            lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)"))
+            lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
 
             # Verificar trocas aprovadas
             if not df_trocas.empty:
@@ -440,6 +445,8 @@ else:
                     f'</div>',
                     unsafe_allow_html=True
                 )
+                dias_sem_dados = 0
+                encontrou_algum = True
             else:
                 df_d = load_data(dt.strftime("%d-%m"))
                 if not df_d.empty:
@@ -454,6 +461,16 @@ else:
                             f'</div>',
                             unsafe_allow_html=True
                         )
+                        encontrou_algum = True
+                    # Aba existe mas o militar não está escalado — não conta como "sem dados"
+                    dias_sem_dados = 0
+                else:
+                    dias_sem_dados += 1
+
+            i += 1
+
+        if not encontrou_algum:
+            st.info("Não foram encontrados serviços escalados a partir de hoje.")
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
@@ -490,24 +507,24 @@ else:
                     mime="application/pdf"
                 )
 
-            # Separar ausências
-            df_aus = df_at[df_at['serviço'].str.lower().str.contains(
-                "férias|licença|doente|diligência|tribunal", na=False
-            )].copy()
-            df_res = df_at[~df_at['id'].isin(df_aus['id'])].copy()
+            # Separar ausências primeiro
+            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência", "tribunal"], df_at)
 
-            # Secções ordenadas
-            df_res = secao_escala_geral("Comando e Administrativos", ["pronto", "secretaria", "inquérito"], df_res)
-            df_res = secao_escala_geral("Atendimento",               ["atendimento", "apoio"],             df_res)
-            df_res = secao_escala_geral("Patrulhas",                 ["po", "patrulha", "ronda", "vtr"],   df_res, mostrar_extras=True)
+            # Extrair cada grupo do df_res por ordem
+            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"], df_res)
+            df_aten, df_res = filtrar_secao(["atendimento", "apoio"],              df_res)
+            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],   df_res)
+            df_remu, df_res = filtrar_secao(["remu", "grat"],                      df_res)
+            df_folga,df_res = filtrar_secao(["folga"],                             df_res)
+            df_outros       = df_res  # o que sobrar são "Outros Serviços"
 
-            df_remu   = df_res[df_res['serviço'].str.lower().str.contains("remu|grat", na=False)].copy()
-            df_folga  = df_res[df_res['serviço'].str.lower().str.contains("folga", na=False)].copy()
-            df_outros = df_res[~df_res['id'].isin(df_remu['id']) & ~df_res['id'].isin(df_folga['id'])].copy()
+            mostrar_secao("Comando e Administrativos", df_cmd)
+            mostrar_secao("Atendimento",               df_aten)
+            mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
+            mostrar_secao("Outros Serviços",           df_outros)
+            mostrar_secao("Remunerados",               df_remu,   mostrar_extras=True)
+            mostrar_secao("Folga",                     df_folga)
 
-            if not df_outros.empty: secao_escala_geral("Outros Serviços", [""], df_outros)
-            if not df_remu.empty:   secao_escala_geral("Remunerados",     ["remu", "grat"], df_remu, mostrar_extras=True)
-            if not df_folga.empty:  secao_escala_geral("Folga",           ["folga"],        df_folga)
             if not df_aus.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
                     ag = df_aus.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
@@ -682,4 +699,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
