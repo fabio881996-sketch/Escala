@@ -234,41 +234,235 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-def gerar_pdf_escala_dia(data: str, df_agrupado: pd.DataFrame) -> bytes:
-    pdf = FPDF(orientation='L')
-    pdf.add_page()
-    # Cabeçalho
-    pdf.set_fill_color(26, 43, 74)
-    pdf.rect(0, 0, 297, 22, 'F')
-    pdf.set_font("Arial", "B", 16)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(277, 22, f"GNR - Escala de Servico  |  {data}", 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(4)
-    # Linha de cabeçalho da tabela
-    pdf.set_font("Arial", "B", 9)
-    pdf.set_fill_color(220, 230, 245)
-    headers = ["Servico", "Horario", "Militar", "Viatura", "Radio", "Indicativo", "Observacoes"]
-    widths  = [45, 22, 65, 32, 22, 32, 59]
-    for i, h in enumerate(headers):
-        pdf.cell(widths[i], 10, h, 1, 0, 'C', True)
-    pdf.ln(10)
-    # Linhas de dados
-    pdf.set_font("Arial", "", 8)
-    fill = False
-    for _, row in df_agrupado.iterrows():
+def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
+    """Gera PDF da escala diária com layout fiel ao modelo oficial, em A4 paisagem."""
+
+    # --- helpers internos ---
+    def set_header_row(pdf, cols, widths, h=6):
+        pdf.set_font("Arial", "B", 7)
+        pdf.set_fill_color(30, 58, 138)   # azul escuro GNR
+        pdf.set_text_color(255, 255, 255)
+        for col, w in zip(cols, widths):
+            pdf.cell(w, h, col, 1, 0, 'C', True)
+        pdf.ln(h)
+        pdf.set_text_color(0, 0, 0)
+
+    def data_row(pdf, vals, widths, h=5, fill=False):
+        pdf.set_font("Arial", "", 7)
         if fill:
-            pdf.set_fill_color(245, 248, 255)
+            pdf.set_fill_color(235, 240, 255)
         else:
             pdf.set_fill_color(255, 255, 255)
-        pdf.cell(45, 9, s(row['serviço']),                 1, 0, '', fill)
-        pdf.cell(22, 9, s(row['horário']),                 1, 0, '', fill)
-        pdf.cell(65, 9, s(row['id_disp']),                 1, 0, '', fill)
-        pdf.cell(32, 9, s(row.get('viatura', '')),         1, 0, '', fill)
-        pdf.cell(22, 9, s(row.get('rádio', '')),           1, 0, '', fill)
-        pdf.cell(32, 9, s(row.get('indicativo rádio','')), 1, 0, '', fill)
-        pdf.cell(59, 9, s(row.get('observações', '')),     1, 1, '', fill)
-        fill = not fill
+        for val, w in zip(vals, widths):
+            pdf.cell(w, h, s(val), 1, 0, 'C', fill)
+        pdf.ln(h)
+
+    def section_title(pdf, titulo, width=277):
+        pdf.set_font("Arial", "B", 7.5)
+        pdf.set_fill_color(200, 210, 235)
+        pdf.set_text_color(15, 40, 100)
+        pdf.cell(width, 5.5, f"  {titulo.upper()}", 1, 1, 'L', True)
+        pdf.set_text_color(0, 0, 0)
+
+    # --- separar grupos ---
+    def grupo(pattern):
+        return df_raw[df_raw['serviço'].str.lower().str.contains(pattern, na=False)].copy()
+
+    df_pat   = grupo(r'po\d|patrulha|ronda|vtr')
+    df_aten  = grupo(r'atendimento')
+    df_apoio = grupo(r'apoio')
+    df_pron  = grupo(r'pronto')
+    df_sec   = grupo(r'secretaria')
+    df_inq   = grupo(r'inqu')
+    df_grat  = grupo(r'remu|grat')
+    df_folga = grupo(r'folga')
+    df_lic   = grupo(r'ferias|licen|doente|dilig|tribunal')
+    ids_usados = set().union(
+        *[set(d['id']) for d in [df_pat, df_aten, df_apoio, df_pron,
+                                  df_sec, df_inq, df_grat, df_folga, df_lic]]
+    )
+    df_outros = df_raw[~df_raw['id'].isin(ids_usados)].copy()
+
+    # --- iniciar PDF A4 paisagem ---
+    pdf = FPDF(orientation='L', format='A4')
+    pdf.set_margins(8, 8, 8)
+    pdf.add_page()
+    W = 277  # largura útil (297 - 2*8 - folga)
+
+    # ===================== CABEÇALHO =====================
+    # Faixa azul principal
+    pdf.set_fill_color(20, 46, 100)
+    pdf.rect(8, 8, W, 14, 'F')
+    pdf.set_xy(8, 8)
+    pdf.set_font("Arial", "B", 13)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(W, 7, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO", 0, 1, 'C')
+    pdf.set_x(8)
+    pdf.set_font("Arial", "B", 9)
+
+    # Calcular dia da semana
+    try:
+        dt_obj = datetime.strptime(data, "%d/%m/%Y")
+        dias_pt = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
+                   "Sexta-feira","Sabado","Domingo"]
+        meses_pt = ["","Janeiro","Fevereiro","Marco","Abril","Maio","Junho",
+                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+        data_ext = f"{dias_pt[dt_obj.weekday()]}  |  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
+    except Exception:
+        data_ext = data
+
+    pdf.cell(W, 7, f"ESCALA DE SERVICO  -  {data_ext}", 0, 1, 'C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
+
+    # ===================== LAYOUT 2 COLUNAS =====================
+    # Coluna esquerda: patrulhas + atendimento + apoio
+    # Coluna direita: pronto/secretaria/inquéritos + gratificados + situações
+    col1_x = 8
+    col2_x = 8 + W // 2 + 2
+    col_w  = W // 2 - 2
+
+    y_start = pdf.get_y()
+
+    # ---------- COLUNA ESQUERDA ----------
+    pdf.set_xy(col1_x, y_start)
+
+    # PATRULHAS
+    if not df_pat.empty:
+        pdf.set_x(col1_x)
+        section_title(pdf, "Patrulhas", col_w)
+        set_header_row(pdf, ["Servico","Horario","Militares","Viatura","Radio","Indicativo"], 
+                       [28, 22, 40, 22, 18, col_w-130])
+        fill = False
+        for _, r in df_pat.iterrows():
+            pdf.set_x(col1_x)
+            data_row(pdf, [
+                r['serviço'], r['horário'], r['id_disp'],
+                r.get('viatura',''), r.get('rádio',''), r.get('indicativo rádio','')
+            ], [28, 22, 40, 22, 18, col_w-130], fill=fill)
+            fill = not fill
+        pdf.ln(1)
+
+    # ATENDIMENTO
+    if not df_aten.empty:
+        pdf.set_x(col1_x)
+        section_title(pdf, "Atendimento", col_w)
+        set_header_row(pdf, ["Horario","Militares"], [22, col_w-22])
+        fill = False
+        for _, r in df_aten.iterrows():
+            pdf.set_x(col1_x)
+            data_row(pdf, [r['horário'], r['id_disp']], [22, col_w-22], fill=fill)
+            fill = not fill
+        pdf.ln(1)
+
+    # APOIO
+    if not df_apoio.empty:
+        pdf.set_x(col1_x)
+        section_title(pdf, "Apoio", col_w)
+        set_header_row(pdf, ["Horario","Militares"], [22, col_w-22])
+        fill = False
+        for _, r in df_apoio.iterrows():
+            pdf.set_x(col1_x)
+            data_row(pdf, [r['horário'], r['id_disp']], [22, col_w-22], fill=fill)
+            fill = not fill
+        pdf.ln(1)
+
+    # OUTROS
+    if not df_outros.empty:
+        pdf.set_x(col1_x)
+        section_title(pdf, "Outros Servicos", col_w)
+        set_header_row(pdf, ["Servico","Horario","Militares"], [40, 22, col_w-62])
+        fill = False
+        for _, r in df_outros.iterrows():
+            pdf.set_x(col1_x)
+            data_row(pdf, [r['serviço'], r['horário'], r['id_disp']], [40, 22, col_w-62], fill=fill)
+            fill = not fill
+
+    y_after_col1 = pdf.get_y()
+
+    # ---------- COLUNA DIREITA ----------
+    pdf.set_xy(col2_x, y_start)
+
+    def right_section(titulo, df_s, cols, widths):
+        pdf.set_x(col2_x)
+        section_title(pdf, titulo, col_w)
+        set_header_row(pdf, cols, widths)
+        fill = False
+        for _, r in df_s.iterrows():
+            pdf.set_x(col2_x)
+            vals = []
+            for c in cols:
+                mapping = {'Servico': 'serviço', 'Horario': 'horário',
+                           'Militares': 'id_disp', 'Viatura': 'viatura',
+                           'Radio': 'rádio', 'Obs': 'observações'}
+                key = mapping.get(c, c.lower())
+                vals.append(r.get(key, ''))
+            data_row(pdf, vals, widths, fill=fill)
+            fill = not fill
+        pdf.ln(1)
+
+    # PRONTO
+    if not df_pron.empty:
+        right_section("Pronto", df_pron, ["Militares"], [col_w])
+
+    # SECRETARIA
+    if not df_sec.empty:
+        right_section("Secretaria", df_sec, ["Horario","Militares"], [22, col_w-22])
+
+    # INQUÉRITOS
+    if not df_inq.empty:
+        right_section("Inqueritos", df_inq, ["Militares"], [col_w])
+
+    # GRATIFICADOS
+    if not df_grat.empty:
+        right_section("Gratificados / Remunerados", df_grat,
+                      ["Servico","Horario","Militares"], [45, 22, col_w-67])
+
+    # FOLGAS
+    if not df_folga.empty:
+        pdf.set_x(col2_x)
+        section_title(pdf, "Folgas", col_w)
+        ag_folga = df_folga.groupby('serviço', sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        set_header_row(pdf, ["Tipo","Militares"], [30, col_w-30])
+        fill = False
+        for _, r in ag_folga.iterrows():
+            pdf.set_x(col2_x)
+            data_row(pdf, [r['serviço'], r['id_disp']], [30, col_w-30], fill=fill)
+            fill = not fill
+        pdf.ln(1)
+
+    # AUSÊNCIAS / LICENÇAS
+    if not df_lic.empty:
+        pdf.set_x(col2_x)
+        section_title(pdf, "Ausencias / Licencas / Impedimentos", col_w)
+        ag_lic = df_lic.groupby('serviço', sort=False)['id_disp'].apply(lambda x: ', '.join(x)).reset_index()
+        set_header_row(pdf, ["Situacao","Militares"], [35, col_w-35])
+        fill = False
+        for _, r in ag_lic.iterrows():
+            pdf.set_x(col2_x)
+            data_row(pdf, [r['serviço'], r['id_disp']], [35, col_w-35], fill=fill)
+            fill = not fill
+
+    y_after_col2 = pdf.get_y()
+
+    # ===================== OBSERVAÇÕES =====================
+    y_obs = max(y_after_col1, y_after_col2) + 2
+    pdf.set_xy(8, y_obs)
+    section_title(pdf, "Observacoes", W)
+    pdf.set_font("Arial", "", 6.5)
+    pdf.set_fill_color(255, 255, 240)
+    # Agregar todas as observações não vazias
+    obs_unicas = df_raw[df_raw.get('observações', pd.Series(dtype=str)).str.strip().str.len() > 0]['observações'].unique() if 'observações' in df_raw.columns else []
+    obs_txt = "  |  ".join([s(o) for o in obs_unicas]) if len(obs_unicas) > 0 else "Sem observacoes."
+    pdf.multi_cell(W, 4.5, obs_txt, 1, 'L', True)
+
+    # ===================== RODAPÉ =====================
+    pdf.set_xy(8, 195)
+    pdf.set_font("Arial", "I", 7)
+    pdf.set_text_color(120, 120, 120)
+    pdf.cell(W//2, 5, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'L')
+    pdf.cell(W//2, 5, "O COMANDANTE", 0, 0, 'R')
+
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 # ============================================================
@@ -509,8 +703,7 @@ else:
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
-            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
-            col_pdf, _ = st.columns([1, 4])
+            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)            col_pdf, _ = st.columns([1, 4])
             with col_pdf:
                 st.download_button(
                     "📥 Descarregar PDF",
@@ -711,3 +904,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
