@@ -723,7 +723,7 @@ else:
 
         st.markdown("---")
 
-        menu_opt = [
+        menu_geral = [
             "📅 Minha Escala",
             "🔍 Escala Geral",
             "📊 Estatísticas",
@@ -732,12 +732,24 @@ else:
             "📥 Pedidos Recebidos",
             "📋 Histórico de Trocas",
             "🔄 Giros",
+            "👥 Efetivo",
         ]
-        if is_admin:
-            menu_opt += ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
-        menu_opt.append("👥 Efetivo")
+        menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
 
-        menu = st.radio("MENU", menu_opt, label_visibility="collapsed")
+        st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
+        sel_geral = st.radio("MENU", menu_geral, label_visibility="collapsed")
+        sel_admin = None
+        if is_admin:
+            st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:8px 0 4px 0;'>GESTÃO</p>", unsafe_allow_html=True)
+            sel_admin = st.radio("GESTÃO", menu_admin, label_visibility="collapsed", index=None)
+
+        # Menu ativo — admin ao clicar em gestão limpa o geral e vice-versa
+        if sel_admin:
+            menu = sel_admin
+            if "sel_geral_prev" not in st.session_state or st.session_state.get("sel_admin_prev") != sel_admin:
+                st.session_state["sel_admin_prev"] = sel_admin
+        else:
+            menu = sel_geral
 
         st.markdown("---")
         if st.button("🚪 Sair", use_container_width=True):
