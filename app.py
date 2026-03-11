@@ -476,13 +476,31 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     if not df_rem.empty:
         pdf.ln(2)
         sec_title("Servicos Remunerados / Gratificados", W)
-        w_r = [22, 58, 110]
+        w_r = [22, 38, 130]
         tbl_hdr(["Horario","Militares","Observacao"], w_r)
         obs_col = 'observações' if 'observações' in df_rem.columns else 'serviço'
-        ag = df_rem.groupby(['horário','serviço',obs_col], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+        ag = df_rem.groupby([obs_col], as_index=False).agg(
+            horário=('horário', lambda x: ', '.join(sorted(x.dropna().unique()))),
+            id_fmt=('id_fmt', lambda x: ', '.join(x))
+        ).sort_values('horário')
         fill = False
-        for _, r in ag.sort_values('horário').iterrows():
-            tbl_row([r['horário'], r['id_fmt'], r.get(obs_col,'')], w_r, fill=fill)
+        for _, r in ag.iterrows():
+            pdf.set_font("Arial", "", 9)
+            if fill:
+                pdf.set_fill_color(235, 241, 255)
+            else:
+                pdf.set_fill_color(255, 255, 255)
+            y_r = pdf.get_y()
+            # Desenhar multi_cell da observação primeiro para calcular altura
+            pdf.set_xy(C1 + w_r[0] + w_r[1], y_r)
+            pdf.multi_cell(w_r[2], 5.5, c(str(r.get(obs_col,''))), border=1, align='L', fill=fill)
+            y_r2 = pdf.get_y()
+            altura_r = y_r2 - y_r
+            # Voltar e desenhar horário e militares com a mesma altura
+            pdf.set_xy(C1, y_r)
+            pdf.cell(w_r[0], altura_r, c(r['horário']), 1, 0, 'C', fill)
+            pdf.cell(w_r[1], altura_r, c(r['id_fmt']),  1, 0, 'C', fill)
+            pdf.set_y(y_r2)
             fill = not fill
 
     # ====================================================
@@ -504,7 +522,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 else:
                     pdf.set_fill_color(255, 255, 255)
                 y_antes = pdf.get_y()
-                # Desenhar multi_cell do texto primeiro para saber altura
+                # Desenhar multi_cell do texto primeiro para calcular altura
                 pdf.set_xy(C1 + 28, y_antes)
                 pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
                 y_depois = pdf.get_y()
