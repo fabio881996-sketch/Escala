@@ -265,10 +265,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
     df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw)
     df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
-    df_at,   df_rest = filtrar(r'atendimento', df_rest)
-    df_at  = df_at[~df_at['servico_col'].str.contains('apoio', na=False)].copy()
-    df_rest2 = df_rest  # apoio ainda está em df_rest
-    df_ap,   df_rest = filtrar(r'apoio', df_rest2)
+    df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
+    df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
     df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
     df_outros = df_rest
@@ -407,7 +405,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # BLOCO 3 — PATRULHAS (largura total)
     # ====================================================
     sec_title("Patrulhas e Policiamento", W)
-    w_p = [20, 52, 40, 28, 28, 22]
+    w_p = [20, 46, 56, 24, 24, 20]
     tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
 
     if not df_pat.empty:
