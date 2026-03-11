@@ -768,6 +768,7 @@ if not st.session_state["logged_in"]:
                 <span class="escudo">🚓</span>
                 <h1>Portal de Escalas</h1>
                 <p>Guarda Nacional Republicana</p>
+                <p>Posto Territorial de Famalicão</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -817,6 +818,14 @@ else:
     # --- Sidebar ---
     with st.sidebar:
         # Badge do utilizador
+        st.markdown("""
+        <div style='text-align:center;padding:8px 0 12px 0;border-bottom:1px solid #334155;margin-bottom:10px'>
+            <div style='font-size:0.75rem;font-weight:700;color:#93C5FD;letter-spacing:0.05em'>🚓 PORTAL DE ESCALAS</div>
+            <div style='font-size:0.7rem;color:#94A3B8;margin-top:2px'>Guarda Nacional Republicana</div>
+            <div style='font-size:0.68rem;color:#64748B;margin-top:1px'>Posto Territorial de Famalicão</div>
+        </div>
+        """, unsafe_allow_html=True)
+
         role_label = "⭐ Administrador" if is_admin else "👮 Militar"
         st.markdown(f"""
         <div class="user-badge">
@@ -1397,7 +1406,6 @@ else:
                                     em_d = email_row['email'].values[0]
                                     if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
                                         st.success("✅ Pedido enviado com sucesso!")
-                                        st.balloons()
 
             # ── Troca a 3 ──
             elif tipo_troca == "🔁 Troca a 3":
@@ -1437,7 +1445,6 @@ else:
                                 salvar_troca_gsheet(linha1)
                                 salvar_troca_gsheet(linha2)
                                 st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
-                                st.balloons()
 
             # ── Matar Remunerado ──
             elif tipo_troca == "❌ Matar Remunerado":
@@ -1469,7 +1476,6 @@ else:
                                 meu_s_rem = f"{meu_serv} ({meu_hor})"
                                 if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s_rem, id_d, s_d, "Pendente_Militar", em_d]):
                                     st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
-                                    st.balloons()
 
     # --- 📥 PEDIDOS RECEBIDOS ---
     elif menu == "📥 Pedidos Recebidos":
@@ -1674,4 +1680,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
