@@ -908,8 +908,12 @@ else:
             with col_full:
                 if st.button("📦 Gerar Escala Completa (hoje→)"):
                     with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
-                        from datetime import date as _date
-                        pdf_completo = FPDF(orientation='P', unit='mm', format='A4')
+                        import tempfile, os, io as _io
+                        try:
+                            from pypdf import PdfWriter, PdfReader
+                        except ImportError:
+                            from PyPDF2 import PdfWriter, PdfReader
+                        writer = PdfWriter()
                         hj2 = datetime.now()
                         dias_sem2 = 0
                         j2 = 0
@@ -919,7 +923,6 @@ else:
                             df_d2 = load_data(dt2.strftime("%d-%m"))
                             if not df_d2.empty:
                                 df_d2['id_disp'] = df_d2['id'].astype(str)
-                                # Aplicar trocas
                                 if not df_trocas.empty:
                                     tr2 = df_trocas[
                                         (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
@@ -931,23 +934,20 @@ else:
                                         m_d2 = df_d2['id'].astype(str) == str(t2['id_destino'])
                                         if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
                                 pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
-                                # Importar página do PDF gerado para o PDF completo
-                                import tempfile, os
-                                from fpdf import FPDF as FPDF2
-                                tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-                                tmp.write(pb2); tmp.close()
-                                pdf_completo.add_page()
-                                pdf_completo.image(tmp.name, x=0, y=0, w=210, h=297)
-                                os.unlink(tmp.name)
+                                reader = PdfReader(_io.BytesIO(pb2))
+                                for pg in reader.pages:
+                                    writer.add_page(pg)
                                 paginas += 1
                                 dias_sem2 = 0
                             else:
                                 dias_sem2 += 1
                             j2 += 1
                         if paginas > 0:
+                            buf = _io.BytesIO()
+                            writer.write(buf)
                             st.download_button(
                                 f"⬇️ Descarregar ({paginas} dias)",
-                                data=pdf_completo.output(dest='S').encode('latin-1','replace'),
+                                data=buf.getvalue(),
                                 file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
                                 mime="application/pdf",
                                 key="dl_completa"
@@ -1368,4 +1368,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
