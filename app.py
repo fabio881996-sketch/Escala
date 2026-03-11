@@ -644,13 +644,16 @@ def _render_tabela(df: pd.DataFrame) -> str:
     td_a = td_s + "background:#F8FAFC;"
     html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
     for col in df.columns:
-        html += f"<th style='{th_s}'>{col}</th>"
+        # Limitar largura da coluna de observações
+        extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
+        html += f"<th style='{th_s}{extra}'>{col}</th>"
     html += "</tr></thead><tbody>"
     for i, (_, row) in enumerate(df.iterrows()):
         td = td_a if i % 2 == 0 else td_s
         html += "<tr>"
-        for val in row:
-            html += f"<td style='{td}'>{_cel_expandivel(str(val))}</td>"
+        for col, val in zip(df.columns, row):
+            extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
+            html += f"<td style='{td}{extra}'>{_cel_expandivel(str(val))}</td>"
         html += "</tr>"
     html += "</tbody></table></div>"
     return html
@@ -1263,19 +1266,20 @@ else:
                     ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
                                   .apply(lambda x: ', '.join(x)).reset_index()
                     col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
-                    st.dataframe(ag_r[col_order].rename(columns={'id_disp': 'Militares'}), use_container_width=True, hide_index=True)
+                    ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares'})
+                    st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
             # Folga sem horário
             if not df_folga.empty:
                 with st.expander("🔹 FOLGA", expanded=True):
                     ag_f = df_folga.groupby('serviço', sort=False)['id_disp'] \
                                    .apply(lambda x: ', '.join(x)).reset_index()
-                    st.dataframe(ag_f.rename(columns={'id_disp':'Militar'}), use_container_width=True, hide_index=True)
+                    st.markdown(_render_tabela(ag_f.rename(columns={'id_disp':'Militar'})), unsafe_allow_html=True)
 
             if not df_aus.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
                     ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
                                .apply(lambda x: ', '.join(x)).reset_index()
-                    st.dataframe(ag, use_container_width=True, hide_index=True)
+                    st.markdown(_render_tabela(ag), unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
