@@ -103,10 +103,11 @@ h3 { color: #243B5C !important; font-weight: 600 !important; }
 
 /* --- Badge de utilizador na sidebar --- */
 .user-badge {
-    background: rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.07);
     border-radius: 10px;
     padding: 12px 14px;
     margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
 }
 .user-badge .nome { font-weight: 700; font-size: 0.95rem; color: #FFFFFF !important; }
 .user-badge .id   { font-size: 0.78rem; color: #94A3B8 !important; margin-top: 2px; }
@@ -116,11 +117,51 @@ h3 { color: #243B5C !important; font-weight: 600 !important; }
 /* --- Login Page --- */
 .login-header {
     text-align: center;
-    padding: 30px 0 20px 0;
+    padding: 24px 0 16px 0;
 }
-.login-header .escudo { font-size: 4rem; display: block; }
-.login-header h1 { font-size: 1.6rem !important; color: #1A2B4A !important; margin: 8px 0 4px 0 !important; }
-.login-header p  { color: #64748B; font-size: 0.88rem; margin: 0; }
+.login-header .escudo {
+    font-size: 3.8rem;
+    display: block;
+    filter: drop-shadow(0 4px 8px rgba(30,58,138,0.25));
+}
+.login-header h1 {
+    font-size: 1.7rem !important;
+    color: #1A2B4A !important;
+    margin: 10px 0 6px 0 !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em;
+}
+.login-header .org-line {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 4px 0 2px 0;
+}
+.login-header .org-line::before,
+.login-header .org-line::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #CBD5E1);
+}
+.login-header .org-line::after {
+    background: linear-gradient(to left, transparent, #CBD5E1);
+}
+.login-header .org-name {
+    font-size: 0.82rem;
+    color: #475569;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.login-header .posto-name {
+    font-size: 0.78rem;
+    color: #64748B;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
 .login-box {
     background: white;
     border-radius: 16px;
@@ -767,8 +808,8 @@ if not st.session_state["logged_in"]:
             <div class="login-header">
                 <span class="escudo">🚓</span>
                 <h1>Portal de Escalas</h1>
-                <p>Guarda Nacional Republicana</p>
-                <p>Posto Territorial de Famalicão</p>
+                <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
+                <p class="posto-name">Posto Territorial de Famalicão</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -819,10 +860,11 @@ else:
     with st.sidebar:
         # Badge do utilizador
         st.markdown("""
-        <div style='text-align:center;padding:8px 0 12px 0;border-bottom:1px solid #334155;margin-bottom:10px'>
-            <div style='font-size:0.75rem;font-weight:700;color:#93C5FD;letter-spacing:0.05em'>🚓 PORTAL DE ESCALAS</div>
-            <div style='font-size:0.7rem;color:#94A3B8;margin-top:2px'>Guarda Nacional Republicana</div>
-            <div style='font-size:0.68rem;color:#64748B;margin-top:1px'>Posto Territorial de Famalicão</div>
+        <div style='text-align:center;padding:10px 0 14px 0;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1)'>
+            <div style='font-size:1.5rem;line-height:1;margin-bottom:6px'>🚓</div>
+            <div style='font-size:0.8rem;font-weight:800;color:#E2E8F0;letter-spacing:0.06em;text-transform:uppercase'>Portal de Escalas</div>
+            <div style='font-size:0.68rem;color:#93C5FD;font-weight:600;margin-top:3px;letter-spacing:0.03em'>Guarda Nacional Republicana</div>
+            <div style='font-size:0.65rem;color:#64748B;margin-top:2px'>Posto Territorial de Famalicão</div>
         </div>
         """, unsafe_allow_html=True)
 
