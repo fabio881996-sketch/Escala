@@ -780,11 +780,14 @@ else:
                     m = df_d[df_d['id'].astype(str) == u_id]
                     if not m.empty:
                         row = m.iloc[0]
+                        obs_val = str(row.get('observações', '') or '').strip()
+                        obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
                         st.markdown(
                             f'<div class="card-servico card-meu">'
                             f'<p><b>{lbl}</b></p>'
                             f'<h3>🛡️ {row["serviço"]}</h3>'
                             f'<p>🕒 {row["horário"]}</p>'
+                            f'{obs_html}'
                             f'</div>',
                             unsafe_allow_html=True
                         )
