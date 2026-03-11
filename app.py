@@ -252,22 +252,22 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             return f"{a} (Troca c/{b})"
         return t
 
-    def grp(pat):
-        return df_raw[df_raw['servico_col'].str.contains(pat, na=False)].copy()
-
     df_raw = df_raw.copy()
     df_raw['servico_col'] = df_raw['serviço'].str.lower()
     df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
 
-    df_aus  = grp(r'ferias|licen|doente|folga')
-    df_adm  = grp(r'pronto|secretaria|inquer|comando|dilig|tribunal')
-    df_at   = df_raw[df_raw['servico_col'].str.contains('atendimento', na=False) &
-                     ~df_raw['servico_col'].str.contains('apoio', na=False)].copy()
-    df_ap   = grp(r'apoio')
-    df_pat  = df_raw[df_raw['servico_col'].str.contains(
-                     r'po\d|patrulha|ronda|vtr|auto|expediente|tiro|instrucao|instrução', na=False) &
-                     ~df_raw['servico_col'].str.contains('atendimento|apoio', na=False)].copy()
-    df_rem  = grp(r'remu|grat')
+    # Filtros sequenciais — igual à escala geral, o que sobrar vai para "outros serviços"
+    def filtrar(pat, df):
+        mask = df['servico_col'].str.contains(pat, na=False)
+        return df[mask].copy(), df[~mask].copy()
+
+    df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw)
+    df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
+    df_at,   df_rest = filtrar(r'atendimento', df_rest)
+    df_ap,   df_rest = filtrar(r'apoio', df_rest)
+    df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
+    df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
+    df_outros = df_rest  # tudo o que não encaixou em nenhuma categoria
 
     # ---- Iniciar PDF ----
     pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -424,9 +424,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         def prio(nome):
             n = str(nome).lower()
-            return "0" if ('po' in n or 'ocorr' in n) else "1"
+            if 'ocorr' in n or 'ocorrencia' in n: return "0"
+            return "1_" + n
         ag['_ord'] = ag['serviço'].apply(prio)
-        ag = ag.sort_values(['serviço', 'horário'])
+        ag = ag.sort_values(['_ord', 'horário'])
 
         fill = False
         for _, r in ag.iterrows():
@@ -436,7 +437,21 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             fill = not fill
 
     # ====================================================
-    # BLOCO 4 — REMUNERADOS
+    # BLOCO 4 — OUTROS SERVIÇOS
+    # ====================================================
+    if not df_outros.empty:
+        pdf.ln(2)
+        sec_title("Outros Servicos", W)
+        w_o2 = [22, 58, 110]
+        tbl_hdr(["Horario","Militares","Servico"], w_o2)
+        ag_out = df_outros.groupby(['horário','serviço'], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+        fill = False
+        for _, r in ag_out.sort_values(['serviço','horário']).iterrows():
+            tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper()], w_o2, fill=fill)
+            fill = not fill
+
+    # ====================================================
+    # BLOCO 5 — REMUNERADOS
     # ====================================================
     if not df_rem.empty:
         pdf.ln(2)
@@ -451,7 +466,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             fill = not fill
 
     # ====================================================
-    # BLOCO 5 — OBSERVACOES DE PATRULHA
+    # BLOCO 6 — OBSERVACOES DE PATRULHA
     # ====================================================
     if not df_pat.empty and 'observações' in df_pat.columns:
         obs_df = df_pat[df_pat['observações'].str.strip().str.len() > 0].copy()
