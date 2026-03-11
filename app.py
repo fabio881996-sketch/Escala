@@ -779,8 +779,8 @@ else:
 
             # Extrair cada grupo do df_res por ordem
             df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
-            df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
             df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
+            df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
             df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],       df_res)
             df_remu, df_res = filtrar_secao(["remu", "grat"],                          df_res)
             df_folga,df_res = filtrar_secao(["folga"],                                 df_res)
@@ -790,7 +790,7 @@ else:
             mostrar_secao("Atendimento",               df_aten)
             mostrar_secao("Apoio ao Atendimento",      df_apoi)
             mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
-            mostrar_secao("Outros Serviços",           df_outros)
+            mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True)
             # Remunerados: horário | militares | serviço
             if not df_remu.empty:
                 with st.expander("🔹 REMUNERADOS", expanded=True):
