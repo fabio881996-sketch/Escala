@@ -1521,7 +1521,6 @@ else:
             else:
                 headers = [str(h).strip() for h in valores[0]]
                 df_giros = pd.DataFrame(valores[1:], columns=headers)
-                # Remover linhas completamente vazias
                 df_giros = df_giros[df_giros.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
                 pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, serviço...")
                 df_g = df_giros.copy()
@@ -1531,7 +1530,27 @@ else:
                     for col in df_g.columns:
                         mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
                     df_g = df_g[mask_g]
-                st.dataframe(df_g, use_container_width=True, hide_index=True)
+
+                # Renderizar como tabela HTML com wrap de texto para não perder informação
+                def render_tabela_giros(df):
+                    th_style = "background:#1E3A8A;color:white;padding:8px 10px;text-align:left;font-size:0.82rem;white-space:nowrap;"
+                    td_style = "padding:7px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;white-space:pre-wrap;max-width:220px;"
+                    td_alt   = "padding:7px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;white-space:pre-wrap;max-width:220px;background:#F8FAFC;"
+                    html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'>"
+                    html += "<thead><tr>"
+                    for col in df.columns:
+                        html += f"<th style='{th_style}'>{col}</th>"
+                    html += "</tr></thead><tbody>"
+                    for i, (_, row) in enumerate(df.iterrows()):
+                        td = td_alt if i % 2 == 0 else td_style
+                        html += "<tr>"
+                        for val in row:
+                            html += f"<td style='{td}'>{str(val)}</td>"
+                        html += "</tr>"
+                    html += "</tbody></table></div>"
+                    return html
+
+                st.markdown(render_tabela_giros(df_g), unsafe_allow_html=True)
         except Exception:
             st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
 
@@ -1554,3 +1573,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
