@@ -331,9 +331,32 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             pdf.set_fill_color(235, 241, 255)
         else:
             pdf.set_fill_color(255, 255, 255)
+        # Calcular altura necessária para cada célula (multi_cell)
+        x0 = pdf.get_x() if x is None else x
+        y0 = pdf.get_y()
+        # Primeira passagem: calcular altura máxima
+        altura_max = 6
         for v, w in zip(vals, widths):
-            pdf.cell(w, 6, c(v), 1, 0, 'C', fill)
-        pdf.ln(6)
+            txt = c(str(v))
+            # Estimar nº de linhas: ~1 char = 2.2mm a font 9
+            chars_por_linha = max(1, int(w / 2.2))
+            n_linhas = max(1, -(-len(txt) // chars_por_linha))  # ceil division
+            altura_max = max(altura_max, n_linhas * 6)
+        # Segunda passagem: desenhar células com altura uniforme
+        xi = x0
+        for v, w in zip(vals, widths):
+            txt = c(str(v))
+            pdf.set_xy(xi, y0)
+            pdf.multi_cell(w, 6, txt, 1, 'C', fill)
+            cell_h = pdf.get_y() - y0
+            if cell_h < altura_max:
+                # Completar com célula vazia para alinhar
+                pdf.set_xy(xi, y0 + cell_h)
+                remaining = altura_max - cell_h
+                if remaining > 0:
+                    pdf.cell(w, remaining, '', 'LRB', 0, 'C', fill)
+            xi += w
+        pdf.set_xy(x0, y0 + altura_max)
 
     # ====================================================
     # CABECALHO
@@ -545,6 +568,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # ====================================================
     # BLOCO 6 — OBSERVACOES DE PATRULHA
     # ====================================================
+    def get_indic(r):
+        return (str(r.get('indicativo rádio','') or '').strip()
+             or str(r.get('rádio','') or '').strip()
+             or str(r.get('serviço','') or '').strip()
+             or 'S/I')
+
     df_obs_total = pd.concat([df_pat, df_outros], ignore_index=True) if not df_outros.empty else df_pat
     if not df_obs_total.empty and 'observações' in df_obs_total.columns:
         obs_df = df_obs_total[df_obs_total['observações'].str.strip().str.len() > 0].copy()
@@ -553,22 +582,24 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             sec_title("Observacoes de Patrulha", W)
             w_o = [28, 162]
             tbl_hdr(["Indicativo","Detalhe"], w_o)
-            # Detetar indicativos duplicados para mostrar horário nesses casos
-            obs_df = obs_df.drop_duplicates('observações').copy()
-            def get_indic(r):
-                return (str(r.get('indicativo rádio','') or '').strip()
-                     or str(r.get('rádio','') or '').strip()
-                     or str(r.get('serviço','') or '').strip()
-                     or 'S/I')
+
             obs_df['_indic'] = obs_df.apply(get_indic, axis=1)
-            indics_duplicados = obs_df['_indic'].value_counts()
-            indics_duplicados = set(indics_duplicados[indics_duplicados > 1].index)
+
+            # Agrupar por observação, juntando indicativos diferentes
+            obs_grp = obs_df.groupby('observações', sort=False).agg(
+                _indic=('_indic', lambda x: ' / '.join(dict.fromkeys(v for v in x if v and v != 'S/I')) or 'S/I'),
+                horário=('horário', 'first')
+            ).reset_index()
+
+            # Detetar indicativos duplicados para mostrar horário
+            indics_count = obs_df['_indic'].value_counts()
+            indics_duplicados = set(indics_count[indics_count > 1].index)
 
             fill = False
-            for _, r in obs_df.iterrows():
+            for _, r in obs_grp.iterrows():
                 indic = r['_indic']
                 horario_val = str(r.get('horário','') or '').strip()
-                if indic in indics_duplicados and horario_val:
+                if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
                     indic = f"{indic}\n{horario_val}"
                 pdf.set_font("Arial", "", 9)
                 if fill:
