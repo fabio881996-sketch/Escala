@@ -1059,7 +1059,9 @@ else:
 
         st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
 
-        _sheet_id = st.secrets["gsheet"]["sheet_id"]
+        # Extrair sheet_id do URL configurado nos secrets
+        _gsheet_url = st.secrets["gsheet_url"]
+        _sheet_id = _gsheet_url.split("/d/")[1].split("/")[0]
 
         @st.cache_data(ttl=86400)
         def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
