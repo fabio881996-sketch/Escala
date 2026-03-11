@@ -479,29 +479,48 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         w_r = [22, 38, 130]
         tbl_hdr(["Horario","Militares","Observacao"], w_r)
         obs_col = 'observações' if 'observações' in df_rem.columns else 'serviço'
-        ag = df_rem.groupby([obs_col], as_index=False).agg(
-            horário=('horário', lambda x: ', '.join(sorted(x.dropna().unique()))),
-            id_fmt=('id_fmt', lambda x: ', '.join(x))
-        ).sort_values('horário')
+        ag = df_rem.groupby(['horário', obs_col], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+        ag = ag.sort_values([obs_col, 'horário']).reset_index(drop=True)
+
+        # Agrupar linhas consecutivas com a mesma observação
+        i = 0
         fill = False
-        for _, r in ag.iterrows():
+        while i < len(ag):
+            obs_txt = str(ag.loc[i, obs_col])
+            # Encontrar todas as linhas consecutivas com a mesma observação
+            grupo = [i]
+            j = i + 1
+            while j < len(ag) and str(ag.loc[j, obs_col]) == obs_txt:
+                grupo.append(j)
+                j += 1
+
             pdf.set_font("Arial", "", 9)
             if fill:
                 pdf.set_fill_color(235, 241, 255)
             else:
                 pdf.set_fill_color(255, 255, 255)
-            y_r = pdf.get_y()
-            # Desenhar multi_cell da observação primeiro para calcular altura
-            pdf.set_xy(C1 + w_r[0] + w_r[1], y_r)
-            pdf.multi_cell(w_r[2], 5.5, c(str(r.get(obs_col,''))), border=1, align='L', fill=fill)
-            y_r2 = pdf.get_y()
-            altura_r = y_r2 - y_r
-            # Voltar e desenhar horário e militares com a mesma altura
-            pdf.set_xy(C1, y_r)
-            pdf.cell(w_r[0], altura_r, c(r['horário']), 1, 0, 'C', fill)
-            pdf.cell(w_r[1], altura_r, c(r['id_fmt']),  1, 0, 'C', fill)
-            pdf.set_y(y_r2)
+
+            y_grupo = pdf.get_y()
+
+            # 1. Desenhar observação (multi_cell) que abrange todo o grupo
+            pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
+            pdf.multi_cell(w_r[2], 5.5, c(obs_txt), border=1, align='L', fill=fill)
+            y_fim_grupo = pdf.get_y()
+            altura_total = y_fim_grupo - y_grupo
+
+            # 2. Dividir altura total pelas linhas do grupo
+            altura_linha = altura_total / len(grupo)
+
+            # 3. Desenhar horário e militares linha a linha
+            for k, idx in enumerate(grupo):
+                y_linha = y_grupo + k * altura_linha
+                pdf.set_xy(C1, y_linha)
+                pdf.cell(w_r[0], altura_linha, c(ag.loc[idx, 'horário']), 1, 0, 'C', fill)
+                pdf.cell(w_r[1], altura_linha, c(ag.loc[idx, 'id_fmt']),  1, 0, 'C', fill)
+
+            pdf.set_y(y_fim_grupo)
             fill = not fill
+            i = j
 
     # ====================================================
     # BLOCO 6 — OBSERVACOES DE PATRULHA
