@@ -1059,19 +1059,19 @@ else:
 
         st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
 
+        _sheet_id = st.secrets["gsheet"]["sheet_id"]
+
         @st.cache_data(ttl=86400)
-        def contar_servicos_historico(alvo_id_c: str):
+        def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
             """Percorre todas as abas DD-MM e conta serviços do militar."""
             import unicodedata as _ud3
             def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
             client = get_gsheet_client()
-            sh = client.open_by_key(st.secrets["gsheet"]["sheet_id"])
+            sh = client.open_by_key(sheet_id_c)
             abas = sh.worksheets()
             resultados = []
-            hoje_str = datetime.now().strftime("%d-%m")
             for aba in abas:
                 titulo = aba.title
-                # Só abas no formato DD-MM
                 partes = titulo.split("-")
                 if len(partes) != 2 or not all(p.isdigit() for p in partes):
                     continue
@@ -1080,13 +1080,11 @@ else:
                     df_aba = pd.DataFrame(dados)
                     if df_aba.empty or 'id' not in df_aba.columns:
                         continue
-                    # Filtrar apenas linhas do militar com id preenchido
                     mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
                     for _, row in mil_rows.iterrows():
                         serv = str(row.get('serviço', '')).strip()
                         if not serv:
                             continue
-                        # Determinar mês/ano — usar ano atual ou anterior conforme o mês
                         dd, mm = int(partes[0]), int(partes[1])
                         ano = datetime.now().year
                         if mm > datetime.now().month + 1:
@@ -1102,7 +1100,7 @@ else:
             return pd.DataFrame(resultados)
 
         with st.spinner("A carregar histórico..."):
-            df_stats = contar_servicos_historico(alvo_id)
+            df_stats = contar_servicos_historico(alvo_id, _sheet_id)
 
         if df_stats.empty:
             st.info("Sem histórico de serviços encontrado.")
@@ -1368,3 +1366,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
