@@ -13,7 +13,7 @@ st.set_page_config(
     page_title="GNR - Portal de Escalas",
     page_icon="🚓",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state=st.session_state.get("sidebar_state", "expanded")
 )
 
 # ============================================================
@@ -747,23 +747,12 @@ else:
     # ============================================================
     # FECHAR SIDEBAR NO MOBILE APÓS SELEÇÃO
     # ============================================================
-    import streamlit.components.v1 as _components
-    _components.html("""
-    <script>
-    (function() {
-        function closeSidebar() {
-            var w = window.parent;
-            if (w.innerWidth > 768) return;
-            // Botão de fechar sidebar no Streamlit
-            var btn = w.document.querySelector('[data-testid="collapsedControl"]');
-            if (!btn) btn = w.document.querySelector('button[kind="header"]');
-            if (btn) btn.click();
-        }
-        // Executar após um pequeno delay para garantir que o render terminou
-        setTimeout(closeSidebar, 300);
-    })();
-    </script>
-    """, height=0)
+    if "menu_anterior" not in st.session_state:
+        st.session_state["menu_anterior"] = menu
+    elif st.session_state["menu_anterior"] != menu:
+        st.session_state["menu_anterior"] = menu
+        st.session_state["sidebar_state"] = "collapsed"
+        st.rerun()
 
     # ============================================================
     # BANNER NOTIFICAÇÕES
