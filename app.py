@@ -1512,10 +1512,17 @@ else:
     elif menu == "🔄 Giros":
         st.title("🔄 Giros")
         try:
-            df_giros = load_data("giros")
-            if df_giros.empty:
+            client = get_gsheet_client()
+            sh = client.open_by_url(st.secrets["gsheet_url"])
+            ws = sh.worksheet("giros")
+            valores = ws.get_all_values()
+            if not valores or len(valores) < 2:
                 st.info("Não existem giros definidos.")
             else:
+                headers = [str(h).strip() for h in valores[0]]
+                df_giros = pd.DataFrame(valores[1:], columns=headers)
+                # Remover linhas completamente vazias
+                df_giros = df_giros[df_giros.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
                 pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, serviço...")
                 df_g = df_giros.copy()
                 if pesq_g:
@@ -1547,4 +1554,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
