@@ -461,7 +461,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # BLOCO 3 — PATRULHAS (largura total)
     # ====================================================
     sec_title("Patrulhas e Policiamento", W)
-    w_p = [20, 46, 56, 24, 24, 20]
+    w_p = [18, 44, 54, 24, 28, 22]
     tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
 
     if not df_pat.empty:
@@ -511,9 +511,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag_out = df_outros.groupby(cols_grp_o, as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
 
         hdr_o = ["Horario","Militares","Servico"]
-        w_o2  = [20, 52, 50]
-        if has_indic_o: hdr_o.append("Indicativo"); w_o2.append(28)
-        if has_radio_o: hdr_o.append("Radio");      w_o2.append(22)
+        w_o2  = [18, 54, 44]
+        if has_indic_o: hdr_o.append("Indicativo"); w_o2.append(24)
+        if has_radio_o: hdr_o.append("Radio");      w_o2.append(24)
         if has_vtr_o:   hdr_o.append("Viatura");    w_o2.append(190 - sum(w_o2))
         tbl_hdr(hdr_o, w_o2)
         fill = False
