@@ -534,7 +534,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             tbl_hdr(["Indicativo","Detalhe"], w_o)
             fill = False
             for _, r in obs_df.drop_duplicates('observações').iterrows():
-                indic = str(r.get('indicativo rádio','') or r.get('rádio','') or 'S/I')
+                indic_val = str(r.get('indicativo rádio','') or '').strip()
+                radio_val = str(r.get('rádio','') or '').strip()
+                servico_val = str(r.get('serviço','') or '').strip()
+                indic = indic_val or radio_val or servico_val or 'S/I'
                 pdf.set_font("Arial", "", 9)
                 if fill:
                     pdf.set_fill_color(255, 255, 220)
