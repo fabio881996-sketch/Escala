@@ -170,7 +170,12 @@ def load_data(aba_nome: str) -> pd.DataFrame:
         if not records:
             return pd.DataFrame()
         df = pd.DataFrame(records).astype(str)
-        df.columns = [c.strip().lower() for c in df.columns]
+        # Normalizar nomes de colunas: strip, lowercase, remover acentos
+        import unicodedata as _ucd
+        def _norm_col(c):
+            c = str(c).strip().lower()
+            return _ucd.normalize('NFKD', c).encode('ascii', 'ignore').decode('ascii')
+        df.columns = [_norm_col(c) for c in df.columns]
         return df.fillna("")
     except Exception:
         return pd.DataFrame()
@@ -668,21 +673,24 @@ if not st.session_state["logged_in"]:
                         st.warning("Preenche o email e a password.")
                     else:
                         df_u = load_data("utilizadores")
-                        user = df_u[
-                            (df_u['email'].str.lower() == u) &
-                            (df_u['password'] == p)
-                        ]
-                        if not user.empty:
-                            st.session_state.update({
-                                "logged_in":  True,
-                                "user_id":    str(user.iloc[0]['id']),
-                                "user_nome":  f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}",
-                                "user_email": u,
-                                "is_admin":   u in ADMINS,
-                            })
-                            st.rerun()
+                        if df_u.empty or 'email' not in df_u.columns or 'password' not in df_u.columns:
+                            st.error("❌ Erro ao carregar dados de utilizadores. Verifica a Sheet.")
                         else:
-                            st.error("❌ Email ou password incorretos.")
+                            user = df_u[
+                                (df_u['email'].str.lower() == u) &
+                                (df_u['password'] == p)
+                            ]
+                            if not user.empty:
+                                st.session_state.update({
+                                    "logged_in":  True,
+                                    "user_id":    str(user.iloc[0]['id']),
+                                    "user_nome":  f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}",
+                                    "user_email": u,
+                                    "is_admin":   u in ADMINS,
+                                })
+                                st.rerun()
+                            else:
+                                st.error("❌ Email ou password incorretos.")
 
 # ============================================================
 # 8. APP PRINCIPAL (pós-login)
@@ -903,91 +911,91 @@ else:
             st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
             hj = datetime.now()
 
-        # Percorre dias a partir de hoje até não encontrar mais abas com dados
-        dias_sem_dados = 0
-        i = 0
-        encontrou_algum = False
+            # Percorre dias a partir de hoje até não encontrar mais abas com dados
+            dias_sem_dados = 0
+            i = 0
+            encontrou_algum = False
 
-        while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
-            dt  = hj + timedelta(days=i)
-            d_s = dt.strftime('%d/%m/%Y')
-            lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
+            while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
+                dt  = hj + timedelta(days=i)
+                d_s = dt.strftime('%d/%m/%Y')
+                lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
 
-            # Verificar trocas aprovadas
-            if not df_trocas.empty:
-                tr_v = df_trocas[
-                    (df_trocas['data'] == d_s) &
-                    (df_trocas['status'] == 'Aprovada') &
-                    ((df_trocas['id_origem'].astype(str) == u_id) |
-                     (df_trocas['id_destino'].astype(str) == u_id))
-                ]
-            else:
-                tr_v = pd.DataFrame()
-
-            if not tr_v.empty:
-                t = tr_v.iloc[0]
-                if str(t['id_origem']) == u_id:
-                    s_ex, era, com = t['servico_destino'], t['servico_origem'], t['id_destino']
+                # Verificar trocas aprovadas
+                if not df_trocas.empty:
+                    tr_v = df_trocas[
+                        (df_trocas['data'] == d_s) &
+                        (df_trocas['status'] == 'Aprovada') &
+                        ((df_trocas['id_origem'].astype(str) == u_id) |
+                         (df_trocas['id_destino'].astype(str) == u_id))
+                    ]
                 else:
-                    s_ex, era, com = t['servico_origem'], t['servico_destino'], t['id_origem']
-                st.markdown(
-                    f'<div class="card-servico card-troca">'
-                    f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
-                    f'<h3>🔄 {s_ex}</h3>'
-                    f'<p>↩️ Serviço original: {era}</p>'
-                    f'<p>👤 Trocado com ID: {com}</p>'
-                    f'</div>',
-                    unsafe_allow_html=True
-                )
-                dias_sem_dados = 0
-                encontrou_algum = True
-            else:
-                df_d = load_data(dt.strftime("%d-%m"))
-                if not df_d.empty:
-                    m = df_d[df_d['id'].astype(str) == u_id]
-                    if not m.empty:
-                        row = m.iloc[0]
-                        obs_val = str(row.get('observações', '') or '').strip()
-                        obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
-                        st.markdown(
-                            f'<div class="card-servico card-meu">'
-                            f'<p><b>{lbl}</b></p>'
-                            f'<h3>🛡️ {row["serviço"]}</h3>'
-                            f'<p>🕒 {row["horário"]}</p>'
-                            f'{obs_html}'
-                            f'</div>',
-                            unsafe_allow_html=True
-                        )
-                        # Verificar se tem remunerado no mesmo dia
-                        df_rem_dia = load_data(dt.strftime("%d-%m"))
-                        if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
-                            import unicodedata as _ud2
-                            def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                            rem_mil = df_rem_dia[
-                                df_rem_dia['id'].astype(str) == u_id
-                            ]
-                            rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
-                            for _, rr in rem_mil.iterrows():
-                                obs_r = str(rr.get('observações', '') or '').strip()
-                                obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
-                                st.markdown(
-                                    f'<div class="card-servico card-rem">'
-                                    f'<p><b>💶 REMUNERADO</b></p>'
-                                    f'<h3>💰 {rr["serviço"]}</h3>'
-                                    f'<p>🕒 {rr["horário"]}</p>'
-                                    f'{obs_r_html}'
-                                    f'</div>',
-                                    unsafe_allow_html=True
-                                )
-                        encontrou_algum = True
-                    # Aba existe mas o militar não está escalado — não conta como "sem dados"
+                    tr_v = pd.DataFrame()
+
+                if not tr_v.empty:
+                    t = tr_v.iloc[0]
+                    if str(t['id_origem']) == u_id:
+                        s_ex, era, com = t['servico_destino'], t['servico_origem'], t['id_destino']
+                    else:
+                        s_ex, era, com = t['servico_origem'], t['servico_destino'], t['id_origem']
+                    st.markdown(
+                        f'<div class="card-servico card-troca">'
+                        f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
+                        f'<h3>🔄 {s_ex}</h3>'
+                        f'<p>↩️ Serviço original: {era}</p>'
+                        f'<p>👤 Trocado com ID: {com}</p>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
                     dias_sem_dados = 0
+                    encontrou_algum = True
                 else:
-                    dias_sem_dados += 1
+                    df_d = load_data(dt.strftime("%d-%m"))
+                    if not df_d.empty:
+                        m = df_d[df_d['id'].astype(str) == u_id]
+                        if not m.empty:
+                            row = m.iloc[0]
+                            obs_val = str(row.get('observações', '') or '').strip()
+                            obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
+                            st.markdown(
+                                f'<div class="card-servico card-meu">'
+                                f'<p><b>{lbl}</b></p>'
+                                f'<h3>🛡️ {row["serviço"]}</h3>'
+                                f'<p>🕒 {row["horário"]}</p>'
+                                f'{obs_html}'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                            # Verificar se tem remunerado no mesmo dia
+                            df_rem_dia = load_data(dt.strftime("%d-%m"))
+                            if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
+                                import unicodedata as _ud2
+                                def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                                rem_mil = df_rem_dia[
+                                    df_rem_dia['id'].astype(str) == u_id
+                                ]
+                                rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
+                                for _, rr in rem_mil.iterrows():
+                                    obs_r = str(rr.get('observações', '') or '').strip()
+                                    obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
+                                    st.markdown(
+                                        f'<div class="card-servico card-rem">'
+                                        f'<p><b>💶 REMUNERADO</b></p>'
+                                        f'<h3>💰 {rr["serviço"]}</h3>'
+                                        f'<p>🕒 {rr["horário"]}</p>'
+                                        f'{obs_r_html}'
+                                        f'</div>',
+                                        unsafe_allow_html=True
+                                    )
+                            encontrou_algum = True
+                        # Aba existe mas o militar não está escalado — não conta como "sem dados"
+                        dias_sem_dados = 0
+                    else:
+                        dias_sem_dados += 1
 
-            i += 1
+                i += 1
 
-        if not encontrou_algum:
+            if not encontrou_algum:
                 st.info("Não foram encontrados serviços escalados a partir de hoje.")
 
     # --- 🔍 ESCALA GERAL ---
