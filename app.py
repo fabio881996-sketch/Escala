@@ -284,7 +284,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def sec_title(label, w=W, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 7.5)
+        pdf.set_font("Arial", "B", 9)
         pdf.set_fill_color(26, 46, 100)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(w, 5.5, c(f"  {label.upper()}"), 1, 1, 'L', True)
@@ -293,7 +293,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def tbl_hdr(cols, widths, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 6.5)
+        pdf.set_font("Arial", "B", 8)
         pdf.set_fill_color(205, 215, 242)
         pdf.set_text_color(15, 35, 90)
         for col, w in zip(cols, widths):
@@ -304,7 +304,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def tbl_row(vals, widths, x=None, fill=False):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "", 6.5)
+        pdf.set_font("Arial", "", 8)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
@@ -348,7 +348,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C1)
-            pdf.set_font("Arial", "", 6.5)
+            pdf.set_font("Arial", "", 8)
             pdf.set_fill_color(255, 245, 245)
             pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C1)
@@ -361,7 +361,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C2)
-            pdf.set_font("Arial", "", 6.5)
+            pdf.set_font("Arial", "", 8)
             pdf.set_fill_color(245, 245, 255)
             pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()} ({r['horário']}): {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C2)
@@ -459,7 +459,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             for _, r in obs_df.drop_duplicates('observações').iterrows():
                 indic = str(r.get('indicativo rádio','') or r.get('rádio','') or 'S/I')
                 # desenhar as duas celulas na mesma linha
-                pdf.set_font("Arial","",6.5)
+                pdf.set_font("Arial", "", 8)
                 if fill:
                     pdf.set_fill_color(255,255,220)
                 else:
@@ -476,7 +476,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_xy(10, 282)
     pdf.set_draw_color(160, 160, 160)
     pdf.line(10, 282, 200, 282)
-    pdf.set_font("Arial", "I", 6.5)
+    pdf.set_font("Arial", "I", 7.5)
     pdf.set_text_color(120, 120, 120)
     pdf.set_xy(10, 283)
     pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
@@ -509,7 +509,7 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
             agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
             for col in ['viatura', 'rádio', 'indicativo rádio', 'observações']:
                 if col in df_sec.columns:
-                    agg_dict[col] = lambda x: ', '.join(x.dropna().unique())
+                    agg_dict[col] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
             ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
         else:
             ag = df_sec.groupby(cols_ag, sort=False)['id_disp'] \
