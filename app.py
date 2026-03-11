@@ -1510,11 +1510,27 @@ else:
         if df_trocas.empty:
             st.info("Sem dados.")
         else:
+            # ── Aguardam aceitação do militar ──
+            pnd_mil = df_trocas[df_trocas['status'] == 'Pendente_Militar']
+            if not pnd_mil.empty:
+                st.markdown(f"#### 🕐 Aguardam aceitação do militar ({len(pnd_mil)})")
+                for idx, r in pnd_mil.sort_values('data').iterrows():
+                    n_o = get_nome_militar(df_util, r['id_origem'])
+                    n_d = get_nome_militar(df_util, r['id_destino'])
+                    with st.expander(f"📅 {r['data']}  |  {n_o} → {n_d}", expanded=False):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.info(f"**Requerente:**\n\n{n_o}\n\n`{r['servico_origem']}`")
+                        with col2:
+                            st.warning(f"**Aguarda aceitação:**\n\n{n_d}\n\n`{r['servico_destino']}`")
+                st.markdown("---")
+
+            # ── Aguardam validação do admin ──
             pnd = df_trocas[df_trocas['status'] == 'Pendente_Admin']
             if pnd.empty:
                 st.success("✅ Não há trocas pendentes de validação.")
             else:
-                st.markdown(f"**{len(pnd)} troca(s) aguardam validação:**")
+                st.markdown(f"#### ⚖️ Aguardam validação ({len(pnd)})")
                 for idx, r in pnd.iterrows():
                     n_o = get_nome_militar(df_util, r['id_origem'])
                     n_d = get_nome_militar(df_util, r['id_destino'])
