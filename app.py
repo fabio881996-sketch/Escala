@@ -267,7 +267,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_ap,   df_rest = filtrar(r'apoio', df_rest)
     df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
-    df_outros = df_rest  # tudo o que não encaixou em nenhuma categoria
+    df_outros = df_rest
 
     # ---- Iniciar PDF ----
     pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -755,19 +755,21 @@ else:
                     mime="application/pdf"
                 )
 
-            # Separar ausências primeiro
+            # Separar ausências primeiro (inclui férias, licenças, doentes, diligências, tribunal)
             df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência", "tribunal"], df_at)
 
             # Extrair cada grupo do df_res por ordem
-            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"], df_res)
-            df_aten, df_res = filtrar_secao(["atendimento", "apoio"],              df_res)
-            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],   df_res)
-            df_remu, df_res = filtrar_secao(["remu", "grat"],                      df_res)
-            df_folga,df_res = filtrar_secao(["folga"],                             df_res)
+            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
+            df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
+            df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
+            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],       df_res)
+            df_remu, df_res = filtrar_secao(["remu", "grat"],                          df_res)
+            df_folga,df_res = filtrar_secao(["folga"],                                 df_res)
             df_outros       = df_res  # o que sobrar são "Outros Serviços"
 
             mostrar_secao("Comando e Administrativos", df_cmd)
             mostrar_secao("Atendimento",               df_aten)
+            mostrar_secao("Apoio ao Atendimento",      df_apoi)
             mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
             mostrar_secao("Outros Serviços",           df_outros)
             mostrar_secao("Remunerados",               df_remu,   mostrar_extras=True)
