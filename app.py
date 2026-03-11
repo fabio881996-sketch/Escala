@@ -544,20 +544,25 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         return
     with st.expander(f"🔹 {titulo.upper()}", expanded=True):
         if mostrar_extras:
-            # Chaves de agrupamento incluem viatura — serviços com viaturas diferentes ficam em linhas separadas
             cols_ag = ['serviço', 'horário']
-            for col in ['viatura', 'rádio', 'indicativo rádio']:
+            for col in ['indicativo rádio', 'rádio', 'viatura']:
                 if col in df_sec.columns:
                     cols_ag.append(col)
             agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
             if 'observações' in df_sec.columns:
                 agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
             ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
+            # Ordem das colunas: serviço, horário, militares, indicativo, rádio, viatura, observações
+            col_order = ['serviço', 'horário', 'id_disp']
+            for col in ['indicativo rádio', 'rádio', 'viatura', 'observações']:
+                if col in ag.columns:
+                    col_order.append(col)
+            ag = ag[col_order]
         else:
             ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                        .apply(lambda x: ', '.join(x)).reset_index()
         st.dataframe(
-            ag.rename(columns={'id_disp': 'Militar'}),
+            ag.rename(columns={'id_disp': 'Militares'}),
             use_container_width=True,
             hide_index=True
         )
