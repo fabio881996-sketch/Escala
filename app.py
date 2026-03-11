@@ -287,7 +287,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         pdf.set_font("Arial", "B", 11)
         pdf.set_fill_color(26, 46, 100)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(w, 5.5, c(f"  {label.upper()}"), 1, 1, 'L', True)
+        pdf.cell(w, 7, c(f"  {label.upper()}"), 1, 1, 'L', True)
         pdf.set_text_color(0, 0, 0)
 
     def tbl_hdr(cols, widths, x=None):
@@ -297,8 +297,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         pdf.set_fill_color(205, 215, 242)
         pdf.set_text_color(15, 35, 90)
         for col, w in zip(cols, widths):
-            pdf.cell(w, 4.5, c(col), 1, 0, 'C', True)
-        pdf.ln(4.5)
+            pdf.cell(w, 6, c(col), 1, 0, 'C', True)
+        pdf.ln(6)
         pdf.set_text_color(0, 0, 0)
 
     def tbl_row(vals, widths, x=None, fill=False):
@@ -310,8 +310,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         else:
             pdf.set_fill_color(255, 255, 255)
         for v, w in zip(vals, widths):
-            pdf.cell(w, 4.5, c(v), 1, 0, 'C', fill)
-        pdf.ln(4.5)
+            pdf.cell(w, 6, c(v), 1, 0, 'C', fill)
+        pdf.ln(6)
 
     # ====================================================
     # CABECALHO
@@ -407,21 +407,26 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     tbl_hdr(["Horario","Militares","Servico","Radio / Indicativo","Viatura"], w_p)
 
     if not df_pat.empty:
-        has_obs = 'observações' in df_pat.columns
-        cols_grp = ['horário','serviço']
-        for col in ['indicativo rádio','rádio','viatura']:
-            if col in df_pat.columns:
-                cols_grp.append(col)
+        has_obs   = 'observações' in df_pat.columns
+        has_indic = 'indicativo rádio' in df_pat.columns
+        has_radio = 'rádio' in df_pat.columns
+        has_vtr   = 'viatura' in df_pat.columns
+
+        cols_grp = ['horário', 'serviço']
+        if has_indic: cols_grp.append('indicativo rádio')
+        if has_radio: cols_grp.append('rádio')
+        if has_vtr:   cols_grp.append('viatura')
+
         agg_dict = {'id_fmt': lambda x: ', '.join(x)}
-        if has_obs:
-            agg_dict['observações'] = lambda x: ' | '.join([v for v in x if str(v).strip()])
+        if has_obs: agg_dict['observações'] = lambda x: ' | '.join(v for v in x if str(v).strip())
+
         ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
 
         def prio(nome):
             n = str(nome).lower()
             return "0" if ('po' in n or 'ocorr' in n) else "1"
         ag['_ord'] = ag['serviço'].apply(prio)
-        ag = ag.sort_values(['_ord','horário'])
+        ag = ag.sort_values(['_ord', 'horário'])
 
         fill = False
         for _, r in ag.iterrows():
@@ -466,8 +471,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                     pdf.set_fill_color(255,255,255)
                 x_before = pdf.get_x()
                 y_before = pdf.get_y()
-                pdf.cell(28, 4.5, c(indic), 1, 0, 'C', fill)
-                pdf.multi_cell(162, 4.5, c(r['observações']), border=1, align='L')
+                pdf.cell(28, 6, c(indic), 1, 0, 'C', fill)
+                pdf.multi_cell(162, 6, c(r['observações']), border=1, align='L')
                 fill = not fill
 
     # ====================================================
