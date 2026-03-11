@@ -266,7 +266,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw)
     df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
     df_at,   df_rest = filtrar(r'atendimento', df_rest)
-    df_ap,   df_rest = filtrar(r'apoio', df_rest)
+    df_at  = df_at[~df_at['servico_col'].str.contains('apoio', na=False)].copy()
+    df_rest2 = df_rest  # apoio ainda está em df_rest
+    df_ap,   df_rest = filtrar(r'apoio', df_rest2)
     df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
     df_outros = df_rest
@@ -405,8 +407,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # BLOCO 3 — PATRULHAS (largura total)
     # ====================================================
     sec_title("Patrulhas e Policiamento", W)
-    w_p = [20, 58, 44, 34, 34]
-    tbl_hdr(["Horario","Militares","Servico","Radio / Indicativo","Viatura"], w_p)
+    w_p = [20, 52, 40, 28, 28, 22]
+    tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
 
     if not df_pat.empty:
         has_obs   = 'observações' in df_pat.columns
@@ -433,9 +435,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         fill = False
         for _, r in ag.iterrows():
-            indic = str(r.get('indicativo rádio','') or r.get('rádio',''))
+            indic = str(r.get('indicativo rádio',''))
+            radio = str(r.get('rádio',''))
             tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
-                     indic, r.get('viatura','')], w_p, fill=fill)
+                     indic, radio, r.get('viatura','')], w_p, fill=fill)
             fill = not fill
 
     # ====================================================
@@ -444,12 +447,28 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     if not df_outros.empty:
         pdf.ln(2)
         sec_title("Outros Servicos", W)
-        w_o2 = [22, 58, 110]
-        tbl_hdr(["Horario","Militares","Servico"], w_o2)
-        ag_out = df_outros.groupby(['horário','serviço'], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+        has_vtr_o   = 'viatura' in df_outros.columns
+        has_indic_o = 'indicativo rádio' in df_outros.columns
+        has_radio_o = 'rádio' in df_outros.columns
+        cols_grp_o  = ['horário', 'serviço']
+        if has_indic_o: cols_grp_o.append('indicativo rádio')
+        if has_radio_o: cols_grp_o.append('rádio')
+        if has_vtr_o:   cols_grp_o.append('viatura')
+        ag_out = df_outros.groupby(cols_grp_o, as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+
+        hdr_o = ["Horario","Militares","Servico"]
+        w_o2  = [20, 52, 50]
+        if has_indic_o: hdr_o.append("Indicativo"); w_o2.append(28)
+        if has_radio_o: hdr_o.append("Radio");      w_o2.append(22)
+        if has_vtr_o:   hdr_o.append("Viatura");    w_o2.append(190 - sum(w_o2))
+        tbl_hdr(hdr_o, w_o2)
         fill = False
         for _, r in ag_out.sort_values(['serviço','horário']).iterrows():
-            tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper()], w_o2, fill=fill)
+            vals = [r['horário'], r['id_fmt'], r['serviço'].upper()]
+            if has_indic_o: vals.append(r.get('indicativo rádio',''))
+            if has_radio_o: vals.append(r.get('rádio',''))
+            if has_vtr_o:   vals.append(r.get('viatura',''))
+            tbl_row(vals, w_o2, fill=fill)
             fill = not fill
 
     # ====================================================
