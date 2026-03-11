@@ -426,7 +426,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             n = str(nome).lower()
             return "0" if ('po' in n or 'ocorr' in n) else "1"
         ag['_ord'] = ag['serviço'].apply(prio)
-        ag = ag.sort_values(['_ord', 'horário'])
+        ag = ag.sort_values(['serviço', 'horário'])
 
         fill = False
         for _, r in ag.iterrows():
@@ -509,15 +509,18 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
     if df_sec.empty:
         return
     with st.expander(f"🔹 {titulo.upper()}", expanded=True):
-        cols_ag = ['serviço', 'horário']
         if mostrar_extras:
-            agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
-            for col in ['viatura', 'rádio', 'indicativo rádio', 'observações']:
+            # Chaves de agrupamento incluem viatura — serviços com viaturas diferentes ficam em linhas separadas
+            cols_ag = ['serviço', 'horário']
+            for col in ['viatura', 'rádio', 'indicativo rádio']:
                 if col in df_sec.columns:
-                    agg_dict[col] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
+                    cols_ag.append(col)
+            agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
+            if 'observações' in df_sec.columns:
+                agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
             ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
         else:
-            ag = df_sec.groupby(cols_ag, sort=False)['id_disp'] \
+            ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                        .apply(lambda x: ', '.join(x)).reset_index()
         st.dataframe(
             ag.rename(columns={'id_disp': 'Militar'}),
