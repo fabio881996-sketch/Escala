@@ -324,25 +324,40 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         pdf.set_text_color(0, 0, 0)
 
     def tbl_row(vals, widths, x=None, fill=False):
-        if x is not None:
-            pdf.set_x(x)
         pdf.set_font("Arial", "", 9)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
             pdf.set_fill_color(255, 255, 255)
-        # Calcular altura necessária para cada célula (multi_cell)
-        x0 = pdf.get_x() if x is None else x
+        x0 = x if x is not None else pdf.get_x()
         y0 = pdf.get_y()
-        # Primeira passagem: calcular altura máxima
+
+        # Calcular altura real necessária para cada célula
+        def calc_altura(txt, w):
+            """Conta quantas linhas o texto ocupa numa célula de largura w."""
+            if not txt:
+                return 6
+            words = txt.replace('\n', ' \n ').split(' ')
+            linha_w = 0
+            n_linhas = 1
+            for word in words:
+                if word == '\n':
+                    n_linhas += 1
+                    linha_w = 0
+                    continue
+                ww = pdf.get_string_width(word + ' ')
+                if linha_w + ww > w - 2:  # margem de 2mm
+                    n_linhas += 1
+                    linha_w = ww
+                else:
+                    linha_w += ww
+            return max(6, n_linhas * 6)
+
         altura_max = 6
         for v, w in zip(vals, widths):
-            txt = c(str(v))
-            # Estimar nº de linhas: ~1 char = 2.2mm a font 9
-            chars_por_linha = max(1, int(w / 2.2))
-            n_linhas = max(1, -(-len(txt) // chars_por_linha))  # ceil division
-            altura_max = max(altura_max, n_linhas * 6)
-        # Segunda passagem: desenhar células com altura uniforme
+            altura_max = max(altura_max, calc_altura(c(str(v)), w))
+
+        # Desenhar todas as células com a mesma altura
         xi = x0
         for v, w in zip(vals, widths):
             txt = c(str(v))
@@ -350,11 +365,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             pdf.multi_cell(w, 6, txt, 1, 'C', fill)
             cell_h = pdf.get_y() - y0
             if cell_h < altura_max:
-                # Completar com célula vazia para alinhar
                 pdf.set_xy(xi, y0 + cell_h)
-                remaining = altura_max - cell_h
-                if remaining > 0:
-                    pdf.cell(w, remaining, '', 'LRB', 0, 'C', fill)
+                pdf.cell(w, altura_max - cell_h, '', 'LRB', 0, 'C', fill)
             xi += w
         pdf.set_xy(x0, y0 + altura_max)
 
@@ -607,13 +619,39 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 else:
                     pdf.set_fill_color(255, 255, 255)
                 y_antes = pdf.get_y()
+
+                # Calcular altura real de cada coluna
+                def _h(txt, w):
+                    words = c(txt).replace('\n',' \n ').split(' ')
+                    lw, nl = 0, 1
+                    for wd in words:
+                        if wd == '\n': nl += 1; lw = 0; continue
+                        ww = pdf.get_string_width(wd + ' ')
+                        if lw + ww > w - 2: nl += 1; lw = ww
+                        else: lw += ww
+                    return max(5.5, nl * 5.5)
+
+                h_indic = _h(indic, 28)
+                h_obs   = _h(r['observações'], 162)
+                altura  = max(h_indic, h_obs)
+
+                # Desenhar observação
                 pdf.set_xy(C1 + 28, y_antes)
                 pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
-                y_depois = pdf.get_y()
-                altura = y_depois - y_antes
+                h_obs_real = pdf.get_y() - y_antes
+                if h_obs_real < altura:
+                    pdf.set_xy(C1 + 28, y_antes + h_obs_real)
+                    pdf.cell(162, altura - h_obs_real, '', 'LRB', 0, 'L', fill)
+
+                # Desenhar indicativo
                 pdf.set_xy(C1, y_antes)
-                pdf.cell(28, altura, c(indic), 1, 0, 'C', fill)
-                pdf.set_y(y_depois)
+                pdf.multi_cell(28, 5.5, c(indic), border=1, align='C', fill=fill)
+                h_ind_real = pdf.get_y() - y_antes
+                if h_ind_real < altura:
+                    pdf.set_xy(C1, y_antes + h_ind_real)
+                    pdf.cell(28, altura - h_ind_real, '', 'LRB', 0, 'C', fill)
+
+                pdf.set_y(y_antes + altura)
                 fill = not fill
 
     # ====================================================
