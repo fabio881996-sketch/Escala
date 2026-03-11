@@ -793,8 +793,115 @@ else:
     # --- 📅 MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 A Minha Escala")
-        st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
-        hj = datetime.now()
+
+        vista = st.radio("Vista:", ["📋 Próximos Serviços", "📅 Calendário Mensal"], horizontal=True, label_visibility="collapsed")
+        st.markdown("---")
+
+        # ── CALENDÁRIO MENSAL ──
+        if vista == "📅 Calendário Mensal":
+            from calendar import monthrange
+            hj_cal = datetime.now()
+            col_m, col_a, _ = st.columns([1, 1, 3])
+            with col_m:
+                mes_sel = st.selectbox("Mês:", list(range(1,13)),
+                    index=hj_cal.month - 1,
+                    format_func=lambda m: ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                                           "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][m-1])
+            with col_a:
+                ano_sel = st.selectbox("Ano:", [hj_cal.year - 1, hj_cal.year, hj_cal.year + 1], index=1)
+
+            _, n_dias = monthrange(ano_sel, mes_sel)
+
+            # Carregar todos os dias do mês
+            servicos_mes = {}
+            for d in range(1, n_dias + 1):
+                dt_cal = datetime(ano_sel, mes_sel, d)
+                aba = dt_cal.strftime("%d-%m")
+                df_cal = load_data(aba)
+                if not df_cal.empty:
+                    m_cal = df_cal[df_cal['id'].astype(str) == u_id]
+                    if not m_cal.empty:
+                        row_cal = m_cal.iloc[0]
+                        # Verificar trocas
+                        troca_cal = None
+                        if not df_trocas.empty:
+                            tr_c = df_trocas[
+                                (df_trocas['data'] == dt_cal.strftime('%d/%m/%Y')) &
+                                (df_trocas['status'] == 'Aprovada') &
+                                ((df_trocas['id_origem'].astype(str) == u_id) |
+                                 (df_trocas['id_destino'].astype(str) == u_id))
+                            ]
+                            if not tr_c.empty:
+                                t_c = tr_c.iloc[0]
+                                troca_cal = t_c['servico_destino'] if str(t_c['id_origem']) == u_id else t_c['servico_origem']
+                        servicos_mes[d] = {
+                            'serviço': troca_cal if troca_cal else row_cal['serviço'],
+                            'horário': row_cal['horário'],
+                            'troca': troca_cal is not None,
+                            'obs': str(row_cal.get('observações','') or '').strip()
+                        }
+
+            # Renderizar calendário em grelha 7 colunas
+            dias_semana = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+            # Cabeçalho
+            cols_hdr = st.columns(7)
+            for i_h, ds in enumerate(dias_semana):
+                cols_hdr[i_h].markdown(f"<div style='text-align:center;font-weight:700;font-size:0.8rem;color:#64748B;padding:4px'>{ds}</div>", unsafe_allow_html=True)
+
+            # Primeiro dia da semana (0=seg)
+            primeiro_dia = datetime(ano_sel, mes_sel, 1).weekday()
+            celulas = [""] * primeiro_dia + list(range(1, n_dias + 1))
+            # Completar até múltiplo de 7
+            while len(celulas) % 7 != 0:
+                celulas.append("")
+
+            hoje_d = datetime.now().date()
+            for semana in range(len(celulas) // 7):
+                cols_cal = st.columns(7)
+                for dia_col in range(7):
+                    cel = celulas[semana * 7 + dia_col]
+                    with cols_cal[dia_col]:
+                        if cel == "":
+                            st.markdown("<div style='min-height:70px'></div>", unsafe_allow_html=True)
+                        else:
+                            dt_cel = datetime(ano_sel, mes_sel, cel).date()
+                            is_hoje = dt_cel == hoje_d
+                            borda = "3px solid #1E3A8A" if is_hoje else "1px solid #E2E8F0"
+                            if cel in servicos_mes:
+                                info = servicos_mes[cel]
+                                if info['troca']:
+                                    bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
+                                else:
+                                    # Categorizar serviço
+                                    s_low = info['serviço'].lower()
+                                    if any(x in s_low for x in ['folga','ferias','licen','doente']):
+                                        bg, cor_txt, icone = "#F0FDF4", "#166534", "🏖️"
+                                    elif any(x in s_low for x in ['remu','grat']):
+                                        bg, cor_txt, icone = "#ECFDF5", "#065F46", "💰"
+                                    else:
+                                        bg, cor_txt, icone = "#EFF6FF", "#1E3A8A", "🛡️"
+                                serv_curto = info['serviço'][:12] + "…" if len(info['serviço']) > 12 else info['serviço']
+                                st.markdown(f"""
+                                <div style='background:{bg};border:{borda};border-radius:8px;padding:4px 6px;min-height:70px;cursor:default'>
+                                    <div style='font-size:0.75rem;font-weight:700;color:#475569'>{cel}</div>
+                                    <div style='font-size:0.7rem;color:{cor_txt};font-weight:600'>{icone} {serv_curto}</div>
+                                    <div style='font-size:0.65rem;color:#64748B'>{info['horário']}</div>
+                                </div>""", unsafe_allow_html=True)
+                            else:
+                                fundo = "#F8FAFC" if not is_hoje else "#EFF6FF"
+                                st.markdown(f"""
+                                <div style='background:{fundo};border:{borda};border-radius:8px;padding:4px 6px;min-height:70px'>
+                                    <div style='font-size:0.75rem;font-weight:700;color:#CBD5E1'>{cel}</div>
+                                </div>""", unsafe_allow_html=True)
+
+            # Legenda
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.caption("🛡️ Serviço &nbsp;·&nbsp; 🔄 Troca &nbsp;·&nbsp; 💰 Remunerado &nbsp;·&nbsp; 🏖️ Folga/Ausência")
+
+        # ── PRÓXIMOS SERVIÇOS ──
+        else:
+            st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
+            hj = datetime.now()
 
         # Percorre dias a partir de hoje até não encontrar mais abas com dados
         dias_sem_dados = 0
@@ -881,7 +988,7 @@ else:
             i += 1
 
         if not encontrou_algum:
-            st.info("Não foram encontrados serviços escalados a partir de hoje.")
+                st.info("Não foram encontrados serviços escalados a partir de hoje.")
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
