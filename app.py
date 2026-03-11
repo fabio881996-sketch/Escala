@@ -533,24 +533,33 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             sec_title("Observacoes de Patrulha", W)
             w_o = [28, 162]
             tbl_hdr(["Indicativo","Detalhe"], w_o)
+            # Detetar indicativos duplicados para mostrar horário nesses casos
+            obs_df = obs_df.drop_duplicates('observações').copy()
+            def get_indic(r):
+                return (str(r.get('indicativo rádio','') or '').strip()
+                     or str(r.get('rádio','') or '').strip()
+                     or str(r.get('serviço','') or '').strip()
+                     or 'S/I')
+            obs_df['_indic'] = obs_df.apply(get_indic, axis=1)
+            indics_duplicados = obs_df['_indic'].value_counts()
+            indics_duplicados = set(indics_duplicados[indics_duplicados > 1].index)
+
             fill = False
-            for _, r in obs_df.drop_duplicates('observações').iterrows():
-                indic_val   = str(r.get('indicativo rádio','') or '').strip()
-                radio_val   = str(r.get('rádio','') or '').strip()
-                servico_val = str(r.get('serviço','') or '').strip()
-                indic = indic_val or radio_val or servico_val or 'S/I'
+            for _, r in obs_df.iterrows():
+                indic = r['_indic']
+                horario_val = str(r.get('horário','') or '').strip()
+                if indic in indics_duplicados and horario_val:
+                    indic = f"{indic}\n{horario_val}"
                 pdf.set_font("Arial", "", 9)
                 if fill:
                     pdf.set_fill_color(255, 255, 220)
                 else:
                     pdf.set_fill_color(255, 255, 255)
                 y_antes = pdf.get_y()
-                # Desenhar multi_cell do texto primeiro para calcular altura
                 pdf.set_xy(C1 + 28, y_antes)
                 pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
                 y_depois = pdf.get_y()
                 altura = y_depois - y_antes
-                # Voltar e desenhar indicativo com a mesma altura
                 pdf.set_xy(C1, y_antes)
                 pdf.cell(28, altura, c(indic), 1, 0, 'C', fill)
                 pdf.set_y(y_depois)
