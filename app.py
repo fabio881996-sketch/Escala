@@ -82,6 +82,10 @@ h3 { color: #243B5C !important; font-weight: 600 !important; }
     border-left-color: #D97706 !important;
     background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%) !important;
 }
+.card-rem {
+    border-left-color: #059669 !important;
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%) !important;
+}
 .card-servico h3 { font-size: 1.1rem !important; margin: 4px 0 !important; }
 .card-servico p  { margin: 2px 0 !important; font-size: 0.88rem !important; color: #475569; }
 
@@ -594,6 +598,12 @@ def filtrar_secao(keys: list, df_f: pd.DataFrame) -> tuple:
     mask = df_f['serviço'].str.lower().str.contains(pattern, na=False)
     return df_f[mask].copy(), df_f[~mask].copy()
 
+def _limpar_sem_militar(df: pd.DataFrame) -> pd.DataFrame:
+    """Remove linhas onde id está vazio — serviços sem militar escalado."""
+    if 'id' not in df.columns:
+        return df
+    return df[df['id'].astype(str).str.strip().str.len() > 0].copy()
+
 def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False):
     """Renderiza uma secção da escala num expander."""
     if df_sec.empty:
@@ -791,6 +801,27 @@ else:
                             f'</div>',
                             unsafe_allow_html=True
                         )
+                        # Verificar se tem remunerado no mesmo dia
+                        df_rem_dia = load_data(dt.strftime("%d-%m"))
+                        if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
+                            import unicodedata as _ud2
+                            def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                            rem_mil = df_rem_dia[
+                                df_rem_dia['id'].astype(str) == u_id
+                            ]
+                            rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
+                            for _, rr in rem_mil.iterrows():
+                                obs_r = str(rr.get('observações', '') or '').strip()
+                                obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
+                                st.markdown(
+                                    f'<div class="card-servico card-rem">'
+                                    f'<p><b>💶 REMUNERADO</b></p>'
+                                    f'<h3>💰 {rr["serviço"]}</h3>'
+                                    f'<p>🕒 {rr["horário"]}</p>'
+                                    f'{obs_r_html}'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
                         encontrou_algum = True
                     # Aba existe mas o militar não está escalado — não conta como "sem dados"
                     dias_sem_dados = 0
@@ -837,6 +868,9 @@ else:
                     file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
                     mime="application/pdf"
                 )
+
+            # Remover linhas sem militar para a visualização na escala geral
+            df_at = _limpar_sem_militar(df_at)
 
             # Separar ausências primeiro (inclui férias, licenças, doentes, diligências, tribunal)
             df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência", "tribunal"], df_at)
