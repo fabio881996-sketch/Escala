@@ -726,19 +726,52 @@ else:
         menu_opt = [
             "📅 Minha Escala",
             "🔍 Escala Geral",
+            "📊 Estatísticas",
             "🔄 Solicitar Troca",
+            "🔁 Troca a 3",
             "📥 Pedidos Recebidos",
+            "📋 Histórico de Trocas",
+            "🔄 Giros",
         ]
         if is_admin:
             menu_opt += ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
         menu_opt.append("👥 Efetivo")
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed")
+        # Mobile: recolher sidebar após selecionar menu
+        st.markdown("""
+        <script>
+        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+        const closeBtn = window.parent.document.querySelector('[data-testid="collapsedControl"]');
+        if (window.parent.innerWidth < 768 && closeBtn) { closeBtn.click(); }
+        </script>
+        """, unsafe_allow_html=True)
 
         st.markdown("---")
         if st.button("🚪 Sair", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
+
+    # ============================================================
+    # BANNER NOTIFICAÇÕES
+    # ============================================================
+    if not df_trocas.empty:
+        n_pend = len(df_trocas[
+            (df_trocas['status'] == 'Pendente_Militar') &
+            (df_trocas['id_destino'].astype(str) == u_id)
+        ])
+        if n_pend > 0:
+            st.warning(f"🔔 Tens **{n_pend} pedido(s) de troca** por responder! Vai a **📥 Pedidos Recebidos**.")
+
+    # ============================================================
+    # EXPIRAÇÃO DE SESSÃO (4 horas)
+    # ============================================================
+    if "login_time" not in st.session_state:
+        st.session_state["login_time"] = datetime.now()
+    elif (datetime.now() - st.session_state["login_time"]).total_seconds() > 4 * 3600:
+        st.session_state["logged_in"] = False
+        st.warning("⏱️ Sessão expirada. Por favor volta a fazer login.")
+        st.stop()
 
     # ============================================================
     # PÁGINAS
@@ -864,14 +897,63 @@ else:
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
             pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
-            col_pdf, _ = st.columns([1, 4])
+            col_pdf, col_full, _ = st.columns([1, 1.5, 3])
             with col_pdf:
                 st.download_button(
-                    "📥 Descarregar PDF",
+                    "📥 Escala do Dia",
                     pdf_bytes,
                     file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
                     mime="application/pdf"
                 )
+            with col_full:
+                if st.button("📦 Gerar Escala Completa (hoje→)"):
+                    with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
+                        from datetime import date as _date
+                        pdf_completo = FPDF(orientation='P', unit='mm', format='A4')
+                        hj2 = datetime.now()
+                        dias_sem2 = 0
+                        j2 = 0
+                        paginas = 0
+                        while dias_sem2 < 5:
+                            dt2 = hj2 + timedelta(days=j2)
+                            df_d2 = load_data(dt2.strftime("%d-%m"))
+                            if not df_d2.empty:
+                                df_d2['id_disp'] = df_d2['id'].astype(str)
+                                # Aplicar trocas
+                                if not df_trocas.empty:
+                                    tr2 = df_trocas[
+                                        (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
+                                        (df_trocas['status'] == 'Aprovada')
+                                    ]
+                                    for _, t2 in tr2.iterrows():
+                                        m_o2 = df_d2['id'].astype(str) == str(t2['id_origem'])
+                                        if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
+                                        m_d2 = df_d2['id'].astype(str) == str(t2['id_destino'])
+                                        if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
+                                pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
+                                # Importar página do PDF gerado para o PDF completo
+                                import tempfile, os
+                                from fpdf import FPDF as FPDF2
+                                tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+                                tmp.write(pb2); tmp.close()
+                                pdf_completo.add_page()
+                                pdf_completo.image(tmp.name, x=0, y=0, w=210, h=297)
+                                os.unlink(tmp.name)
+                                paginas += 1
+                                dias_sem2 = 0
+                            else:
+                                dias_sem2 += 1
+                            j2 += 1
+                        if paginas > 0:
+                            st.download_button(
+                                f"⬇️ Descarregar ({paginas} dias)",
+                                data=pdf_completo.output(dest='S').encode('latin-1','replace'),
+                                file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
+                                mime="application/pdf",
+                                key="dl_completa"
+                            )
+                        else:
+                            st.info("Não há escalas disponíveis.")
 
             # Remover linhas sem militar para a visualização na escala geral
             df_at = _limpar_sem_militar(df_at)
@@ -913,6 +995,157 @@ else:
                     ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
                                .apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag, use_container_width=True, hide_index=True)
+
+    # --- 🔁 TROCA A 3 ---
+    elif menu == "🔁 Troca a 3":
+        st.title("🔁 Solicitar Troca a 3")
+        st.caption("Faz dois pedidos de troca em simultâneo num único formulário.")
+        dt_t3   = st.date_input("Data da tua troca:", format="DD/MM/YYYY", key="t3_data")
+        df_t3   = load_data(dt_t3.strftime("%d-%m"))
+        if df_t3.empty:
+            st.info("Sem dados para essa data.")
+        else:
+            meu_t3 = df_t3[df_t3['id'].astype(str) == u_id]
+            if meu_t3.empty:
+                st.warning("Não tens serviço escalado nesse dia.")
+            else:
+                meu_serv_t3 = meu_t3.iloc[0]['serviço']
+                st.info(f"O teu serviço nesse dia: **{meu_serv_t3}**")
+                outros_t3 = df_t3[df_t3['id'].astype(str) != u_id]
+                opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
+                if len(opcoes_t3) < 2:
+                    st.warning("Não há militares suficientes escalados nesse dia para uma troca a 3.")
+                else:
+                    sel1 = st.selectbox("1º militar (vai para o teu serviço):", list(opcoes_t3.keys()), key="t3_sel1")
+                    sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
+                    id1  = str(opcoes_t3[sel1])
+                    id2  = str(opcoes_t3[sel2])
+                    serv1 = df_t3[df_t3['id'].astype(str) == id1].iloc[0]['serviço']
+                    serv2 = df_t3[df_t3['id'].astype(str) == id2].iloc[0]['serviço']
+                    st.markdown(f"""
+                    **Resumo da troca a 3:**
+                    - Tu ({u_id}): `{meu_serv_t3}` → ficas com `{serv1}`... aguarda, o 1º vai para o teu serviço
+                    - **{sel1}**: `{serv1}` → vai para `{meu_serv_t3}`
+                    - **{sel2}**: `{serv2}` → vai para `{serv1}`
+                    """)
+                    email1_rows = df_util[df_util['id'].astype(str) == id1]
+                    email2_rows = df_util[df_util['id'].astype(str) == id2]
+                    if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
+                        if email1_rows.empty or email2_rows.empty:
+                            st.error("Não foi possível encontrar o email de um dos militares.")
+                        else:
+                            data_str = dt_t3.strftime('%d/%m/%Y')
+                            # Pedido 1: eu troco com militar 1
+                            linha1 = [data_str, u_id, meu_serv_t3, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
+                            salvar_troca_gsheet(linha1)
+                            # Pedido 2: militar 1 troca com militar 2
+                            linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
+                            salvar_troca_gsheet(linha2)
+                            st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos os militares.")
+
+    # --- 📊 ESTATÍSTICAS ---
+    elif menu == "📊 Estatísticas":
+        st.title("📊 Estatísticas de Serviço")
+
+        # Admin pode escolher militar
+        if is_admin:
+            militares_opts = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
+            sel_mil = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts.keys()))
+            alvo_id = u_id if sel_mil == "— O meu próprio —" else militares_opts[sel_mil]
+            alvo_nome = u_nome if sel_mil == "— O meu próprio —" else sel_mil
+        else:
+            alvo_id   = u_id
+            alvo_nome = u_nome
+
+        st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
+
+        @st.cache_data(ttl=86400)
+        def contar_servicos_historico(alvo_id_c: str):
+            """Percorre todas as abas DD-MM e conta serviços do militar."""
+            import unicodedata as _ud3
+            def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+            client = get_gsheet_client()
+            sh = client.open_by_key(st.secrets["gsheet"]["sheet_id"])
+            abas = sh.worksheets()
+            resultados = []
+            hoje_str = datetime.now().strftime("%d-%m")
+            for aba in abas:
+                titulo = aba.title
+                # Só abas no formato DD-MM
+                partes = titulo.split("-")
+                if len(partes) != 2 or not all(p.isdigit() for p in partes):
+                    continue
+                try:
+                    dados = aba.get_all_records()
+                    df_aba = pd.DataFrame(dados)
+                    if df_aba.empty or 'id' not in df_aba.columns:
+                        continue
+                    # Filtrar apenas linhas do militar com id preenchido
+                    mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
+                    for _, row in mil_rows.iterrows():
+                        serv = str(row.get('serviço', '')).strip()
+                        if not serv:
+                            continue
+                        # Determinar mês/ano — usar ano atual ou anterior conforme o mês
+                        dd, mm = int(partes[0]), int(partes[1])
+                        ano = datetime.now().year
+                        if mm > datetime.now().month + 1:
+                            ano -= 1
+                        resultados.append({
+                            'data': f"{partes[0]}/{partes[1]}/{ano}",
+                            'mes': f"{partes[1]}/{ano}",
+                            'serviço': serv,
+                            'tipo': _n3(serv)
+                        })
+                except Exception:
+                    continue
+            return pd.DataFrame(resultados)
+
+        with st.spinner("A carregar histórico..."):
+            df_stats = contar_servicos_historico(alvo_id)
+
+        if df_stats.empty:
+            st.info("Sem histórico de serviços encontrado.")
+        else:
+            import unicodedata as _ud4
+            def _n4(t): return _ud4.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+
+            def cat(s):
+                s = _n4(s)
+                if any(x in s for x in ['ferias','licen','doente']): return 'Ausência'
+                if any(x in s for x in ['folga']): return 'Folga'
+                if any(x in s for x in ['remu','grat']): return 'Remunerado'
+                if any(x in s for x in ['atendimento']) and 'apoio' not in s: return 'Atendimento'
+                if 'apoio' in s: return 'Apoio Atendimento'
+                if any(x in s for x in ['po','patrulha','ronda','ocorr']): return 'Patrulha'
+                if any(x in s for x in ['pronto','secretaria','inquer','dilig']): return 'ADM'
+                return 'Outros'
+
+            df_stats['categoria'] = df_stats['serviço'].apply(cat)
+
+            # Métricas rápidas
+            total = len(df_stats)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Total serviços", total)
+            c2.metric("Patrulhas", len(df_stats[df_stats['categoria'] == 'Patrulha']))
+            c3.metric("Atendimentos", len(df_stats[df_stats['categoria'].isin(['Atendimento','Apoio Atendimento'])]))
+            c4.metric("Remunerados", len(df_stats[df_stats['categoria'] == 'Remunerado']))
+
+            st.markdown("---")
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("**Por categoria**")
+                df_cat = df_stats.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
+                st.dataframe(df_cat, use_container_width=True, hide_index=True)
+            with col_g2:
+                st.markdown("**Por mês**")
+                df_mes = df_stats.groupby('mes').size().reset_index(name='total')
+                st.dataframe(df_mes, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+            st.markdown("**Detalhe por serviço**")
+            df_detalhe = df_stats.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
+            st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
@@ -1062,6 +1295,59 @@ else:
                             mime="application/pdf",
                             key=f"hist_pdf_{idx}"
                         )
+
+    # --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
+    elif menu == "📋 Histórico de Trocas":
+        st.title("📋 Histórico das Minhas Trocas")
+        if df_trocas.empty:
+            st.info("Não existem trocas registadas.")
+        else:
+            minhas = df_trocas[
+                (df_trocas['id_origem'].astype(str) == u_id) |
+                (df_trocas['id_destino'].astype(str) == u_id)
+            ].copy().sort_values('data', ascending=False)
+            if minhas.empty:
+                st.info("Não tens trocas registadas.")
+            else:
+                for _, r in minhas.iterrows():
+                    fui_origem = str(r['id_origem']) == u_id
+                    outro_id   = r['id_destino'] if fui_origem else r['id_origem']
+                    outro_nome = get_nome_militar(df_util, outro_id)
+                    meu_serv   = r['servico_origem'] if fui_origem else r['servico_destino']
+                    outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
+                    papel      = "Requerente" if fui_origem else "Substituto"
+                    status     = r.get('status','')
+                    cor = "🟢" if status == "Aprovada" else ("🔴" if status == "Rejeitada" else "🟡")
+                    with st.expander(f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})", expanded=False):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**O meu papel:** {papel}")
+                            st.markdown(f"**O meu serviço:** `{meu_serv}`")
+                        with col2:
+                            st.markdown(f"**Contraparte:** {outro_nome}")
+                            st.markdown(f"**Serviço contraparte:** `{outro_serv}`")
+                        if status == "Aprovada":
+                            st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
+
+    # --- 🔄 GIROS ---
+    elif menu == "🔄 Giros":
+        st.title("🔄 Giros")
+        try:
+            df_giros = load_data("giros")
+            if df_giros.empty:
+                st.info("Não existem giros definidos.")
+            else:
+                pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, serviço...")
+                df_g = df_giros.copy()
+                if pesq_g:
+                    p_g = pesq_g.lower()
+                    mask_g = pd.Series([False] * len(df_g), index=df_g.index)
+                    for col in df_g.columns:
+                        mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
+                    df_g = df_g[mask_g]
+                st.dataframe(df_g, use_container_width=True, hide_index=True)
+        except Exception:
+            st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
 
     # --- 👥 EFETIVO ---
     elif menu == "👥 Efetivo":
