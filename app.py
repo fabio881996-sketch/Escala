@@ -634,7 +634,6 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
             if 'observações' in df_sec.columns:
                 agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
             ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
-            # Ordem das colunas: serviço, horário, militares, indicativo, rádio, viatura, observações
             col_order = ['serviço', 'horário', 'id_disp']
             for col in ['indicativo rádio', 'rádio', 'viatura', 'observações']:
                 if col in ag.columns:
@@ -643,11 +642,24 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         else:
             ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                        .apply(lambda x: ', '.join(x)).reset_index()
-        st.dataframe(
-            ag.rename(columns={'id_disp': 'Militares'}),
-            use_container_width=True,
-            hide_index=True
-        )
+        ag = ag.rename(columns={'id_disp': 'Militares'})
+
+        # Tabela HTML com wrap de texto para não perder informação nas observações
+        th_s = "background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;"
+        td_s = "padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;white-space:pre-wrap;"
+        td_a = td_s + "background:#F8FAFC;"
+        html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
+        for col in ag.columns:
+            html += f"<th style='{th_s}'>{col}</th>"
+        html += "</tr></thead><tbody>"
+        for i, (_, row) in enumerate(ag.iterrows()):
+            td = td_a if i % 2 == 0 else td_s
+            html += "<tr>"
+            for val in row:
+                html += f"<td style='{td}'>{str(val)}</td>"
+            html += "</tr>"
+        html += "</tbody></table></div>"
+        st.markdown(html, unsafe_allow_html=True)
 
 # ============================================================
 # 7. LOGIN
