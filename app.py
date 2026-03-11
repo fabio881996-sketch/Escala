@@ -253,7 +253,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         return t
 
     df_raw = df_raw.copy()
-    df_raw['servico_col'] = df_raw['serviço'].str.lower()
+    import unicodedata as _ud
+    def _norm(t): return _ud.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+    df_raw['servico_col'] = df_raw['serviço'].apply(_norm)
     df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
 
     # Filtros sequenciais — igual à escala geral, o que sobrar vai para "outros serviços"
@@ -772,12 +774,27 @@ else:
             mostrar_secao("Apoio ao Atendimento",      df_apoi)
             mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
             mostrar_secao("Outros Serviços",           df_outros)
-            mostrar_secao("Remunerados",               df_remu,   mostrar_extras=True)
-            mostrar_secao("Folga",                     df_folga)
+            # Remunerados: horário | militares | serviço
+            if not df_remu.empty:
+                with st.expander("🔹 REMUNERADOS", expanded=True):
+                    cols_r = ['horário', 'id_disp']
+                    extra_cols = [c for c in ['serviço','viatura','rádio','indicativo rádio','observações'] if c in df_remu.columns]
+                    cols_r += extra_cols
+                    ag_r = df_remu.groupby(['horário'] + [c for c in ['serviço','viatura','rádio','indicativo rádio','observações'] if c in df_remu.columns], sort=False)['id_disp'] \
+                                  .apply(lambda x: ', '.join(x)).reset_index()
+                    # Reordenar colunas: horário, id_disp (militares), resto
+                    col_order = ['horário','id_disp'] + [c for c in ag_r.columns if c not in ['horário','id_disp']]
+                    st.dataframe(ag_r[col_order].rename(columns={'id_disp':'Militares'}), use_container_width=True, hide_index=True)
+            # Folga sem horário
+            if not df_folga.empty:
+                with st.expander("🔹 FOLGA", expanded=True):
+                    ag_f = df_folga.groupby('serviço', sort=False)['id_disp'] \
+                                   .apply(lambda x: ', '.join(x)).reset_index()
+                    st.dataframe(ag_f.rename(columns={'id_disp':'Militar'}), use_container_width=True, hide_index=True)
 
             if not df_aus.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
-                    ag = df_aus.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
+                    ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
                                .apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag, use_container_width=True, hide_index=True)
 
