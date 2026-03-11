@@ -365,7 +365,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             pdf.set_x(C2)
             pdf.set_font("Arial", "", 9)
             pdf.set_fill_color(245, 245, 255)
-            pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()} ({r['horário']}): {r['id_fmt']}"), border='LR', align='L', fill=True)
+            horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
+            pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C2)
     pdf.cell(CW, 0.5, "", border='T', ln=1)
     y_c2 = pdf.get_y()
@@ -497,16 +498,21 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             fill = False
             for _, r in obs_df.drop_duplicates('observações').iterrows():
                 indic = str(r.get('indicativo rádio','') or r.get('rádio','') or 'S/I')
-                # desenhar as duas celulas na mesma linha
                 pdf.set_font("Arial", "", 9)
                 if fill:
-                    pdf.set_fill_color(255,255,220)
+                    pdf.set_fill_color(255, 255, 220)
                 else:
-                    pdf.set_fill_color(255,255,255)
-                x_before = pdf.get_x()
-                y_before = pdf.get_y()
-                pdf.cell(28, 6, c(indic), 1, 0, 'C', fill)
-                pdf.multi_cell(162, 6, c(r['observações']), border=1, align='L')
+                    pdf.set_fill_color(255, 255, 255)
+                y_antes = pdf.get_y()
+                # Desenhar multi_cell do texto primeiro para saber altura
+                pdf.set_xy(C1 + 28, y_antes)
+                pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
+                y_depois = pdf.get_y()
+                altura = y_depois - y_antes
+                # Voltar e desenhar indicativo com a mesma altura
+                pdf.set_xy(C1, y_antes)
+                pdf.cell(28, altura, c(indic), 1, 0, 'C', fill)
+                pdf.set_y(y_depois)
                 fill = not fill
 
     # ====================================================
@@ -796,17 +802,14 @@ else:
             mostrar_secao("Apoio ao Atendimento",      df_apoi)
             mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
             mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True)
-            # Remunerados: horário | militares | serviço
+            # Remunerados: horário | militares | observações (sem rádio/indicativo)
             if not df_remu.empty:
                 with st.expander("🔹 REMUNERADOS", expanded=True):
-                    cols_r = ['horário', 'id_disp']
-                    extra_cols = [c for c in ['serviço','viatura','rádio','indicativo rádio','observações'] if c in df_remu.columns]
-                    cols_r += extra_cols
-                    ag_r = df_remu.groupby(['horário'] + [c for c in ['serviço','viatura','rádio','indicativo rádio','observações'] if c in df_remu.columns], sort=False)['id_disp'] \
+                    cols_grp_r = ['horário'] + [c for c in ['serviço', 'observações'] if c in df_remu.columns]
+                    ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
                                   .apply(lambda x: ', '.join(x)).reset_index()
-                    # Reordenar colunas: horário, id_disp (militares), resto
-                    col_order = ['horário','id_disp'] + [c for c in ag_r.columns if c not in ['horário','id_disp']]
-                    st.dataframe(ag_r[col_order].rename(columns={'id_disp':'Militares'}), use_container_width=True, hide_index=True)
+                    col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
+                    st.dataframe(ag_r[col_order].rename(columns={'id_disp': 'Militares'}), use_container_width=True, hide_index=True)
             # Folga sem horário
             if not df_folga.empty:
                 with st.expander("🔹 FOLGA", expanded=True):
