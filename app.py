@@ -738,19 +738,32 @@ else:
         menu_opt.append("👥 Efetivo")
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed")
-        # Mobile: recolher sidebar após selecionar menu
-        st.markdown("""
-        <script>
-        const sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-        const closeBtn = window.parent.document.querySelector('[data-testid="collapsedControl"]');
-        if (window.parent.innerWidth < 768 && closeBtn) { closeBtn.click(); }
-        </script>
-        """, unsafe_allow_html=True)
 
         st.markdown("---")
         if st.button("🚪 Sair", use_container_width=True):
             st.session_state["logged_in"] = False
             st.rerun()
+
+    # ============================================================
+    # FECHAR SIDEBAR NO MOBILE APÓS SELEÇÃO
+    # ============================================================
+    import streamlit.components.v1 as _components
+    _components.html("""
+    <script>
+    (function() {
+        function closeSidebar() {
+            var w = window.parent;
+            if (w.innerWidth > 768) return;
+            // Botão de fechar sidebar no Streamlit
+            var btn = w.document.querySelector('[data-testid="collapsedControl"]');
+            if (!btn) btn = w.document.querySelector('button[kind="header"]');
+            if (btn) btn.click();
+        }
+        // Executar após um pequeno delay para garantir que o render terminou
+        setTimeout(closeSidebar, 300);
+    })();
+    </script>
+    """, height=0)
 
     # ============================================================
     # BANNER NOTIFICAÇÕES
