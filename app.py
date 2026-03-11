@@ -739,19 +739,29 @@ else:
         menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
 
         st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
-        sel_geral = st.radio("MENU", menu_geral, label_visibility="collapsed")
+
+        # Se vem de gestão, reset ao index do menu geral
+        idx_geral = None
+        if st.session_state.get("menu_ativo_grupo") != "gestao":
+            ultimo = st.session_state.get("menu_geral_sel", menu_geral[0])
+            idx_geral = menu_geral.index(ultimo) if ultimo in menu_geral else 0
+
+        sel_geral = st.radio("MENU", menu_geral, index=idx_geral if idx_geral is not None else 0, label_visibility="collapsed", key="radio_geral")
+
         sel_admin = None
         if is_admin:
             st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:8px 0 4px 0;'>GESTÃO</p>", unsafe_allow_html=True)
-            sel_admin = st.radio("GESTÃO", menu_admin, label_visibility="collapsed", index=None)
+            idx_admin = None if st.session_state.get("menu_ativo_grupo") != "gestao" else None
+            sel_admin = st.radio("GESTÃO", menu_admin, label_visibility="collapsed", index=None, key="radio_admin")
 
-        # Menu ativo — admin ao clicar em gestão limpa o geral e vice-versa
-        if sel_admin:
+        # Determinar menu ativo e grupo
+        if sel_admin and st.session_state.get("radio_admin") in menu_admin:
             menu = sel_admin
-            if "sel_geral_prev" not in st.session_state or st.session_state.get("sel_admin_prev") != sel_admin:
-                st.session_state["sel_admin_prev"] = sel_admin
+            st.session_state["menu_ativo_grupo"] = "gestao"
         else:
             menu = sel_geral
+            st.session_state["menu_ativo_grupo"] = "geral"
+            st.session_state["menu_geral_sel"] = sel_geral
 
         st.markdown("---")
         if st.button("🚪 Sair", use_container_width=True):
@@ -992,6 +1002,95 @@ else:
 
             if not encontrou_algum:
                 st.info("Não foram encontrados serviços escalados a partir de hoje.")
+
+
+    # --- 📊 ESTATÍSTICAS ---
+    elif menu == "📊 Estatísticas":
+        st.title("📊 Estatísticas de Serviço")
+
+        if is_admin:
+            militares_opts = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
+            sel_mil = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts.keys()))
+            alvo_id   = u_id if sel_mil == "— O meu próprio —" else militares_opts[sel_mil]
+            alvo_nome = u_nome if sel_mil == "— O meu próprio —" else sel_mil
+        else:
+            alvo_id   = u_id
+            alvo_nome = u_nome
+
+        st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
+
+        _gsheet_url = st.secrets["gsheet_url"]
+        _sheet_id   = _gsheet_url.split("/d/")[1].split("/")[0]
+
+        @st.cache_data(ttl=86400)
+        def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
+            import unicodedata as _ud3
+            def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+            client = get_gsheet_client()
+            sh = client.open_by_key(sheet_id_c)
+            abas = sh.worksheets()
+            resultados = []
+            for aba in abas:
+                titulo = aba.title
+                partes = titulo.split("-")
+                if len(partes) != 2 or not all(p.isdigit() for p in partes):
+                    continue
+                try:
+                    dados = aba.get_all_records()
+                    df_aba = pd.DataFrame(dados)
+                    if df_aba.empty or 'id' not in df_aba.columns:
+                        continue
+                    mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
+                    for _, row in mil_rows.iterrows():
+                        serv = str(row.get('serviço', '')).strip()
+                        if not serv:
+                            continue
+                        dd, mm = int(partes[0]), int(partes[1])
+                        ano = datetime.now().year
+                        if mm > datetime.now().month + 1:
+                            ano -= 1
+                        resultados.append({
+                            'data': f"{partes[0]}/{partes[1]}/{ano}",
+                            'mes': f"{partes[1]}/{ano}",
+                            'serviço': serv,
+                            'tipo': _n3(serv)
+                        })
+                except Exception:
+                    continue
+            return pd.DataFrame(resultados)
+
+        with st.spinner("A carregar histórico..."):
+            df_stats = contar_servicos_historico(alvo_id, _sheet_id)
+
+        if df_stats.empty:
+            st.info("Não foram encontrados serviços no histórico.")
+        else:
+            def categorizar(tipo):
+                if any(x in tipo for x in ['feria','licen','doente']): return 'Ausência'
+                if 'folga' in tipo: return 'Folga'
+                if any(x in tipo for x in ['remu','grat']): return 'Remunerado'
+                if 'atendimento' in tipo: return 'Atendimento'
+                if 'apoio' in tipo: return 'Apoio Atendimento'
+                if any(x in tipo for x in ['patrulha','ronda','po ','vtr']): return 'Patrulha'
+                if any(x in tipo for x in ['secretaria','inquer','comando','dilig','tribunal','pronto']): return 'ADM'
+                return 'Outros'
+
+            df_stats['categoria'] = df_stats['tipo'].apply(categorizar)
+            total = len(df_stats)
+            st.metric("Total de serviços", total)
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("**Por categoria**")
+                df_cat = df_stats.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
+                st.dataframe(df_cat, use_container_width=True, hide_index=True)
+            with col_g2:
+                st.markdown("**Por mês**")
+                df_mes = df_stats.groupby('mes').size().reset_index(name='total')
+                st.dataframe(df_mes, use_container_width=True, hide_index=True)
+            st.markdown("---")
+            st.markdown("**Detalhe por serviço**")
+            df_detalhe = df_stats.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
+            st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
@@ -1420,4 +1519,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
