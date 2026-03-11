@@ -740,28 +740,21 @@ else:
 
         st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
 
-        # Se vem de gestão, reset ao index do menu geral
-        idx_geral = None
-        if st.session_state.get("menu_ativo_grupo") != "gestao":
-            ultimo = st.session_state.get("menu_geral_sel", menu_geral[0])
-            idx_geral = menu_geral.index(ultimo) if ultimo in menu_geral else 0
-
-        sel_geral = st.radio("MENU", menu_geral, index=idx_geral if idx_geral is not None else 0, label_visibility="collapsed", key="radio_geral")
-
-        sel_admin = None
+        menu_opt = [
+            "📅 Minha Escala",
+            "🔍 Escala Geral",
+            "📊 Estatísticas",
+            "🔄 Solicitar Troca",
+            "📥 Pedidos Recebidos",
+            "📋 Histórico de Trocas",
+            "🔄 Giros",
+            "👥 Efetivo",
+        ]
         if is_admin:
-            st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:8px 0 4px 0;'>GESTÃO</p>", unsafe_allow_html=True)
-            idx_admin = None if st.session_state.get("menu_ativo_grupo") != "gestao" else None
-            sel_admin = st.radio("GESTÃO", menu_admin, label_visibility="collapsed", index=None, key="radio_admin")
+            menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas"]
 
-        # Determinar menu ativo e grupo
-        if sel_admin and st.session_state.get("radio_admin") in menu_admin:
-            menu = sel_admin
-            st.session_state["menu_ativo_grupo"] = "gestao"
-        else:
-            menu = sel_geral
-            st.session_state["menu_ativo_grupo"] = "geral"
-            st.session_state["menu_geral_sel"] = sel_geral
+        menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
+                        format_func=lambda x: "──────────" if x == "" else x)
 
         st.markdown("---")
         if st.button("🚪 Sair", use_container_width=True):
@@ -854,62 +847,59 @@ else:
                             'obs': str(row_cal.get('observações','') or '').strip()
                         }
 
-            # Renderizar calendário em grelha 7 colunas
-            dias_semana = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-            # Cabeçalho
-            cols_hdr = st.columns(7)
-            for i_h, ds in enumerate(dias_semana):
-                cols_hdr[i_h].markdown(f"<div style='text-align:center;font-weight:700;font-size:0.8rem;color:#64748B;padding:4px'>{ds}</div>", unsafe_allow_html=True)
-
-            # Primeiro dia da semana (0=seg)
-            primeiro_dia = datetime(ano_sel, mes_sel, 1).weekday()
-            celulas = [""] * primeiro_dia + list(range(1, n_dias + 1))
-            # Completar até múltiplo de 7
-            while len(celulas) % 7 != 0:
-                celulas.append("")
-
             hoje_d = datetime.now().date()
-            for semana in range(len(celulas) // 7):
-                cols_cal = st.columns(7)
-                for dia_col in range(7):
-                    cel = celulas[semana * 7 + dia_col]
-                    with cols_cal[dia_col]:
-                        if cel == "":
-                            st.markdown("<div style='min-height:70px'></div>", unsafe_allow_html=True)
-                        else:
-                            dt_cel = datetime(ano_sel, mes_sel, cel).date()
-                            is_hoje = dt_cel == hoje_d
-                            borda = "3px solid #1E3A8A" if is_hoje else "1px solid #E2E8F0"
-                            if cel in servicos_mes:
-                                info = servicos_mes[cel]
-                                if info['troca']:
-                                    bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
-                                else:
-                                    # Categorizar serviço
-                                    s_low = info['serviço'].lower()
-                                    if any(x in s_low for x in ['folga','ferias','licen','doente']):
-                                        bg, cor_txt, icone = "#F0FDF4", "#166534", "🏖️"
-                                    elif any(x in s_low for x in ['remu','grat']):
-                                        bg, cor_txt, icone = "#ECFDF5", "#065F46", "💰"
-                                    else:
-                                        bg, cor_txt, icone = "#EFF6FF", "#1E3A8A", "🛡️"
-                                serv_curto = info['serviço'][:12] + "…" if len(info['serviço']) > 12 else info['serviço']
-                                st.markdown(f"""
-                                <div style='background:{bg};border:{borda};border-radius:8px;padding:4px 6px;min-height:70px;cursor:default'>
-                                    <div style='font-size:0.75rem;font-weight:700;color:#475569'>{cel}</div>
-                                    <div style='font-size:0.7rem;color:{cor_txt};font-weight:600'>{icone} {serv_curto}</div>
-                                    <div style='font-size:0.65rem;color:#64748B'>{info['horário']}</div>
-                                </div>""", unsafe_allow_html=True)
-                            else:
-                                fundo = "#F8FAFC" if not is_hoje else "#EFF6FF"
-                                st.markdown(f"""
-                                <div style='background:{fundo};border:{borda};border-radius:8px;padding:4px 6px;min-height:70px'>
-                                    <div style='font-size:0.75rem;font-weight:700;color:#CBD5E1'>{cel}</div>
-                                </div>""", unsafe_allow_html=True)
 
-            # Legenda
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.caption("🛡️ Serviço &nbsp;·&nbsp; 🔄 Troca &nbsp;·&nbsp; 💰 Remunerado &nbsp;·&nbsp; 🏖️ Folga/Ausência")
+            # Renderizar como lista de cards compactos (funciona em mobile e desktop)
+            nomes_mes = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                         "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+            nomes_dia = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+            st.markdown(f"### {nomes_mes[mes_sel]} {ano_sel}")
+
+            tem_servicos = False
+            for d in range(1, n_dias + 1):
+                dt_cel = datetime(ano_sel, mes_sel, d).date()
+                is_hoje = dt_cel == hoje_d
+                dia_sem = nomes_dia[dt_cel.weekday()]
+                borda_esq = "4px solid #1E3A8A" if is_hoje else "3px solid #E2E8F0"
+                hoje_badge = " <span style='background:#1E3A8A;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px'>HOJE</span>" if is_hoje else ""
+
+                if d in servicos_mes:
+                    tem_servicos = True
+                    info = servicos_mes[d]
+                    if info['troca']:
+                        bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
+                    else:
+                        s_low = info['serviço'].lower()
+                        if any(x in s_low for x in ['folga','ferias','licen','doente']):
+                            bg, cor_txt, icone = "#F0FDF4", "#166534", "🏖️"
+                        elif any(x in s_low for x in ['remu','grat']):
+                            bg, cor_txt, icone = "#ECFDF5", "#065F46", "💰"
+                        else:
+                            bg, cor_txt, icone = "#EFF6FF", "#1E3A8A", "🛡️"
+                    obs_html = f"<span style='color:#64748B;font-size:0.75rem'> · 📝 {info['obs']}</span>" if info['obs'] else ""
+                    st.markdown(f"""
+                    <div style='background:{bg};border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
+                        <div style='min-width:48px;text-align:center'>
+                            <div style='font-size:1.2rem;font-weight:800;color:#1E293B;line-height:1'>{d}</div>
+                            <div style='font-size:0.7rem;color:#64748B'>{dia_sem}</div>
+                        </div>
+                        <div>
+                            <div style='font-size:0.9rem;font-weight:700;color:{cor_txt}'>{icone} {info['serviço']}{hoje_badge}</div>
+                            <div style='font-size:0.8rem;color:#475569'>🕒 {info['horário']}{obs_html}</div>
+                        </div>
+                    </div>""", unsafe_allow_html=True)
+                elif is_hoje:
+                    st.markdown(f"""
+                    <div style='background:#F8FAFC;border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
+                        <div style='min-width:48px;text-align:center'>
+                            <div style='font-size:1.2rem;font-weight:800;color:#94A3B8;line-height:1'>{d}</div>
+                            <div style='font-size:0.7rem;color:#94A3B8'>{dia_sem}</div>
+                        </div>
+                        <div style='color:#94A3B8;font-size:0.85rem'>Sem serviço escalado{hoje_badge}</div>
+                    </div>""", unsafe_allow_html=True)
+
+            if not tem_servicos:
+                st.info("Não foram encontrados serviços escalados neste mês.")
 
         # ── PRÓXIMOS SERVIÇOS ──
         else:
@@ -1519,3 +1509,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
