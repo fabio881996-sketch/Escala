@@ -262,12 +262,16 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_raw['servico_col'] = df_raw['serviço'].apply(_norm)
     df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
 
-    # Filtros sequenciais — igual à escala geral, o que sobrar vai para "outros serviços"
+    # Separar logo à partida linhas sem militar (id vazio) — não aparecem nas tabelas
+    df_raw_com = df_raw[df_raw['id'].astype(str).str.strip().str.len() > 0].copy()
+    df_raw_sem = df_raw[df_raw['id'].astype(str).str.strip().str.len() == 0].copy()
+
+    # Filtros sequenciais sobre linhas COM militar
     def filtrar(pat, df):
         mask = df['servico_col'].str.contains(pat, na=False)
         return df[mask].copy(), df[~mask].copy()
 
-    df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw)
+    df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw_com)
     df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
     df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
     df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
