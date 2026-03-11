@@ -860,11 +860,12 @@ else:
     with st.sidebar:
         # Badge do utilizador
         st.markdown("""
-        <div style='text-align:center;padding:10px 0 14px 0;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1)'>
-            <div style='font-size:1.5rem;line-height:1;margin-bottom:6px'>🚓</div>
-            <div style='font-size:0.8rem;font-weight:800;color:#E2E8F0;letter-spacing:0.06em;text-transform:uppercase'>Portal de Escalas</div>
-            <div style='font-size:0.68rem;color:#93C5FD;font-weight:600;margin-top:3px;letter-spacing:0.03em'>Guarda Nacional Republicana</div>
-            <div style='font-size:0.65rem;color:#64748B;margin-top:2px'>Posto Territorial de Famalicão</div>
+        <div style='text-align:center;padding:12px 4px 16px 4px;margin-bottom:14px;background:linear-gradient(180deg,rgba(30,58,138,0.4) 0%,rgba(15,23,42,0) 100%);border-radius:10px'>
+            <div style='font-size:2rem;line-height:1;margin-bottom:8px;filter:drop-shadow(0 2px 6px rgba(147,197,253,0.4))'>🚓</div>
+            <div style='font-size:0.85rem;font-weight:800;color:#F1F5F9;letter-spacing:0.08em;text-transform:uppercase;line-height:1.2'>Portal de Escalas</div>
+            <div style='width:40px;height:2px;background:linear-gradient(90deg,transparent,#3B82F6,transparent);margin:6px auto 5px auto;border-radius:2px'></div>
+            <div style='font-size:0.72rem;color:#93C5FD;font-weight:600;letter-spacing:0.04em'>Guarda Nacional Republicana</div>
+            <div style='font-size:0.67rem;color:#64748B;margin-top:3px;letter-spacing:0.02em'>Posto Territorial de Famalicão</div>
         </div>
         """, unsafe_allow_html=True)
 
