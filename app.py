@@ -86,6 +86,18 @@ h3 { color: #243B5C !important; font-weight: 600 !important; }
     border-left-color: #059669 !important;
     background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%) !important;
 }
+.card-folga {
+    border-left-color: #7C3AED !important;
+    background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%) !important;
+}
+.card-ausencia {
+    border-left-color: #64748B !important;
+    background: linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%) !important;
+}
+.card-tribunal {
+    border-left-color: #DC2626 !important;
+    background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%) !important;
+}
 .card-servico h3 { font-size: 1.1rem !important; margin: 4px 0 !important; }
 .card-servico p  { margin: 2px 0 !important; font-size: 0.88rem !important; color: #475569; }
 
@@ -859,8 +871,13 @@ else:
             for d in range(1, n_dias + 1):
                 dt_cel = datetime(ano_sel, mes_sel, d).date()
                 is_hoje = dt_cel == hoje_d
-                dia_sem = nomes_dia[dt_cel.weekday()]
-                borda_esq = "4px solid #1E3A8A" if is_hoje else "3px solid #E2E8F0"
+                weekday = dt_cel.weekday()
+                dia_sem = nomes_dia[weekday]
+                is_fds = weekday >= 5  # Sábado=5, Domingo=6
+
+                borda_esq = "4px solid #1E3A8A" if is_hoje else ("3px solid #F59E0B" if is_fds else "3px solid #E2E8F0")
+                cor_num = "#B45309" if is_fds else "#1E293B"
+                cor_dia = "#B45309" if is_fds else "#64748B"
                 hoje_badge = " <span style='background:#1E3A8A;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px'>HOJE</span>" if is_hoje else ""
 
                 if d in servicos_mes:
@@ -869,19 +886,28 @@ else:
                     if info['troca']:
                         bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
                     else:
-                        s_low = info['serviço'].lower()
-                        if any(x in s_low for x in ['folga','ferias','licen','doente']):
-                            bg, cor_txt, icone = "#F0FDF4", "#166534", "🏖️"
-                        elif any(x in s_low for x in ['remu','grat']):
+                        import unicodedata as _udc
+                        def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                        s_n = _nc(info['serviço'])
+                        if any(x in s_n for x in ['ferias','licen','doente']):
+                            bg, cor_txt, icone = "#F8FAFC", "#64748B", "🏖️"
+                        elif 'folga' in s_n:
+                            bg, cor_txt, icone = "#F5F3FF", "#7C3AED", "😴"
+                        elif any(x in s_n for x in ['tribunal','dilig']):
+                            bg, cor_txt, icone = "#FFF1F2", "#DC2626", "⚖️"
+                        elif any(x in s_n for x in ['remu','grat']):
                             bg, cor_txt, icone = "#ECFDF5", "#065F46", "💰"
                         else:
                             bg, cor_txt, icone = "#EFF6FF", "#1E3A8A", "🛡️"
+                    # Fundo mais quente ao fim de semana
+                    if is_fds and bg == "#EFF6FF":
+                        bg = "#FFFBEB"
                     obs_html = f"<span style='color:#64748B;font-size:0.75rem'> · 📝 {info['obs']}</span>" if info['obs'] else ""
                     st.markdown(f"""
                     <div style='background:{bg};border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
                         <div style='min-width:48px;text-align:center'>
-                            <div style='font-size:1.2rem;font-weight:800;color:#1E293B;line-height:1'>{d}</div>
-                            <div style='font-size:0.7rem;color:#64748B'>{dia_sem}</div>
+                            <div style='font-size:1.2rem;font-weight:800;color:{cor_num};line-height:1'>{d}</div>
+                            <div style='font-size:0.7rem;color:{cor_dia};font-weight:{"700" if is_fds else "400"}'>{dia_sem}</div>
                         </div>
                         <div>
                             <div style='font-size:0.9rem;font-weight:700;color:{cor_txt}'>{icone} {info['serviço']}{hoje_badge}</div>
@@ -952,10 +978,22 @@ else:
                             row = m.iloc[0]
                             obs_val = str(row.get('observações', '') or '').strip()
                             obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
+                            # Escolher classe e ícone conforme o tipo de serviço
+                            import unicodedata as _uds
+                            def _ns(t): return _uds.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                            s_norm = _ns(row['serviço'])
+                            if any(x in s_norm for x in ['ferias','licen','doente']):
+                                card_class, icone_s = 'card-ausencia', '🏖️'
+                            elif 'folga' in s_norm:
+                                card_class, icone_s = 'card-folga', '😴'
+                            elif any(x in s_norm for x in ['tribunal','dilig']):
+                                card_class, icone_s = 'card-tribunal', '⚖️'
+                            else:
+                                card_class, icone_s = 'card-meu', '🛡️'
                             st.markdown(
-                                f'<div class="card-servico card-meu">'
+                                f'<div class="card-servico {card_class}">'
                                 f'<p><b>{lbl}</b></p>'
-                                f'<h3>🛡️ {row["serviço"]}</h3>'
+                                f'<h3>{icone_s} {row["serviço"]}</h3>'
                                 f'<p>🕒 {row["horário"]}</p>'
                                 f'{obs_html}'
                                 f'</div>',
