@@ -170,12 +170,7 @@ def load_data(aba_nome: str) -> pd.DataFrame:
         if not records:
             return pd.DataFrame()
         df = pd.DataFrame(records).astype(str)
-        # Normalizar nomes de colunas: strip, lowercase, remover acentos
-        import unicodedata as _ucd
-        def _norm_col(c):
-            c = str(c).strip().lower()
-            return _ucd.normalize('NFKD', c).encode('ascii', 'ignore').decode('ascii')
-        df.columns = [_norm_col(c) for c in df.columns]
+        df.columns = [str(c).strip().lower() for c in df.columns]
         return df.fillna("")
     except Exception:
         return pd.DataFrame()
