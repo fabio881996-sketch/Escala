@@ -525,8 +525,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # ====================================================
     # BLOCO 6 — OBSERVACOES DE PATRULHA
     # ====================================================
-    if not df_pat.empty and 'observações' in df_pat.columns:
-        obs_df = df_pat[df_pat['observações'].str.strip().str.len() > 0].copy()
+    df_obs_total = pd.concat([df_pat, df_outros], ignore_index=True) if not df_outros.empty else df_pat
+    if not df_obs_total.empty and 'observações' in df_obs_total.columns:
+        obs_df = df_obs_total[df_obs_total['observações'].str.strip().str.len() > 0].copy()
         if not obs_df.empty:
             pdf.ln(2)
             sec_title("Observacoes de Patrulha", W)
@@ -534,8 +535,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             tbl_hdr(["Indicativo","Detalhe"], w_o)
             fill = False
             for _, r in obs_df.drop_duplicates('observações').iterrows():
-                indic_val = str(r.get('indicativo rádio','') or '').strip()
-                radio_val = str(r.get('rádio','') or '').strip()
+                indic_val   = str(r.get('indicativo rádio','') or '').strip()
+                radio_val   = str(r.get('rádio','') or '').strip()
                 servico_val = str(r.get('serviço','') or '').strip()
                 indic = indic_val or radio_val or servico_val or 'S/I'
                 pdf.set_font("Arial", "", 9)
