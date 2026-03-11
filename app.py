@@ -728,7 +728,6 @@ else:
             "🔍 Escala Geral",
             "📊 Estatísticas",
             "🔄 Solicitar Troca",
-            "🔁 Troca a 3",
             "📥 Pedidos Recebidos",
             "📋 Histórico de Trocas",
             "🔄 Giros",
@@ -1010,204 +1009,125 @@ else:
                                .apply(lambda x: ', '.join(x)).reset_index()
                     st.dataframe(ag, use_container_width=True, hide_index=True)
 
-    # --- 🔁 TROCA A 3 ---
-    elif menu == "🔁 Troca a 3":
-        st.title("🔁 Solicitar Troca a 3")
-        st.caption("Faz dois pedidos de troca em simultâneo num único formulário.")
-        dt_t3   = st.date_input("Data da tua troca:", format="DD/MM/YYYY", key="t3_data")
-        df_t3   = load_data(dt_t3.strftime("%d-%m"))
-        if df_t3.empty:
-            st.info("Sem dados para essa data.")
-        else:
-            meu_t3 = df_t3[df_t3['id'].astype(str) == u_id]
-            if meu_t3.empty:
-                st.warning("Não tens serviço escalado nesse dia.")
-            else:
-                meu_serv_t3 = meu_t3.iloc[0]['serviço']
-                st.info(f"O teu serviço nesse dia: **{meu_serv_t3}**")
-                outros_t3 = df_t3[df_t3['id'].astype(str) != u_id]
-                # Excluir militares indisponíveis — mesma regra do Solicitar Troca
-                outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
-                opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
-                if len(opcoes_t3) < 2:
-                    st.warning("Não há militares suficientes escalados nesse dia para uma troca a 3.")
-                else:
-                    sel1 = st.selectbox("1º militar (vai para o teu serviço):", list(opcoes_t3.keys()), key="t3_sel1")
-                    sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
-                    id1  = str(opcoes_t3[sel1])
-                    id2  = str(opcoes_t3[sel2])
-                    serv1 = df_t3[df_t3['id'].astype(str) == id1].iloc[0]['serviço']
-                    serv2 = df_t3[df_t3['id'].astype(str) == id2].iloc[0]['serviço']
-                    st.markdown(f"""
-                    **Resumo da troca a 3:**
-                    - Tu ({u_id}): `{meu_serv_t3}` → ficas com `{serv1}`... aguarda, o 1º vai para o teu serviço
-                    - **{sel1}**: `{serv1}` → vai para `{meu_serv_t3}`
-                    - **{sel2}**: `{serv2}` → vai para `{serv1}`
-                    """)
-                    email1_rows = df_util[df_util['id'].astype(str) == id1]
-                    email2_rows = df_util[df_util['id'].astype(str) == id2]
-                    if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
-                        if email1_rows.empty or email2_rows.empty:
-                            st.error("Não foi possível encontrar o email de um dos militares.")
-                        else:
-                            data_str = dt_t3.strftime('%d/%m/%Y')
-                            # Pedido 1: eu troco com militar 1
-                            linha1 = [data_str, u_id, meu_serv_t3, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
-                            salvar_troca_gsheet(linha1)
-                            # Pedido 2: militar 1 troca com militar 2
-                            linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
-                            salvar_troca_gsheet(linha2)
-                            st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos os militares.")
-
-    # --- 📊 ESTATÍSTICAS ---
-    elif menu == "📊 Estatísticas":
-        st.title("📊 Estatísticas de Serviço")
-
-        # Admin pode escolher militar
-        if is_admin:
-            militares_opts = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
-            sel_mil = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts.keys()))
-            alvo_id = u_id if sel_mil == "— O meu próprio —" else militares_opts[sel_mil]
-            alvo_nome = u_nome if sel_mil == "— O meu próprio —" else sel_mil
-        else:
-            alvo_id   = u_id
-            alvo_nome = u_nome
-
-        st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
-
-        # Extrair sheet_id do URL configurado nos secrets
-        _gsheet_url = st.secrets["gsheet_url"]
-        _sheet_id = _gsheet_url.split("/d/")[1].split("/")[0]
-
-        @st.cache_data(ttl=86400)
-        def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
-            """Percorre todas as abas DD-MM e conta serviços do militar."""
-            import unicodedata as _ud3
-            def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-            client = get_gsheet_client()
-            sh = client.open_by_key(sheet_id_c)
-            abas = sh.worksheets()
-            resultados = []
-            for aba in abas:
-                titulo = aba.title
-                partes = titulo.split("-")
-                if len(partes) != 2 or not all(p.isdigit() for p in partes):
-                    continue
-                try:
-                    dados = aba.get_all_records()
-                    df_aba = pd.DataFrame(dados)
-                    if df_aba.empty or 'id' not in df_aba.columns:
-                        continue
-                    mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
-                    for _, row in mil_rows.iterrows():
-                        serv = str(row.get('serviço', '')).strip()
-                        if not serv:
-                            continue
-                        dd, mm = int(partes[0]), int(partes[1])
-                        ano = datetime.now().year
-                        if mm > datetime.now().month + 1:
-                            ano -= 1
-                        resultados.append({
-                            'data': f"{partes[0]}/{partes[1]}/{ano}",
-                            'mes': f"{partes[1]}/{ano}",
-                            'serviço': serv,
-                            'tipo': _n3(serv)
-                        })
-                except Exception:
-                    continue
-            return pd.DataFrame(resultados)
-
-        with st.spinner("A carregar histórico..."):
-            df_stats = contar_servicos_historico(alvo_id, _sheet_id)
-
-        if df_stats.empty:
-            st.info("Sem histórico de serviços encontrado.")
-        else:
-            import unicodedata as _ud4
-            def _n4(t): return _ud4.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-
-            def cat(s):
-                s = _n4(s)
-                if any(x in s for x in ['ferias','licen','doente']): return 'Ausência'
-                if any(x in s for x in ['folga']): return 'Folga'
-                if any(x in s for x in ['remu','grat']): return 'Remunerado'
-                if any(x in s for x in ['atendimento']) and 'apoio' not in s: return 'Atendimento'
-                if 'apoio' in s: return 'Apoio Atendimento'
-                if any(x in s for x in ['po','patrulha','ronda','ocorr']): return 'Patrulha'
-                if any(x in s for x in ['pronto','secretaria','inquer','dilig']): return 'ADM'
-                return 'Outros'
-
-            df_stats['categoria'] = df_stats['serviço'].apply(cat)
-
-            # Métricas rápidas
-            total = len(df_stats)
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Total serviços", total)
-            c2.metric("Patrulhas", len(df_stats[df_stats['categoria'] == 'Patrulha']))
-            c3.metric("Atendimentos", len(df_stats[df_stats['categoria'].isin(['Atendimento','Apoio Atendimento'])]))
-            c4.metric("Remunerados", len(df_stats[df_stats['categoria'] == 'Remunerado']))
-
-            st.markdown("---")
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                st.markdown("**Por categoria**")
-                df_cat = df_stats.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
-                st.dataframe(df_cat, use_container_width=True, hide_index=True)
-            with col_g2:
-                st.markdown("**Por mês**")
-                df_mes = df_stats.groupby('mes').size().reset_index(name='total')
-                st.dataframe(df_mes, use_container_width=True, hide_index=True)
-
-            st.markdown("---")
-            st.markdown("**Detalhe por serviço**")
-            df_detalhe = df_stats.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
-            st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
-
     # --- 🔄 SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
         st.title("🔄 Solicitar Troca de Serviço")
-        dt_s  = st.date_input("Data da troca:", format="DD/MM/YYYY")
-        df_d  = load_data(dt_s.strftime("%d-%m"))
+
+        tipo_troca = st.radio(
+            "Tipo de pedido:",
+            ["🔄 Troca Simples", "🔁 Troca a 3", "❌ Matar Remunerado"],
+            horizontal=True
+        )
+        st.markdown("---")
+
+        dt_s = st.date_input("Data:", format="DD/MM/YYYY")
+        df_d = load_data(dt_s.strftime("%d-%m"))
 
         if df_d.empty:
             st.info("Não existem dados para esta data.")
         else:
             meu = df_d[df_d['id'].astype(str) == u_id]
-            if meu.empty:
-                st.warning("Não tens serviço escalado neste dia.")
-            else:
-                meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
-                st.info(f"📋 O teu serviço: **{meu_s}**")
 
-                cols = df_d[
-                    (df_d['id'].astype(str) != u_id) &
-                    (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))
-                ]
-
-                if cols.empty:
-                    st.warning("Não há militares disponíveis para troca neste dia.")
+            # ── Troca Simples ──
+            if tipo_troca == "🔄 Troca Simples":
+                if meu.empty:
+                    st.warning("Não tens serviço escalado neste dia.")
                 else:
-                    opts = cols.apply(
-                        lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1
-                    ).tolist()
-                    with st.form("tr"):
-                        alvo = st.selectbox("👤 Trocar com:", opts)
+                    meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
+                    st.info(f"📋 O teu serviço: **{meu_s}**")
+                    cols = df_d[
+                        (df_d['id'].astype(str) != u_id) &
+                        (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))
+                    ]
+                    if cols.empty:
+                        st.warning("Não há militares disponíveis para troca neste dia.")
+                    else:
+                        opts = cols.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                        with st.form("tr_simples"):
+                            alvo = st.selectbox("👤 Trocar com:", opts)
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
+                                id_d = alvo.split(" - ")[0]
+                                s_d  = alvo.split(" - ", 1)[1]
+                                email_row = df_util[df_util['id'].astype(str) == id_d]
+                                if email_row.empty:
+                                    st.error("Militar de destino não encontrado.")
+                                else:
+                                    em_d = email_row['email'].values[0]
+                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
+                                        st.success("✅ Pedido enviado com sucesso!")
+                                        st.balloons()
+
+            # ── Troca a 3 ──
+            elif tipo_troca == "🔁 Troca a 3":
+                if meu.empty:
+                    st.warning("Não tens serviço escalado nesse dia.")
+                else:
+                    meu_serv_t3 = meu.iloc[0]['serviço']
+                    meu_hor_t3  = meu.iloc[0]['horário']
+                    st.info(f"📋 O teu serviço: **{meu_serv_t3} ({meu_hor_t3})**")
+                    outros_t3 = df_d[df_d['id'].astype(str) != u_id]
+                    outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
+                    opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
+                    if len(opcoes_t3) < 2:
+                        st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
+                    else:
+                        sel1 = st.selectbox("1º militar (vai para o teu serviço):", list(opcoes_t3.keys()), key="t3_sel1")
+                        sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
+                        id1   = str(opcoes_t3[sel1])
+                        id2   = str(opcoes_t3[sel2])
+                        serv1 = df_d[df_d['id'].astype(str) == id1].iloc[0]['serviço']
+                        serv2 = df_d[df_d['id'].astype(str) == id2].iloc[0]['serviço']
+                        st.markdown(f"""
+                        **Resumo da troca a 3:**
+                        - **Tu** `{meu_serv_t3}` → ficas com o serviço do 1º
+                        - **{sel1}** `{serv1}` → vai para o teu serviço
+                        - **{sel2}** `{serv2}` → vai para o serviço do 1º
+                        """)
+                        email1_rows = df_util[df_util['id'].astype(str) == id1]
+                        email2_rows = df_util[df_util['id'].astype(str) == id2]
+                        if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
+                            if email1_rows.empty or email2_rows.empty:
+                                st.error("Não foi possível encontrar o email de um dos militares.")
+                            else:
+                                data_str = dt_s.strftime('%d/%m/%Y')
+                                linha1 = [data_str, u_id, meu_serv_t3, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
+                                linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
+                                salvar_troca_gsheet(linha1)
+                                salvar_troca_gsheet(linha2)
+                                st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
+                                st.balloons()
+
+            # ── Matar Remunerado ──
+            elif tipo_troca == "❌ Matar Remunerado":
+                # Procurar militares que TÊM remunerado nesse dia (exceto o próprio)
+                rem_dia = df_d[
+                    (df_d['id'].astype(str) != u_id) &
+                    (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False)) &
+                    (df_d['id'].astype(str).str.strip().str.len() > 0)
+                ]
+                if rem_dia.empty:
+                    st.info("Não há serviços remunerados escalados neste dia.")
+                else:
+                    opts_rem = rem_dia.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                    with st.form("matar_rem"):
+                        st.info("Seleciona o remunerado que queres fazer.")
+                        rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
-                            id_d = alvo.split(" - ")[0]
-                            s_d  = alvo.split(" - ", 1)[1]
+                        if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
+                            id_d = rem_sel.split(" - ")[0]
+                            s_d  = rem_sel.split(" - ", 1)[1]
                             email_row = df_util[df_util['id'].astype(str) == id_d]
                             if email_row.empty:
-                                st.error("Militar de destino não encontrado.")
+                                st.error("Militar não encontrado.")
                             else:
                                 em_d = email_row['email'].values[0]
-                                if salvar_troca_gsheet([
-                                    dt_s.strftime('%d/%m/%Y'),
-                                    u_id, meu_s,
-                                    id_d, s_d,
-                                    "Pendente_Militar", em_d
-                                ]):
-                                    st.success("✅ Pedido enviado com sucesso!")
+                                # Troca normal — pedido vai para o militar que tem o remunerado
+                                meu_serv = meu.iloc[0]['serviço'] if not meu.empty else "Folga"
+                                meu_hor  = meu.iloc[0]['horário'] if not meu.empty else ""
+                                meu_s_rem = f"{meu_serv} ({meu_hor})"
+                                if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s_rem, id_d, s_d, "Pendente_Militar", em_d]):
+                                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
                                     st.balloons()
 
     # --- 📥 PEDIDOS RECEBIDOS ---
@@ -1325,7 +1245,7 @@ else:
             if minhas.empty:
                 st.info("Não tens trocas registadas.")
             else:
-                for _, r in minhas.iterrows():
+                for idx, r in minhas.iterrows():
                     fui_origem = str(r['id_origem']) == u_id
                     outro_id   = r['id_destino'] if fui_origem else r['id_origem']
                     outro_nome = get_nome_militar(df_util, outro_id)
@@ -1333,7 +1253,7 @@ else:
                     outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
                     papel      = "Requerente" if fui_origem else "Substituto"
                     status     = r.get('status','')
-                    cor = "🟢" if status == "Aprovada" else ("🔴" if status == "Rejeitada" else "🟡")
+                    cor = "🟢" if status == "Aprovada" else ("🔴" if status in ("Rejeitada","Cancelada") else "🟡")
                     with st.expander(f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})", expanded=False):
                         col1, col2 = st.columns(2)
                         with col1:
@@ -1344,6 +1264,12 @@ else:
                             st.markdown(f"**Serviço contraparte:** `{outro_serv}`")
                         if status == "Aprovada":
                             st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
+                        # Cancelar só se ainda estiver pendente e o militar for o requerente
+                        elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
+                            if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
+                                if atualizar_status_gsheet(idx, "Cancelada"):
+                                    st.success("Pedido cancelado.")
+                                    st.rerun()
 
     # --- 🔄 GIROS ---
     elif menu == "🔄 Giros":
