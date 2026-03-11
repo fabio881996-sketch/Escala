@@ -620,6 +620,41 @@ def _limpar_sem_militar(df: pd.DataFrame) -> pd.DataFrame:
         return df
     return df[df['id'].astype(str).str.strip().str.len() > 0].copy()
 
+def _cel_expandivel(val: str, limite: int = 60) -> str:
+    """Renderiza texto longo com 'ver mais' usando <details> nativo do HTML."""
+    txt = str(val)
+    if len(txt) <= limite:
+        return txt
+    resumo = txt[:limite].rstrip() + "…"
+    # Escapar aspas para não quebrar o HTML
+    txt_esc = txt.replace('"', '&quot;').replace("'", "&#39;")
+    resumo_esc = resumo.replace('"', '&quot;').replace("'", "&#39;")
+    return (
+        f"<details style='cursor:pointer'>"
+        f"<summary style='list-style:none;outline:none;color:#1E293B'>{resumo_esc}"
+        f"<span style='color:#1E3A8A;font-size:0.75rem;margin-left:4px'>ver mais</span></summary>"
+        f"<span style='color:#1E293B'>{txt_esc}</span>"
+        f"</details>"
+    )
+
+def _render_tabela(df: pd.DataFrame) -> str:
+    """Tabela HTML com wrap e células expansíveis para texto longo."""
+    th_s = "background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;"
+    td_s = "padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;"
+    td_a = td_s + "background:#F8FAFC;"
+    html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
+    for col in df.columns:
+        html += f"<th style='{th_s}'>{col}</th>"
+    html += "</tr></thead><tbody>"
+    for i, (_, row) in enumerate(df.iterrows()):
+        td = td_a if i % 2 == 0 else td_s
+        html += "<tr>"
+        for val in row:
+            html += f"<td style='{td}'>{_cel_expandivel(str(val))}</td>"
+        html += "</tr>"
+    html += "</tbody></table></div>"
+    return html
+
 def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False):
     """Renderiza uma secção da escala num expander."""
     if df_sec.empty:
@@ -643,23 +678,7 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
             ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                        .apply(lambda x: ', '.join(x)).reset_index()
         ag = ag.rename(columns={'id_disp': 'Militares'})
-
-        # Tabela HTML com wrap de texto para não perder informação nas observações
-        th_s = "background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;"
-        td_s = "padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;white-space:pre-wrap;"
-        td_a = td_s + "background:#F8FAFC;"
-        html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
-        for col in ag.columns:
-            html += f"<th style='{th_s}'>{col}</th>"
-        html += "</tr></thead><tbody>"
-        for i, (_, row) in enumerate(ag.iterrows()):
-            td = td_a if i % 2 == 0 else td_s
-            html += "<tr>"
-            for val in row:
-                html += f"<td style='{td}'>{str(val)}</td>"
-            html += "</tr>"
-        html += "</tbody></table></div>"
-        st.markdown(html, unsafe_allow_html=True)
+        st.markdown(_render_tabela(ag), unsafe_allow_html=True)
 
 # ============================================================
 # 7. LOGIN
@@ -1543,26 +1562,7 @@ else:
                         mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
                     df_g = df_g[mask_g]
 
-                # Renderizar como tabela HTML com wrap de texto para não perder informação
-                def render_tabela_giros(df):
-                    th_style = "background:#1E3A8A;color:white;padding:8px 10px;text-align:left;font-size:0.82rem;white-space:nowrap;"
-                    td_style = "padding:7px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;white-space:pre-wrap;max-width:220px;"
-                    td_alt   = "padding:7px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;white-space:pre-wrap;max-width:220px;background:#F8FAFC;"
-                    html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'>"
-                    html += "<thead><tr>"
-                    for col in df.columns:
-                        html += f"<th style='{th_style}'>{col}</th>"
-                    html += "</tr></thead><tbody>"
-                    for i, (_, row) in enumerate(df.iterrows()):
-                        td = td_alt if i % 2 == 0 else td_style
-                        html += "<tr>"
-                        for val in row:
-                            html += f"<td style='{td}'>{str(val)}</td>"
-                        html += "</tr>"
-                    html += "</tbody></table></div>"
-                    return html
-
-                st.markdown(render_tabela_giros(df_g), unsafe_allow_html=True)
+                st.markdown(_render_tabela(df_g), unsafe_allow_html=True)
         except Exception:
             st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
 
