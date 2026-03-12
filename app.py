@@ -325,8 +325,9 @@ def _e_atendimento(serv: str) -> bool:
     n = _u.normalize('NFKD', str(serv).lower()).encode('ascii','ignore').decode('ascii')
     return bool(__import__('re').search(ATENDIMENTO_PATTERN, n))
 
-def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo: str) -> tuple:
+def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo: str, serv_orig_hor: str = "") -> tuple:
     """Verifica se o militar tem >= 8h de descanso entre o serviço novo e os adjacentes.
+    serv_orig_hor: horário do serviço original que está a ser trocado (para excluir da verificação).
     Retorna (ok: bool, motivo: str).
     Exceção: se serviço novo OU adjacente for atendimento/apoio, permite sempre."""
     if _e_atendimento(serv_novo):
@@ -348,6 +349,9 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
             hor_adj  = str(r.get('horário', ''))
             if not hor_adj.strip():
                 continue
+            # Excluir o próprio serviço que está a ser trocado
+            if serv_orig_hor and hor_adj.strip() == serv_orig_hor.strip():
+                continue
             if _e_atendimento(serv_adj):
                 continue  # exceção — adjacente é atendimento/apoio
             import unicodedata as _ud_loc, re as _re_loc
@@ -359,7 +363,6 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
 
             if delta == -1:
                 # serviço anterior acaba, novo começa
-                # fim_adj é no dia anterior → fim_adj - 1440 relativamente ao dia novo
                 fim_adj_rel = fim_adj - 1440
                 descanso = ini_novo - fim_adj_rel
             else:
@@ -374,7 +377,47 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
                                f"({serv_adj} {hor_adj})")
     return True, ""
 
-def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
+def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val):
+    """Verifica descanso para ambos os militares numa troca simples.
+    Retorna lista de erros (vazia se tudo ok)."""
+    erros = []
+    MIN = 8 * 60
+
+    ini_eu, fim_eu   = _parse_horario(meu_hor_val)
+    ini_ele, fim_ele = _parse_horario(hor_d_val)
+
+    # Verificar conflito direto entre os dois serviços no mesmo dia
+    # (um termina e o outro começa com menos de 8h)
+    if ini_eu is not None and ini_ele is not None:
+        if not (_e_atendimento(serv_d_nome) or _e_atendimento(meu_serv_nome)):
+            # Tu ficas com serv_ele — quanto descansas do teu serviço para o dele?
+            # Se ele começa antes de tu acabares (mesmo dia), calcular diferença
+            # Verificar as duas direções: meu_fim → ele_ini e ele_fim → meu_ini
+            d1 = ini_ele - fim_eu   # tu acabas, ele começa (ele já começou antes)
+            d2 = ini_eu  - fim_ele  # ele acaba, tu começas
+            # O militar que fica com o serviço do outro: tu ficas com hor_ele, ele fica com hor_eu
+            # Se fim_eu > ini_ele no mesmo dia → sobreposição/menos de 8h
+            descanso_eu_para_ele = ini_ele - fim_eu  # pode ser negativo se ele começa antes
+            descanso_ele_para_eu = ini_eu  - fim_ele
+
+            # Só bloqueia se a transição for consecutiva (mesmo dia, um a seguir ao outro)
+            # com menos de 8h entre fim de um e início do outro
+            if 0 <= descanso_eu_para_ele < MIN:
+                h, m = descanso_eu_para_ele // 60, descanso_eu_para_ele % 60
+                erros.append(f"Tu: apenas {h}h{m:02d}m de descanso entre o teu serviço ({meu_hor_val}) e o serviço que ficas ({hor_d_val})")
+            if 0 <= descanso_ele_para_eu < MIN:
+                h, m = descanso_ele_para_eu // 60, descanso_ele_para_eu % 60
+                erros.append(f"Militar de destino: apenas {h}h{m:02d}m de descanso entre o seu serviço ({hor_d_val}) e o serviço que fica ({meu_hor_val})")
+
+    # Verificar dias adjacentes para cada um (excluindo o serviço original)
+    if not erros:
+        ok, m = verificar_descanso(u_id, dt_s, serv_d_nome, hor_d_val, serv_orig_hor=meu_hor_val)
+        if not ok: erros.append(f"Não podes fazer esta troca: {m}")
+    if not erros:
+        ok, m = verificar_descanso(id_d, dt_s, meu_serv_nome, meu_hor_val, serv_orig_hor=hor_d_val)
+        if not ok: erros.append(f"O militar de destino não pode fazer esta troca: {m}")
+
+    return erros
     """Atualiza o status de uma troca na Google Sheet — batch update numa chamada."""
     try:
         sh = get_sheet()
@@ -1909,12 +1952,10 @@ else:
                                 meu_serv_nome = meu_s.rsplit('(', 1)[0].strip()
                                 meu_hor_val   = meu_s.rsplit('(', 1)[1].rstrip(')') if '(' in meu_s else meu.iloc[0]['horário']
                                 # Verificar descanso para ambos os militares
-                                ok_eu, motivo_eu   = verificar_descanso(u_id, dt_s, serv_d_nome, hor_d_val)
-                                ok_ele, motivo_ele = verificar_descanso(id_d, dt_s, meu_serv_nome, meu_hor_val)
-                                if not ok_eu:
-                                    st.error(f"❌ Não podes fazer esta troca: {motivo_eu}")
-                                elif not ok_ele:
-                                    st.error(f"❌ O militar de destino não pode fazer esta troca: {motivo_ele}")
+                                erros = verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val)
+                                if erros:
+                                    for e in erros:
+                                        st.error(f"❌ {e}")
                                 else:
                                     email_row = df_util[df_util['id'].astype(str) == id_d]
                                     if email_row.empty:
