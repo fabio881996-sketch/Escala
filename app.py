@@ -441,8 +441,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # CABECALHO
     # ====================================================
     pdf.set_fill_color(20, 40, 95)
-    pdf.rect(10, 10, W, 15, 'F')
-    pdf.set_xy(10, 10)
+    pdf.rect(10, 10, W, 14, 'F')
+    pdf.set_xy(10, 11)
     pdf.set_font("Arial", "B", 10.5)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(W, 6, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
@@ -459,7 +459,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         titulo = f"ESCALA DE SERVICO  |  {data}"
     pdf.cell(W, 6, c(titulo), 0, 1, 'C')
     pdf.set_text_color(0, 0, 0)
-    pdf.ln(1.5)
+    pdf.ln(2)
 
     # ====================================================
     # BLOCO 1 — AUSENCIAS (esq) | ADM (dir)
