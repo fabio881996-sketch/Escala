@@ -1940,21 +1940,39 @@ else:
         else:
             df_d = df_d.copy()
 
-            # Verificar se o utilizador tem troca aprovada neste dia
-            # e substituir o serviço apresentado pelo serviço real
-            servico_override = None  # serviço real após troca
+            # Aplicar trocas aprovadas a TODOS os militares no df_d (excluindo remunerados)
+            # para que as listas mostrem o serviço real de cada um
+            servico_override = None
             if not df_trocas.empty:
                 tr_dia = df_trocas[
                     (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada')
                 ]
+                mask_rem = df_d['serviço'].str.lower().str.contains('remu|grat', na=False)
                 for _, t in tr_dia.iterrows():
-                    if str(t['id_origem']).strip() == u_id.strip():
-                        servico_override = t['servico_destino']
-                        break
-                    elif str(t['id_destino']).strip() == u_id.strip():
-                        servico_override = t['servico_origem']
-                        break
+                    id_o = str(t['id_origem']).strip()
+                    id_dest = str(t['id_destino']).strip()
+                    s_o = t['servico_origem']; s_d_t = t['servico_destino']
+                    # extrair serviço e horário de cada lado
+                    serv_o = s_o.rsplit('(', 1)[0].strip()
+                    hor_o  = s_o.rsplit('(', 1)[1].rstrip(')') if '(' in s_o else ''
+                    serv_d2 = s_d_t.rsplit('(', 1)[0].strip()
+                    hor_d2  = s_d_t.rsplit('(', 1)[1].rstrip(')') if '(' in s_d_t else ''
+                    # militar origem passa a ter serviço destino
+                    m_o = (df_d['id'].astype(str).str.strip() == id_o) & ~mask_rem
+                    if m_o.any():
+                        df_d.loc[m_o, 'serviço'] = serv_d2
+                        if hor_d2: df_d.loc[m_o, 'horário'] = hor_d2
+                    # militar destino passa a ter serviço origem
+                    m_d = (df_d['id'].astype(str).str.strip() == id_dest) & ~mask_rem
+                    if m_d.any():
+                        df_d.loc[m_d, 'serviço'] = serv_o
+                        if hor_o: df_d.loc[m_d, 'horário'] = hor_o
+                    # registar override do próprio utilizador
+                    if id_o == u_id.strip():
+                        servico_override = s_d_t
+                    elif id_dest == u_id.strip():
+                        servico_override = s_o
 
             meu = df_d[df_d['id'].astype(str) == u_id]
 
