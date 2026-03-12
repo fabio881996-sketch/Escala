@@ -1780,6 +1780,26 @@ else:
         if df_d.empty:
             st.info("Não existem dados para esta data.")
         else:
+            # Aplicar trocas aprovadas (excluindo remunerados) — mostrar serviço real
+            df_d = df_d.copy()
+            if not df_trocas.empty:
+                tr_v = df_trocas[
+                    (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
+                    (df_trocas['status'] == 'Aprovada')
+                ]
+                mask_rem = df_d['serviço'].str.lower().str.contains('remu|grat', na=False)
+                for _, t in tr_v.iterrows():
+                    # Militar origem passa a ter o serviço destino
+                    m_o = (df_d['id'].astype(str) == str(t['id_origem'])) & ~mask_rem
+                    if m_o.any():
+                        df_d.loc[m_o, 'serviço'] = t['servico_destino'].split('(')[0].strip()
+                        df_d.loc[m_o, 'horário'] = t['servico_destino'].split('(')[1].rstrip(')') if '(' in t['servico_destino'] else df_d.loc[m_o, 'horário']
+                    # Militar destino passa a ter o serviço origem
+                    m_d = (df_d['id'].astype(str) == str(t['id_destino'])) & ~mask_rem
+                    if m_d.any():
+                        df_d.loc[m_d, 'serviço'] = t['servico_origem'].split('(')[0].strip()
+                        df_d.loc[m_d, 'horário'] = t['servico_origem'].split('(')[1].rstrip(')') if '(' in t['servico_origem'] else df_d.loc[m_d, 'horário']
+
             meu = df_d[df_d['id'].astype(str) == u_id]
 
             # ── Troca Simples ──
@@ -2084,3 +2104,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
