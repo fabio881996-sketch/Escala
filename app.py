@@ -1609,17 +1609,18 @@ else:
             df_at = df_dia.copy()
             df_at['id_disp'] = df_at['id'].astype(str)
 
-            # Aplicar trocas aprovadas
+            # Aplicar trocas aprovadas (excluindo remunerados)
             if not df_trocas.empty:
                 tr_v = df_trocas[
                     (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada')
                 ]
+                mask_rem = df_at['serviço'].str.lower().str.contains('remu|grat', na=False)
                 for _, t in tr_v.iterrows():
-                    m_o = df_at['id'].astype(str) == str(t['id_origem'])
+                    m_o = (df_at['id'].astype(str) == str(t['id_origem'])) & ~mask_rem
                     if m_o.any():
                         df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
-                    m_d = df_at['id'].astype(str) == str(t['id_destino'])
+                    m_d = (df_at['id'].astype(str) == str(t['id_destino'])) & ~mask_rem
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
@@ -1655,10 +1656,11 @@ else:
                                         (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
                                         (df_trocas['status'] == 'Aprovada')
                                     ]
+                                    mask_rem2 = df_d2['serviço'].str.lower().str.contains('remu|grat', na=False)
                                     for _, t2 in tr2.iterrows():
-                                        m_o2 = df_d2['id'].astype(str) == str(t2['id_origem'])
+                                        m_o2 = (df_d2['id'].astype(str) == str(t2['id_origem'])) & ~mask_rem2
                                         if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
-                                        m_d2 = df_d2['id'].astype(str) == str(t2['id_destino'])
+                                        m_d2 = (df_d2['id'].astype(str) == str(t2['id_destino'])) & ~mask_rem2
                                         if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
                                 pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
                                 reader = PdfReader(_io.BytesIO(pb2))
