@@ -1790,12 +1790,7 @@ else:
                     (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada')
                 ]
-                # DEBUG temporário — remover depois
-                if not tr_dia.empty:
-                    st.caption(f"🔍 DEBUG trocas aprovadas neste dia: {tr_dia[['id_origem','id_destino','servico_origem','servico_destino','status']].to_dict('records')}")
-                st.caption(f"🔍 DEBUG u_id={repr(u_id)}")
                 for _, t in tr_dia.iterrows():
-                    st.caption(f"🔍 id_origem={repr(str(t['id_origem']))} | id_destino={repr(str(t['id_destino']))}")
                     if str(t['id_origem']).strip() == u_id.strip():
                         servico_override = t['servico_destino']
                         break
