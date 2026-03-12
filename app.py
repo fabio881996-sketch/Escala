@@ -7,19 +7,26 @@ from fpdf import FPDF
 import io
 
 # ============================================================
+
 # 1. CONFIGURAÇÃO DA PÁGINA
+
 # ============================================================
+
 st.set_page_config(
-    page_title="GNR - Portal de Escalas",
-    page_icon="🚓",
-    layout="wide",
-    initial_sidebar_state=st.session_state.get("sidebar_state", "expanded")
+page_title=“GNR - Portal de Escalas”,
+page_icon=“🚓”,
+layout=“wide”,
+initial_sidebar_state=st.session_state.get(“sidebar_state”, “expanded”)
 )
 
 # ============================================================
+
 # 2. ESTILOS CSS
+
 # ============================================================
-st.markdown("""
+
+st.markdown(”””
+
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -183,1543 +190,1704 @@ hr { border-color: #E2E8F0 !important; }
 /* --- Info / Warning / Success --- */
 .stAlert { border-radius: 10px !important; }
 </style>
-""", unsafe_allow_html=True)
+
+“””, unsafe_allow_html=True)
 
 # ============================================================
+
 # 3. CONSTANTES
-# ============================================================
-ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
-IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
-IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 
 # ============================================================
-# 4. FUNÇÕES DE DADOS
+
+ADMINS = [“ferreira.fr@gnr.pt”, “carmo.haf@gnr.pt”, “veiga.hfp@gnr.pt”]
+IMPEDIMENTOS = [“férias”, “licença”, “doente”, “diligência”, “tribunal”, “pronto”, “secretaria”, “inquérito”]
+IMPEDIMENTOS_PATTERN = ‘|’.join(IMPEDIMENTOS).lower()
+
 # ============================================================
+
+# 4. FUNÇÕES DE DADOS
+
+# ============================================================
+
 @st.cache_resource
 def get_gsheet_client():
-    """Cria o cliente gspread uma única vez e reutiliza (cache_resource)."""
-    try:
-        scope = [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive'
-        ]
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"], scopes=scope
-        )
-        return gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"Erro ao conectar ao Google Sheets: {e}")
-        return None
+“”“Cria o cliente gspread uma única vez e reutiliza (cache_resource).”””
+try:
+scope = [
+‘https://www.googleapis.com/auth/spreadsheets’,
+‘https://www.googleapis.com/auth/drive’
+]
+creds = Credentials.from_service_account_info(
+st.secrets[“gcp_service_account”], scopes=scope
+)
+return gspread.authorize(creds)
+except Exception as e:
+st.error(f”Erro ao conectar ao Google Sheets: {e}”)
+return None
 
 @st.cache_data(ttl=300)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
-    try:
-        client = get_gsheet_client()
-        if client is None:
-            return pd.DataFrame()
-        sh = client.open_by_url(st.secrets["gsheet_url"])
-        records = sh.worksheet(aba_nome).get_all_records()
-        if not records:
-            return pd.DataFrame()
-        df = pd.DataFrame(records).astype(str)
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        return df.fillna("")
-    except Exception:
-        return pd.DataFrame()
+“”“Carrega dados de uma aba da Google Sheet com cache de 5 minutos.”””
+try:
+client = get_gsheet_client()
+if client is None:
+return pd.DataFrame()
+sh = client.open_by_url(st.secrets[“gsheet_url”])
+records = sh.worksheet(aba_nome).get_all_records()
+if not records:
+return pd.DataFrame()
+df = pd.DataFrame(records).astype(str)
+df.columns = [str(c).strip().lower() for c in df.columns]
+return df.fillna(””)
+except Exception:
+return pd.DataFrame()
 
-def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
-    """Atualiza o status de uma troca na Google Sheet."""
-    try:
-        client = get_gsheet_client()
-        sh = client.open_by_url(st.secrets["gsheet_url"])
-        aba = sh.worksheet("registos_trocas")
-        row = index_linha + 2  # +1 cabeçalho, +1 índice base-0
-        aba.update_cell(row, 6, novo_status)
-        if admin_nome:
-            dt_agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-            aba.update_cell(row, 8, admin_nome)
-            aba.update_cell(row, 9, dt_agora)
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao atualizar: {e}")
-        return False
+def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = “”) -> bool:
+“”“Atualiza o status de uma troca na Google Sheet.”””
+try:
+client = get_gsheet_client()
+sh = client.open_by_url(st.secrets[“gsheet_url”])
+aba = sh.worksheet(“registos_trocas”)
+row = index_linha + 2  # +1 cabeçalho, +1 índice base-0
+aba.update_cell(row, 6, novo_status)
+if admin_nome:
+dt_agora = datetime.now().strftime(”%d/%m/%Y %H:%M”)
+aba.update_cell(row, 8, admin_nome)
+aba.update_cell(row, 9, dt_agora)
+st.cache_data.clear()
+return True
+except Exception as e:
+st.error(f”Erro ao atualizar: {e}”)
+return False
 
 def salvar_troca_gsheet(linha: list) -> bool:
-    """Adiciona uma nova linha de troca na Google Sheet."""
-    try:
-        client = get_gsheet_client()
-        sh = client.open_by_url(st.secrets["gsheet_url"])
-        sh.worksheet("registos_trocas").append_row(linha)
-        st.cache_data.clear()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao guardar: {e}")
-        return False
+“”“Adiciona uma nova linha de troca na Google Sheet.”””
+try:
+client = get_gsheet_client()
+sh = client.open_by_url(st.secrets[“gsheet_url”])
+sh.worksheet(“registos_trocas”).append_row(linha)
+st.cache_data.clear()
+return True
+except Exception as e:
+st.error(f”Erro ao guardar: {e}”)
+return False
 
 # ============================================================
+
 # 5. FUNÇÕES PDF
+
 # ============================================================
+
 def s(txt) -> str:
-    """Remove acentos e caracteres especiais para compatibilidade com fpdf/latin-1."""
-    import unicodedata
-    return unicodedata.normalize('NFKD', str(txt)).encode('latin-1', 'ignore').decode('latin-1')
+“”“Remove acentos e caracteres especiais para compatibilidade com fpdf/latin-1.”””
+import unicodedata
+return unicodedata.normalize(‘NFKD’, str(txt)).encode(‘latin-1’, ‘ignore’).decode(‘latin-1’)
 
 def gerar_pdf_troca(dados: dict) -> bytes:
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_fill_color(26, 43, 74)
-    pdf.rect(0, 0, 210, 30, 'F')
-    pdf.set_font("Arial", "B", 18)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 30, "GNR - Comprovativo de Troca de Servico", 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(10)
-    pdf.set_font("Arial", "", 11)
-    texto = (
-        f"Certifica-se que o militar {s(dados['nome_origem'])} (ID {s(dados['id_origem'])}), "
-        f"requereu a troca do servico '{s(dados['serv_orig'])}' pelo servico '{s(dados['serv_dest'])}' "
-        f"do militar {s(dados['nome_destino'])} (ID {s(dados['id_destino'])}), para o dia {s(dados['data'])}.\n\n"
-        f"O pedido foi aceite pelo militar de destino e validado superiormente por "
-        f"{s(dados['validador'])} no dia {s(dados['data_val'])}."
-    )
-    pdf.multi_cell(190, 8, texto)
-    pdf.ln(15)
-    pdf.set_font("Arial", "I", 9)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
-    return pdf.output(dest='S').encode('latin-1', 'replace')
+pdf = FPDF()
+pdf.add_page()
+pdf.set_fill_color(26, 43, 74)
+pdf.rect(0, 0, 210, 30, ‘F’)
+pdf.set_font(“Arial”, “B”, 18)
+pdf.set_text_color(255, 255, 255)
+pdf.cell(190, 30, “GNR - Comprovativo de Troca de Servico”, 0, 1, ‘C’)
+pdf.set_text_color(0, 0, 0)
+pdf.ln(10)
+pdf.set_font(“Arial”, “”, 11)
+texto = (
+f”Certifica-se que o militar {s(dados[‘nome_origem’])} (ID {s(dados[‘id_origem’])}), “
+f”requereu a troca do servico ‘{s(dados[‘serv_orig’])}’ pelo servico ‘{s(dados[‘serv_dest’])}’ “
+f”do militar {s(dados[‘nome_destino’])} (ID {s(dados[‘id_destino’])}), para o dia {s(dados[‘data’])}.\n\n”
+f”O pedido foi aceite pelo militar de destino e validado superiormente por “
+f”{s(dados[‘validador’])} no dia {s(dados[‘data_val’])}.”
+)
+pdf.multi_cell(190, 8, texto)
+pdf.ln(15)
+pdf.set_font(“Arial”, “I”, 9)
+pdf.set_text_color(100, 100, 100)
+pdf.cell(190, 10, f”Gerado em: {datetime.now().strftime(’%d/%m/%Y %H:%M’)}”, 0, 0, ‘R’)
+return pdf.output(dest=‘S’).encode(‘latin-1’, ‘replace’)
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
-    """Gera PDF da escala diaria em A4 retrato. Inclui indicacao de trocas."""
-    import unicodedata
-    from datetime import datetime as _dt
+“”“Gera PDF da escala diaria em A4 retrato. Inclui indicacao de trocas.”””
+import unicodedata
+from datetime import datetime as _dt
 
-    def c(txt):
-        return unicodedata.normalize('NFKD', str(txt)).encode('latin-1','ignore').decode('latin-1')
+```
+def c(txt):
+    return unicodedata.normalize('NFKD', str(txt)).encode('latin-1','ignore').decode('latin-1')
 
-    # ---- formatar id_disp para mostrar troca de forma legivel ----
-    # id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
-    def fmt_id(txt):
-        t = str(txt)
-        if '\U0001f504' in t:          # emoji 🔄
-            parts = t.split('\U0001f504')
-            a, b = parts[0].strip(), parts[1].strip()
-            return f"{a} (Troca c/{b})"
-        return t
+# ---- formatar id_disp para mostrar troca de forma legivel ----
+# id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
+def fmt_id(txt):
+    t = str(txt)
+    if '\U0001f504' in t:          # emoji 🔄
+        parts = t.split('\U0001f504')
+        a, b = parts[0].strip(), parts[1].strip()
+        return f"{a} (Troca c/{b})"
+    return t
 
-    df_raw = df_raw.copy()
-    import unicodedata as _ud
-    def _norm(t): return _ud.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-    df_raw['servico_col'] = df_raw['serviço'].apply(_norm)
-    df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
+df_raw = df_raw.copy()
+import unicodedata as _ud
+def _norm(t): return _ud.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+df_raw['servico_col'] = df_raw['serviço'].apply(_norm)
+df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
 
-    # Separar logo à partida linhas sem militar (id vazio) — não aparecem nas tabelas
-    df_raw_com = df_raw[df_raw['id'].astype(str).str.strip().str.len() > 0].copy()
-    df_raw_sem = df_raw[df_raw['id'].astype(str).str.strip().str.len() == 0].copy()
+# Separar logo à partida linhas sem militar (id vazio) — não aparecem nas tabelas
+df_raw_com = df_raw[df_raw['id'].astype(str).str.strip().str.len() > 0].copy()
+df_raw_sem = df_raw[df_raw['id'].astype(str).str.strip().str.len() == 0].copy()
 
-    # Filtros sequenciais sobre linhas COM militar
-    def filtrar(pat, df):
-        mask = df['servico_col'].str.contains(pat, na=False)
-        return df[mask].copy(), df[~mask].copy()
+# Filtros sequenciais sobre linhas COM militar
+def filtrar(pat, df):
+    mask = df['servico_col'].str.contains(pat, na=False)
+    return df[mask].copy(), df[~mask].copy()
 
-    df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw_com)
-    df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
-    df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
-    df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
-    df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
-    df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
-    df_outros = df_rest
+df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw_com)
+df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
+df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
+df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
+df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
+df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
+df_outros = df_rest
 
-    # ---- Iniciar PDF ----
-    pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.set_margins(10, 10, 10)
-    pdf.set_auto_page_break(auto=False)   # SEM quebra automatica — evita pagina em branco
-    pdf.add_page()
+# ---- Iniciar PDF ----
+pdf = FPDF(orientation='P', unit='mm', format='A4')
+pdf.set_margins(10, 10, 10)
+pdf.set_auto_page_break(auto=False)   # SEM quebra automatica — evita pagina em branco
+pdf.add_page()
 
-    W  = 190
-    C1 = 10
-    C2 = 107
-    CW = 92
+W  = 190
+C1 = 10
+C2 = 107
+CW = 92
 
-    # ---- Helpers ----
-    def sec_title(label, w=W, x=None):
-        if x is not None:
-            pdf.set_x(x)
-        pdf.set_font("Arial", "B", 11)
-        pdf.set_fill_color(26, 46, 100)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(w, 7, c(f"  {label.upper()}"), 1, 1, 'L', True)
-        pdf.set_text_color(0, 0, 0)
+# ---- Helpers ----
+def sec_title(label, w=W, x=None):
+    if x is not None:
+        pdf.set_x(x)
+    pdf.set_font("Arial", "B", 11)
+    pdf.set_fill_color(26, 46, 100)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(w, 7, c(f"  {label.upper()}"), 1, 1, 'L', True)
+    pdf.set_text_color(0, 0, 0)
 
-    def tbl_hdr(cols, widths, x=None):
-        if x is not None:
-            pdf.set_x(x)
-        pdf.set_font("Arial", "B", 11)
-        pdf.set_fill_color(205, 215, 242)
-        pdf.set_text_color(15, 35, 90)
-        for col, w in zip(cols, widths):
-            pdf.cell(w, 6, c(col), 1, 0, 'C', True)
-        pdf.ln(6)
-        pdf.set_text_color(0, 0, 0)
+def tbl_hdr(cols, widths, x=None):
+    if x is not None:
+        pdf.set_x(x)
+    pdf.set_font("Arial", "B", 11)
+    pdf.set_fill_color(205, 215, 242)
+    pdf.set_text_color(15, 35, 90)
+    for col, w in zip(cols, widths):
+        pdf.cell(w, 6, c(col), 1, 0, 'C', True)
+    pdf.ln(6)
+    pdf.set_text_color(0, 0, 0)
 
-    def tbl_row(vals, widths, x=None, fill=False):
+def tbl_row(vals, widths, x=None, fill=False):
+    pdf.set_font("Arial", "", 9)
+    if fill:
+        pdf.set_fill_color(235, 241, 255)
+    else:
+        pdf.set_fill_color(255, 255, 255)
+    x0 = x if x is not None else pdf.get_x()
+    y0 = pdf.get_y()
+
+    # Calcular altura real necessária para cada célula
+    def calc_altura(txt, w):
+        """Conta quantas linhas o texto ocupa numa célula de largura w."""
+        if not txt:
+            return 6
+        words = txt.replace('\n', ' \n ').split(' ')
+        linha_w = 0
+        n_linhas = 1
+        for word in words:
+            if word == '\n':
+                n_linhas += 1
+                linha_w = 0
+                continue
+            ww = pdf.get_string_width(word + ' ')
+            if linha_w + ww > w - 2:  # margem de 2mm
+                n_linhas += 1
+                linha_w = ww
+            else:
+                linha_w += ww
+        return max(6, n_linhas * 6)
+
+    altura_max = 6
+    for v, w in zip(vals, widths):
+        altura_max = max(altura_max, calc_altura(c(str(v)), w))
+
+    # Desenhar todas as células com a mesma altura
+    xi = x0
+    for v, w in zip(vals, widths):
+        txt = c(str(v))
+        pdf.set_xy(xi, y0)
+        pdf.multi_cell(w, 6, txt, 1, 'C', fill)
+        cell_h = pdf.get_y() - y0
+        if cell_h < altura_max:
+            pdf.set_xy(xi, y0 + cell_h)
+            pdf.cell(w, altura_max - cell_h, '', 'LRB', 0, 'C', fill)
+        xi += w
+    pdf.set_xy(x0, y0 + altura_max)
+
+# ====================================================
+# CABECALHO
+# ====================================================
+pdf.set_fill_color(20, 40, 95)
+pdf.rect(10, 10, W, 15, 'F')
+pdf.set_xy(10, 10)
+pdf.set_font("Arial", "B", 11)
+pdf.set_text_color(255, 255, 255)
+pdf.cell(W, 7.5, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
+pdf.set_x(10)
+pdf.set_font("Arial", "B", 11)
+try:
+    dt_obj   = _dt.strptime(data, "%d/%m/%Y")
+    dias_pt  = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
+                "Sexta-feira","Sabado","Domingo"]
+    meses_pt = ["","Janeiro","Fevereiro","Marco","Abril","Maio","Junho",
+                "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+    titulo   = f"ESCALA DE SERVICO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
+except Exception:
+    titulo = f"ESCALA DE SERVICO  |  {data}"
+pdf.cell(W, 7.5, c(titulo), 0, 1, 'C')
+pdf.set_text_color(0, 0, 0)
+pdf.ln(3)
+
+# ====================================================
+# BLOCO 1 — AUSENCIAS (esq) | ADM (dir)
+# ====================================================
+y_top = pdf.get_y()
+
+pdf.set_x(C1)
+sec_title("Ausencias, Folgas e Licencas", CW, C1)
+if not df_aus.empty:
+    ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+    for _, r in ag.iterrows():
+        pdf.set_x(C1)
+        pdf.set_font("Arial", "", 9)
+        pdf.set_fill_color(255, 245, 245)
+        pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
+pdf.set_x(C1)
+pdf.cell(CW, 0.5, "", border='T', ln=1)
+y_c1 = pdf.get_y()
+
+pdf.set_xy(C2, y_top)
+sec_title("Outras Situacoes / ADM", CW, C2)
+if not df_adm.empty:
+    ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+    for _, r in ag.iterrows():
+        pdf.set_x(C2)
+        pdf.set_font("Arial", "", 9)
+        pdf.set_fill_color(245, 245, 255)
+        horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
+        pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
+pdf.set_x(C2)
+pdf.cell(CW, 0.5, "", border='T', ln=1)
+y_c2 = pdf.get_y()
+
+pdf.set_y(max(y_c1, y_c2) + 2)
+
+# ====================================================
+# BLOCO 2 — ATENDIMENTO (esq) | APOIO (dir)
+# ====================================================
+y_top2 = pdf.get_y()
+
+pdf.set_x(C1)
+sec_title("Atendimento", CW, C1)
+tbl_hdr(["Horario", "Militar(es)"], [26, CW-26], C1)
+if not df_at.empty:
+    ag = df_at.groupby(['horário','serviço'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+    fill = False
+    for _, r in ag.sort_values('horário').iterrows():
+        tbl_row([r['horário'], r['id_fmt']], [26, CW-26], C1, fill)
+        fill = not fill
+y_at = pdf.get_y()
+
+pdf.set_xy(C2, y_top2)
+sec_title("Apoio ao Atendimento", CW, C2)
+tbl_hdr(["Horario", "Militar(es)"], [26, CW-26], C2)
+if not df_ap.empty:
+    ag = df_ap.groupby(['horário','serviço'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+    fill = False
+    for _, r in ag.sort_values('horário').iterrows():
+        tbl_row([r['horário'], r['id_fmt']], [26, CW-26], C2, fill)
+        fill = not fill
+y_ap = pdf.get_y()
+
+pdf.set_y(max(y_at, y_ap) + 2)
+
+# ====================================================
+# BLOCO 3 — PATRULHAS (largura total)
+# ====================================================
+sec_title("Patrulhas e Policiamento", W)
+w_p = [18, 44, 54, 24, 28, 22]
+tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
+
+if not df_pat.empty:
+    has_obs   = 'observações' in df_pat.columns
+    has_indic = 'indicativo rádio' in df_pat.columns
+    has_radio = 'rádio' in df_pat.columns
+    has_vtr   = 'viatura' in df_pat.columns
+
+    cols_grp = ['horário', 'serviço']
+    if has_indic: cols_grp.append('indicativo rádio')
+    if has_radio: cols_grp.append('rádio')
+    if has_vtr:   cols_grp.append('viatura')
+
+    agg_dict = {'id_fmt': lambda x: ', '.join(x)}
+    if has_obs: agg_dict['observações'] = lambda x: ' | '.join(v for v in x if str(v).strip())
+
+    ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
+
+    def prio(nome):
+        n = str(nome).lower()
+        if 'ocorr' in n or 'ocorrencia' in n: return "0"
+        return "1_" + n
+    ag['_ord'] = ag['serviço'].apply(prio)
+    ag = ag.sort_values(['_ord', 'horário'])
+
+    fill = False
+    for _, r in ag.iterrows():
+        indic = str(r.get('indicativo rádio',''))
+        radio = str(r.get('rádio',''))
+        tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
+                 indic, radio, r.get('viatura','')], w_p, fill=fill)
+        fill = not fill
+
+# ====================================================
+# BLOCO 4 — OUTROS SERVIÇOS
+# ====================================================
+if not df_outros.empty:
+    pdf.ln(2)
+    sec_title("Outros Servicos", W)
+    has_vtr_o   = 'viatura' in df_outros.columns
+    has_indic_o = 'indicativo rádio' in df_outros.columns
+    has_radio_o = 'rádio' in df_outros.columns
+    cols_grp_o  = ['horário', 'serviço']
+    if has_indic_o: cols_grp_o.append('indicativo rádio')
+    if has_radio_o: cols_grp_o.append('rádio')
+    if has_vtr_o:   cols_grp_o.append('viatura')
+    ag_out = df_outros.groupby(cols_grp_o, as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+
+    hdr_o = ["Horario","Militares","Servico"]
+    w_o2  = [18, 54, 44]
+    if has_indic_o: hdr_o.append("Indicativo"); w_o2.append(24)
+    if has_radio_o: hdr_o.append("Radio");      w_o2.append(24)
+    if has_vtr_o:   hdr_o.append("Viatura");    w_o2.append(190 - sum(w_o2))
+    tbl_hdr(hdr_o, w_o2)
+    fill = False
+    for _, r in ag_out.sort_values(['serviço','horário']).iterrows():
+        vals = [r['horário'], r['id_fmt'], r['serviço'].upper()]
+        if has_indic_o: vals.append(r.get('indicativo rádio',''))
+        if has_radio_o: vals.append(r.get('rádio',''))
+        if has_vtr_o:   vals.append(r.get('viatura',''))
+        tbl_row(vals, w_o2, fill=fill)
+        fill = not fill
+
+# ====================================================
+# BLOCO 5 — REMUNERADOS
+# ====================================================
+if not df_rem.empty:
+    pdf.ln(2)
+    sec_title("Servicos Remunerados / Gratificados", W)
+    w_r = [22, 38, 130]
+    tbl_hdr(["Horario","Militares","Observacao"], w_r)
+    obs_col = 'observações' if 'observações' in df_rem.columns else 'serviço'
+    ag = df_rem.groupby(['horário', obs_col], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+    ag = ag.sort_values([obs_col, 'horário']).reset_index(drop=True)
+
+    # Agrupar linhas consecutivas com a mesma observação
+    i = 0
+    fill = False
+    while i < len(ag):
+        obs_txt = str(ag.loc[i, obs_col])
+        # Encontrar todas as linhas consecutivas com a mesma observação
+        grupo = [i]
+        j = i + 1
+        while j < len(ag) and str(ag.loc[j, obs_col]) == obs_txt:
+            grupo.append(j)
+            j += 1
+
         pdf.set_font("Arial", "", 9)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
             pdf.set_fill_color(255, 255, 255)
-        x0 = x if x is not None else pdf.get_x()
-        y0 = pdf.get_y()
 
-        # Calcular altura real necessária para cada célula
-        def calc_altura(txt, w):
-            """Conta quantas linhas o texto ocupa numa célula de largura w."""
-            if not txt:
-                return 6
-            words = txt.replace('\n', ' \n ').split(' ')
-            linha_w = 0
-            n_linhas = 1
-            for word in words:
-                if word == '\n':
-                    n_linhas += 1
-                    linha_w = 0
-                    continue
-                ww = pdf.get_string_width(word + ' ')
-                if linha_w + ww > w - 2:  # margem de 2mm
-                    n_linhas += 1
-                    linha_w = ww
-                else:
-                    linha_w += ww
-            return max(6, n_linhas * 6)
+        y_grupo = pdf.get_y()
 
-        altura_max = 6
-        for v, w in zip(vals, widths):
-            altura_max = max(altura_max, calc_altura(c(str(v)), w))
+        # 1. Desenhar observação (multi_cell) que abrange todo o grupo
+        pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
+        pdf.multi_cell(w_r[2], 5.5, c(obs_txt), border=1, align='L', fill=fill)
+        y_fim_grupo = pdf.get_y()
+        altura_total = y_fim_grupo - y_grupo
 
-        # Desenhar todas as células com a mesma altura
-        xi = x0
-        for v, w in zip(vals, widths):
-            txt = c(str(v))
-            pdf.set_xy(xi, y0)
-            pdf.multi_cell(w, 6, txt, 1, 'C', fill)
-            cell_h = pdf.get_y() - y0
-            if cell_h < altura_max:
-                pdf.set_xy(xi, y0 + cell_h)
-                pdf.cell(w, altura_max - cell_h, '', 'LRB', 0, 'C', fill)
-            xi += w
-        pdf.set_xy(x0, y0 + altura_max)
+        # 2. Dividir altura total pelas linhas do grupo
+        altura_linha = altura_total / len(grupo)
 
-    # ====================================================
-    # CABECALHO
-    # ====================================================
-    pdf.set_fill_color(20, 40, 95)
-    pdf.rect(10, 10, W, 15, 'F')
-    pdf.set_xy(10, 10)
-    pdf.set_font("Arial", "B", 11)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(W, 7.5, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
-    pdf.set_x(10)
-    pdf.set_font("Arial", "B", 11)
-    try:
-        dt_obj   = _dt.strptime(data, "%d/%m/%Y")
-        dias_pt  = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
-                    "Sexta-feira","Sabado","Domingo"]
-        meses_pt = ["","Janeiro","Fevereiro","Marco","Abril","Maio","Junho",
-                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-        titulo   = f"ESCALA DE SERVICO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
-    except Exception:
-        titulo = f"ESCALA DE SERVICO  |  {data}"
-    pdf.cell(W, 7.5, c(titulo), 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(3)
+        # 3. Desenhar horário e militares linha a linha
+        for k, idx in enumerate(grupo):
+            y_linha = y_grupo + k * altura_linha
+            pdf.set_xy(C1, y_linha)
+            pdf.cell(w_r[0], altura_linha, c(ag.loc[idx, 'horário']), 1, 0, 'C', fill)
+            pdf.cell(w_r[1], altura_linha, c(ag.loc[idx, 'id_fmt']),  1, 0, 'C', fill)
 
-    # ====================================================
-    # BLOCO 1 — AUSENCIAS (esq) | ADM (dir)
-    # ====================================================
-    y_top = pdf.get_y()
+        pdf.set_y(y_fim_grupo)
+        fill = not fill
+        i = j
 
-    pdf.set_x(C1)
-    sec_title("Ausencias, Folgas e Licencas", CW, C1)
-    if not df_aus.empty:
-        ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        for _, r in ag.iterrows():
-            pdf.set_x(C1)
-            pdf.set_font("Arial", "", 9)
-            pdf.set_fill_color(255, 245, 245)
-            pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
-    pdf.set_x(C1)
-    pdf.cell(CW, 0.5, "", border='T', ln=1)
-    y_c1 = pdf.get_y()
+# ====================================================
+# BLOCO 6 — OBSERVACOES DE PATRULHA
+# ====================================================
+def get_indic(r):
+    return (str(r.get('indicativo rádio','') or '').strip()
+         or str(r.get('rádio','') or '').strip()
+         or str(r.get('serviço','') or '').strip()
+         or 'S/I')
 
-    pdf.set_xy(C2, y_top)
-    sec_title("Outras Situacoes / ADM", CW, C2)
-    if not df_adm.empty:
-        ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        for _, r in ag.iterrows():
-            pdf.set_x(C2)
-            pdf.set_font("Arial", "", 9)
-            pdf.set_fill_color(245, 245, 255)
-            horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
-            pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
-    pdf.set_x(C2)
-    pdf.cell(CW, 0.5, "", border='T', ln=1)
-    y_c2 = pdf.get_y()
-
-    pdf.set_y(max(y_c1, y_c2) + 2)
-
-    # ====================================================
-    # BLOCO 2 — ATENDIMENTO (esq) | APOIO (dir)
-    # ====================================================
-    y_top2 = pdf.get_y()
-
-    pdf.set_x(C1)
-    sec_title("Atendimento", CW, C1)
-    tbl_hdr(["Horario", "Militar(es)"], [26, CW-26], C1)
-    if not df_at.empty:
-        ag = df_at.groupby(['horário','serviço'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        fill = False
-        for _, r in ag.sort_values('horário').iterrows():
-            tbl_row([r['horário'], r['id_fmt']], [26, CW-26], C1, fill)
-            fill = not fill
-    y_at = pdf.get_y()
-
-    pdf.set_xy(C2, y_top2)
-    sec_title("Apoio ao Atendimento", CW, C2)
-    tbl_hdr(["Horario", "Militar(es)"], [26, CW-26], C2)
-    if not df_ap.empty:
-        ag = df_ap.groupby(['horário','serviço'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        fill = False
-        for _, r in ag.sort_values('horário').iterrows():
-            tbl_row([r['horário'], r['id_fmt']], [26, CW-26], C2, fill)
-            fill = not fill
-    y_ap = pdf.get_y()
-
-    pdf.set_y(max(y_at, y_ap) + 2)
-
-    # ====================================================
-    # BLOCO 3 — PATRULHAS (largura total)
-    # ====================================================
-    sec_title("Patrulhas e Policiamento", W)
-    w_p = [18, 44, 54, 24, 28, 22]
-    tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
-
-    if not df_pat.empty:
-        has_obs   = 'observações' in df_pat.columns
-        has_indic = 'indicativo rádio' in df_pat.columns
-        has_radio = 'rádio' in df_pat.columns
-        has_vtr   = 'viatura' in df_pat.columns
-
-        cols_grp = ['horário', 'serviço']
-        if has_indic: cols_grp.append('indicativo rádio')
-        if has_radio: cols_grp.append('rádio')
-        if has_vtr:   cols_grp.append('viatura')
-
-        agg_dict = {'id_fmt': lambda x: ', '.join(x)}
-        if has_obs: agg_dict['observações'] = lambda x: ' | '.join(v for v in x if str(v).strip())
-
-        ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
-
-        def prio(nome):
-            n = str(nome).lower()
-            if 'ocorr' in n or 'ocorrencia' in n: return "0"
-            return "1_" + n
-        ag['_ord'] = ag['serviço'].apply(prio)
-        ag = ag.sort_values(['_ord', 'horário'])
-
-        fill = False
-        for _, r in ag.iterrows():
-            indic = str(r.get('indicativo rádio',''))
-            radio = str(r.get('rádio',''))
-            tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
-                     indic, radio, r.get('viatura','')], w_p, fill=fill)
-            fill = not fill
-
-    # ====================================================
-    # BLOCO 4 — OUTROS SERVIÇOS
-    # ====================================================
-    if not df_outros.empty:
+df_obs_total = pd.concat([df_pat, df_outros], ignore_index=True) if not df_outros.empty else df_pat
+if not df_obs_total.empty and 'observações' in df_obs_total.columns:
+    obs_df = df_obs_total[df_obs_total['observações'].str.strip().str.len() > 0].copy()
+    if not obs_df.empty:
         pdf.ln(2)
-        sec_title("Outros Servicos", W)
-        has_vtr_o   = 'viatura' in df_outros.columns
-        has_indic_o = 'indicativo rádio' in df_outros.columns
-        has_radio_o = 'rádio' in df_outros.columns
-        cols_grp_o  = ['horário', 'serviço']
-        if has_indic_o: cols_grp_o.append('indicativo rádio')
-        if has_radio_o: cols_grp_o.append('rádio')
-        if has_vtr_o:   cols_grp_o.append('viatura')
-        ag_out = df_outros.groupby(cols_grp_o, as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+        sec_title("Observacoes de Patrulha", W)
+        w_o = [28, 162]
+        tbl_hdr(["Indicativo","Detalhe"], w_o)
 
-        hdr_o = ["Horario","Militares","Servico"]
-        w_o2  = [18, 54, 44]
-        if has_indic_o: hdr_o.append("Indicativo"); w_o2.append(24)
-        if has_radio_o: hdr_o.append("Radio");      w_o2.append(24)
-        if has_vtr_o:   hdr_o.append("Viatura");    w_o2.append(190 - sum(w_o2))
-        tbl_hdr(hdr_o, w_o2)
+        obs_df['_indic'] = obs_df.apply(get_indic, axis=1)
+
+        # Agrupar por observação, juntando indicativos diferentes
+        obs_grp = obs_df.groupby('observações', sort=False).agg(
+            _indic=('_indic', lambda x: ' / '.join(dict.fromkeys(v for v in x if v and v != 'S/I')) or 'S/I'),
+            horário=('horário', 'first')
+        ).reset_index()
+
+        # Detetar indicativos duplicados para mostrar horário
+        indics_count = obs_df['_indic'].value_counts()
+        indics_duplicados = set(indics_count[indics_count > 1].index)
+
         fill = False
-        for _, r in ag_out.sort_values(['serviço','horário']).iterrows():
-            vals = [r['horário'], r['id_fmt'], r['serviço'].upper()]
-            if has_indic_o: vals.append(r.get('indicativo rádio',''))
-            if has_radio_o: vals.append(r.get('rádio',''))
-            if has_vtr_o:   vals.append(r.get('viatura',''))
-            tbl_row(vals, w_o2, fill=fill)
-            fill = not fill
-
-    # ====================================================
-    # BLOCO 5 — REMUNERADOS
-    # ====================================================
-    if not df_rem.empty:
-        pdf.ln(2)
-        sec_title("Servicos Remunerados / Gratificados", W)
-        w_r = [22, 38, 130]
-        tbl_hdr(["Horario","Militares","Observacao"], w_r)
-        obs_col = 'observações' if 'observações' in df_rem.columns else 'serviço'
-        ag = df_rem.groupby(['horário', obs_col], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        ag = ag.sort_values([obs_col, 'horário']).reset_index(drop=True)
-
-        # Agrupar linhas consecutivas com a mesma observação
-        i = 0
-        fill = False
-        while i < len(ag):
-            obs_txt = str(ag.loc[i, obs_col])
-            # Encontrar todas as linhas consecutivas com a mesma observação
-            grupo = [i]
-            j = i + 1
-            while j < len(ag) and str(ag.loc[j, obs_col]) == obs_txt:
-                grupo.append(j)
-                j += 1
-
+        for _, r in obs_grp.iterrows():
+            indic = r['_indic']
+            horario_val = str(r.get('horário','') or '').strip()
+            if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
+                indic = f"{indic}\n{horario_val}"
             pdf.set_font("Arial", "", 9)
             if fill:
-                pdf.set_fill_color(235, 241, 255)
+                pdf.set_fill_color(255, 255, 220)
             else:
                 pdf.set_fill_color(255, 255, 255)
+            y_antes = pdf.get_y()
 
-            y_grupo = pdf.get_y()
+            # Calcular altura real de cada coluna
+            def _h(txt, w):
+                words = c(txt).replace('\n',' \n ').split(' ')
+                lw, nl = 0, 1
+                for wd in words:
+                    if wd == '\n': nl += 1; lw = 0; continue
+                    ww = pdf.get_string_width(wd + ' ')
+                    if lw + ww > w - 2: nl += 1; lw = ww
+                    else: lw += ww
+                return max(5.5, nl * 5.5)
 
-            # 1. Desenhar observação (multi_cell) que abrange todo o grupo
-            pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
-            pdf.multi_cell(w_r[2], 5.5, c(obs_txt), border=1, align='L', fill=fill)
-            y_fim_grupo = pdf.get_y()
-            altura_total = y_fim_grupo - y_grupo
+            h_indic = _h(indic, 28)
+            h_obs   = _h(r['observações'], 162)
+            altura  = max(h_indic, h_obs)
 
-            # 2. Dividir altura total pelas linhas do grupo
-            altura_linha = altura_total / len(grupo)
+            # Desenhar observação
+            pdf.set_xy(C1 + 28, y_antes)
+            pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
+            h_obs_real = pdf.get_y() - y_antes
+            if h_obs_real < altura:
+                pdf.set_xy(C1 + 28, y_antes + h_obs_real)
+                pdf.cell(162, altura - h_obs_real, '', 'LRB', 0, 'L', fill)
 
-            # 3. Desenhar horário e militares linha a linha
-            for k, idx in enumerate(grupo):
-                y_linha = y_grupo + k * altura_linha
-                pdf.set_xy(C1, y_linha)
-                pdf.cell(w_r[0], altura_linha, c(ag.loc[idx, 'horário']), 1, 0, 'C', fill)
-                pdf.cell(w_r[1], altura_linha, c(ag.loc[idx, 'id_fmt']),  1, 0, 'C', fill)
+            # Desenhar indicativo
+            pdf.set_xy(C1, y_antes)
+            pdf.multi_cell(28, 5.5, c(indic), border=1, align='C', fill=fill)
+            h_ind_real = pdf.get_y() - y_antes
+            if h_ind_real < altura:
+                pdf.set_xy(C1, y_antes + h_ind_real)
+                pdf.cell(28, altura - h_ind_real, '', 'LRB', 0, 'C', fill)
 
-            pdf.set_y(y_fim_grupo)
+            pdf.set_y(y_antes + altura)
             fill = not fill
-            i = j
 
-    # ====================================================
-    # BLOCO 6 — OBSERVACOES DE PATRULHA
-    # ====================================================
-    def get_indic(r):
-        return (str(r.get('indicativo rádio','') or '').strip()
-             or str(r.get('rádio','') or '').strip()
-             or str(r.get('serviço','') or '').strip()
-             or 'S/I')
+# ====================================================
+# RODAPE — fixo no fundo da pagina
+# ====================================================
+pdf.set_xy(10, 282)
+pdf.set_draw_color(160, 160, 160)
+pdf.line(10, 282, 200, 282)
+pdf.set_font("Arial", "I", 8.5)
+pdf.set_text_color(120, 120, 120)
+pdf.set_xy(10, 283)
+pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
+pdf.cell(95, 4, c("O COMANDANTE"), 0, 0, 'R')
 
-    df_obs_total = pd.concat([df_pat, df_outros], ignore_index=True) if not df_outros.empty else df_pat
-    if not df_obs_total.empty and 'observações' in df_obs_total.columns:
-        obs_df = df_obs_total[df_obs_total['observações'].str.strip().str.len() > 0].copy()
-        if not obs_df.empty:
-            pdf.ln(2)
-            sec_title("Observacoes de Patrulha", W)
-            w_o = [28, 162]
-            tbl_hdr(["Indicativo","Detalhe"], w_o)
-
-            obs_df['_indic'] = obs_df.apply(get_indic, axis=1)
-
-            # Agrupar por observação, juntando indicativos diferentes
-            obs_grp = obs_df.groupby('observações', sort=False).agg(
-                _indic=('_indic', lambda x: ' / '.join(dict.fromkeys(v for v in x if v and v != 'S/I')) or 'S/I'),
-                horário=('horário', 'first')
-            ).reset_index()
-
-            # Detetar indicativos duplicados para mostrar horário
-            indics_count = obs_df['_indic'].value_counts()
-            indics_duplicados = set(indics_count[indics_count > 1].index)
-
-            fill = False
-            for _, r in obs_grp.iterrows():
-                indic = r['_indic']
-                horario_val = str(r.get('horário','') or '').strip()
-                if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
-                    indic = f"{indic}\n{horario_val}"
-                pdf.set_font("Arial", "", 9)
-                if fill:
-                    pdf.set_fill_color(255, 255, 220)
-                else:
-                    pdf.set_fill_color(255, 255, 255)
-                y_antes = pdf.get_y()
-
-                # Calcular altura real de cada coluna
-                def _h(txt, w):
-                    words = c(txt).replace('\n',' \n ').split(' ')
-                    lw, nl = 0, 1
-                    for wd in words:
-                        if wd == '\n': nl += 1; lw = 0; continue
-                        ww = pdf.get_string_width(wd + ' ')
-                        if lw + ww > w - 2: nl += 1; lw = ww
-                        else: lw += ww
-                    return max(5.5, nl * 5.5)
-
-                h_indic = _h(indic, 28)
-                h_obs   = _h(r['observações'], 162)
-                altura  = max(h_indic, h_obs)
-
-                # Desenhar observação
-                pdf.set_xy(C1 + 28, y_antes)
-                pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
-                h_obs_real = pdf.get_y() - y_antes
-                if h_obs_real < altura:
-                    pdf.set_xy(C1 + 28, y_antes + h_obs_real)
-                    pdf.cell(162, altura - h_obs_real, '', 'LRB', 0, 'L', fill)
-
-                # Desenhar indicativo
-                pdf.set_xy(C1, y_antes)
-                pdf.multi_cell(28, 5.5, c(indic), border=1, align='C', fill=fill)
-                h_ind_real = pdf.get_y() - y_antes
-                if h_ind_real < altura:
-                    pdf.set_xy(C1, y_antes + h_ind_real)
-                    pdf.cell(28, altura - h_ind_real, '', 'LRB', 0, 'C', fill)
-
-                pdf.set_y(y_antes + altura)
-                fill = not fill
-
-    # ====================================================
-    # RODAPE — fixo no fundo da pagina
-    # ====================================================
-    pdf.set_xy(10, 282)
-    pdf.set_draw_color(160, 160, 160)
-    pdf.line(10, 282, 200, 282)
-    pdf.set_font("Arial", "I", 8.5)
-    pdf.set_text_color(120, 120, 120)
-    pdf.set_xy(10, 283)
-    pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
-    pdf.cell(95, 4, c("O COMANDANTE"), 0, 0, 'R')
-
-    return pdf.output(dest='S').encode('latin-1', 'replace')
+return pdf.output(dest='S').encode('latin-1', 'replace')
+```
 
 # ============================================================
+
 # 6. HELPERS UI
+
 # ============================================================
+
 def get_nome_militar(df_util: pd.DataFrame, id_m) -> str:
-    res = df_util[df_util['id'].astype(str) == str(id_m)]
-    return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
+res = df_util[df_util[‘id’].astype(str) == str(id_m)]
+return f”{res.iloc[0][‘posto’]} {res.iloc[0][‘nome’]}” if not res.empty else f”ID {id_m}”
 
 def filtrar_secao(keys: list, df_f: pd.DataFrame) -> tuple:
-    """Filtra linhas pelo padrão de keys. Devolve (df_secção, df_restante)."""
-    pattern = '|'.join(k for k in keys if k).lower()
-    if not pattern:
-        return pd.DataFrame(), df_f
-    mask = df_f['serviço'].str.lower().str.contains(pattern, na=False)
-    return df_f[mask].copy(), df_f[~mask].copy()
+“”“Filtra linhas pelo padrão de keys. Devolve (df_secção, df_restante).”””
+pattern = ‘|’.join(k for k in keys if k).lower()
+if not pattern:
+return pd.DataFrame(), df_f
+mask = df_f[‘serviço’].str.lower().str.contains(pattern, na=False)
+return df_f[mask].copy(), df_f[~mask].copy()
 
 def _limpar_sem_militar(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove linhas onde id está vazio — serviços sem militar escalado."""
-    if 'id' not in df.columns:
-        return df
-    return df[df['id'].astype(str).str.strip().str.len() > 0].copy()
+“”“Remove linhas onde id está vazio — serviços sem militar escalado.”””
+if ‘id’ not in df.columns:
+return df
+return df[df[‘id’].astype(str).str.strip().str.len() > 0].copy()
 
 def _cel_expandivel(val: str, limite: int = 60) -> str:
-    """Renderiza texto longo com 'ver mais' usando <details> nativo do HTML."""
-    txt = str(val)
-    if len(txt) <= limite:
-        return txt
-    resumo = txt[:limite].rstrip() + "…"
-    # Escapar aspas para não quebrar o HTML
-    txt_esc = txt.replace('"', '&quot;').replace("'", "&#39;")
-    resumo_esc = resumo.replace('"', '&quot;').replace("'", "&#39;")
-    return (
-        f"<details style='cursor:pointer'>"
-        f"<summary style='list-style:none;outline:none;color:#1E293B'>{resumo_esc}"
-        f"<span style='color:#1E3A8A;font-size:0.75rem;margin-left:4px'>ver mais</span></summary>"
-        f"<span style='color:#1E293B'>{txt_esc}</span>"
-        f"</details>"
-    )
+“”“Renderiza texto longo com ‘ver mais’ usando <details> nativo do HTML.”””
+txt = str(val)
+if len(txt) <= limite:
+return txt
+resumo = txt[:limite].rstrip() + “…”
+# Escapar aspas para não quebrar o HTML
+txt_esc = txt.replace(’”’, ‘"’).replace(”’”, “'”)
+resumo_esc = resumo.replace(’”’, ‘"’).replace(”’”, “'”)
+return (
+f”<details style='cursor:pointer'>”
+f”<summary style='list-style:none;outline:none;color:#1E293B'>{resumo_esc}”
+f”<span style='color:#1E3A8A;font-size:0.75rem;margin-left:4px'>ver mais</span></summary>”
+f”<span style='color:#1E293B'>{txt_esc}</span>”
+f”</details>”
+)
 
-def _render_tabela(df: pd.DataFrame) -> str:
-    """Tabela HTML com wrap e células expansíveis para texto longo."""
-    th_s = "background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;"
-    td_s = "padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;"
-    td_a = td_s + "background:#F8FAFC;"
-    html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
-    for col in df.columns:
-        # Limitar largura da coluna de observações
-        extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
-        html += f"<th style='{th_s}{extra}'>{col}</th>"
-    html += "</tr></thead><tbody>"
-    for i, (_, row) in enumerate(df.iterrows()):
-        td = td_a if i % 2 == 0 else td_s
-        html += "<tr>"
-        for col, val in zip(df.columns, row):
-            extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
-            html += f"<td style='{td}{extra}'>{_cel_expandivel(str(val))}</td>"
-        html += "</tr>"
-    html += "</tbody></table></div>"
-    return html
+def *render_tabela(df: pd.DataFrame) -> str:
+“”“Tabela HTML com wrap e células expansíveis para texto longo.”””
+th_s = “background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;”
+td_s = “padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;”
+td_a = td_s + “background:#F8FAFC;”
+html = “<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>”
+for col in df.columns:
+# Limitar largura da coluna de observações
+extra = “ max-width:180px;” if ‘observa’ in str(col).lower() else “”
+html += f”<th style='{th_s}{extra}'>{col}</th>”
+html += “</tr></thead><tbody>”
+for i, (*, row) in enumerate(df.iterrows()):
+td = td_a if i % 2 == 0 else td_s
+html += “<tr>”
+for col, val in zip(df.columns, row):
+extra = “ max-width:180px;” if ‘observa’ in str(col).lower() else “”
+html += f”<td style='{td}{extra}'>{_cel_expandivel(str(val))}</td>”
+html += “</tr>”
+html += “</tbody></table></div>”
+return html
 
 def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False):
-    """Renderiza uma secção da escala num expander."""
-    if df_sec.empty:
-        return
-    with st.expander(f"🔹 {titulo.upper()}", expanded=True):
-        if mostrar_extras:
-            cols_ag = ['serviço', 'horário']
-            for col in ['indicativo rádio', 'rádio', 'viatura']:
-                if col in df_sec.columns:
-                    cols_ag.append(col)
-            agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
-            if 'observações' in df_sec.columns:
-                agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
-            ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
-            col_order = ['serviço', 'horário', 'id_disp']
-            for col in ['indicativo rádio', 'rádio', 'viatura', 'observações']:
-                if col in ag.columns:
-                    col_order.append(col)
-            ag = ag[col_order]
-        else:
-            ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
-                       .apply(lambda x: ', '.join(x)).reset_index()
-        ag = ag.rename(columns={'id_disp': 'Militares'})
-        st.markdown(_render_tabela(ag), unsafe_allow_html=True)
-
-# ============================================================
-# 7. LOGIN
-# ============================================================
-if "logged_in" not in st.session_state:
-    st.session_state["logged_in"] = False
-
-if not st.session_state["logged_in"]:
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.4, 1])
-    with col2:
-        st.markdown("""
-        <div class="login-box">
-            <div class="login-header">
-                <span class="escudo">🚓</span>
-                <h1>Portal de Escalas</h1>
-                <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
-                <p class="posto-name">Posto Territorial de Famalicão</p>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        with st.container():
-            with st.form("login", clear_on_submit=False):
-                st.markdown("<br>", unsafe_allow_html=True)
-                u = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
-                p = st.text_input("🔒 Password", type="password", placeholder="••••••••")
-                st.markdown("<br>", unsafe_allow_html=True)
-                entrar = st.form_submit_button("ENTRAR", use_container_width=True)
-                if entrar:
-                    if not u or not p:
-                        st.warning("Preenche o email e a password.")
-                    else:
-                        df_u = load_data("utilizadores")
-                        if df_u.empty or 'email' not in df_u.columns or 'password' not in df_u.columns:
-                            st.error("❌ Erro ao carregar dados de utilizadores. Verifica a Sheet.")
-                        else:
-                            user = df_u[
-                                (df_u['email'].str.lower() == u) &
-                                (df_u['password'] == p)
-                            ]
-                            if not user.empty:
-                                st.session_state.update({
-                                    "logged_in":  True,
-                                    "user_id":    str(user.iloc[0]['id']),
-                                    "user_nome":  f"{user.iloc[0]['posto']} {user.iloc[0]['nome']}",
-                                    "user_email": u,
-                                    "is_admin":   u in ADMINS,
-                                })
-                                st.rerun()
-                            else:
-                                st.error("❌ Email ou password incorretos.")
-
-# ============================================================
-# 8. APP PRINCIPAL (pós-login)
-# ============================================================
+“”“Renderiza uma secção da escala num expander.”””
+if df_sec.empty:
+return
+with st.expander(f”🔹 {titulo.upper()}”, expanded=True):
+if mostrar_extras:
+cols_ag = [‘serviço’, ‘horário’]
+for col in [‘indicativo rádio’, ‘rádio’, ‘viatura’]:
+if col in df_sec.columns:
+cols_ag.append(col)
+agg_dict: dict = {‘id_disp’: lambda x: ’, ’.join(x)}
+if ‘observações’ in df_sec.columns:
+agg_dict[‘observações’] = lambda x: ’, ’.join(v for v in x.dropna().unique() if str(v).strip())
+ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
+col_order = [‘serviço’, ‘horário’, ‘id_disp’]
+for col in [‘indicativo rádio’, ‘rádio’, ‘viatura’, ‘observações’]:
+if col in ag.columns:
+col_order.append(col)
+ag = ag[col_order]
 else:
-    # Carregar dados globais uma vez por sessão de render
-    df_trocas = load_data("registos_trocas")
-    df_util   = load_data("utilizadores")
+ag = df_sec.groupby([‘serviço’, ‘horário’], sort=False)[‘id_disp’]   
+.apply(lambda x: ’, ’.join(x)).reset_index()
+ag = ag.rename(columns={‘id_disp’: ‘Militares’})
+st.markdown(_render_tabela(ag), unsafe_allow_html=True)
 
-    u_id      = str(st.session_state['user_id'])
-    u_nome    = st.session_state['user_nome']
-    is_admin  = st.session_state.get("is_admin", False)
+# ============================================================
 
-    # --- Sidebar ---
-    with st.sidebar:
-        # Badge do utilizador
-        st.markdown("""
-        <div style='text-align:center;padding:12px 4px 16px 4px;margin-bottom:14px;background:linear-gradient(180deg,rgba(30,58,138,0.4) 0%,rgba(15,23,42,0) 100%);border-radius:10px'>
-            <div style='font-size:2rem;line-height:1;margin-bottom:8px;filter:drop-shadow(0 2px 6px rgba(147,197,253,0.4))'>🚓</div>
-            <div style='font-size:0.85rem;font-weight:800;color:#F1F5F9;letter-spacing:0.08em;text-transform:uppercase;line-height:1.2'>Portal de Escalas</div>
-            <div style='width:40px;height:2px;background:linear-gradient(90deg,transparent,#3B82F6,transparent);margin:6px auto 5px auto;border-radius:2px'></div>
-            <div style='font-size:0.72rem;color:#93C5FD;font-weight:600;letter-spacing:0.04em'>Guarda Nacional Republicana</div>
-            <div style='font-size:0.67rem;color:#64748B;margin-top:3px;letter-spacing:0.02em'>Posto Territorial de Famalicão</div>
-        </div>
-        """, unsafe_allow_html=True)
+# 7. LOGIN
 
-        role_label = "⭐ Administrador" if is_admin else "👮 Militar"
-        st.markdown(f"""
-        <div class="user-badge">
-            <div class="nome">👤 {u_nome}</div>
-            <div class="id">ID: {u_id}</div>
-            <div class="role">{role_label}</div>
-        </div>
-        """, unsafe_allow_html=True)
+# ============================================================
 
-        # Contador de pedidos pendentes
-        if not df_trocas.empty:
-            n_pendentes = len(df_trocas[
-                (df_trocas['status'] == 'Pendente_Militar') &
-                (df_trocas['id_destino'].astype(str) == u_id)
-            ])
-            n_admin = len(df_trocas[df_trocas['status'] == 'Pendente_Admin']) if is_admin else 0
+if “logged_in” not in st.session_state:
+st.session_state[“logged_in”] = False
+if “login_modo” not in st.session_state:
+st.session_state[“login_modo”] = “pin”  # “pin” | “email” | “registar_pin”
+if “pin_tentativas” not in st.session_state:
+st.session_state[“pin_tentativas”] = 0
+if “pin_bloqueado_ate” not in st.session_state:
+st.session_state[“pin_bloqueado_ate”] = None
 
-            if n_pendentes > 0:
-                st.warning(f"🔔 {n_pendentes} pedido(s) de troca por responder")
-            if n_admin > 0:
-                st.warning(f"⚖️ {n_admin} troca(s) aguardam validação")
+def fazer_login(user_row, u_email):
+st.session_state.update({
+“logged_in”:  True,
+“user_id”:    str(user_row[‘id’]),
+“user_nome”:  f”{user_row[‘posto’]} {user_row[‘nome’]}”,
+“user_email”: u_email,
+“is_admin”:   u_email in ADMINS,
+“pin_tentativas”: 0,
+“pin_bloqueado_ate”: None,
+})
 
-        st.markdown("---")
+if not st.session_state[“logged_in”]:
+st.markdown(”<br><br>”, unsafe_allow_html=True)
+_, col2, _ = st.columns([1, 1.4, 1])
+with col2:
+st.markdown(”””
+<div class="login-box">
+<div class="login-header">
+<span class="escudo">🚓</span>
+<h1>Portal de Escalas</h1>
+<div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
+<p class="posto-name">Posto Territorial de Famalicão</p>
+</div>
+</div>
+“””, unsafe_allow_html=True)
 
-        menu_geral = [
-            "📅 Minha Escala",
-            "🔍 Escala Geral",
-            "📊 Estatísticas",
-            "🔄 Solicitar Troca",
-            "📥 Pedidos Recebidos",
-            "📋 Histórico de Trocas",
-            "🔄 Giros",
-            "👥 Efetivo",
-        ]
-        menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
+```
+    modo = st.session_state["login_modo"]
 
-        st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
+    # ── MODO PIN ──
+    if modo == "pin":
+        with st.form("form_pin", clear_on_submit=True):
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align:center;color:#475569;font-size:0.9rem;margin-bottom:4px'>Introduz o teu PIN de 6 dígitos</p>", unsafe_allow_html=True)
+            pin_input = st.text_input("PIN", type="password", placeholder="● ● ● ● ● ●",
+                                      max_chars=6, label_visibility="collapsed")
+            st.markdown("<br>", unsafe_allow_html=True)
+            entrar = st.form_submit_button("ENTRAR COM PIN", use_container_width=True)
+            if entrar:
+                # Verificar bloqueio
+                if st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]:
+                    resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
+                    st.error(f"🔒 Demasiadas tentativas. Aguarda {resto}s.")
+                elif not pin_input or len(pin_input) != 6 or not pin_input.isdigit():
+                    st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
+                else:
+                    df_u = load_data("utilizadores")
+                    if df_u.empty or 'pin' not in df_u.columns:
+                        st.error("❌ Erro ao carregar dados.")
+                    else:
+                        user = df_u[df_u['pin'].astype(str).str.strip() == pin_input.strip()]
+                        if not user.empty:
+                            fazer_login(user.iloc[0], user.iloc[0]['email'])
+                            st.rerun()
+                        else:
+                            st.session_state["pin_tentativas"] += 1
+                            tentativas = st.session_state["pin_tentativas"]
+                            if tentativas >= 3:
+                                st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
+                                st.session_state["pin_tentativas"] = 0
+                                st.error("🔒 3 tentativas falhadas. Bloqueado por 30 segundos.")
+                            else:
+                                st.error(f"❌ PIN incorreto. ({tentativas}/3 tentativas)")
 
-        menu_opt = [
-            "📅 Minha Escala",
-            "🔍 Escala Geral",
-            "📊 Estatísticas",
-            "🔄 Solicitar Troca",
-            "📥 Pedidos Recebidos",
-            "📋 Histórico de Trocas",
-            "🔄 Giros",
-            "👥 Efetivo",
-        ]
-        if is_admin:
-            menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas"]
-
-        menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
-                        format_func=lambda x: "──────────" if x == "" else x)
-
-        st.markdown("---")
-        if st.button("🚪 Sair", use_container_width=True):
-            st.session_state["logged_in"] = False
+        col_a, col_b = st.columns(2)
+        if col_a.button("🔑 Entrar com email", use_container_width=True):
+            st.session_state["login_modo"] = "email"
+            st.rerun()
+        if col_b.button("📱 Registar PIN", use_container_width=True):
+            st.session_state["login_modo"] = "registar_pin"
             st.rerun()
 
-    # ============================================================
-    # FECHAR SIDEBAR NO MOBILE APÓS SELEÇÃO
-    # ============================================================
-    if "menu_anterior" not in st.session_state:
-        st.session_state["menu_anterior"] = menu
-    elif st.session_state["menu_anterior"] != menu:
-        st.session_state["menu_anterior"] = menu
-        st.session_state["sidebar_state"] = "collapsed"
-        st.rerun()
+    # ── MODO EMAIL/PASSWORD ──
+    elif modo == "email":
+        with st.form("form_email", clear_on_submit=False):
+            st.markdown("<br>", unsafe_allow_html=True)
+            u = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
+            p = st.text_input("🔒 Password", type="password", placeholder="••••••••")
+            st.markdown("<br>", unsafe_allow_html=True)
+            entrar = st.form_submit_button("ENTRAR", use_container_width=True)
+            if entrar:
+                if not u or not p:
+                    st.warning("Preenche o email e a password.")
+                else:
+                    df_u = load_data("utilizadores")
+                    if df_u.empty or 'email' not in df_u.columns:
+                        st.error("❌ Erro ao carregar dados.")
+                    else:
+                        user = df_u[
+                            (df_u['email'].str.lower() == u) &
+                            (df_u['password'] == p)
+                        ]
+                        if not user.empty:
+                            fazer_login(user.iloc[0], u)
+                            st.rerun()
+                        else:
+                            st.error("❌ Email ou password incorretos.")
+        if st.button("← Voltar ao PIN", use_container_width=True):
+            st.session_state["login_modo"] = "pin"
+            st.rerun()
 
-    # ============================================================
-    # BANNER NOTIFICAÇÕES
-    # ============================================================
+    # ── MODO REGISTAR PIN ──
+    elif modo == "registar_pin":
+        st.markdown("<p style='text-align:center;color:#475569;font-size:0.88rem'>Autentica-te primeiro para criar o teu PIN</p>", unsafe_allow_html=True)
+        with st.form("form_reg_pin", clear_on_submit=False):
+            st.markdown("<br>", unsafe_allow_html=True)
+            u_r = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
+            p_r = st.text_input("🔒 Password", type="password", placeholder="••••••••")
+            st.markdown("---")
+            pin1 = st.text_input("📱 Novo PIN (6 dígitos)", type="password",
+                                 placeholder="● ● ● ● ● ●", max_chars=6)
+            pin2 = st.text_input("📱 Confirmar PIN", type="password",
+                                 placeholder="● ● ● ● ● ●", max_chars=6)
+            st.markdown("<br>", unsafe_allow_html=True)
+            registar = st.form_submit_button("CRIAR PIN", use_container_width=True)
+            if registar:
+                if not u_r or not p_r or not pin1 or not pin2:
+                    st.warning("Preenche todos os campos.")
+                elif len(pin1) != 6 or not pin1.isdigit():
+                    st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
+                elif pin1 != pin2:
+                    st.error("❌ Os PINs não coincidem.")
+                else:
+                    df_u = load_data("utilizadores")
+                    if df_u.empty or 'email' not in df_u.columns:
+                        st.error("❌ Erro ao carregar dados.")
+                    else:
+                        user = df_u[
+                            (df_u['email'].str.lower() == u_r) &
+                            (df_u['password'] == p_r)
+                        ]
+                        if user.empty:
+                            st.error("❌ Email ou password incorretos.")
+                        else:
+                            # Verificar se PIN já existe
+                            if 'pin' in df_u.columns:
+                                pin_existe = df_u[
+                                    (df_u['pin'].astype(str).str.strip() == pin1) &
+                                    (df_u['email'].str.lower() != u_r)
+                                ]
+                                if not pin_existe.empty:
+                                    st.error("❌ Este PIN já está a ser usado por outro militar. Escolhe outro.")
+                                    st.stop()
+                            # Guardar PIN na Sheet
+                            try:
+                                client = get_gsheet_client()
+                                sh = client.open_by_url(st.secrets["gsheet_url"])
+                                ws = sh.worksheet("utilizadores")
+                                # Encontrar coluna pin
+                                headers = ws.row_values(1)
+                                headers_lower = [h.strip().lower() for h in headers]
+                                if 'pin' not in headers_lower:
+                                    st.error("❌ Coluna 'pin' não existe na aba 'utilizadores'. Adiciona-a primeiro.")
+                                    st.stop()
+                                col_pin = headers_lower.index('pin') + 1
+                                # Encontrar linha do utilizador
+                                ids_col = ws.col_values(headers_lower.index('email') + 1)
+                                linha_user = None
+                                for i, email_val in enumerate(ids_col):
+                                    if email_val.strip().lower() == u_r:
+                                        linha_user = i + 1
+                                        break
+                                if linha_user:
+                                    ws.update_cell(linha_user, col_pin, pin1)
+                                    st.success("✅ PIN criado com sucesso! Já podes usar o PIN para entrar.")
+                                    st.session_state["login_modo"] = "pin"
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Utilizador não encontrado na Sheet.")
+                            except Exception as e:
+                                st.error(f"❌ Erro ao guardar PIN: {e}")
+
+        if st.button("← Voltar ao PIN", use_container_width=True):
+            st.session_state["login_modo"] = "pin"
+            st.rerun()
+```
+
+# ============================================================
+
+# 8. APP PRINCIPAL (pós-login)
+
+# ============================================================
+
+else:
+# Carregar dados globais uma vez por sessão de render
+df_trocas = load_data(“registos_trocas”)
+df_util   = load_data(“utilizadores”)
+
+```
+u_id      = str(st.session_state['user_id'])
+u_nome    = st.session_state['user_nome']
+is_admin  = st.session_state.get("is_admin", False)
+
+# --- Sidebar ---
+with st.sidebar:
+    # Badge do utilizador
+    st.markdown("""
+    <div style='text-align:center;padding:12px 4px 16px 4px;margin-bottom:14px;background:linear-gradient(180deg,rgba(30,58,138,0.4) 0%,rgba(15,23,42,0) 100%);border-radius:10px'>
+        <div style='font-size:2rem;line-height:1;margin-bottom:8px;filter:drop-shadow(0 2px 6px rgba(147,197,253,0.4))'>🚓</div>
+        <div style='font-size:0.85rem;font-weight:800;color:#F1F5F9;letter-spacing:0.08em;text-transform:uppercase;line-height:1.2'>Portal de Escalas</div>
+        <div style='width:40px;height:2px;background:linear-gradient(90deg,transparent,#3B82F6,transparent);margin:6px auto 5px auto;border-radius:2px'></div>
+        <div style='font-size:0.72rem;color:#93C5FD;font-weight:600;letter-spacing:0.04em'>Guarda Nacional Republicana</div>
+        <div style='font-size:0.67rem;color:#64748B;margin-top:3px;letter-spacing:0.02em'>Posto Territorial de Famalicão</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    role_label = "⭐ Administrador" if is_admin else "👮 Militar"
+    st.markdown(f"""
+    <div class="user-badge">
+        <div class="nome">👤 {u_nome}</div>
+        <div class="id">ID: {u_id}</div>
+        <div class="role">{role_label}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Contador de pedidos pendentes
     if not df_trocas.empty:
-        n_pend = len(df_trocas[
+        n_pendentes = len(df_trocas[
             (df_trocas['status'] == 'Pendente_Militar') &
             (df_trocas['id_destino'].astype(str) == u_id)
         ])
-        if n_pend > 0:
-            st.warning(f"🔔 Tens **{n_pend} pedido(s) de troca** por responder! Vai a **📥 Pedidos Recebidos**.")
+        n_admin = len(df_trocas[df_trocas['status'] == 'Pendente_Admin']) if is_admin else 0
 
-    # ============================================================
-    # EXPIRAÇÃO DE SESSÃO (4 horas)
-    # ============================================================
-    if "login_time" not in st.session_state:
-        st.session_state["login_time"] = datetime.now()
-    elif (datetime.now() - st.session_state["login_time"]).total_seconds() > 4 * 3600:
+        if n_pendentes > 0:
+            st.warning(f"🔔 {n_pendentes} pedido(s) de troca por responder")
+        if n_admin > 0:
+            st.warning(f"⚖️ {n_admin} troca(s) aguardam validação")
+
+    st.markdown("---")
+
+    menu_geral = [
+        "📅 Minha Escala",
+        "🔍 Escala Geral",
+        "📊 Estatísticas",
+        "🔄 Solicitar Troca",
+        "📥 Pedidos Recebidos",
+        "📋 Histórico de Trocas",
+        "🔄 Giros",
+        "👥 Efetivo",
+    ]
+    menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
+
+    st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
+
+    menu_opt = [
+        "📅 Minha Escala",
+        "🔍 Escala Geral",
+        "📊 Estatísticas",
+        "🔄 Solicitar Troca",
+        "📥 Pedidos Recebidos",
+        "📋 Histórico de Trocas",
+        "🔄 Giros",
+        "👥 Efetivo",
+    ]
+    if is_admin:
+        menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas"]
+
+    menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
+                    format_func=lambda x: "──────────" if x == "" else x)
+
+    st.markdown("---")
+    if st.button("🚪 Sair", use_container_width=True):
         st.session_state["logged_in"] = False
-        st.warning("⏱️ Sessão expirada. Por favor volta a fazer login.")
-        st.stop()
+        st.rerun()
 
-    # ============================================================
-    # PÁGINAS
-    # ============================================================
+# ============================================================
+# FECHAR SIDEBAR NO MOBILE APÓS SELEÇÃO
+# ============================================================
+if "menu_anterior" not in st.session_state:
+    st.session_state["menu_anterior"] = menu
+elif st.session_state["menu_anterior"] != menu:
+    st.session_state["menu_anterior"] = menu
+    st.session_state["sidebar_state"] = "collapsed"
+    st.rerun()
 
-    # --- 📅 MINHA ESCALA ---
-    if menu == "📅 Minha Escala":
-        st.title("📅 A Minha Escala")
+# ============================================================
+# BANNER NOTIFICAÇÕES
+# ============================================================
+if not df_trocas.empty:
+    n_pend = len(df_trocas[
+        (df_trocas['status'] == 'Pendente_Militar') &
+        (df_trocas['id_destino'].astype(str) == u_id)
+    ])
+    if n_pend > 0:
+        st.warning(f"🔔 Tens **{n_pend} pedido(s) de troca** por responder! Vai a **📥 Pedidos Recebidos**.")
 
-        vista = st.radio("Vista:", ["📋 Próximos Serviços", "📅 Calendário Mensal"], horizontal=True, label_visibility="collapsed")
-        st.markdown("---")
+# ============================================================
+# EXPIRAÇÃO DE SESSÃO (4 horas)
+# ============================================================
+if "login_time" not in st.session_state:
+    st.session_state["login_time"] = datetime.now()
+elif (datetime.now() - st.session_state["login_time"]).total_seconds() > 4 * 3600:
+    st.session_state["logged_in"] = False
+    st.warning("⏱️ Sessão expirada. Por favor volta a fazer login.")
+    st.stop()
 
-        # ── CALENDÁRIO MENSAL ──
-        if vista == "📅 Calendário Mensal":
-            from calendar import monthrange
-            hj_cal = datetime.now()
-            col_m, col_a, _ = st.columns([1, 1, 3])
-            with col_m:
-                mes_sel = st.selectbox("Mês:", list(range(1,13)),
-                    index=hj_cal.month - 1,
-                    format_func=lambda m: ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                                           "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][m-1])
-            with col_a:
-                ano_sel = st.selectbox("Ano:", [hj_cal.year - 1, hj_cal.year, hj_cal.year + 1], index=1)
+# ============================================================
+# PÁGINAS
+# ============================================================
 
-            _, n_dias = monthrange(ano_sel, mes_sel)
+# --- 📅 MINHA ESCALA ---
+if menu == "📅 Minha Escala":
+    st.title("📅 A Minha Escala")
 
-            # Carregar todos os dias do mês
-            servicos_mes = {}
-            for d in range(1, n_dias + 1):
-                dt_cal = datetime(ano_sel, mes_sel, d)
-                aba = dt_cal.strftime("%d-%m")
-                df_cal = load_data(aba)
-                if not df_cal.empty:
-                    m_cal = df_cal[df_cal['id'].astype(str) == u_id]
-                    if not m_cal.empty:
-                        row_cal = m_cal.iloc[0]
-                        # Verificar trocas
-                        troca_cal = None
-                        if not df_trocas.empty:
-                            tr_c = df_trocas[
-                                (df_trocas['data'] == dt_cal.strftime('%d/%m/%Y')) &
-                                (df_trocas['status'] == 'Aprovada') &
-                                ((df_trocas['id_origem'].astype(str) == u_id) |
-                                 (df_trocas['id_destino'].astype(str) == u_id))
-                            ]
-                            if not tr_c.empty:
-                                t_c = tr_c.iloc[0]
-                                troca_cal = t_c['servico_destino'] if str(t_c['id_origem']) == u_id else t_c['servico_origem']
-                        servicos_mes[d] = {
-                            'serviço': troca_cal if troca_cal else row_cal['serviço'],
-                            'horário': row_cal['horário'],
-                            'troca': troca_cal is not None,
-                            'obs': str(row_cal.get('observações','') or '').strip()
-                        }
+    vista = st.radio("Vista:", ["📋 Próximos Serviços", "📅 Calendário Mensal"], horizontal=True, label_visibility="collapsed")
+    st.markdown("---")
 
-            hoje_d = datetime.now().date()
+    # ── CALENDÁRIO MENSAL ──
+    if vista == "📅 Calendário Mensal":
+        from calendar import monthrange
+        hj_cal = datetime.now()
+        col_m, col_a, _ = st.columns([1, 1, 3])
+        with col_m:
+            mes_sel = st.selectbox("Mês:", list(range(1,13)),
+                index=hj_cal.month - 1,
+                format_func=lambda m: ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                                       "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][m-1])
+        with col_a:
+            ano_sel = st.selectbox("Ano:", [hj_cal.year - 1, hj_cal.year, hj_cal.year + 1], index=1)
 
-            # Renderizar como lista de cards compactos (funciona em mobile e desktop)
-            nomes_mes = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                         "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-            nomes_dia = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-            st.markdown(f"### {nomes_mes[mes_sel]} {ano_sel}")
+        _, n_dias = monthrange(ano_sel, mes_sel)
 
-            tem_servicos = False
-            for d in range(1, n_dias + 1):
-                dt_cel = datetime(ano_sel, mes_sel, d).date()
-                is_hoje = dt_cel == hoje_d
-                weekday = dt_cel.weekday()
-                dia_sem = nomes_dia[weekday]
-                is_fds = weekday >= 5  # Sábado=5, Domingo=6
+        # Carregar todos os dias do mês
+        servicos_mes = {}
+        for d in range(1, n_dias + 1):
+            dt_cal = datetime(ano_sel, mes_sel, d)
+            aba = dt_cal.strftime("%d-%m")
+            df_cal = load_data(aba)
+            if not df_cal.empty:
+                m_cal = df_cal[df_cal['id'].astype(str) == u_id]
+                if not m_cal.empty:
+                    row_cal = m_cal.iloc[0]
+                    # Verificar trocas
+                    troca_cal = None
+                    if not df_trocas.empty:
+                        tr_c = df_trocas[
+                            (df_trocas['data'] == dt_cal.strftime('%d/%m/%Y')) &
+                            (df_trocas['status'] == 'Aprovada') &
+                            ((df_trocas['id_origem'].astype(str) == u_id) |
+                             (df_trocas['id_destino'].astype(str) == u_id))
+                        ]
+                        if not tr_c.empty:
+                            t_c = tr_c.iloc[0]
+                            troca_cal = t_c['servico_destino'] if str(t_c['id_origem']) == u_id else t_c['servico_origem']
+                    servicos_mes[d] = {
+                        'serviço': troca_cal if troca_cal else row_cal['serviço'],
+                        'horário': row_cal['horário'],
+                        'troca': troca_cal is not None,
+                        'obs': str(row_cal.get('observações','') or '').strip()
+                    }
 
-                borda_esq = "4px solid #1E3A8A" if is_hoje else ("3px solid #F59E0B" if is_fds else "3px solid #E2E8F0")
-                cor_num = "#B45309" if is_fds else "#1E293B"
-                cor_dia = "#B45309" if is_fds else "#64748B"
-                hoje_badge = " <span style='background:#1E3A8A;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px'>HOJE</span>" if is_hoje else ""
+        hoje_d = datetime.now().date()
 
-                if d in servicos_mes:
-                    tem_servicos = True
-                    info = servicos_mes[d]
-                    if info['troca']:
-                        bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
-                    else:
-                        import unicodedata as _udc
-                        def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                        s_n = _nc(info['serviço'])
-                        if any(x in s_n for x in ['ferias','licen','doente']):
-                            bg, cor_txt, icone = "#F8FAFC", "#64748B", "🏖️"
-                        elif 'folga' in s_n:
-                            bg, cor_txt, icone = "#F5F3FF", "#7C3AED", "😴"
-                        elif any(x in s_n for x in ['tribunal','dilig']):
-                            bg, cor_txt, icone = "#FFF1F2", "#DC2626", "⚖️"
-                        elif any(x in s_n for x in ['remu','grat']):
-                            bg, cor_txt, icone = "#ECFDF5", "#065F46", "💰"
-                        else:
-                            bg, cor_txt, icone = "#EFF6FF", "#1E3A8A", "🛡️"
-                    # Fundo mais quente ao fim de semana
-                    if is_fds and bg == "#EFF6FF":
-                        bg = "#FFFBEB"
-                    obs_html = f"<span style='color:#64748B;font-size:0.75rem'> · 📝 {info['obs']}</span>" if info['obs'] else ""
-                    st.markdown(f"""
-                    <div style='background:{bg};border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
-                        <div style='min-width:48px;text-align:center'>
-                            <div style='font-size:1.2rem;font-weight:800;color:{cor_num};line-height:1'>{d}</div>
-                            <div style='font-size:0.7rem;color:{cor_dia};font-weight:{"700" if is_fds else "400"}'>{dia_sem}</div>
-                        </div>
-                        <div>
-                            <div style='font-size:0.9rem;font-weight:700;color:{cor_txt}'>{icone} {info['serviço']}{hoje_badge}</div>
-                            <div style='font-size:0.8rem;color:#475569'>🕒 {info['horário']}{obs_html}</div>
-                        </div>
-                    </div>""", unsafe_allow_html=True)
-                elif is_hoje:
-                    st.markdown(f"""
-                    <div style='background:#F8FAFC;border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
-                        <div style='min-width:48px;text-align:center'>
-                            <div style='font-size:1.2rem;font-weight:800;color:#94A3B8;line-height:1'>{d}</div>
-                            <div style='font-size:0.7rem;color:#94A3B8'>{dia_sem}</div>
-                        </div>
-                        <div style='color:#94A3B8;font-size:0.85rem'>Sem serviço escalado{hoje_badge}</div>
-                    </div>""", unsafe_allow_html=True)
+        # Renderizar como lista de cards compactos (funciona em mobile e desktop)
+        nomes_mes = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+        nomes_dia = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+        st.markdown(f"### {nomes_mes[mes_sel]} {ano_sel}")
 
-            if not tem_servicos:
-                st.info("Não foram encontrados serviços escalados neste mês.")
+        tem_servicos = False
+        for d in range(1, n_dias + 1):
+            dt_cel = datetime(ano_sel, mes_sel, d).date()
+            is_hoje = dt_cel == hoje_d
+            weekday = dt_cel.weekday()
+            dia_sem = nomes_dia[weekday]
+            is_fds = weekday >= 5  # Sábado=5, Domingo=6
 
-        # ── PRÓXIMOS SERVIÇOS ──
-        else:
-            st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
-            hj = datetime.now()
+            borda_esq = "4px solid #1E3A8A" if is_hoje else ("3px solid #F59E0B" if is_fds else "3px solid #E2E8F0")
+            cor_num = "#B45309" if is_fds else "#1E293B"
+            cor_dia = "#B45309" if is_fds else "#64748B"
+            hoje_badge = " <span style='background:#1E3A8A;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px'>HOJE</span>" if is_hoje else ""
 
-            # Percorre dias a partir de hoje até não encontrar mais abas com dados
-            dias_sem_dados = 0
-            i = 0
-            encontrou_algum = False
-
-            while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
-                dt  = hj + timedelta(days=i)
-                d_s = dt.strftime('%d/%m/%Y')
-                lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
-
-                # Verificar trocas aprovadas
-                if not df_trocas.empty:
-                    tr_v = df_trocas[
-                        (df_trocas['data'] == d_s) &
-                        (df_trocas['status'] == 'Aprovada') &
-                        ((df_trocas['id_origem'].astype(str) == u_id) |
-                         (df_trocas['id_destino'].astype(str) == u_id))
-                    ]
+            if d in servicos_mes:
+                tem_servicos = True
+                info = servicos_mes[d]
+                if info['troca']:
+                    bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
                 else:
-                    tr_v = pd.DataFrame()
-
-                if not tr_v.empty:
-                    t = tr_v.iloc[0]
-                    if str(t['id_origem']) == u_id:
-                        s_ex, era, com = t['servico_destino'], t['servico_origem'], t['id_destino']
+                    import unicodedata as _udc
+                    def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                    s_n = _nc(info['serviço'])
+                    if any(x in s_n for x in ['ferias','licen','doente']):
+                        bg, cor_txt, icone = "#F8FAFC", "#64748B", "🏖️"
+                    elif 'folga' in s_n:
+                        bg, cor_txt, icone = "#F5F3FF", "#7C3AED", "😴"
+                    elif any(x in s_n for x in ['tribunal','dilig']):
+                        bg, cor_txt, icone = "#FFF1F2", "#DC2626", "⚖️"
+                    elif any(x in s_n for x in ['remu','grat']):
+                        bg, cor_txt, icone = "#ECFDF5", "#065F46", "💰"
                     else:
-                        s_ex, era, com = t['servico_origem'], t['servico_destino'], t['id_origem']
-                    st.markdown(
-                        f'<div class="card-servico card-troca">'
-                        f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
-                        f'<h3>🔄 {s_ex}</h3>'
-                        f'<p>↩️ Serviço original: {era}</p>'
-                        f'<p>👤 Trocado com ID: {com}</p>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
-                    dias_sem_dados = 0
-                    encontrou_algum = True
-                else:
-                    df_d = load_data(dt.strftime("%d-%m"))
-                    if not df_d.empty:
-                        m = df_d[df_d['id'].astype(str) == u_id]
-                        if not m.empty:
-                            row = m.iloc[0]
-                            obs_val = str(row.get('observações', '') or '').strip()
-                            obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
-                            # Escolher classe e ícone conforme o tipo de serviço
-                            import unicodedata as _uds
-                            def _ns(t): return _uds.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                            s_norm = _ns(row['serviço'])
-                            if any(x in s_norm for x in ['ferias','licen','doente']):
-                                card_class, icone_s = 'card-ausencia', '🏖️'
-                            elif 'folga' in s_norm:
-                                card_class, icone_s = 'card-folga', '😴'
-                            elif any(x in s_norm for x in ['tribunal','dilig']):
-                                card_class, icone_s = 'card-tribunal', '⚖️'
-                            else:
-                                card_class, icone_s = 'card-meu', '🛡️'
-                            st.markdown(
-                                f'<div class="card-servico {card_class}">'
-                                f'<p><b>{lbl}</b></p>'
-                                f'<h3>{icone_s} {row["serviço"]}</h3>'
-                                f'<p>🕒 {row["horário"]}</p>'
-                                f'{obs_html}'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
-                            # Verificar se tem remunerado no mesmo dia
-                            df_rem_dia = load_data(dt.strftime("%d-%m"))
-                            if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
-                                import unicodedata as _ud2
-                                def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                                rem_mil = df_rem_dia[
-                                    df_rem_dia['id'].astype(str) == u_id
-                                ]
-                                rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
-                                for _, rr in rem_mil.iterrows():
-                                    obs_r = str(rr.get('observações', '') or '').strip()
-                                    obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
-                                    st.markdown(
-                                        f'<div class="card-servico card-rem">'
-                                        f'<p><b>💶 REMUNERADO</b></p>'
-                                        f'<h3>💰 {rr["serviço"]}</h3>'
-                                        f'<p>🕒 {rr["horário"]}</p>'
-                                        f'{obs_r_html}'
-                                        f'</div>',
-                                        unsafe_allow_html=True
-                                    )
-                            encontrou_algum = True
-                        # Aba existe mas o militar não está escalado — não conta como "sem dados"
-                        dias_sem_dados = 0
-                    else:
-                        dias_sem_dados += 1
+                        bg, cor_txt, icone = "#EFF6FF", "#1E3A8A", "🛡️"
+                # Fundo mais quente ao fim de semana
+                if is_fds and bg == "#EFF6FF":
+                    bg = "#FFFBEB"
+                obs_html = f"<span style='color:#64748B;font-size:0.75rem'> · 📝 {info['obs']}</span>" if info['obs'] else ""
+                st.markdown(f"""
+                <div style='background:{bg};border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
+                    <div style='min-width:48px;text-align:center'>
+                        <div style='font-size:1.2rem;font-weight:800;color:{cor_num};line-height:1'>{d}</div>
+                        <div style='font-size:0.7rem;color:{cor_dia};font-weight:{"700" if is_fds else "400"}'>{dia_sem}</div>
+                    </div>
+                    <div>
+                        <div style='font-size:0.9rem;font-weight:700;color:{cor_txt}'>{icone} {info['serviço']}{hoje_badge}</div>
+                        <div style='font-size:0.8rem;color:#475569'>🕒 {info['horário']}{obs_html}</div>
+                    </div>
+                </div>""", unsafe_allow_html=True)
+            elif is_hoje:
+                st.markdown(f"""
+                <div style='background:#F8FAFC;border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
+                    <div style='min-width:48px;text-align:center'>
+                        <div style='font-size:1.2rem;font-weight:800;color:#94A3B8;line-height:1'>{d}</div>
+                        <div style='font-size:0.7rem;color:#94A3B8'>{dia_sem}</div>
+                    </div>
+                    <div style='color:#94A3B8;font-size:0.85rem'>Sem serviço escalado{hoje_badge}</div>
+                </div>""", unsafe_allow_html=True)
 
-                i += 1
+        if not tem_servicos:
+            st.info("Não foram encontrados serviços escalados neste mês.")
 
-            if not encontrou_algum:
-                st.info("Não foram encontrados serviços escalados a partir de hoje.")
+    # ── PRÓXIMOS SERVIÇOS ──
+    else:
+        st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
+        hj = datetime.now()
 
+        # Percorre dias a partir de hoje até não encontrar mais abas com dados
+        dias_sem_dados = 0
+        i = 0
+        encontrou_algum = False
 
-    # --- 📊 ESTATÍSTICAS ---
-    elif menu == "📊 Estatísticas":
-        st.title("📊 Estatísticas de Serviço")
+        while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
+            dt  = hj + timedelta(days=i)
+            d_s = dt.strftime('%d/%m/%Y')
+            lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
 
-        if is_admin:
-            militares_opts = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
-            sel_mil = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts.keys()))
-            alvo_id   = u_id if sel_mil == "— O meu próprio —" else militares_opts[sel_mil]
-            alvo_nome = u_nome if sel_mil == "— O meu próprio —" else sel_mil
-        else:
-            alvo_id   = u_id
-            alvo_nome = u_nome
-
-        st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
-
-        _gsheet_url = st.secrets["gsheet_url"]
-        _sheet_id   = _gsheet_url.split("/d/")[1].split("/")[0]
-
-        @st.cache_data(ttl=86400)
-        def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
-            import unicodedata as _ud3
-            def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-            client = get_gsheet_client()
-            sh = client.open_by_key(sheet_id_c)
-            abas = sh.worksheets()
-            resultados = []
-            for aba in abas:
-                titulo = aba.title
-                partes = titulo.split("-")
-                if len(partes) != 2 or not all(p.isdigit() for p in partes):
-                    continue
-                try:
-                    dados = aba.get_all_records()
-                    df_aba = pd.DataFrame(dados)
-                    if df_aba.empty or 'id' not in df_aba.columns:
-                        continue
-                    mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
-                    for _, row in mil_rows.iterrows():
-                        serv = str(row.get('serviço', '')).strip()
-                        if not serv:
-                            continue
-                        dd, mm = int(partes[0]), int(partes[1])
-                        ano = datetime.now().year
-                        if mm > datetime.now().month + 1:
-                            ano -= 1
-                        resultados.append({
-                            'data': f"{partes[0]}/{partes[1]}/{ano}",
-                            'mes': f"{partes[1]}/{ano}",
-                            'serviço': serv,
-                            'tipo': _n3(serv)
-                        })
-                except Exception:
-                    continue
-            return pd.DataFrame(resultados)
-
-        with st.spinner("A carregar histórico..."):
-            df_stats = contar_servicos_historico(alvo_id, _sheet_id)
-
-        if df_stats.empty:
-            st.info("Não foram encontrados serviços no histórico.")
-        else:
-            def categorizar(tipo):
-                if any(x in tipo for x in ['feria','licen','doente']): return 'Ausência'
-                if 'folga' in tipo: return 'Folga'
-                if any(x in tipo for x in ['remu','grat']): return 'Remunerado'
-                if 'atendimento' in tipo: return 'Atendimento'
-                if 'apoio' in tipo: return 'Apoio Atendimento'
-                if any(x in tipo for x in ['patrulha','ronda','po ','vtr']): return 'Patrulha'
-                if any(x in tipo for x in ['secretaria','inquer','comando','dilig','tribunal','pronto']): return 'ADM'
-                return 'Outros'
-
-            df_stats['categoria'] = df_stats['tipo'].apply(categorizar)
-            total = len(df_stats)
-            st.metric("Total de serviços", total)
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                st.markdown("**Por categoria**")
-                df_cat = df_stats.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
-                st.dataframe(df_cat, use_container_width=True, hide_index=True)
-            with col_g2:
-                st.markdown("**Por mês**")
-                df_mes = df_stats.groupby('mes').size().reset_index(name='total')
-                st.dataframe(df_mes, use_container_width=True, hide_index=True)
-            st.markdown("---")
-            st.markdown("**Detalhe por serviço**")
-            df_detalhe = df_stats.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
-            st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
-
-    # --- 🔍 ESCALA GERAL ---
-    elif menu == "🔍 Escala Geral":
-        st.title("🔍 Escala Geral")
-        d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
-        df_dia = load_data(d_sel.strftime("%d-%m"))
-
-        if df_dia.empty:
-            st.info("Não existem dados para esta data.")
-        else:
-            df_at = df_dia.copy()
-            df_at['id_disp'] = df_at['id'].astype(str)
-
-            # Aplicar trocas aprovadas
+            # Verificar trocas aprovadas
             if not df_trocas.empty:
                 tr_v = df_trocas[
-                    (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
-                    (df_trocas['status'] == 'Aprovada')
+                    (df_trocas['data'] == d_s) &
+                    (df_trocas['status'] == 'Aprovada') &
+                    ((df_trocas['id_origem'].astype(str) == u_id) |
+                     (df_trocas['id_destino'].astype(str) == u_id))
                 ]
-                for _, t in tr_v.iterrows():
-                    m_o = df_at['id'].astype(str) == str(t['id_origem'])
-                    if m_o.any():
-                        df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
-                    m_d = df_at['id'].astype(str) == str(t['id_destino'])
-                    if m_d.any():
-                        df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+            else:
+                tr_v = pd.DataFrame()
 
-            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
-            col_pdf, col_full, _ = st.columns([1, 1.5, 3])
-            with col_pdf:
-                st.download_button(
-                    "📥 Escala do Dia",
-                    pdf_bytes,
-                    file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
-                    mime="application/pdf"
+            if not tr_v.empty:
+                t = tr_v.iloc[0]
+                if str(t['id_origem']) == u_id:
+                    s_ex, era, com = t['servico_destino'], t['servico_origem'], t['id_destino']
+                else:
+                    s_ex, era, com = t['servico_origem'], t['servico_destino'], t['id_origem']
+                st.markdown(
+                    f'<div class="card-servico card-troca">'
+                    f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
+                    f'<h3>🔄 {s_ex}</h3>'
+                    f'<p>↩️ Serviço original: {era}</p>'
+                    f'<p>👤 Trocado com ID: {com}</p>'
+                    f'</div>',
+                    unsafe_allow_html=True
                 )
-            with col_full:
-                if st.button("📦 Gerar Escala Completa (hoje→)"):
-                    with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
-                        import tempfile, os, io as _io
-                        try:
-                            from pypdf import PdfWriter, PdfReader
-                        except ImportError:
-                            from PyPDF2 import PdfWriter, PdfReader
-                        writer = PdfWriter()
-                        hj2 = datetime.now()
-                        dias_sem2 = 0
-                        j2 = 0
-                        paginas = 0
-                        while dias_sem2 < 5:
-                            dt2 = hj2 + timedelta(days=j2)
-                            df_d2 = load_data(dt2.strftime("%d-%m"))
-                            if not df_d2.empty:
-                                df_d2['id_disp'] = df_d2['id'].astype(str)
-                                if not df_trocas.empty:
-                                    tr2 = df_trocas[
-                                        (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
-                                        (df_trocas['status'] == 'Aprovada')
-                                    ]
-                                    for _, t2 in tr2.iterrows():
-                                        m_o2 = df_d2['id'].astype(str) == str(t2['id_origem'])
-                                        if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
-                                        m_d2 = df_d2['id'].astype(str) == str(t2['id_destino'])
-                                        if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
-                                pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
-                                reader = PdfReader(_io.BytesIO(pb2))
-                                for pg in reader.pages:
-                                    writer.add_page(pg)
-                                paginas += 1
-                                dias_sem2 = 0
-                            else:
-                                dias_sem2 += 1
-                            j2 += 1
-                        if paginas > 0:
-                            buf = _io.BytesIO()
-                            writer.write(buf)
-                            st.download_button(
-                                f"⬇️ Descarregar ({paginas} dias)",
-                                data=buf.getvalue(),
-                                file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
-                                mime="application/pdf",
-                                key="dl_completa"
-                            )
+                dias_sem_dados = 0
+                encontrou_algum = True
+            else:
+                df_d = load_data(dt.strftime("%d-%m"))
+                if not df_d.empty:
+                    m = df_d[df_d['id'].astype(str) == u_id]
+                    if not m.empty:
+                        row = m.iloc[0]
+                        obs_val = str(row.get('observações', '') or '').strip()
+                        obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
+                        # Escolher classe e ícone conforme o tipo de serviço
+                        import unicodedata as _uds
+                        def _ns(t): return _uds.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                        s_norm = _ns(row['serviço'])
+                        if any(x in s_norm for x in ['ferias','licen','doente']):
+                            card_class, icone_s = 'card-ausencia', '🏖️'
+                        elif 'folga' in s_norm:
+                            card_class, icone_s = 'card-folga', '😴'
+                        elif any(x in s_norm for x in ['tribunal','dilig']):
+                            card_class, icone_s = 'card-tribunal', '⚖️'
                         else:
-                            st.info("Não há escalas disponíveis.")
+                            card_class, icone_s = 'card-meu', '🛡️'
+                        st.markdown(
+                            f'<div class="card-servico {card_class}">'
+                            f'<p><b>{lbl}</b></p>'
+                            f'<h3>{icone_s} {row["serviço"]}</h3>'
+                            f'<p>🕒 {row["horário"]}</p>'
+                            f'{obs_html}'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                        # Verificar se tem remunerado no mesmo dia
+                        df_rem_dia = load_data(dt.strftime("%d-%m"))
+                        if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
+                            import unicodedata as _ud2
+                            def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                            rem_mil = df_rem_dia[
+                                df_rem_dia['id'].astype(str) == u_id
+                            ]
+                            rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
+                            for _, rr in rem_mil.iterrows():
+                                obs_r = str(rr.get('observações', '') or '').strip()
+                                obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
+                                st.markdown(
+                                    f'<div class="card-servico card-rem">'
+                                    f'<p><b>💶 REMUNERADO</b></p>'
+                                    f'<h3>💰 {rr["serviço"]}</h3>'
+                                    f'<p>🕒 {rr["horário"]}</p>'
+                                    f'{obs_r_html}'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
+                        encontrou_algum = True
+                    # Aba existe mas o militar não está escalado — não conta como "sem dados"
+                    dias_sem_dados = 0
+                else:
+                    dias_sem_dados += 1
 
-            # Remover linhas sem militar para a visualização na escala geral
-            df_at = _limpar_sem_militar(df_at)
+            i += 1
 
-            # Separar ausências primeiro (inclui férias, licenças, doentes, diligências, tribunal)
-            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência", "tribunal"], df_at)
+        if not encontrou_algum:
+            st.info("Não foram encontrados serviços escalados a partir de hoje.")
 
-            # Extrair cada grupo do df_res por ordem
-            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
-            df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
-            df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
-            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],       df_res)
-            df_remu, df_res = filtrar_secao(["remu", "grat"],                          df_res)
-            df_folga,df_res = filtrar_secao(["folga"],                                 df_res)
-            df_outros       = df_res  # o que sobrar são "Outros Serviços"
 
-            mostrar_secao("Comando e Administrativos", df_cmd)
-            mostrar_secao("Atendimento",               df_aten)
-            mostrar_secao("Apoio ao Atendimento",      df_apoi)
-            mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
-            mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True)
-            # Remunerados: horário | militares | observações (sem rádio/indicativo)
-            if not df_remu.empty:
-                with st.expander("🔹 REMUNERADOS", expanded=True):
-                    cols_grp_r = ['horário'] + [c for c in ['serviço', 'observações'] if c in df_remu.columns]
-                    ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
-                                  .apply(lambda x: ', '.join(x)).reset_index()
-                    col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
-                    ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares'})
-                    st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
-            # Folga sem horário
-            if not df_folga.empty:
-                with st.expander("🔹 FOLGA", expanded=True):
-                    ag_f = df_folga.groupby('serviço', sort=False)['id_disp'] \
-                                   .apply(lambda x: ', '.join(x)).reset_index()
-                    st.markdown(_render_tabela(ag_f.rename(columns={'id_disp':'Militar'})), unsafe_allow_html=True)
+# --- 📊 ESTATÍSTICAS ---
+elif menu == "📊 Estatísticas":
+    st.title("📊 Estatísticas de Serviço")
 
-            if not df_aus.empty:
-                with st.expander("🔹 AUSENTES", expanded=True):
-                    ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
-                               .apply(lambda x: ', '.join(x)).reset_index()
-                    st.markdown(_render_tabela(ag), unsafe_allow_html=True)
+    if is_admin:
+        militares_opts = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
+        sel_mil = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts.keys()))
+        alvo_id   = u_id if sel_mil == "— O meu próprio —" else militares_opts[sel_mil]
+        alvo_nome = u_nome if sel_mil == "— O meu próprio —" else sel_mil
+    else:
+        alvo_id   = u_id
+        alvo_nome = u_nome
 
-    # --- 🔄 SOLICITAR TROCA ---
-    elif menu == "🔄 Solicitar Troca":
-        st.title("🔄 Solicitar Troca de Serviço")
+    st.caption(f"A contar serviços originais escalados para **{alvo_nome}**")
 
-        tipo_troca = st.radio(
-            "Tipo de pedido:",
-            ["🔄 Troca Simples", "🔁 Troca a 3", "❌ Matar Remunerado"],
-            horizontal=True
-        )
+    _gsheet_url = st.secrets["gsheet_url"]
+    _sheet_id   = _gsheet_url.split("/d/")[1].split("/")[0]
+
+    @st.cache_data(ttl=86400)
+    def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
+        import unicodedata as _ud3
+        def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+        client = get_gsheet_client()
+        sh = client.open_by_key(sheet_id_c)
+        abas = sh.worksheets()
+        resultados = []
+        for aba in abas:
+            titulo = aba.title
+            partes = titulo.split("-")
+            if len(partes) != 2 or not all(p.isdigit() for p in partes):
+                continue
+            try:
+                dados = aba.get_all_records()
+                df_aba = pd.DataFrame(dados)
+                if df_aba.empty or 'id' not in df_aba.columns:
+                    continue
+                mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
+                for _, row in mil_rows.iterrows():
+                    serv = str(row.get('serviço', '')).strip()
+                    if not serv:
+                        continue
+                    dd, mm = int(partes[0]), int(partes[1])
+                    ano = datetime.now().year
+                    if mm > datetime.now().month + 1:
+                        ano -= 1
+                    resultados.append({
+                        'data': f"{partes[0]}/{partes[1]}/{ano}",
+                        'mes': f"{partes[1]}/{ano}",
+                        'serviço': serv,
+                        'tipo': _n3(serv)
+                    })
+            except Exception:
+                continue
+        return pd.DataFrame(resultados)
+
+    with st.spinner("A carregar histórico..."):
+        df_stats = contar_servicos_historico(alvo_id, _sheet_id)
+
+    if df_stats.empty:
+        st.info("Não foram encontrados serviços no histórico.")
+    else:
+        def categorizar(tipo):
+            if any(x in tipo for x in ['feria','licen','doente']): return 'Ausência'
+            if 'folga' in tipo: return 'Folga'
+            if any(x in tipo for x in ['remu','grat']): return 'Remunerado'
+            if 'atendimento' in tipo: return 'Atendimento'
+            if 'apoio' in tipo: return 'Apoio Atendimento'
+            if any(x in tipo for x in ['patrulha','ronda','po ','vtr']): return 'Patrulha'
+            if any(x in tipo for x in ['secretaria','inquer','comando','dilig','tribunal','pronto']): return 'ADM'
+            return 'Outros'
+
+        df_stats['categoria'] = df_stats['tipo'].apply(categorizar)
+        total = len(df_stats)
+        st.metric("Total de serviços", total)
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            st.markdown("**Por categoria**")
+            df_cat = df_stats.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
+            st.dataframe(df_cat, use_container_width=True, hide_index=True)
+        with col_g2:
+            st.markdown("**Por mês**")
+            df_mes = df_stats.groupby('mes').size().reset_index(name='total')
+            st.dataframe(df_mes, use_container_width=True, hide_index=True)
         st.markdown("---")
+        st.markdown("**Detalhe por serviço**")
+        df_detalhe = df_stats.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
+        st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
 
-        dt_s = st.date_input("Data:", format="DD/MM/YYYY")
-        df_d = load_data(dt_s.strftime("%d-%m"))
+# --- 🔍 ESCALA GERAL ---
+elif menu == "🔍 Escala Geral":
+    st.title("🔍 Escala Geral")
+    d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
+    df_dia = load_data(d_sel.strftime("%d-%m"))
 
-        if df_d.empty:
-            st.info("Não existem dados para esta data.")
-        else:
-            meu = df_d[df_d['id'].astype(str) == u_id]
+    if df_dia.empty:
+        st.info("Não existem dados para esta data.")
+    else:
+        df_at = df_dia.copy()
+        df_at['id_disp'] = df_at['id'].astype(str)
 
-            # ── Troca Simples ──
-            if tipo_troca == "🔄 Troca Simples":
-                if meu.empty:
-                    st.warning("Não tens serviço escalado neste dia.")
-                else:
-                    meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
-                    st.info(f"📋 O teu serviço: **{meu_s}**")
-                    cols = df_d[
-                        (df_d['id'].astype(str) != u_id) &
-                        (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))
-                    ]
-                    if cols.empty:
-                        st.warning("Não há militares disponíveis para troca neste dia.")
+        # Aplicar trocas aprovadas
+        if not df_trocas.empty:
+            tr_v = df_trocas[
+                (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
+                (df_trocas['status'] == 'Aprovada')
+            ]
+            for _, t in tr_v.iterrows():
+                m_o = df_at['id'].astype(str) == str(t['id_origem'])
+                if m_o.any():
+                    df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
+                m_d = df_at['id'].astype(str) == str(t['id_destino'])
+                if m_d.any():
+                    df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+
+        pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
+        col_pdf, col_full, _ = st.columns([1, 1.5, 3])
+        with col_pdf:
+            st.download_button(
+                "📥 Escala do Dia",
+                pdf_bytes,
+                file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
+                mime="application/pdf"
+            )
+        with col_full:
+            if st.button("📦 Gerar Escala Completa (hoje→)"):
+                with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
+                    import tempfile, os, io as _io
+                    try:
+                        from pypdf import PdfWriter, PdfReader
+                    except ImportError:
+                        from PyPDF2 import PdfWriter, PdfReader
+                    writer = PdfWriter()
+                    hj2 = datetime.now()
+                    dias_sem2 = 0
+                    j2 = 0
+                    paginas = 0
+                    while dias_sem2 < 5:
+                        dt2 = hj2 + timedelta(days=j2)
+                        df_d2 = load_data(dt2.strftime("%d-%m"))
+                        if not df_d2.empty:
+                            df_d2['id_disp'] = df_d2['id'].astype(str)
+                            if not df_trocas.empty:
+                                tr2 = df_trocas[
+                                    (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
+                                    (df_trocas['status'] == 'Aprovada')
+                                ]
+                                for _, t2 in tr2.iterrows():
+                                    m_o2 = df_d2['id'].astype(str) == str(t2['id_origem'])
+                                    if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
+                                    m_d2 = df_d2['id'].astype(str) == str(t2['id_destino'])
+                                    if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
+                            pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
+                            reader = PdfReader(_io.BytesIO(pb2))
+                            for pg in reader.pages:
+                                writer.add_page(pg)
+                            paginas += 1
+                            dias_sem2 = 0
+                        else:
+                            dias_sem2 += 1
+                        j2 += 1
+                    if paginas > 0:
+                        buf = _io.BytesIO()
+                        writer.write(buf)
+                        st.download_button(
+                            f"⬇️ Descarregar ({paginas} dias)",
+                            data=buf.getvalue(),
+                            file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
+                            mime="application/pdf",
+                            key="dl_completa"
+                        )
                     else:
-                        opts = cols.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
-                        with st.form("tr_simples"):
-                            alvo = st.selectbox("👤 Trocar com:", opts)
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
-                                id_d = alvo.split(" - ")[0]
-                                s_d  = alvo.split(" - ", 1)[1]
-                                email_row = df_util[df_util['id'].astype(str) == id_d]
-                                if email_row.empty:
-                                    st.error("Militar de destino não encontrado.")
-                                else:
-                                    em_d = email_row['email'].values[0]
-                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
-                                        st.success("✅ Pedido enviado com sucesso!")
+                        st.info("Não há escalas disponíveis.")
 
-            # ── Troca a 3 ──
-            elif tipo_troca == "🔁 Troca a 3":
-                if meu.empty:
-                    st.warning("Não tens serviço escalado nesse dia.")
-                else:
-                    meu_serv_t3 = meu.iloc[0]['serviço']
-                    meu_hor_t3  = meu.iloc[0]['horário']
-                    st.info(f"📋 O teu serviço: **{meu_serv_t3} ({meu_hor_t3})**")
-                    outros_t3 = df_d[df_d['id'].astype(str) != u_id]
-                    outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
-                    opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
-                    if len(opcoes_t3) < 2:
-                        st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
-                    else:
-                        sel1 = st.selectbox("1º militar (vai para o teu serviço):", list(opcoes_t3.keys()), key="t3_sel1")
-                        sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
-                        id1   = str(opcoes_t3[sel1])
-                        id2   = str(opcoes_t3[sel2])
-                        serv1 = df_d[df_d['id'].astype(str) == id1].iloc[0]['serviço']
-                        serv2 = df_d[df_d['id'].astype(str) == id2].iloc[0]['serviço']
-                        st.markdown(f"""
-                        **Resumo da troca a 3:**
-                        - **Tu** `{meu_serv_t3}` → ficas com o serviço do 1º
-                        - **{sel1}** `{serv1}` → vai para o teu serviço
-                        - **{sel2}** `{serv2}` → vai para o serviço do 1º
-                        """)
-                        email1_rows = df_util[df_util['id'].astype(str) == id1]
-                        email2_rows = df_util[df_util['id'].astype(str) == id2]
-                        if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
-                            if email1_rows.empty or email2_rows.empty:
-                                st.error("Não foi possível encontrar o email de um dos militares.")
-                            else:
-                                data_str = dt_s.strftime('%d/%m/%Y')
-                                linha1 = [data_str, u_id, meu_serv_t3, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
-                                linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
-                                salvar_troca_gsheet(linha1)
-                                salvar_troca_gsheet(linha2)
-                                st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
+        # Remover linhas sem militar para a visualização na escala geral
+        df_at = _limpar_sem_militar(df_at)
 
-            # ── Matar Remunerado ──
-            elif tipo_troca == "❌ Matar Remunerado":
-                # Procurar militares que TÊM remunerado nesse dia (exceto o próprio)
-                rem_dia = df_d[
+        # Separar ausências primeiro (inclui férias, licenças, doentes, diligências, tribunal)
+        df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência", "tribunal"], df_at)
+
+        # Extrair cada grupo do df_res por ordem
+        df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
+        df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
+        df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
+        df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],       df_res)
+        df_remu, df_res = filtrar_secao(["remu", "grat"],                          df_res)
+        df_folga,df_res = filtrar_secao(["folga"],                                 df_res)
+        df_outros       = df_res  # o que sobrar são "Outros Serviços"
+
+        mostrar_secao("Comando e Administrativos", df_cmd)
+        mostrar_secao("Atendimento",               df_aten)
+        mostrar_secao("Apoio ao Atendimento",      df_apoi)
+        mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
+        mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True)
+        # Remunerados: horário | militares | observações (sem rádio/indicativo)
+        if not df_remu.empty:
+            with st.expander("🔹 REMUNERADOS", expanded=True):
+                cols_grp_r = ['horário'] + [c for c in ['serviço', 'observações'] if c in df_remu.columns]
+                ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
+                              .apply(lambda x: ', '.join(x)).reset_index()
+                col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
+                ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares'})
+                st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
+        # Folga sem horário
+        if not df_folga.empty:
+            with st.expander("🔹 FOLGA", expanded=True):
+                ag_f = df_folga.groupby('serviço', sort=False)['id_disp'] \
+                               .apply(lambda x: ', '.join(x)).reset_index()
+                st.markdown(_render_tabela(ag_f.rename(columns={'id_disp':'Militar'})), unsafe_allow_html=True)
+
+        if not df_aus.empty:
+            with st.expander("🔹 AUSENTES", expanded=True):
+                ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
+                           .apply(lambda x: ', '.join(x)).reset_index()
+                st.markdown(_render_tabela(ag), unsafe_allow_html=True)
+
+# --- 🔄 SOLICITAR TROCA ---
+elif menu == "🔄 Solicitar Troca":
+    st.title("🔄 Solicitar Troca de Serviço")
+
+    tipo_troca = st.radio(
+        "Tipo de pedido:",
+        ["🔄 Troca Simples", "🔁 Troca a 3", "❌ Matar Remunerado"],
+        horizontal=True
+    )
+    st.markdown("---")
+
+    dt_s = st.date_input("Data:", format="DD/MM/YYYY")
+    df_d = load_data(dt_s.strftime("%d-%m"))
+
+    if df_d.empty:
+        st.info("Não existem dados para esta data.")
+    else:
+        meu = df_d[df_d['id'].astype(str) == u_id]
+
+        # ── Troca Simples ──
+        if tipo_troca == "🔄 Troca Simples":
+            if meu.empty:
+                st.warning("Não tens serviço escalado neste dia.")
+            else:
+                meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
+                st.info(f"📋 O teu serviço: **{meu_s}**")
+                cols = df_d[
                     (df_d['id'].astype(str) != u_id) &
-                    (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False)) &
-                    (df_d['id'].astype(str).str.strip().str.len() > 0)
+                    (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))
                 ]
-                if rem_dia.empty:
-                    st.info("Não há serviços remunerados escalados neste dia.")
+                if cols.empty:
+                    st.warning("Não há militares disponíveis para troca neste dia.")
                 else:
-                    opts_rem = rem_dia.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
-                    with st.form("matar_rem"):
-                        st.info("Seleciona o remunerado que queres fazer.")
-                        rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
+                    opts = cols.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                    with st.form("tr_simples"):
+                        alvo = st.selectbox("👤 Trocar com:", opts)
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
-                            id_d = rem_sel.split(" - ")[0]
-                            s_d  = rem_sel.split(" - ", 1)[1]
+                        if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
+                            id_d = alvo.split(" - ")[0]
+                            s_d  = alvo.split(" - ", 1)[1]
                             email_row = df_util[df_util['id'].astype(str) == id_d]
                             if email_row.empty:
-                                st.error("Militar não encontrado.")
+                                st.error("Militar de destino não encontrado.")
                             else:
                                 em_d = email_row['email'].values[0]
-                                # Troca normal — pedido vai para o militar que tem o remunerado
-                                meu_serv = meu.iloc[0]['serviço'] if not meu.empty else "Folga"
-                                meu_hor  = meu.iloc[0]['horário'] if not meu.empty else ""
-                                meu_s_rem = f"{meu_serv} ({meu_hor})"
-                                if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s_rem, id_d, s_d, "Pendente_Militar", em_d]):
-                                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
+                                if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
+                                    st.success("✅ Pedido enviado com sucesso!")
 
-    # --- 📥 PEDIDOS RECEBIDOS ---
-    elif menu == "📥 Pedidos Recebidos":
-        st.title("📥 Pedidos de Troca Recebidos")
-        if df_trocas.empty:
-            st.info("Sem dados de trocas.")
-        else:
-            m = df_trocas[
-                (df_trocas['status'] == 'Pendente_Militar') &
-                (df_trocas['id_destino'].astype(str) == u_id)
+        # ── Troca a 3 ──
+        elif tipo_troca == "🔁 Troca a 3":
+            if meu.empty:
+                st.warning("Não tens serviço escalado nesse dia.")
+            else:
+                meu_serv_t3 = meu.iloc[0]['serviço']
+                meu_hor_t3  = meu.iloc[0]['horário']
+                st.info(f"📋 O teu serviço: **{meu_serv_t3} ({meu_hor_t3})**")
+                outros_t3 = df_d[df_d['id'].astype(str) != u_id]
+                outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
+                opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
+                if len(opcoes_t3) < 2:
+                    st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
+                else:
+                    sel1 = st.selectbox("1º militar (vai para o teu serviço):", list(opcoes_t3.keys()), key="t3_sel1")
+                    sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
+                    id1   = str(opcoes_t3[sel1])
+                    id2   = str(opcoes_t3[sel2])
+                    serv1 = df_d[df_d['id'].astype(str) == id1].iloc[0]['serviço']
+                    serv2 = df_d[df_d['id'].astype(str) == id2].iloc[0]['serviço']
+                    st.markdown(f"""
+                    **Resumo da troca a 3:**
+                    - **Tu** `{meu_serv_t3}` → ficas com o serviço do 1º
+                    - **{sel1}** `{serv1}` → vai para o teu serviço
+                    - **{sel2}** `{serv2}` → vai para o serviço do 1º
+                    """)
+                    email1_rows = df_util[df_util['id'].astype(str) == id1]
+                    email2_rows = df_util[df_util['id'].astype(str) == id2]
+                    if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
+                        if email1_rows.empty or email2_rows.empty:
+                            st.error("Não foi possível encontrar o email de um dos militares.")
+                        else:
+                            data_str = dt_s.strftime('%d/%m/%Y')
+                            linha1 = [data_str, u_id, meu_serv_t3, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
+                            linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
+                            salvar_troca_gsheet(linha1)
+                            salvar_troca_gsheet(linha2)
+                            st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
+
+        # ── Matar Remunerado ──
+        elif tipo_troca == "❌ Matar Remunerado":
+            # Procurar militares que TÊM remunerado nesse dia (exceto o próprio)
+            rem_dia = df_d[
+                (df_d['id'].astype(str) != u_id) &
+                (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False)) &
+                (df_d['id'].astype(str).str.strip().str.len() > 0)
             ]
-            if m.empty:
-                st.success("✅ Não tens pedidos pendentes.")
+            if rem_dia.empty:
+                st.info("Não há serviços remunerados escalados neste dia.")
             else:
-                st.markdown(f"**{len(m)} pedido(s) aguardam a tua resposta:**")
-                for idx, r in m.iterrows():
-                    nome_orig = get_nome_militar(df_util, r['id_origem'])
-                    st.markdown(
-                        f'<div class="card-servico card-troca">'
-                        f'<p><b>📅 {r["data"]}</b></p>'
-                        f'<p>👤 <b>{nome_orig}</b> quer trocar contigo</p>'
-                        f'<p>🟢 Recebes: <b>{r["servico_origem"]}</b></p>'
-                        f'<p>🔴 Dás: <b>{r["servico_destino"]}</b></p>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
+                opts_rem = rem_dia.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
+                with st.form("matar_rem"):
+                    st.info("Seleciona o remunerado que queres fazer.")
+                    rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
+                        id_d = rem_sel.split(" - ")[0]
+                        s_d  = rem_sel.split(" - ", 1)[1]
+                        email_row = df_util[df_util['id'].astype(str) == id_d]
+                        if email_row.empty:
+                            st.error("Militar não encontrado.")
+                        else:
+                            em_d = email_row['email'].values[0]
+                            # Troca normal — pedido vai para o militar que tem o remunerado
+                            meu_serv = meu.iloc[0]['serviço'] if not meu.empty else "Folga"
+                            meu_hor  = meu.iloc[0]['horário'] if not meu.empty else ""
+                            meu_s_rem = f"{meu_serv} ({meu_hor})"
+                            if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s_rem, id_d, s_d, "Pendente_Militar", em_d]):
+                                st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
+
+# --- 📥 PEDIDOS RECEBIDOS ---
+elif menu == "📥 Pedidos Recebidos":
+    st.title("📥 Pedidos de Troca Recebidos")
+    if df_trocas.empty:
+        st.info("Sem dados de trocas.")
+    else:
+        m = df_trocas[
+            (df_trocas['status'] == 'Pendente_Militar') &
+            (df_trocas['id_destino'].astype(str) == u_id)
+        ]
+        if m.empty:
+            st.success("✅ Não tens pedidos pendentes.")
+        else:
+            st.markdown(f"**{len(m)} pedido(s) aguardam a tua resposta:**")
+            for idx, r in m.iterrows():
+                nome_orig = get_nome_militar(df_util, r['id_origem'])
+                st.markdown(
+                    f'<div class="card-servico card-troca">'
+                    f'<p><b>📅 {r["data"]}</b></p>'
+                    f'<p>👤 <b>{nome_orig}</b> quer trocar contigo</p>'
+                    f'<p>🟢 Recebes: <b>{r["servico_origem"]}</b></p>'
+                    f'<p>🔴 Dás: <b>{r["servico_destino"]}</b></p>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
+                c1, c2 = st.columns(2)
+                if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
+                    atualizar_status_gsheet(idx, "Pendente_Admin")
+                    st.rerun()
+                if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
+                    atualizar_status_gsheet(idx, "Recusada")
+                    st.rerun()
+
+# --- ⚖️ VALIDAR TROCAS (ADMIN) ---
+elif menu == "⚖️ Validar Trocas":
+    st.title("⚖️ Validação Superior de Trocas")
+    if df_trocas.empty:
+        st.info("Sem dados.")
+    else:
+        # ── Aguardam aceitação do militar ──
+        pnd_mil = df_trocas[df_trocas['status'] == 'Pendente_Militar']
+        if not pnd_mil.empty:
+            st.markdown(f"#### 🕐 Aguardam aceitação do militar ({len(pnd_mil)})")
+            for idx, r in pnd_mil.sort_values('data').iterrows():
+                n_o = get_nome_militar(df_util, r['id_origem'])
+                n_d = get_nome_militar(df_util, r['id_destino'])
+                with st.expander(f"📅 {r['data']}  |  {n_o} → {n_d}", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.info(f"**Requerente:**\n\n{n_o}\n\n`{r['servico_origem']}`")
+                    with col2:
+                        st.warning(f"**Aguarda aceitação:**\n\n{n_d}\n\n`{r['servico_destino']}`")
+            st.markdown("---")
+
+        # ── Aguardam validação do admin ──
+        pnd = df_trocas[df_trocas['status'] == 'Pendente_Admin']
+        if pnd.empty:
+            st.success("✅ Não há trocas pendentes de validação.")
+        else:
+            st.markdown(f"#### ⚖️ Aguardam validação ({len(pnd)})")
+            for idx, r in pnd.iterrows():
+                n_o = get_nome_militar(df_util, r['id_origem'])
+                n_d = get_nome_militar(df_util, r['id_destino'])
+                with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}", expanded=True):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.info(f"**{n_o}**\n\n`{r['servico_origem']}`")
+                    with col2:
+                        st.success(f"**{n_d}**\n\n`{r['servico_destino']}`")
                     c1, c2 = st.columns(2)
-                    if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
-                        atualizar_status_gsheet(idx, "Pendente_Admin")
+                    if c1.button("✔️ VALIDAR",  key=f"ok_{idx}", use_container_width=True):
+                        atualizar_status_gsheet(idx, "Aprovada",  u_nome)
                         st.rerun()
-                    if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
-                        atualizar_status_gsheet(idx, "Recusada")
+                    if c2.button("🚫 REJEITAR", key=f"no_{idx}", use_container_width=True):
+                        atualizar_status_gsheet(idx, "Rejeitada", u_nome)
                         st.rerun()
 
-    # --- ⚖️ VALIDAR TROCAS (ADMIN) ---
-    elif menu == "⚖️ Validar Trocas":
-        st.title("⚖️ Validação Superior de Trocas")
-        if df_trocas.empty:
-            st.info("Sem dados.")
+# --- 📜 HISTÓRICO DE TROCAS ---
+elif menu == "📜 Trocas Validadas":
+    st.title("📜 Histórico de Trocas Aprovadas")
+    if df_trocas.empty:
+        st.info("Ainda não existem registos de trocas.")
+    else:
+        aprv = df_trocas[df_trocas['status'] == 'Aprovada']
+        if aprv.empty:
+            st.write("Não existem trocas validadas.")
         else:
-            # ── Aguardam aceitação do militar ──
-            pnd_mil = df_trocas[df_trocas['status'] == 'Pendente_Militar']
-            if not pnd_mil.empty:
-                st.markdown(f"#### 🕐 Aguardam aceitação do militar ({len(pnd_mil)})")
-                for idx, r in pnd_mil.sort_values('data').iterrows():
-                    n_o = get_nome_militar(df_util, r['id_origem'])
-                    n_d = get_nome_militar(df_util, r['id_destino'])
-                    with st.expander(f"📅 {r['data']}  |  {n_o} → {n_d}", expanded=False):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.info(f"**Requerente:**\n\n{n_o}\n\n`{r['servico_origem']}`")
-                        with col2:
-                            st.warning(f"**Aguarda aceitação:**\n\n{n_d}\n\n`{r['servico_destino']}`")
-                st.markdown("---")
+            for idx, r in aprv.sort_index(ascending=False).iterrows():
+                n_o = get_nome_militar(df_util, r['id_origem'])
+                n_d = get_nome_militar(df_util, r['id_destino'])
+                with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.info(f"**Requerente:**\n\n{n_o}")
+                        st.markdown(f"**Serviço original:**\n`{r['servico_origem']}`")
+                    with col2:
+                        st.success(f"**Substituto:**\n\n{n_d}")
+                        st.markdown(f"**Serviço destino:**\n`{r['servico_destino']}`")
+                    st.divider()
+                    val_por = r.get('validador', 'N/A')
+                    val_em  = r.get('data_validacao', 'N/A')
+                    st.caption(f"⚖️ Validado por **{val_por}** em {val_em}")
+                    dados_pdf = {
+                        "data":         r['data'],
+                        "id_origem":    r['id_origem'],   "nome_origem":  n_o,
+                        "serv_orig":    r['servico_origem'],
+                        "id_destino":   r['id_destino'],  "nome_destino": n_d,
+                        "serv_dest":    r['servico_destino'],
+                        "validador":    val_por,          "data_val":     val_em,
+                    }
+                    st.download_button(
+                        label="📥 Descarregar Guia de Troca",
+                        data=gerar_pdf_troca(dados_pdf),
+                        file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf",
+                        mime="application/pdf",
+                        key=f"hist_pdf_{idx}"
+                    )
 
-            # ── Aguardam validação do admin ──
-            pnd = df_trocas[df_trocas['status'] == 'Pendente_Admin']
-            if pnd.empty:
-                st.success("✅ Não há trocas pendentes de validação.")
-            else:
-                st.markdown(f"#### ⚖️ Aguardam validação ({len(pnd)})")
-                for idx, r in pnd.iterrows():
-                    n_o = get_nome_militar(df_util, r['id_origem'])
-                    n_d = get_nome_militar(df_util, r['id_destino'])
-                    with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}", expanded=True):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.info(f"**{n_o}**\n\n`{r['servico_origem']}`")
-                        with col2:
-                            st.success(f"**{n_d}**\n\n`{r['servico_destino']}`")
-                        c1, c2 = st.columns(2)
-                        if c1.button("✔️ VALIDAR",  key=f"ok_{idx}", use_container_width=True):
-                            atualizar_status_gsheet(idx, "Aprovada",  u_nome)
-                            st.rerun()
-                        if c2.button("🚫 REJEITAR", key=f"no_{idx}", use_container_width=True):
-                            atualizar_status_gsheet(idx, "Rejeitada", u_nome)
-                            st.rerun()
-
-    # --- 📜 HISTÓRICO DE TROCAS ---
-    elif menu == "📜 Trocas Validadas":
-        st.title("📜 Histórico de Trocas Aprovadas")
-        if df_trocas.empty:
-            st.info("Ainda não existem registos de trocas.")
+# --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
+elif menu == "📋 Histórico de Trocas":
+    st.title("📋 Histórico das Minhas Trocas")
+    if df_trocas.empty:
+        st.info("Não existem trocas registadas.")
+    else:
+        minhas = df_trocas[
+            (df_trocas['id_origem'].astype(str) == u_id) |
+            (df_trocas['id_destino'].astype(str) == u_id)
+        ].copy().sort_values('data', ascending=False)
+        if minhas.empty:
+            st.info("Não tens trocas registadas.")
         else:
-            aprv = df_trocas[df_trocas['status'] == 'Aprovada']
-            if aprv.empty:
-                st.write("Não existem trocas validadas.")
-            else:
-                for idx, r in aprv.sort_index(ascending=False).iterrows():
-                    n_o = get_nome_militar(df_util, r['id_origem'])
-                    n_d = get_nome_militar(df_util, r['id_destino'])
-                    with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}"):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.info(f"**Requerente:**\n\n{n_o}")
-                            st.markdown(f"**Serviço original:**\n`{r['servico_origem']}`")
-                        with col2:
-                            st.success(f"**Substituto:**\n\n{n_d}")
-                            st.markdown(f"**Serviço destino:**\n`{r['servico_destino']}`")
-                        st.divider()
-                        val_por = r.get('validador', 'N/A')
-                        val_em  = r.get('data_validacao', 'N/A')
-                        st.caption(f"⚖️ Validado por **{val_por}** em {val_em}")
-                        dados_pdf = {
-                            "data":         r['data'],
-                            "id_origem":    r['id_origem'],   "nome_origem":  n_o,
-                            "serv_orig":    r['servico_origem'],
-                            "id_destino":   r['id_destino'],  "nome_destino": n_d,
-                            "serv_dest":    r['servico_destino'],
-                            "validador":    val_por,          "data_val":     val_em,
-                        }
-                        st.download_button(
-                            label="📥 Descarregar Guia de Troca",
-                            data=gerar_pdf_troca(dados_pdf),
-                            file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf",
-                            mime="application/pdf",
-                            key=f"hist_pdf_{idx}"
-                        )
+            for idx, r in minhas.iterrows():
+                fui_origem = str(r['id_origem']) == u_id
+                outro_id   = r['id_destino'] if fui_origem else r['id_origem']
+                outro_nome = get_nome_militar(df_util, outro_id)
+                meu_serv   = r['servico_origem'] if fui_origem else r['servico_destino']
+                outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
+                papel      = "Requerente" if fui_origem else "Substituto"
+                status     = r.get('status','')
+                cor = "🟢" if status == "Aprovada" else ("🔴" if status in ("Rejeitada","Cancelada") else "🟡")
+                with st.expander(f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.markdown(f"**O meu papel:** {papel}")
+                        st.markdown(f"**O meu serviço:** `{meu_serv}`")
+                    with col2:
+                        st.markdown(f"**Contraparte:** {outro_nome}")
+                        st.markdown(f"**Serviço contraparte:** `{outro_serv}`")
+                    if status == "Aprovada":
+                        st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
+                    # Cancelar só se ainda estiver pendente e o militar for o requerente
+                    elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
+                        if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
+                            if atualizar_status_gsheet(idx, "Cancelada"):
+                                st.success("Pedido cancelado.")
+                                st.rerun()
 
-    # --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
-    elif menu == "📋 Histórico de Trocas":
-        st.title("📋 Histórico das Minhas Trocas")
-        if df_trocas.empty:
-            st.info("Não existem trocas registadas.")
+# --- 🔄 GIROS ---
+elif menu == "🔄 Giros":
+    st.title("🔄 Giros")
+    try:
+        client = get_gsheet_client()
+        sh = client.open_by_url(st.secrets["gsheet_url"])
+        ws = sh.worksheet("giros")
+        valores = ws.get_all_values()
+        if not valores or len(valores) < 2:
+            st.info("Não existem giros definidos.")
         else:
-            minhas = df_trocas[
-                (df_trocas['id_origem'].astype(str) == u_id) |
-                (df_trocas['id_destino'].astype(str) == u_id)
-            ].copy().sort_values('data', ascending=False)
-            if minhas.empty:
-                st.info("Não tens trocas registadas.")
-            else:
-                for idx, r in minhas.iterrows():
-                    fui_origem = str(r['id_origem']) == u_id
-                    outro_id   = r['id_destino'] if fui_origem else r['id_origem']
-                    outro_nome = get_nome_militar(df_util, outro_id)
-                    meu_serv   = r['servico_origem'] if fui_origem else r['servico_destino']
-                    outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
-                    papel      = "Requerente" if fui_origem else "Substituto"
-                    status     = r.get('status','')
-                    cor = "🟢" if status == "Aprovada" else ("🔴" if status in ("Rejeitada","Cancelada") else "🟡")
-                    with st.expander(f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})", expanded=False):
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**O meu papel:** {papel}")
-                            st.markdown(f"**O meu serviço:** `{meu_serv}`")
-                        with col2:
-                            st.markdown(f"**Contraparte:** {outro_nome}")
-                            st.markdown(f"**Serviço contraparte:** `{outro_serv}`")
-                        if status == "Aprovada":
-                            st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
-                        # Cancelar só se ainda estiver pendente e o militar for o requerente
-                        elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
-                            if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
-                                if atualizar_status_gsheet(idx, "Cancelada"):
-                                    st.success("Pedido cancelado.")
-                                    st.rerun()
+            headers = [str(h).strip() for h in valores[0]]
+            df_giros = pd.DataFrame(valores[1:], columns=headers)
+            df_giros = df_giros[df_giros.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+            pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, serviço...")
+            df_g = df_giros.copy()
+            if pesq_g:
+                p_g = pesq_g.lower()
+                mask_g = pd.Series([False] * len(df_g), index=df_g.index)
+                for col in df_g.columns:
+                    mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
+                df_g = df_g[mask_g]
 
-    # --- 🔄 GIROS ---
-    elif menu == "🔄 Giros":
-        st.title("🔄 Giros")
-        try:
-            client = get_gsheet_client()
-            sh = client.open_by_url(st.secrets["gsheet_url"])
-            ws = sh.worksheet("giros")
-            valores = ws.get_all_values()
-            if not valores or len(valores) < 2:
-                st.info("Não existem giros definidos.")
-            else:
-                headers = [str(h).strip() for h in valores[0]]
-                df_giros = pd.DataFrame(valores[1:], columns=headers)
-                df_giros = df_giros[df_giros.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-                pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, serviço...")
-                df_g = df_giros.copy()
-                if pesq_g:
-                    p_g = pesq_g.lower()
-                    mask_g = pd.Series([False] * len(df_g), index=df_g.index)
-                    for col in df_g.columns:
-                        mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
-                    df_g = df_g[mask_g]
+            st.markdown(_render_tabela(df_g), unsafe_allow_html=True)
+    except Exception:
+        st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
 
-                st.markdown(_render_tabela(df_g), unsafe_allow_html=True)
-        except Exception:
-            st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
-
-    # --- 👥 EFETIVO ---
-    elif menu == "👥 Efetivo":
-        st.title("👥 Lista de Contactos")
-        if df_util.empty:
-            st.info("Sem dados.")
-        else:
-            # Pesquisa rápida
-            pesq = st.text_input("🔍 Pesquisar por nome, posto ou ID:", placeholder="ex: Cabo, Ferreira...")
-            df_show = df_util.copy()
-            if pesq:
-                p = pesq.lower()
-                df_show = df_show[
-                    df_show['nome'].str.lower().str.contains(p, na=False) |
-                    df_show['posto'].str.lower().str.contains(p, na=False) |
-                    df_show['id'].astype(str).str.contains(p, na=False)
-                ]
-            cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
-            st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
-            st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+# --- 👥 EFETIVO ---
+elif menu == "👥 Efetivo":
+    st.title("👥 Lista de Contactos")
+    if df_util.empty:
+        st.info("Sem dados.")
+    else:
+        # Pesquisa rápida
+        pesq = st.text_input("🔍 Pesquisar por nome, posto ou ID:", placeholder="ex: Cabo, Ferreira...")
+        df_show = df_util.copy()
+        if pesq:
+            p = pesq.lower()
+            df_show = df_show[
+                df_show['nome'].str.lower().str.contains(p, na=False) |
+                df_show['posto'].str.lower().str.contains(p, na=False) |
+                df_show['id'].astype(str).str.contains(p, na=False)
+            ]
+        cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
+        st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
+        st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+```
