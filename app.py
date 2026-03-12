@@ -826,7 +826,11 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "login_modo" not in st.session_state:
-    st.session_state["login_modo"] = "pin"  # "pin" | "email" | "registar_pin"
+    st.session_state["login_modo"] = "pin"
+if "pin_buf" not in st.session_state:
+    st.session_state["pin_buf"] = ""
+if "pin_erro" not in st.session_state:
+    st.session_state["pin_erro"] = False
 if "pin_tentativas" not in st.session_state:
     st.session_state["pin_tentativas"] = 0
 if "pin_bloqueado_ate" not in st.session_state:
@@ -841,73 +845,147 @@ def fazer_login(user_row, u_email):
         "is_admin":   u_email in ADMINS,
         "pin_tentativas": 0,
         "pin_bloqueado_ate": None,
+        "pin_buf": "",
+        "pin_erro": False,
     })
 
 if not st.session_state["logged_in"]:
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    _, col2, _ = st.columns([1, 1.4, 1])
-    with col2:
+    modo = st.session_state["login_modo"]
+
+    # ── MODO PIN (keypad iPhone) ──
+    if modo == "pin":
+        buf = st.session_state["pin_buf"]
+        err = st.session_state["pin_erro"]
+        n   = len(buf)
+
+        # CSS keypad
         st.markdown("""
-        <div class="login-box">
-            <div class="login-header">
-                <span class="escudo">🚓</span>
-                <h1>Portal de Escalas</h1>
-                <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
-                <p class="posto-name">Posto Territorial de Famalicão</p>
-            </div>
+        <style>
+        .stApp { background:#FFFFFF !important; }
+        header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"], #MainMenu { display:none !important; }
+        .block-container { padding:0 !important; max-width:100% !important; }
+        .pin-wrap { display:flex; flex-direction:column; align-items:center; padding:48px 0 24px 0; }
+        .pin-escudo { font-size:2.8rem; margin-bottom:6px; filter:drop-shadow(0 4px 8px rgba(30,58,138,0.25)); }
+        .pin-titulo { font-size:1.4rem; font-weight:800; color:#1A2B4A; letter-spacing:-0.02em; margin-bottom:2px; }
+        .pin-org { font-size:0.72rem; font-weight:600; color:#2563EB; letter-spacing:0.04em; text-transform:uppercase; margin-bottom:2px; }
+        .pin-posto { font-size:0.68rem; color:#64748B; margin-bottom:28px; }
+        .pin-dots { display:flex; gap:16px; justify-content:center; margin-bottom:10px; }
+        .pin-dot { width:14px; height:14px; border-radius:50%; transition:all 0.15s ease; }
+        .pin-err { min-height:20px; font-size:13px; font-weight:600; color:#EF4444; text-align:center; margin-bottom:16px; }
+        div[data-testid="stButton"]>button {
+            width:76px !important; height:76px !important; border-radius:50% !important;
+            background:#F1F5F9 !important; color:#0F172A !important;
+            font-size:24px !important; font-weight:300 !important;
+            border:none !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;
+            padding:0 !important; margin:0 auto !important;
+            transition:transform 0.08s ease, background 0.08s ease !important; }
+        div[data-testid="stButton"]>button:hover {
+            background:#E2E8F0 !important; transform:scale(0.95) !important; }
+        div[data-testid="stButton"]>button:active {
+            background:#CBD5E1 !important; transform:scale(0.90) !important; }
+        [data-testid="stHorizontalBlock"] {
+            display:flex !important; flex-direction:row !important;
+            justify-content:center !important; gap:14px !important; flex-wrap:nowrap !important; }
+        [data-testid="stHorizontalBlock"]>[data-testid="stColumn"] {
+            flex:0 0 76px !important; min-width:76px !important;
+            max-width:76px !important; width:76px !important; padding:0 !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        # Dots (6 dígitos)
+        dots_html = '<div class="pin-dots">'
+        for i in range(6):
+            if err:
+                style = "background:#EF4444;border:2px solid #EF4444;"
+            elif i < n:
+                style = "background:#0F172A;border:2px solid #0F172A;"
+            else:
+                style = "background:transparent;border:2px solid #CBD5E1;"
+            dots_html += f'<div class="pin-dot" style="{style}"></div>'
+        dots_html += '</div>'
+
+        err_msg = "PIN incorreto. Tenta novamente." if err else ""
+        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
+        if bloqueado:
+            resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
+            err_msg = f"🔒 Bloqueado. Aguarda {resto}s."
+
+        st.markdown(f"""
+        <div class="pin-wrap">
+            <div class="pin-escudo">🚓</div>
+            <div class="pin-titulo">Portal de Escalas</div>
+            <div class="pin-org">Guarda Nacional Republicana</div>
+            <div class="pin-posto">Posto Territorial de Famalicão</div>
+            {dots_html}
+            <div class="pin-err">{err_msg}</div>
         </div>
         """, unsafe_allow_html=True)
 
-        modo = st.session_state["login_modo"]
-
-        # ── MODO PIN ──
-        if modo == "pin":
-            with st.form("form_pin", clear_on_submit=True):
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.markdown("<p style='text-align:center;color:#475569;font-size:0.9rem;margin-bottom:4px'>Introduz o teu PIN de 6 dígitos</p>", unsafe_allow_html=True)
-                pin_input = st.text_input("PIN", type="password", placeholder="● ● ● ● ● ●",
-                                          max_chars=6, label_visibility="collapsed")
-                st.markdown("<br>", unsafe_allow_html=True)
-                entrar = st.form_submit_button("ENTRAR COM PIN", use_container_width=True)
-                if entrar:
-                    # Verificar bloqueio
-                    if st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]:
-                        resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
-                        st.error(f"🔒 Demasiadas tentativas. Aguarda {resto}s.")
-                    elif not pin_input or len(pin_input) != 6 or not pin_input.isdigit():
-                        st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
-                    else:
-                        invalidar_trocas()
-                        df_u = load_utilizadores()
-                        if df_u.empty:
-                            st.error("❌ Erro ao carregar dados.")
-                        elif 'pin' not in df_u.columns:
-                            st.error("❌ Coluna 'pin' não existe na Sheet. Adiciona-a primeiro.")
+        # Teclado numérico
+        rows = [["1","2","3"], ["4","5","6"], ["7","8","9"], ["_","0","⌫"]]
+        for row in rows:
+            c1, c2, c3 = st.columns(3)
+            for col, val in zip([c1, c2, c3], row):
+                with col:
+                    if val == "_":
+                        st.markdown("<div style='height:76px'></div>", unsafe_allow_html=True)
+                    elif st.button(val, key=f"pk_{val}"):
+                        if bloqueado:
+                            pass
+                        elif val == "⌫":
+                            st.session_state["pin_buf"] = buf[:-1]
+                            st.session_state["pin_erro"] = False
                         else:
-                            user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(6) == pin_input.strip().zfill(6)]
-                            if not user.empty:
-                                fazer_login(user.iloc[0], user.iloc[0]['email'])
-                                st.rerun()
-                            else:
-                                st.session_state["pin_tentativas"] += 1
-                                tentativas = st.session_state["pin_tentativas"]
-                                if tentativas >= 3:
-                                    st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
-                                    st.session_state["pin_tentativas"] = 0
-                                    st.error("🔒 3 tentativas falhadas. Bloqueado por 30 segundos.")
+                            new = buf + val
+                            st.session_state["pin_erro"] = False
+                            if len(new) == 6:
+                                # Validar PIN
+                                df_u = load_utilizadores()
+                                if not df_u.empty and 'pin' in df_u.columns:
+                                    user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(6) == new.zfill(6)]
+                                    if not user.empty:
+                                        fazer_login(user.iloc[0], user.iloc[0]['email'])
+                                        st.rerun()
+                                    else:
+                                        st.session_state["pin_tentativas"] += 1
+                                        if st.session_state["pin_tentativas"] >= 3:
+                                            st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
+                                            st.session_state["pin_tentativas"] = 0
+                                        st.session_state["pin_erro"] = True
+                                        st.session_state["pin_buf"] = ""
                                 else:
-                                    st.error(f"❌ PIN incorreto. ({tentativas}/3 tentativas)")
+                                    st.session_state["pin_erro"] = True
+                                    st.session_state["pin_buf"] = ""
+                            else:
+                                st.session_state["pin_buf"] = new
+                        st.rerun()
 
-            col_a, col_b = st.columns(2)
-            if col_a.button("🔑 Entrar com email", use_container_width=True):
-                st.session_state["login_modo"] = "email"
-                st.rerun()
-            if col_b.button("📱 Registar PIN", use_container_width=True):
-                st.session_state["login_modo"] = "registar_pin"
-                st.rerun()
+        # Links em baixo
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_a, col_b = st.columns(2)
+        if col_a.button("🔑 Entrar com email", use_container_width=True):
+            st.session_state["login_modo"] = "email"
+            st.rerun()
+        if col_b.button("📱 Registar PIN", use_container_width=True):
+            st.session_state["login_modo"] = "registar_pin"
+            st.rerun()
 
-        # ── MODO EMAIL/PASSWORD ──
-        elif modo == "email":
+    # ── MODO EMAIL/PASSWORD ──
+    elif modo == "email":
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        _, col2, _ = st.columns([1, 1.4, 1])
+        with col2:
+            st.markdown("""
+            <div class="login-box">
+                <div class="login-header">
+                    <span class="escudo">🚓</span>
+                    <h1>Portal de Escalas</h1>
+                    <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
+                    <p class="posto-name">Posto Territorial de Famalicão</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             with st.form("form_email", clear_on_submit=False):
                 st.markdown("<br>", unsafe_allow_html=True)
                 u = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
@@ -935,8 +1013,21 @@ if not st.session_state["logged_in"]:
                 st.session_state["login_modo"] = "pin"
                 st.rerun()
 
-        # ── MODO REGISTAR PIN ──
-        elif modo == "registar_pin":
+    # ── MODO REGISTAR PIN ──
+    elif modo == "registar_pin":
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        _, col2, _ = st.columns([1, 1.4, 1])
+        with col2:
+            st.markdown("""
+            <div class="login-box">
+                <div class="login-header">
+                    <span class="escudo">🚓</span>
+                    <h1>Registar PIN</h1>
+                    <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
+                    <p class="posto-name">Posto Territorial de Famalicão</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
             st.markdown("<p style='text-align:center;color:#475569;font-size:0.88rem'>Autentica-te primeiro para criar o teu PIN</p>", unsafe_allow_html=True)
             with st.form("form_reg_pin", clear_on_submit=False):
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -968,28 +1059,23 @@ if not st.session_state["logged_in"]:
                             if user.empty:
                                 st.error("❌ Email ou password incorretos.")
                             else:
-                                # Verificar se PIN já existe
                                 if 'pin' in df_u.columns:
                                     pin_existe = df_u[
-                                        (df_u['pin'].astype(str).str.strip() == pin1) &
+                                        (df_u['pin'].astype(str).str.strip().str.zfill(6) == pin1.zfill(6)) &
                                         (df_u['email'].str.lower() != u_r)
                                     ]
                                     if not pin_existe.empty:
-                                        st.error("❌ Este PIN já está a ser usado por outro militar. Escolhe outro.")
+                                        st.error("❌ Este PIN já está a ser usado. Escolhe outro.")
                                         st.stop()
-                                # Guardar PIN na Sheet
                                 try:
-                                    client = get_gsheet_client()
-                                    sh = client.open_by_url(st.secrets["gsheet_url"])
+                                    sh = get_sheet()
                                     ws = sh.worksheet("utilizadores")
-                                    # Encontrar coluna pin
                                     headers = ws.row_values(1)
                                     headers_lower = [h.strip().lower() for h in headers]
                                     if 'pin' not in headers_lower:
-                                        st.error("❌ Coluna 'pin' não existe na aba 'utilizadores'. Adiciona-a primeiro.")
+                                        st.error("❌ Coluna 'pin' não existe na Sheet.")
                                         st.stop()
                                     col_pin = headers_lower.index('pin') + 1
-                                    # Encontrar linha do utilizador
                                     ids_col = ws.col_values(headers_lower.index('email') + 1)
                                     linha_user = None
                                     for i, email_val in enumerate(ids_col):
@@ -998,17 +1084,17 @@ if not st.session_state["logged_in"]:
                                             break
                                     if linha_user:
                                         ws.update_cell(linha_user, col_pin, pin1)
-                                        st.success("✅ PIN criado com sucesso! Já podes usar o PIN para entrar.")
+                                        st.success("✅ PIN criado! Já podes entrar com o PIN.")
                                         st.session_state["login_modo"] = "pin"
                                         st.rerun()
                                     else:
-                                        st.error("❌ Utilizador não encontrado na Sheet.")
+                                        st.error("❌ Utilizador não encontrado.")
                                 except Exception as e:
                                     st.error(f"❌ Erro ao guardar PIN: {e}")
-
             if st.button("← Voltar ao PIN", use_container_width=True):
                 st.session_state["login_modo"] = "pin"
                 st.rerun()
+
 
 
 # ============================================================
@@ -1133,6 +1219,35 @@ else:
     # --- 📅 MINHA ESCALA ---
     if menu == "📅 Minha Escala":
         st.title("📅 A Minha Escala")
+
+        # ── Aniversários de hoje ──
+        hoje = datetime.now()
+        if 'nascimento' in df_util.columns:
+            aniversariantes = []
+            for _, row in df_util.iterrows():
+                nasc = str(row.get('nascimento', '')).strip()
+                if not nasc or nasc == 'nan':
+                    continue
+                try:
+                    dt_nasc = datetime.strptime(nasc, "%d-%m-%Y")
+                    if dt_nasc.day == hoje.day and dt_nasc.month == hoje.month:
+                        idade = hoje.year - dt_nasc.year
+                        nome = f"{row.get('posto','')} {row.get('nome','')}".strip()
+                        aniversariantes.append((nome, idade))
+                except:
+                    continue
+            if aniversariantes:
+                for nome, idade in aniversariantes:
+                    st.markdown(f"""
+                    <div style='background:linear-gradient(135deg,#FEF9C3,#FEF08A);border-left:4px solid #EAB308;
+                    border-radius:10px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px'>
+                        <span style='font-size:1.8rem'>🎂</span>
+                        <div>
+                            <div style='font-weight:700;color:#713F12;font-size:0.95rem'>Hoje é o aniversário de {nome}!</div>
+                            <div style='color:#92400E;font-size:0.82rem'>Completa {idade} anos — Parabéns! 🎉</div>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
         vista = st.radio("Vista:", ["📋 Próximos Serviços", "📅 Calendário Mensal"], horizontal=True, label_visibility="collapsed")
         st.markdown("---")
