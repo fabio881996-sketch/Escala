@@ -1093,123 +1093,99 @@ if not st.session_state["logged_in"]:
 
     # ── MODO PIN (keypad iPhone) ──
     if modo == "pin":
-        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
+        buf = st.session_state["pin_buf"]
         err = st.session_state["pin_erro"]
+        n   = len(buf)
 
+        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
+        err_msg = "PIN incorreto. Tenta novamente." if err else ""
         if bloqueado:
             resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
             err_msg = f"🔒 Bloqueado. Aguarda {resto}s."
-        elif err:
-            err_msg = "PIN incorreto. Tenta novamente."
-        else:
-            err_msg = ""
+
+        st.markdown("""
+        <style>
+        .stApp { background:#FFFFFF !important; }
+        header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"], #MainMenu { display:none !important; }
+        .block-container { padding:0 !important; max-width:100% !important; }
+        div[data-testid="stButton"]>button {
+            width:76px !important; height:76px !important; border-radius:50% !important;
+            background:#F1F5F9 !important; color:#0F172A !important;
+            font-size:24px !important; font-weight:300 !important;
+            border:none !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;
+            padding:0 !important; margin:0 auto !important;
+            transition:transform 0.08s ease, background 0.08s ease !important; }
+        div[data-testid="stButton"]>button:hover {
+            background:#E2E8F0 !important; transform:scale(0.95) !important; }
+        div[data-testid="stButton"]>button:active {
+            background:#CBD5E1 !important; transform:scale(0.90) !important; }
+        [data-testid="stHorizontalBlock"] {
+            display:flex !important; flex-direction:row !important;
+            justify-content:center !important; gap:14px !important; flex-wrap:nowrap !important; }
+        [data-testid="stHorizontalBlock"]>[data-testid="stColumn"] {
+            flex:0 0 76px !important; min-width:76px !important;
+            max-width:76px !important; width:76px !important; padding:0 !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+        dots_html = '<div style="display:flex;gap:16px;justify-content:center;margin-bottom:10px;">'
+        for i in range(6):
+            if err:
+                style = "background:#EF4444;border:2px solid #EF4444;"
+            elif i < n:
+                style = "background:#0F172A;border:2px solid #0F172A;"
+            else:
+                style = "background:transparent;border:2px solid #CBD5E1;"
+            dots_html += f'<div style="width:14px;height:14px;border-radius:50%;{style}transition:all 0.15s ease;"></div>'
+        dots_html += '</div>'
 
         st.markdown(f"""
-        <style>
-        .stApp {{ background:#FFFFFF !important; }}
-        header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"],
-        [data-testid="stStatusWidget"], #MainMenu {{ display:none !important; }}
-        .block-container {{ padding:0 !important; max-width:100% !important; }}
-        </style>
         <div style="display:flex;flex-direction:column;align-items:center;padding:48px 0 24px 0;">
             <div style="font-size:2.8rem;margin-bottom:6px;filter:drop-shadow(0 4px 8px rgba(30,58,138,0.25))">🚓</div>
             <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;letter-spacing:-0.02em;margin-bottom:2px">Portal de Escalas</div>
             <div style="font-size:0.72rem;font-weight:600;color:#2563EB;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
             <div style="font-size:0.68rem;color:#64748B;margin-bottom:28px">Posto Territorial de Famalicão</div>
-
-            <div id="pin-dots" style="display:flex;gap:16px;justify-content:center;margin-bottom:10px;">
-                {''.join([f'<div id="dot-{i}" style="width:14px;height:14px;border-radius:50%;background:transparent;border:2px solid {"#EF4444" if err else "#CBD5E1"};transition:all 0.15s ease;"></div>' for i in range(6)])}
-            </div>
-            <div id="pin-err" style="min-height:20px;font-size:13px;font-weight:600;color:#EF4444;text-align:center;margin-bottom:16px;">{err_msg}</div>
-
-            <div style="display:flex;flex-direction:column;gap:14px;align-items:center;">
-                {''.join([
-                    f'<div style="display:flex;gap:14px;">' +
-                    ''.join([
-                        f'<button onclick="pinPress(\'{v}\')" style="width:76px;height:76px;border-radius:50%;background:#F1F5F9;color:#0F172A;font-size:24px;font-weight:300;border:none;box-shadow:0 2px 8px rgba(0,0,0,0.08);cursor:pointer;transition:transform 0.08s,background 0.08s;" onmousedown="this.style.transform=\'scale(0.90)\';this.style.background=\'#CBD5E1\'" onmouseup="this.style.transform=\'\';this.style.background=\'#F1F5F9\'" ontouchstart="this.style.transform=\'scale(0.90)\';this.style.background=\'#CBD5E1\'" ontouchend="this.style.transform=\'\';this.style.background=\'#F1F5F9\'">{v if v != "_" else ""}</button>'
-                        for v in row
-                    ]) +
-                    '</div>'
-                    for row in [["1","2","3"],["4","5","6"],["7","8","9"],["_","0","⌫"]]
-                ])}
-            </div>
+            {dots_html}
+            <div style="min-height:20px;font-size:13px;font-weight:600;color:#EF4444;text-align:center;margin-bottom:16px;">{err_msg}</div>
         </div>
-
-        <input type="hidden" id="pin-submit-val" name="pin_val">
-        <script>
-        var pinBuf = "";
-        var bloqueado = {"true" if bloqueado else "false"};
-        function pinPress(v) {{
-            if (bloqueado) return;
-            if (v === "_") return;
-            if (v === "⌫") {{
-                pinBuf = pinBuf.slice(0, -1);
-            }} else if (pinBuf.length < 6) {{
-                pinBuf += v;
-            }}
-            updateDots();
-            if (pinBuf.length === 6) {{
-                submitPin();
-            }}
-        }}
-        function updateDots() {{
-            for (var i = 0; i < 6; i++) {{
-                var dot = document.getElementById("dot-" + i);
-                if (dot) {{
-                    dot.style.background = i < pinBuf.length ? "#0F172A" : "transparent";
-                    dot.style.borderColor = i < pinBuf.length ? "#0F172A" : "#CBD5E1";
-                }}
-            }}
-        }}
-        function submitPin() {{
-            var input = document.getElementById("pin-submit-val");
-            if (input) input.value = pinBuf;
-            // enviar via Streamlit component communication
-            window.parent.postMessage({{type:"streamlit:setComponentValue", value: pinBuf}}, "*");
-            // fallback: usar form hidden
-            var form = document.getElementById("pin-form-hidden");
-            if (form) {{ form.querySelector("input[name=pin]").value = pinBuf; }}
-            // usar query param approach via location
-            var url = new URL(window.parent.location.href);
-            url.searchParams.set("_pin", pinBuf);
-            window.parent.history.replaceState(null, "", url);
-            // trigger Streamlit rerun via button click simulation
-            setTimeout(function() {{
-                var btn = window.parent.document.querySelector("#pin-trigger-btn button");
-                if (btn) btn.click();
-            }}, 50);
-        }}
-        </script>
         """, unsafe_allow_html=True)
 
-        # Capturar PIN via query params
-        pin_val = st.query_params.get("_pin", "")
-        if pin_val and len(pin_val) == 6 and pin_val.isdigit() and not bloqueado:
-            st.query_params.clear()
-            df_u = load_utilizadores()
-            if not df_u.empty and 'pin' in df_u.columns:
-                user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(6) == pin_val.zfill(6)]
-                if not user.empty:
-                    fazer_login(user.iloc[0], user.iloc[0]['email'])
-                    st.rerun()
-                else:
-                    st.session_state["pin_tentativas"] += 1
-                    if st.session_state["pin_tentativas"] >= 3:
-                        st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
-                        st.session_state["pin_tentativas"] = 0
-                    st.session_state["pin_erro"] = True
-                    st.session_state["pin_buf"] = ""
-                    st.rerun()
+        rows = [["1","2","3"], ["4","5","6"], ["7","8","9"], ["_","0","⌫"]]
+        for row in rows:
+            c1, c2, c3 = st.columns(3)
+            for col, val in zip([c1, c2, c3], row):
+                with col:
+                    if val == "_":
+                        st.markdown("<div style='height:76px'></div>", unsafe_allow_html=True)
+                    elif st.button(val, key=f"pk_{val}"):
+                        if not bloqueado:
+                            if val == "⌫":
+                                st.session_state["pin_buf"] = buf[:-1]
+                                st.session_state["pin_erro"] = False
+                            else:
+                                new = buf + val
+                                st.session_state["pin_erro"] = False
+                                if len(new) == 6:
+                                    df_u = load_utilizadores()
+                                    if not df_u.empty and 'pin' in df_u.columns:
+                                        user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(6) == new.zfill(6)]
+                                        if not user.empty:
+                                            fazer_login(user.iloc[0], user.iloc[0]['email'])
+                                        else:
+                                            st.session_state["pin_tentativas"] += 1
+                                            if st.session_state["pin_tentativas"] >= 3:
+                                                st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
+                                                st.session_state["pin_tentativas"] = 0
+                                            st.session_state["pin_erro"] = True
+                                            st.session_state["pin_buf"] = ""
+                                    else:
+                                        st.session_state["pin_erro"] = True
+                                        st.session_state["pin_buf"] = ""
+                                else:
+                                    st.session_state["pin_buf"] = new
+                        st.rerun()
 
-        # Botão trigger oculto para rerun após JS
-        col_trig, _, _ = st.columns([1,1,1])
-        with col_trig:
-            st.markdown('<span id="pin-trigger-btn" style="display:none">', unsafe_allow_html=True)
-            if st.button("▶", key="pin_trigger_btn"):
-                pass  # rerun automático
-            st.markdown('</span>', unsafe_allow_html=True)
-
-        # Links em baixo
         st.markdown("<br>", unsafe_allow_html=True)
         col_a, col_b = st.columns(2)
         if col_a.button("🔑 Entrar com email", use_container_width=True):
