@@ -876,9 +876,12 @@ st.markdown(”””
                 elif not pin_input or len(pin_input) != 6 or not pin_input.isdigit():
                     st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
                 else:
+                    st.cache_data.clear()
                     df_u = load_data("utilizadores")
-                    if df_u.empty or 'pin' not in df_u.columns:
+                    if df_u.empty:
                         st.error("❌ Erro ao carregar dados.")
+                    elif 'pin' not in df_u.columns:
+                        st.error("❌ Coluna 'pin' não existe na Sheet. Adiciona-a primeiro.")
                     else:
                         user = df_u[df_u['pin'].astype(str).str.strip() == pin_input.strip()]
                         if not user.empty:
