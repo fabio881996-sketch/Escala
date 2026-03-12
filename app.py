@@ -211,36 +211,66 @@ def get_gsheet_client():
         st.error(f"Erro ao conectar ao Google Sheets: {e}")
         return None
 
+@st.cache_resource
+def get_sheet():
+    """Abre a Sheet uma única vez e reutiliza — evita open_by_url repetido."""
+    client = get_gsheet_client()
+    if client is None:
+        return None
+    return client.open_by_url(st.secrets["gsheet_url"])
+
+def _df_from_records(records) -> pd.DataFrame:
+    """Converte records para DataFrame normalizado."""
+    if not records:
+        return pd.DataFrame()
+    df = pd.DataFrame(records).astype(str)
+    df.columns = [str(c).strip().lower() for c in df.columns]
+    return df.fillna("")
+
 @st.cache_data(ttl=300)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
+    """Carrega dados de uma aba da Google Sheet.
+    TTL 5 min para trocas/utilizadores, 1h para escalas diárias."""
     try:
-        client = get_gsheet_client()
-        if client is None:
+        sh = get_sheet()
+        if sh is None:
             return pd.DataFrame()
-        sh = client.open_by_url(st.secrets["gsheet_url"])
-        records = sh.worksheet(aba_nome).get_all_records()
-        if not records:
-            return pd.DataFrame()
-        df = pd.DataFrame(records).astype(str)
-        df.columns = [str(c).strip().lower() for c in df.columns]
-        return df.fillna("")
+        return _df_from_records(sh.worksheet(aba_nome).get_all_records())
     except Exception:
         return pd.DataFrame()
 
-def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
-    """Atualiza o status de uma troca na Google Sheet."""
+@st.cache_data(ttl=3600)
+def load_escala(aba_nome: str) -> pd.DataFrame:
+    """Carrega escala diária com cache de 1 hora — mudam raramente."""
     try:
-        client = get_gsheet_client()
-        sh = client.open_by_url(st.secrets["gsheet_url"])
+        sh = get_sheet()
+        if sh is None:
+            return pd.DataFrame()
+        return _df_from_records(sh.worksheet(aba_nome).get_all_records())
+    except Exception:
+        return pd.DataFrame()
+
+def invalidar_trocas():
+    """Limpa só o cache de trocas e utilizadores, preserva escalas diárias."""
+    load_data.clear()
+
+def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
+    """Atualiza o status de uma troca na Google Sheet — batch update numa chamada."""
+    try:
+        sh = get_sheet()
         aba = sh.worksheet("registos_trocas")
         row = index_linha + 2  # +1 cabeçalho, +1 índice base-0
-        aba.update_cell(row, 6, novo_status)
         if admin_nome:
             dt_agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-            aba.update_cell(row, 8, admin_nome)
-            aba.update_cell(row, 9, dt_agora)
-        st.cache_data.clear()
+            # Batch: atualiza status, validador e data numa só chamada
+            aba.batch_update([
+                {"range": f"F{row}", "values": [[novo_status]]},
+                {"range": f"H{row}", "values": [[admin_nome]]},
+                {"range": f"I{row}", "values": [[dt_agora]]},
+            ])
+        else:
+            aba.update_cell(row, 6, novo_status)
+        invalidar_trocas()
         return True
     except Exception as e:
         st.error(f"Erro ao atualizar: {e}")
@@ -249,10 +279,9 @@ def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str 
 def salvar_troca_gsheet(linha: list) -> bool:
     """Adiciona uma nova linha de troca na Google Sheet."""
     try:
-        client = get_gsheet_client()
-        sh = client.open_by_url(st.secrets["gsheet_url"])
+        sh = get_sheet()
         sh.worksheet("registos_trocas").append_row(linha)
-        st.cache_data.clear()
+        invalidar_trocas()
         return True
     except Exception as e:
         st.error(f"Erro ao guardar: {e}")
@@ -850,7 +879,7 @@ if not st.session_state["logged_in"]:
                     elif not pin_input or len(pin_input) != 6 or not pin_input.isdigit():
                         st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
                     else:
-                        st.cache_data.clear()
+                        invalidar_trocas()
                         df_u = load_data("utilizadores")
                         if df_u.empty:
                             st.error("❌ Erro ao carregar dados.")
@@ -1130,7 +1159,7 @@ else:
             for d in range(1, n_dias + 1):
                 dt_cal = datetime(ano_sel, mes_sel, d)
                 aba = dt_cal.strftime("%d-%m")
-                df_cal = load_data(aba)
+                df_cal = load_escala(aba)
                 if not df_cal.empty:
                     m_cal = df_cal[df_cal['id'].astype(str) == u_id]
                     if not m_cal.empty:
@@ -1266,7 +1295,7 @@ else:
                     dias_sem_dados = 0
                     encontrou_algum = True
                 else:
-                    df_d = load_data(dt.strftime("%d-%m"))
+                    df_d = load_escala(dt.strftime("%d-%m"))
                     if not df_d.empty:
                         m = df_d[df_d['id'].astype(str) == u_id]
                         if not m.empty:
@@ -1295,7 +1324,7 @@ else:
                                 unsafe_allow_html=True
                             )
                             # Verificar se tem remunerado no mesmo dia
-                            df_rem_dia = load_data(dt.strftime("%d-%m"))
+                            df_rem_dia = load_escala(dt.strftime("%d-%m"))
                             if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
                                 import unicodedata as _ud2
                                 def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
@@ -1419,7 +1448,7 @@ else:
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
-        df_dia = load_data(d_sel.strftime("%d-%m"))
+        df_dia = load_escala(d_sel.strftime("%d-%m"))
 
         if df_dia.empty:
             st.info("Não existem dados para esta data.")
@@ -1465,7 +1494,7 @@ else:
                         paginas = 0
                         while dias_sem2 < 5:
                             dt2 = hj2 + timedelta(days=j2)
-                            df_d2 = load_data(dt2.strftime("%d-%m"))
+                            df_d2 = load_escala(dt2.strftime("%d-%m"))
                             if not df_d2.empty:
                                 df_d2['id_disp'] = df_d2['id'].astype(str)
                                 if not df_trocas.empty:
@@ -1554,7 +1583,7 @@ else:
         st.markdown("---")
 
         dt_s = st.date_input("Data:", format="DD/MM/YYYY")
-        df_d = load_data(dt_s.strftime("%d-%m"))
+        df_d = load_escala(dt_s.strftime("%d-%m"))
 
         if df_d.empty:
             st.info("Não existem dados para esta data.")
