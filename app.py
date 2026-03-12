@@ -1581,19 +1581,67 @@ else:
                 return 'Outros'
 
             df_stats['categoria'] = df_stats['tipo'].apply(categorizar)
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                st.markdown("**Por categoria**")
-                df_cat = df_stats.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
-                st.dataframe(df_cat, use_container_width=True, hide_index=True)
-            with col_g2:
-                st.markdown("**Por mês**")
-                df_mes = df_stats.groupby('mes').size().reset_index(name='total')
-                st.dataframe(df_mes, use_container_width=True, hide_index=True)
+
+            # ── Filtro mensal / anual ──
+            meses_pt = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+            hoje = datetime.now()
+
+            periodo = st.radio("Período:", ["📅 Mensal", "📆 Anual"], horizontal=True)
+
+            if periodo == "📅 Mensal":
+                # extrair meses disponíveis do histórico
+                meses_disp = sorted(df_stats['mes'].unique(),
+                                    key=lambda x: (int(x.split('/')[1]), int(x.split('/')[0])))
+                mes_atual = f"{hoje.month:02d}/{hoje.year}"
+                idx_default = meses_disp.index(mes_atual) if mes_atual in meses_disp else len(meses_disp) - 1
+
+                def fmt_mes(m):
+                    mm, aa = m.split('/')
+                    return f"{meses_pt[int(mm)-1]} {aa}"
+
+                mes_sel = st.selectbox("Mês:", meses_disp,
+                                       index=idx_default,
+                                       format_func=fmt_mes)
+                df_filtrado = df_stats[df_stats['mes'] == mes_sel]
+                st.caption(f"A mostrar: **{fmt_mes(mes_sel)}**")
+
+            else:
+                anos_disp = sorted(df_stats['mes'].apply(lambda x: x.split('/')[1]).unique(), reverse=True)
+                ano_atual = str(hoje.year)
+                idx_ano = anos_disp.index(ano_atual) if ano_atual in anos_disp else 0
+                ano_sel = st.selectbox("Ano:", anos_disp, index=idx_ano)
+                df_filtrado = df_stats[df_stats['mes'].str.endswith(f"/{ano_sel}")]
+                st.caption(f"A mostrar: **{ano_sel}**")
+
             st.markdown("---")
-            st.markdown("**Detalhe por serviço**")
-            df_detalhe = df_stats.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
-            st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
+
+            if df_filtrado.empty:
+                st.info("Sem serviços no período selecionado.")
+            else:
+                col_g1, col_g2 = st.columns(2)
+                with col_g1:
+                    st.markdown("**Por categoria**")
+                    df_cat = df_filtrado.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
+                    st.dataframe(df_cat, use_container_width=True, hide_index=True)
+                with col_g2:
+                    if periodo == "📆 Anual":
+                        st.markdown("**Por mês**")
+                        df_mes = df_filtrado.groupby('mes').size().reset_index(name='total')
+                        df_mes['_ord'] = df_mes['mes'].apply(lambda x: (int(x.split('/')[1]), int(x.split('/')[0])))
+                        df_mes = df_mes.sort_values('_ord').drop(columns='_ord')
+                        df_mes['mes'] = df_mes['mes'].apply(lambda x: fmt_mes(x) if 'fmt_mes' in dir() else x)
+                        st.dataframe(df_mes, use_container_width=True, hide_index=True)
+                    else:
+                        st.markdown("**Detalhe por serviço**")
+                        df_det = df_filtrado.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
+                        st.dataframe(df_det, use_container_width=True, hide_index=True)
+
+                if periodo == "📆 Anual":
+                    st.markdown("---")
+                    st.markdown("**Detalhe por serviço**")
+                    df_detalhe = df_filtrado.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
+                    st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
