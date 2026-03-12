@@ -238,8 +238,9 @@ def load_data(aba_nome: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+@st.cache_data(ttl=60)
 def load_utilizadores() -> pd.DataFrame:
-    """Carrega utilizadores sempre fresco — sem cache, para PIN funcionar imediatamente."""
+    """Carrega utilizadores com cache de 60s — fresco o suficiente para PIN funcionar."""
     try:
         sh = get_sheet()
         if sh is None:
@@ -251,6 +252,47 @@ def load_utilizadores() -> pd.DataFrame:
 def invalidar_trocas():
     """Limpa cache de trocas."""
     load_data.clear()
+
+import unicodedata as _ud3
+
+@st.cache_data(ttl=86400)
+def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
+    """Conta serviços históricos de um militar — cache 24h."""
+    def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+    try:
+        client = get_gsheet_client()
+        sh = client.open_by_key(sheet_id_c)
+        abas = sh.worksheets()
+        resultados = []
+        hoje = datetime.now()
+        for aba in abas:
+            titulo = aba.title
+            partes = titulo.split("-")
+            if len(partes) != 2 or not all(p.isdigit() for p in partes):
+                continue
+            try:
+                dados = aba.get_all_records()
+                df_aba = pd.DataFrame(dados)
+                if df_aba.empty or 'id' not in df_aba.columns:
+                    continue
+                mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
+                for _, row in mil_rows.iterrows():
+                    serv = str(row.get('serviço', '')).strip()
+                    if not serv:
+                        continue
+                    mm = int(partes[1])
+                    ano = hoje.year if mm <= hoje.month + 1 else hoje.year - 1
+                    resultados.append({
+                        'data': f"{partes[0]}/{partes[1]}/{ano}",
+                        'mes': f"{partes[1]:>02}/{ano}",
+                        'serviço': serv,
+                        'tipo': _n3(serv)
+                    })
+            except Exception:
+                continue
+        return pd.DataFrame(resultados)
+    except Exception:
+        return pd.DataFrame()
 
 def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
     """Atualiza o status de uma troca na Google Sheet — batch update numa chamada."""
@@ -1526,43 +1568,6 @@ else:
 
         _gsheet_url = st.secrets["gsheet_url"]
         _sheet_id   = _gsheet_url.split("/d/")[1].split("/")[0]
-
-        @st.cache_data(ttl=86400)
-        def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str):
-            import unicodedata as _ud3
-            def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-            client = get_gsheet_client()
-            sh = client.open_by_key(sheet_id_c)
-            abas = sh.worksheets()
-            resultados = []
-            for aba in abas:
-                titulo = aba.title
-                partes = titulo.split("-")
-                if len(partes) != 2 or not all(p.isdigit() for p in partes):
-                    continue
-                try:
-                    dados = aba.get_all_records()
-                    df_aba = pd.DataFrame(dados)
-                    if df_aba.empty or 'id' not in df_aba.columns:
-                        continue
-                    mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
-                    for _, row in mil_rows.iterrows():
-                        serv = str(row.get('serviço', '')).strip()
-                        if not serv:
-                            continue
-                        dd, mm = int(partes[0]), int(partes[1])
-                        ano = datetime.now().year
-                        if mm > datetime.now().month + 1:
-                            ano -= 1
-                        resultados.append({
-                            'data': f"{partes[0]}/{partes[1]}/{ano}",
-                            'mes': f"{partes[1]}/{ano}",
-                            'serviço': serv,
-                            'tipo': _n3(serv)
-                        })
-                except Exception:
-                    continue
-            return pd.DataFrame(resultados)
 
         with st.spinner("A carregar histórico..."):
             df_stats = contar_servicos_historico(alvo_id, _sheet_id)
