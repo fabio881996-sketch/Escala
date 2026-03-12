@@ -377,46 +377,76 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
                                f"({serv_adj} {hor_adj})")
     return True, ""
 
-def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val):
-    """Verifica descanso para ambos os militares numa troca simples.
+def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val, df_dia):
+    """Verifica se após a troca ambos os militares respeitam 8h de descanso.
+    Compara o serviço novo de cada militar com TODOS os seus outros serviços no mesmo dia
+    e com os serviços dos dias adjacentes.
     Retorna lista de erros (vazia se tudo ok)."""
+    import unicodedata as _ud_loc, re as _re_loc
     erros = []
     MIN = 8 * 60
 
-    ini_eu, fim_eu   = _parse_horario(meu_hor_val)
-    ini_ele, fim_ele = _parse_horario(hor_d_val)
+    def _norm_serv(s):
+        return _ud_loc.normalize('NFKD', str(s).lower()).encode('ascii','ignore').decode('ascii')
 
-    # Verificar conflito direto entre os dois serviços no mesmo dia
-    # (um termina e o outro começa com menos de 8h)
-    if ini_eu is not None and ini_ele is not None:
-        if not (_e_atendimento(serv_d_nome) or _e_atendimento(meu_serv_nome)):
-            # Tu ficas com serv_ele — quanto descansas do teu serviço para o dele?
-            # Se ele começa antes de tu acabares (mesmo dia), calcular diferença
-            # Verificar as duas direções: meu_fim → ele_ini e ele_fim → meu_ini
-            d1 = ini_ele - fim_eu   # tu acabas, ele começa (ele já começou antes)
-            d2 = ini_eu  - fim_ele  # ele acaba, tu começas
-            # O militar que fica com o serviço do outro: tu ficas com hor_ele, ele fica com hor_eu
-            # Se fim_eu > ini_ele no mesmo dia → sobreposição/menos de 8h
-            descanso_eu_para_ele = ini_ele - fim_eu  # pode ser negativo se ele começa antes
-            descanso_ele_para_eu = ini_eu  - fim_ele
+    def _e_rem(s):
+        return bool(_re_loc.search(r'remu|grat', _norm_serv(s)))
 
-            # Só bloqueia se a transição for consecutiva (mesmo dia, um a seguir ao outro)
-            # com menos de 8h entre fim de um e início do outro
-            if 0 <= descanso_eu_para_ele < MIN:
-                h, m = descanso_eu_para_ele // 60, descanso_eu_para_ele % 60
-                erros.append(f"Tu: apenas {h}h{m:02d}m de descanso entre o teu serviço ({meu_hor_val}) e o serviço que ficas ({hor_d_val})")
-            if 0 <= descanso_ele_para_eu < MIN:
-                h, m = descanso_ele_para_eu // 60, descanso_ele_para_eu % 60
-                erros.append(f"Militar de destino: apenas {h}h{m:02d}m de descanso entre o seu serviço ({hor_d_val}) e o serviço que fica ({meu_hor_val})")
+    def conflito_com_lista(serv_novo, hor_novo, servicos_existentes, label_mil):
+        """Verifica se serv_novo conflitua com qualquer serviço da lista."""
+        if _e_atendimento(serv_novo) or _e_rem(serv_novo):
+            return []
+        ini_novo, fim_novo = _parse_horario(hor_novo)
+        if ini_novo is None:
+            return []
+        msgs = []
+        for s, h, origem in servicos_existentes:
+            if _e_atendimento(s) or _e_rem(s):
+                continue
+            ini, fim = _parse_horario(h)
+            if ini is None:
+                continue
+            # calcular descanso nas duas direções
+            # novo depois do existente (mesmo dia ou dia seguinte)
+            for offset in [0, 1440]:
+                ini_n = ini_novo + offset
+                d = ini_n - fim
+                if 0 <= d < MIN:
+                    h2, m2 = d // 60, d % 60
+                    msgs.append(f"{label_mil}: apenas {h2}h{m2:02d}m de descanso entre '{s} ({h})' ({origem}) e o serviço novo '{serv_novo} ({hor_novo})'")
+                    break
+            # existente depois do novo
+            for offset in [0, 1440]:
+                ini_e = ini + offset
+                d = ini_e - fim_novo
+                if 0 <= d < MIN:
+                    h2, m2 = d // 60, d % 60
+                    msgs.append(f"{label_mil}: apenas {h2}h{m2:02d}m de descanso entre o serviço novo '{serv_novo} ({hor_novo})' e '{s} ({h})' ({origem})")
+                    break
+        return msgs
 
-    # Verificar dias adjacentes para cada um (excluindo o serviço original)
-    if not erros:
-        ok, m = verificar_descanso(u_id, dt_s, serv_d_nome, hor_d_val, serv_orig_hor=meu_hor_val)
-        if not ok: erros.append(f"Não podes fazer esta troca: {m}")
-    if not erros:
-        ok, m = verificar_descanso(id_d, dt_s, meu_serv_nome, meu_hor_val, serv_orig_hor=hor_d_val)
-        if not ok: erros.append(f"O militar de destino não pode fazer esta troca: {m}")
+    # Serviços que cada militar mantém no mesmo dia (excluindo o que está a trocar)
+    servicos_eu  = [(str(r['serviço']), str(r['horário']), 'mesmo dia')
+                    for _, r in df_dia[df_dia['id'].astype(str) == u_id].iterrows()
+                    if str(r['horário']).strip() != meu_hor_val.strip()]
+    servicos_ele = [(str(r['serviço']), str(r['horário']), 'mesmo dia')
+                    for _, r in df_dia[df_dia['id'].astype(str) == id_d].iterrows()
+                    if str(r['horário']).strip() != hor_d_val.strip()]
 
+    # Adicionar serviços dos dias adjacentes
+    for delta, label_dia in [(-1, 'dia anterior'), (1, 'dia seguinte')]:
+        dt_adj = dt_s + timedelta(days=delta)
+        df_adj = load_data(dt_adj.strftime("%d-%m"))
+        if not df_adj.empty:
+            for _, r in df_adj[df_adj['id'].astype(str) == u_id].iterrows():
+                if str(r['horário']).strip():
+                    servicos_eu.append((str(r['serviço']), str(r['horário']), label_dia))
+            for _, r in df_adj[df_adj['id'].astype(str) == id_d].iterrows():
+                if str(r['horário']).strip():
+                    servicos_ele.append((str(r['serviço']), str(r['horário']), label_dia))
+
+    erros += conflito_com_lista(serv_d_nome, hor_d_val, servicos_eu,  'Não podes fazer esta troca')
+    erros += conflito_com_lista(meu_serv_nome, meu_hor_val, servicos_ele, 'O militar de destino não pode fazer esta troca')
     return erros
     """Atualiza o status de uma troca na Google Sheet — batch update numa chamada."""
     try:
@@ -1952,7 +1982,7 @@ else:
                                 meu_serv_nome = meu_s.rsplit('(', 1)[0].strip()
                                 meu_hor_val   = meu_s.rsplit('(', 1)[1].rstrip(')') if '(' in meu_s else meu.iloc[0]['horário']
                                 # Verificar descanso para ambos os militares
-                                erros = verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val)
+                                erros = verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val, df_d)
                                 if erros:
                                     for e in erros:
                                         st.error(f"❌ {e}")
