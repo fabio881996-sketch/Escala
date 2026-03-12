@@ -229,8 +229,7 @@ def _df_from_records(records) -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet.
-    TTL 5 min para trocas/utilizadores, 1h para escalas diárias."""
+    """Carrega dados de uma aba da Google Sheet com cache de 5 min (trocas, etc)."""
     try:
         sh = get_sheet()
         if sh is None:
@@ -250,8 +249,18 @@ def load_escala(aba_nome: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+def load_utilizadores() -> pd.DataFrame:
+    """Carrega utilizadores sempre fresco — sem cache, para PIN funcionar imediatamente."""
+    try:
+        sh = get_sheet()
+        if sh is None:
+            return pd.DataFrame()
+        return _df_from_records(sh.worksheet("utilizadores").get_all_records())
+    except Exception:
+        return pd.DataFrame()
+
 def invalidar_trocas():
-    """Limpa só o cache de trocas e utilizadores, preserva escalas diárias."""
+    """Limpa só o cache de trocas, preserva escalas diárias."""
     load_data.clear()
 
 def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
@@ -880,7 +889,7 @@ if not st.session_state["logged_in"]:
                         st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
                     else:
                         invalidar_trocas()
-                        df_u = load_data("utilizadores")
+                        df_u = load_utilizadores()
                         if df_u.empty:
                             st.error("❌ Erro ao carregar dados.")
                         elif 'pin' not in df_u.columns:
@@ -920,7 +929,7 @@ if not st.session_state["logged_in"]:
                     if not u or not p:
                         st.warning("Preenche o email e a password.")
                     else:
-                        df_u = load_data("utilizadores")
+                        df_u = load_utilizadores()
                         if df_u.empty or 'email' not in df_u.columns:
                             st.error("❌ Erro ao carregar dados.")
                         else:
@@ -959,7 +968,7 @@ if not st.session_state["logged_in"]:
                     elif pin1 != pin2:
                         st.error("❌ Os PINs não coincidem.")
                     else:
-                        df_u = load_data("utilizadores")
+                        df_u = load_utilizadores()
                         if df_u.empty or 'email' not in df_u.columns:
                             st.error("❌ Erro ao carregar dados.")
                         else:
@@ -1019,7 +1028,7 @@ if not st.session_state["logged_in"]:
 else:
     # Carregar dados globais uma vez por sessão de render
     df_trocas = load_data("registos_trocas")
-    df_util   = load_data("utilizadores")
+    df_util   = load_utilizadores()
 
     u_id      = str(st.session_state['user_id'])
     u_nome    = st.session_state['user_nome']
@@ -1892,3 +1901,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
