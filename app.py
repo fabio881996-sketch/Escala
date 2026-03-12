@@ -1229,7 +1229,8 @@ else:
                 if not nasc or nasc == 'nan':
                     continue
                 try:
-                    dt_nasc = datetime.strptime(nasc, "%d-%m-%Y")
+                    nasc_norm = nasc.replace("/", "-")
+                    dt_nasc = datetime.strptime(nasc_norm, "%d-%m-%Y")
                     if dt_nasc.day == hoje.day and dt_nasc.month == hoje.month:
                         idade = hoje.year - dt_nasc.year
                         nome = f"{row.get('posto','')} {row.get('nome','')}".strip()
