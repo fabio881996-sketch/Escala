@@ -1625,23 +1625,9 @@ else:
                     df_cat = df_filtrado.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False)
                     st.dataframe(df_cat, use_container_width=True, hide_index=True)
                 with col_g2:
-                    if periodo == "📆 Anual":
-                        st.markdown("**Por mês**")
-                        df_mes = df_filtrado.groupby('mes').size().reset_index(name='total')
-                        df_mes['_ord'] = df_mes['mes'].apply(lambda x: (int(x.split('/')[1]), int(x.split('/')[0])))
-                        df_mes = df_mes.sort_values('_ord').drop(columns='_ord')
-                        df_mes['mes'] = df_mes['mes'].apply(lambda x: fmt_mes(x) if 'fmt_mes' in dir() else x)
-                        st.dataframe(df_mes, use_container_width=True, hide_index=True)
-                    else:
-                        st.markdown("**Detalhe por serviço**")
-                        df_det = df_filtrado.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
-                        st.dataframe(df_det, use_container_width=True, hide_index=True)
-
-                if periodo == "📆 Anual":
-                    st.markdown("---")
                     st.markdown("**Detalhe por serviço**")
-                    df_detalhe = df_filtrado.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
-                    st.dataframe(df_detalhe, use_container_width=True, hide_index=True)
+                    df_det = df_filtrado.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
+                    st.dataframe(df_det, use_container_width=True, hide_index=True)
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
