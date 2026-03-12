@@ -621,7 +621,6 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         fill = False
         while i < len(ag):
             obs_txt = str(ag.loc[i, obs_col])
-            # Encontrar todas as linhas consecutivas com a mesma observação
             grupo = [i]
             j = i + 1
             while j < len(ag) and str(ag.loc[j, obs_col]) == obs_txt:
@@ -636,23 +635,45 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
             y_grupo = pdf.get_y()
 
-            # 1. Desenhar observação (multi_cell) que abrange todo o grupo
-            pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
-            pdf.multi_cell(w_r[2], 5.5, c(obs_txt), border=1, align='L', fill=fill)
-            y_fim_grupo = pdf.get_y()
-            altura_total = y_fim_grupo - y_grupo
+            # Calcular altura mínima para cada linha do grupo
+            h_linha = 5.5
 
-            # 2. Dividir altura total pelas linhas do grupo
+            # Calcular altura da observação (multi_cell)
+            def _h_rem(txt, w):
+                words = c(txt).replace('\n',' \n ').split(' ')
+                lw, nl = 0, 1
+                for wd in words:
+                    if wd == '\n': nl += 1; lw = 0; continue
+                    ww = pdf.get_string_width(wd + ' ')
+                    if lw + ww > w - 2: nl += 1; lw = ww
+                    else: lw += ww
+                return max(h_linha * len(grupo), nl * h_linha)
+
+            altura_obs = _h_rem(obs_txt, w_r[2])
+            altura_total = max(altura_obs, h_linha * len(grupo))
             altura_linha = altura_total / len(grupo)
 
-            # 3. Desenhar horário e militares linha a linha
+            # Desenhar observação (célula única para todo o grupo)
+            pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
+            pdf.multi_cell(w_r[2], h_linha, c(obs_txt), border=1, align='L', fill=fill)
+            y_fim_obs = pdf.get_y()
+            altura_real = y_fim_obs - y_grupo
+            altura_total = max(altura_real, h_linha * len(grupo))
+            altura_linha = altura_total / len(grupo)
+
+            # Completar borda da observação se necessário
+            if altura_real < altura_total:
+                pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo + altura_real)
+                pdf.cell(w_r[2], altura_total - altura_real, '', 'LRB', 0, 'L', fill)
+
+            # Desenhar horário e militares linha a linha
             for k, idx in enumerate(grupo):
                 y_linha = y_grupo + k * altura_linha
                 pdf.set_xy(C1, y_linha)
-                pdf.cell(w_r[0], altura_linha, c(ag.loc[idx, 'horário']), 1, 0, 'C', fill)
-                pdf.cell(w_r[1], altura_linha, c(ag.loc[idx, 'id_fmt']),  1, 0, 'C', fill)
+                pdf.cell(w_r[0], altura_linha, c(str(ag.loc[idx, 'horário'])), 1, 0, 'C', fill)
+                pdf.cell(w_r[1], altura_linha, c(ag.loc[idx, 'id_fmt']), 1, 0, 'C', fill)
 
-            pdf.set_y(y_fim_grupo)
+            pdf.set_y(y_grupo + altura_total)
             fill = not fill
             i = j
 
@@ -699,6 +720,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                     pdf.set_fill_color(255, 255, 255)
                 y_antes = pdf.get_y()
 
+                # Se não cabe no espaço restante, parar (rodapé fixo em 282)
+                if y_antes > 270:
+                    break
+
                 # Calcular altura real de cada coluna
                 def _h(txt, w):
                     words = c(txt).replace('\n',' \n ').split(' ')
@@ -713,6 +738,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 h_indic = _h(indic, 28)
                 h_obs   = _h(r['observações'], 162)
                 altura  = max(h_indic, h_obs)
+
+                # Se esta linha ultrapassa o rodapé, truncar
+                if y_antes + altura > 278:
+                    break
 
                 # Desenhar observação
                 pdf.set_xy(C1 + 28, y_antes)
