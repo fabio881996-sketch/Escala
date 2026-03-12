@@ -1808,7 +1808,9 @@ else:
                     meu_s = servico_override if servico_override else f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
                     st.info(f"📋 O teu serviço: **{meu_s}**")
                     cols = df_d[
-                        (df_d['id'].astype(str) != u_id) &
+                        (df_d['id'].astype(str).str.strip() != u_id) &
+                        (df_d['id'].astype(str).str.strip() != '') &
+                        (df_d['id'].astype(str).str.strip() != 'nan') &
                         (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))
                     ]
                     if cols.empty:
@@ -1834,10 +1836,18 @@ else:
                 if meu.empty:
                     st.warning("Não tens serviço escalado nesse dia.")
                 else:
-                    meu_serv_t3 = meu.iloc[0]['serviço']
-                    meu_hor_t3  = meu.iloc[0]['horário']
+                    if servico_override:
+                        meu_serv_t3 = servico_override.split('(')[0].strip()
+                        meu_hor_t3  = servico_override.split('(')[1].rstrip(')') if '(' in servico_override else ''
+                    else:
+                        meu_serv_t3 = meu.iloc[0]['serviço']
+                        meu_hor_t3  = meu.iloc[0]['horário']
                     st.info(f"📋 O teu serviço: **{meu_serv_t3} ({meu_hor_t3})**")
-                    outros_t3 = df_d[df_d['id'].astype(str) != u_id]
+                    outros_t3 = df_d[
+                        (df_d['id'].astype(str).str.strip() != u_id) &
+                        (df_d['id'].astype(str).str.strip() != '') &
+                        (df_d['id'].astype(str).str.strip() != 'nan')
+                    ]
                     outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
                     opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
                     if len(opcoes_t3) < 2:
@@ -1862,7 +1872,8 @@ else:
                                 st.error("Não foi possível encontrar o email de um dos militares.")
                             else:
                                 data_str = dt_s.strftime('%d/%m/%Y')
-                                linha1 = [data_str, u_id, meu_serv_t3, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
+                                meu_serv_t3_completo = servico_override if servico_override else f"{meu_serv_t3} ({meu_hor_t3})"
+                                linha1 = [data_str, u_id, meu_serv_t3_completo, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
                                 linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
                                 salvar_troca_gsheet(linha1)
                                 salvar_troca_gsheet(linha2)
