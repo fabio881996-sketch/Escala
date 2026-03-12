@@ -884,7 +884,7 @@ if not st.session_state["logged_in"]:
                         elif 'pin' not in df_u.columns:
                             st.error("❌ Coluna 'pin' não existe na Sheet. Adiciona-a primeiro.")
                         else:
-                            user = df_u[df_u['pin'].astype(str).str.strip() == pin_input.strip()]
+                            user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(6) == pin_input.strip().zfill(6)]
                             if not user.empty:
                                 fazer_login(user.iloc[0], user.iloc[0]['email'])
                                 st.rerun()
