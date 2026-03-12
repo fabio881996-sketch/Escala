@@ -1780,25 +1780,28 @@ else:
         if df_d.empty:
             st.info("Não existem dados para esta data.")
         else:
-            # Aplicar trocas aprovadas (excluindo remunerados) — mostrar serviço real
             df_d = df_d.copy()
+
+            # Verificar se o utilizador tem troca aprovada neste dia
+            # e substituir o serviço apresentado pelo serviço real
+            servico_override = None  # serviço real após troca
             if not df_trocas.empty:
-                tr_v = df_trocas[
+                tr_dia = df_trocas[
                     (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada')
                 ]
-                mask_rem = df_d['serviço'].str.lower().str.contains('remu|grat', na=False)
-                for _, t in tr_v.iterrows():
-                    # Militar origem passa a ter o serviço destino
-                    m_o = (df_d['id'].astype(str) == str(t['id_origem'])) & ~mask_rem
-                    if m_o.any():
-                        df_d.loc[m_o, 'serviço'] = t['servico_destino'].split('(')[0].strip()
-                        df_d.loc[m_o, 'horário'] = t['servico_destino'].split('(')[1].rstrip(')') if '(' in t['servico_destino'] else df_d.loc[m_o, 'horário']
-                    # Militar destino passa a ter o serviço origem
-                    m_d = (df_d['id'].astype(str) == str(t['id_destino'])) & ~mask_rem
-                    if m_d.any():
-                        df_d.loc[m_d, 'serviço'] = t['servico_origem'].split('(')[0].strip()
-                        df_d.loc[m_d, 'horário'] = t['servico_origem'].split('(')[1].rstrip(')') if '(' in t['servico_origem'] else df_d.loc[m_d, 'horário']
+                # DEBUG temporário — remover depois
+                if not tr_dia.empty:
+                    st.caption(f"🔍 DEBUG trocas aprovadas neste dia: {tr_dia[['id_origem','id_destino','servico_origem','servico_destino','status']].to_dict('records')}")
+                st.caption(f"🔍 DEBUG u_id={repr(u_id)}")
+                for _, t in tr_dia.iterrows():
+                    st.caption(f"🔍 id_origem={repr(str(t['id_origem']))} | id_destino={repr(str(t['id_destino']))}")
+                    if str(t['id_origem']).strip() == u_id.strip():
+                        servico_override = t['servico_destino']
+                        break
+                    elif str(t['id_destino']).strip() == u_id.strip():
+                        servico_override = t['servico_origem']
+                        break
 
             meu = df_d[df_d['id'].astype(str) == u_id]
 
@@ -1807,7 +1810,7 @@ else:
                 if meu.empty:
                     st.warning("Não tens serviço escalado neste dia.")
                 else:
-                    meu_s = f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
+                    meu_s = servico_override if servico_override else f"{meu.iloc[0]['serviço']} ({meu.iloc[0]['horário']})"
                     st.info(f"📋 O teu serviço: **{meu_s}**")
                     cols = df_d[
                         (df_d['id'].astype(str) != u_id) &
@@ -2104,4 +2107,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
