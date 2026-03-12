@@ -374,25 +374,25 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def sec_title(label, w=W, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 10.5)
+        pdf.set_font("Arial", "B", 10)
         pdf.set_fill_color(26, 46, 100)
         pdf.set_text_color(255, 255, 255)
-        pdf.cell(w, 7, c(f"  {label.upper()}"), 1, 1, 'L', True)
+        pdf.cell(w, 5.5, c(f"  {label.upper()}"), 1, 1, 'L', True)
         pdf.set_text_color(0, 0, 0)
 
     def tbl_hdr(cols, widths, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 10.5)
+        pdf.set_font("Arial", "B", 9.5)
         pdf.set_fill_color(205, 215, 242)
         pdf.set_text_color(15, 35, 90)
         for col, w in zip(cols, widths):
-            pdf.cell(w, 6, c(col), 1, 0, 'C', True)
-        pdf.ln(6)
+            pdf.cell(w, 5, c(col), 1, 0, 'C', True)
+        pdf.ln(5)
         pdf.set_text_color(0, 0, 0)
 
     def tbl_row(vals, widths, x=None, fill=False):
-        pdf.set_font("Arial", "", 8.5)
+        pdf.set_font("Arial", "", 8)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
@@ -402,9 +402,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         # Calcular altura real necessária para cada célula
         def calc_altura(txt, w):
-            """Conta quantas linhas o texto ocupa numa célula de largura w."""
             if not txt:
-                return 6
+                return 5
             words = txt.replace('\n', ' \n ').split(' ')
             linha_w = 0
             n_linhas = 1
@@ -414,14 +413,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                     linha_w = 0
                     continue
                 ww = pdf.get_string_width(word + ' ')
-                if linha_w + ww > w - 2:  # margem de 2mm
+                if linha_w + ww > w - 2:
                     n_linhas += 1
                     linha_w = ww
                 else:
                     linha_w += ww
-            return max(6, n_linhas * 6)
+            return max(5, n_linhas * 5)
 
-        altura_max = 6
+        altura_max = 5
         for v, w in zip(vals, widths):
             altura_max = max(altura_max, calc_altura(c(str(v)), w))
 
@@ -430,7 +429,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         for v, w in zip(vals, widths):
             txt = c(str(v))
             pdf.set_xy(xi, y0)
-            pdf.multi_cell(w, 6, txt, 1, 'C', fill)
+            pdf.multi_cell(w, 5, txt, 1, 'C', fill)
             cell_h = pdf.get_y() - y0
             if cell_h < altura_max:
                 pdf.set_xy(xi, y0 + cell_h)
@@ -446,7 +445,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_xy(10, 10)
     pdf.set_font("Arial", "B", 10.5)
     pdf.set_text_color(255, 255, 255)
-    pdf.cell(W, 7.5, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
+    pdf.cell(W, 6, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
     pdf.set_x(10)
     pdf.set_font("Arial", "B", 10.5)
     try:
@@ -458,9 +457,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         titulo   = f"ESCALA DE SERVICO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
     except Exception:
         titulo = f"ESCALA DE SERVICO  |  {data}"
-    pdf.cell(W, 7.5, c(titulo), 0, 1, 'C')
+    pdf.cell(W, 6, c(titulo), 0, 1, 'C')
     pdf.set_text_color(0, 0, 0)
-    pdf.ln(3)
+    pdf.ln(1.5)
 
     # ====================================================
     # BLOCO 1 — AUSENCIAS (esq) | ADM (dir)
@@ -475,7 +474,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             pdf.set_x(C1)
             pdf.set_font("Arial", "", 8.5)
             pdf.set_fill_color(255, 245, 245)
-            pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
+            pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C1)
     pdf.cell(CW, 0.5, "", border='T', ln=1)
     y_c1 = pdf.get_y()
@@ -489,7 +488,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             pdf.set_font("Arial", "", 8.5)
             pdf.set_fill_color(245, 245, 255)
             horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
-            pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
+            pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C2)
     pdf.cell(CW, 0.5, "", border='T', ln=1)
     y_c2 = pdf.get_y()
@@ -564,7 +563,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         # Grupo 2 — Outras Patrulhas e Policiamento
         if not ag_outras.empty:
-            pdf.ln(2)
+            pdf.ln(1)
             sec_title("Patrulhas e Policiamento", W)
             tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
             fill = False
@@ -578,7 +577,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # BLOCO 4 — OUTROS SERVIÇOS
     # ====================================================
     if not df_outros.empty:
-        pdf.ln(2)
+        pdf.ln(1)
         sec_title("Outros Servicos", W)
         has_vtr_o   = 'viatura' in df_outros.columns
         has_indic_o = 'indicativo rádio' in df_outros.columns
@@ -608,7 +607,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # BLOCO 5 — REMUNERADOS
     # ====================================================
     if not df_rem.empty:
-        pdf.ln(2)
+        pdf.ln(1)
         sec_title("Servicos Remunerados / Gratificados", W)
         w_r = [22, 38, 130]
         tbl_hdr(["Horario","Militares","Observacao"], w_r)
@@ -636,7 +635,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             y_grupo = pdf.get_y()
 
             # Calcular altura mínima para cada linha do grupo
-            h_linha = 5.5
+            h_linha = 5
 
             # Calcular altura da observação (multi_cell)
             def _h_rem(txt, w):
@@ -655,7 +654,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
             # Desenhar observação (célula única para todo o grupo)
             pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
-            pdf.multi_cell(w_r[2], h_linha, c(obs_txt), border=1, align='L', fill=fill)
+            pdf.multi_cell(w_r[2], 5, c(obs_txt), border=1, align='L', fill=fill)
             y_fim_obs = pdf.get_y()
             altura_real = y_fim_obs - y_grupo
             altura_total = max(altura_real, h_linha * len(grupo))
@@ -690,7 +689,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     if not df_obs_total.empty and 'observações' in df_obs_total.columns:
         obs_df = df_obs_total[df_obs_total['observações'].str.strip().str.len() > 0].copy()
         if not obs_df.empty:
-            pdf.ln(2)
+            pdf.ln(1)
             sec_title("Observacoes de Patrulha", W)
             w_o = [28, 162]
             tbl_hdr(["Indicativo","Detalhe"], w_o)
@@ -733,7 +732,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                         ww = pdf.get_string_width(wd + ' ')
                         if lw + ww > w - 2: nl += 1; lw = ww
                         else: lw += ww
-                    return max(5.5, nl * 5.5)
+                    return max(5, nl * 5)
 
                 h_indic = _h(indic, 28)
                 h_obs   = _h(r['observações'], 162)
@@ -745,7 +744,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
                 # Desenhar observação
                 pdf.set_xy(C1 + 28, y_antes)
-                pdf.multi_cell(162, 5.5, c(r['observações']), border=1, align='L', fill=fill)
+                pdf.multi_cell(162, 5, c(r['observações']), border=1, align='L', fill=fill)
                 h_obs_real = pdf.get_y() - y_antes
                 if h_obs_real < altura:
                     pdf.set_xy(C1 + 28, y_antes + h_obs_real)
@@ -753,7 +752,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
                 # Desenhar indicativo
                 pdf.set_xy(C1, y_antes)
-                pdf.multi_cell(28, 5.5, c(indic), border=1, align='C', fill=fill)
+                pdf.multi_cell(28, 5, c(indic), border=1, align='C', fill=fill)
                 h_ind_real = pdf.get_y() - y_antes
                 if h_ind_real < altura:
                     pdf.set_xy(C1, y_antes + h_ind_real)
