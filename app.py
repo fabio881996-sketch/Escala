@@ -298,12 +298,12 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.add_page()
     pdf.set_fill_color(26, 43, 74)
     pdf.rect(0, 0, 210, 30, 'F')
-    pdf.set_font("Arial", "B", 18)
+    pdf.set_font("Arial", "B", 17.5)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(190, 30, "GNR - Comprovativo de Troca de Servico", 0, 1, 'C')
     pdf.set_text_color(0, 0, 0)
     pdf.ln(10)
-    pdf.set_font("Arial", "", 11)
+    pdf.set_font("Arial", "", 10.5)
     texto = (
         f"Certifica-se que o militar {s(dados['nome_origem'])} (ID {s(dados['id_origem'])}), "
         f"requereu a troca do servico '{s(dados['serv_orig'])}' pelo servico '{s(dados['serv_dest'])}' "
@@ -313,7 +313,7 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     )
     pdf.multi_cell(190, 8, texto)
     pdf.ln(15)
-    pdf.set_font("Arial", "I", 9)
+    pdf.set_font("Arial", "I", 8)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
@@ -374,7 +374,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def sec_title(label, w=W, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 11)
+        pdf.set_font("Arial", "B", 10.5)
         pdf.set_fill_color(26, 46, 100)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(w, 7, c(f"  {label.upper()}"), 1, 1, 'L', True)
@@ -383,7 +383,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def tbl_hdr(cols, widths, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 11)
+        pdf.set_font("Arial", "B", 10.5)
         pdf.set_fill_color(205, 215, 242)
         pdf.set_text_color(15, 35, 90)
         for col, w in zip(cols, widths):
@@ -392,7 +392,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         pdf.set_text_color(0, 0, 0)
 
     def tbl_row(vals, widths, x=None, fill=False):
-        pdf.set_font("Arial", "", 9)
+        pdf.set_font("Arial", "", 8.5)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
@@ -473,7 +473,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C1)
-            pdf.set_font("Arial", "", 9)
+            pdf.set_font("Arial", "", 8.5)
             pdf.set_fill_color(255, 245, 245)
             pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C1)
@@ -486,7 +486,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C2)
-            pdf.set_font("Arial", "", 9)
+            pdf.set_font("Arial", "", 8.5)
             pdf.set_fill_color(245, 245, 255)
             horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
             pdf.multi_cell(CW, 4, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
@@ -528,10 +528,6 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # ====================================================
     # BLOCO 3 — PATRULHAS (largura total)
     # ====================================================
-    sec_title("Patrulhas e Policiamento", W)
-    w_p = [18, 44, 54, 24, 28, 22]
-    tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
-
     if not df_pat.empty:
         has_obs   = 'observações' in df_pat.columns
         has_indic = 'indicativo rádio' in df_pat.columns
@@ -548,20 +544,35 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
 
-        def prio(nome):
-            n = str(nome).lower()
-            if 'ocorr' in n or 'ocorrencia' in n: return "0"
-            return "1_" + n
-        ag['_ord'] = ag['serviço'].apply(prio)
-        ag = ag.sort_values(['_ord', 'horário'])
+        w_p = [18, 44, 54, 24, 28, 22]
 
-        fill = False
-        for _, r in ag.iterrows():
-            indic = str(r.get('indicativo rádio',''))
-            radio = str(r.get('rádio',''))
-            tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
-                     indic, radio, r.get('viatura','')], w_p, fill=fill)
-            fill = not fill
+        # Separar Ocorrências das outras patrulhas
+        mask_ocorr = ag['serviço'].str.lower().str.contains('ocorr|ocorrencia', na=False)
+        ag_ocorr   = ag[mask_ocorr].sort_values('horário')
+        ag_outras  = ag[~mask_ocorr].sort_values('horário')
+
+        # Grupo 1 — Patrulha Ocorrências
+        if not ag_ocorr.empty:
+            sec_title("Patrulha Ocorrencias", W)
+            tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
+            fill = False
+            for _, r in ag_ocorr.iterrows():
+                tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
+                         str(r.get('indicativo rádio','')), str(r.get('rádio','')),
+                         r.get('viatura','')], w_p, fill=fill)
+                fill = not fill
+
+        # Grupo 2 — Outras Patrulhas e Policiamento
+        if not ag_outras.empty:
+            pdf.ln(2)
+            sec_title("Patrulhas e Policiamento", W)
+            tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
+            fill = False
+            for _, r in ag_outras.iterrows():
+                tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
+                         str(r.get('indicativo rádio','')), str(r.get('rádio','')),
+                         r.get('viatura','')], w_p, fill=fill)
+                fill = not fill
 
     # ====================================================
     # BLOCO 4 — OUTROS SERVIÇOS
@@ -617,7 +628,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 grupo.append(j)
                 j += 1
 
-            pdf.set_font("Arial", "", 9)
+            pdf.set_font("Arial", "", 8.5)
             if fill:
                 pdf.set_fill_color(235, 241, 255)
             else:
@@ -681,7 +692,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 horario_val = str(r.get('horário','') or '').strip()
                 if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
                     indic = f"{indic}\n{horario_val}"
-                pdf.set_font("Arial", "", 9)
+                pdf.set_font("Arial", "", 8.5)
                 if fill:
                     pdf.set_fill_color(255, 255, 220)
                 else:
@@ -728,7 +739,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_xy(10, 282)
     pdf.set_draw_color(160, 160, 160)
     pdf.line(10, 282, 200, 282)
-    pdf.set_font("Arial", "I", 8.5)
+    pdf.set_font("Arial", "I", 8)
     pdf.set_text_color(120, 120, 120)
     pdf.set_xy(10, 283)
     pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
