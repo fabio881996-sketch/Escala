@@ -294,6 +294,86 @@ def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+ATENDIMENTO_PATTERN = r'atendimento|apoio'
+
+def _parse_horario(hor: str):
+    """Converte 'HH-HH' ou 'HH:MM-HH:MM' em (inicio_min, fim_min) desde meia-noite.
+    '24' é tratado como 1440 min (meia-noite do dia seguinte)."""
+    try:
+        hor = str(hor).strip()
+        # suporta 08-16, 08:30-16:30, 8-16
+        partes = hor.replace(':', '').split('-')
+        if len(partes) != 2:
+            return None, None
+        def to_min(s):
+            s = s.strip()
+            if len(s) <= 2:
+                return int(s) * 60
+            return int(s[:-2]) * 60 + int(s[-2:])
+        ini = to_min(partes[0])
+        fim = to_min(partes[1])
+        if fim == 0:
+            fim = 1440  # 24h = meia-noite seguinte
+        if fim < ini:
+            fim += 1440  # passa a meia-noite
+        return ini, fim
+    except Exception:
+        return None, None
+
+def _e_atendimento(serv: str) -> bool:
+    import unicodedata as _u
+    n = _u.normalize('NFKD', str(serv).lower()).encode('ascii','ignore').decode('ascii')
+    return bool(__import__('re').search(ATENDIMENTO_PATTERN, n))
+
+def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo: str) -> tuple:
+    """Verifica se o militar tem >= 8h de descanso entre o serviço novo e os adjacentes.
+    Retorna (ok: bool, motivo: str).
+    Exceção: se serviço novo OU adjacente for atendimento/apoio, permite sempre."""
+    if _e_atendimento(serv_novo):
+        return True, ""
+    ini_novo, fim_novo = _parse_horario(hor_novo)
+    if ini_novo is None:
+        return True, ""  # não consegue validar, deixa passar
+
+    MIN_DESCANSO = 8 * 60  # 480 minutos
+
+    for delta, label in [(-1, "dia anterior"), (1, "dia seguinte")]:
+        dt_adj = data + timedelta(days=delta)
+        df_adj = load_data(dt_adj.strftime("%d-%m"))
+        if df_adj.empty:
+            continue
+        rows = df_adj[df_adj['id'].astype(str).str.strip() == str(militar_id).strip()]
+        for _, r in rows.iterrows():
+            serv_adj = str(r.get('serviço', ''))
+            hor_adj  = str(r.get('horário', ''))
+            if not hor_adj.strip():
+                continue
+            if _e_atendimento(serv_adj):
+                continue  # exceção — adjacente é atendimento/apoio
+            import unicodedata as _ud_loc, re as _re_loc
+            if _re_loc.search(r'remu|grat', _ud_loc.normalize('NFKD', serv_adj.lower()).encode('ascii','ignore').decode('ascii')):
+                continue  # remunerados não contam para descanso
+            ini_adj, fim_adj = _parse_horario(hor_adj)
+            if ini_adj is None:
+                continue
+
+            if delta == -1:
+                # serviço anterior acaba, novo começa
+                # fim_adj é no dia anterior → fim_adj - 1440 relativamente ao dia novo
+                fim_adj_rel = fim_adj - 1440
+                descanso = ini_novo - fim_adj_rel
+            else:
+                # novo acaba, próximo começa
+                ini_adj_rel = ini_adj + 1440
+                descanso = ini_adj_rel - fim_novo
+
+            if descanso < MIN_DESCANSO:
+                horas = descanso // 60
+                mins  = descanso % 60
+                return False, (f"Apenas {horas}h{mins:02d}m de descanso face ao serviço do {label} "
+                               f"({serv_adj} {hor_adj})")
+    return True, ""
+
 def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
     """Atualiza o status de uma troca na Google Sheet — batch update numa chamada."""
     try:
@@ -1823,13 +1903,26 @@ else:
                             if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
                                 id_d = alvo.split(" - ")[0]
                                 s_d  = alvo.split(" - ", 1)[1]
-                                email_row = df_util[df_util['id'].astype(str) == id_d]
-                                if email_row.empty:
-                                    st.error("Militar de destino não encontrado.")
+                                serv_d_nome = s_d.rsplit('(', 1)[0].strip()
+                                hor_d_val   = s_d.rsplit('(', 1)[1].rstrip(')') if '(' in s_d else ''
+                                # Extrair serviço e horário do próprio
+                                meu_serv_nome = meu_s.rsplit('(', 1)[0].strip()
+                                meu_hor_val   = meu_s.rsplit('(', 1)[1].rstrip(')') if '(' in meu_s else meu.iloc[0]['horário']
+                                # Verificar descanso para ambos os militares
+                                ok_eu, motivo_eu   = verificar_descanso(u_id, dt_s, serv_d_nome, hor_d_val)
+                                ok_ele, motivo_ele = verificar_descanso(id_d, dt_s, meu_serv_nome, meu_hor_val)
+                                if not ok_eu:
+                                    st.error(f"❌ Não podes fazer esta troca: {motivo_eu}")
+                                elif not ok_ele:
+                                    st.error(f"❌ O militar de destino não pode fazer esta troca: {motivo_ele}")
                                 else:
-                                    em_d = email_row['email'].values[0]
-                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
-                                        st.success("✅ Pedido enviado com sucesso!")
+                                    email_row = df_util[df_util['id'].astype(str) == id_d]
+                                    if email_row.empty:
+                                        st.error("Militar de destino não encontrado.")
+                                    else:
+                                        em_d = email_row['email'].values[0]
+                                        if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
+                                            st.success("✅ Pedido enviado com sucesso!")
 
             # ── Troca a 3 ──
             elif tipo_troca == "🔁 Troca a 3":
@@ -1857,8 +1950,10 @@ else:
                         sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
                         id1   = str(opcoes_t3[sel1])
                         id2   = str(opcoes_t3[sel2])
-                        serv1 = df_d[df_d['id'].astype(str) == id1].iloc[0]['serviço']
-                        serv2 = df_d[df_d['id'].astype(str) == id2].iloc[0]['serviço']
+                        row1  = df_d[df_d['id'].astype(str) == id1].iloc[0]
+                        row2  = df_d[df_d['id'].astype(str) == id2].iloc[0]
+                        serv1 = row1['serviço']; hor1 = row1['horário']
+                        serv2 = row2['serviço']; hor2 = row2['horário']
                         st.markdown(f"""
                         **Resumo da troca a 3:**
                         - **Tu** `{meu_serv_t3}` → ficas com o serviço do 1º
@@ -1873,8 +1968,8 @@ else:
                             else:
                                 data_str = dt_s.strftime('%d/%m/%Y')
                                 meu_serv_t3_completo = servico_override if servico_override else f"{meu_serv_t3} ({meu_hor_t3})"
-                                linha1 = [data_str, u_id, meu_serv_t3_completo, id1, serv1, "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
-                                linha2 = [data_str, id1, serv1, id2, serv2, "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
+                                linha1 = [data_str, u_id, meu_serv_t3_completo, id1, f"{serv1} ({hor1})", "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
+                                linha2 = [data_str, id1, f"{serv1} ({hor1})", id2, f"{serv2} ({hor2})", "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
                                 salvar_troca_gsheet(linha1)
                                 salvar_troca_gsheet(linha2)
                                 st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
