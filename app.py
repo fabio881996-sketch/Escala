@@ -297,11 +297,10 @@ def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
 ATENDIMENTO_PATTERN = r'atendimento|apoio'
 
 def _parse_horario(hor: str):
-    """Converte 'HH-HH' ou 'HH:MM-HH:MM' em (inicio_min, fim_min) desde meia-noite.
-    '24' é tratado como 1440 min (meia-noite do dia seguinte)."""
+    """Converte 'HH-HH' ou 'HH:MM-HH:MM' em (inicio_min, fim_min, passa_meia_noite).
+    Valores relativos ao próprio dia. fim pode ser > 1440 se passa meia-noite."""
     try:
         hor = str(hor).strip()
-        # suporta 08-16, 08:30-16:30, 8-16
         partes = hor.replace(':', '').split('-')
         if len(partes) != 2:
             return None, None
@@ -313,9 +312,9 @@ def _parse_horario(hor: str):
         ini = to_min(partes[0])
         fim = to_min(partes[1])
         if fim == 0:
-            fim = 1440  # 24h = meia-noite seguinte
+            fim = 1440  # 24 = meia-noite do dia seguinte
         if fim < ini:
-            fim += 1440  # passa a meia-noite
+            fim += 1440  # passa a meia-noite (ex: 18-02 → fim=1560)
         return ini, fim
     except Exception:
         return None, None
@@ -414,7 +413,10 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
                 ini, fim = _parse_horario(h)
                 if ini is None:
                     continue
-                result.append((ini + offset, fim + offset, s, h))
+                duracao = fim - ini  # duração em minutos (sempre positiva)
+                ini_abs = ini + offset
+                fim_abs = ini_abs + duracao
+                result.append((ini_abs, fim_abs, s, h))
         return result
 
     def verificar_militar(mil_id, serv_novo, hor_novo, hor_excluir, label):
@@ -424,9 +426,8 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
         ini_novo, fim_novo = _parse_horario(hor_novo)
         if ini_novo is None:
             return []
-        # colocar serviço novo no dia atual (offset 1440)
         ini_novo_abs = ini_novo + 1440
-        fim_novo_abs = fim_novo + 1440
+        fim_novo_abs = ini_novo_abs + (fim_novo - ini_novo)
 
         fixos = get_servicos_fixos(mil_id, hor_excluir)
         msgs = []
@@ -435,18 +436,23 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
             d1 = ini_novo_abs - fim_f
             # descanso entre fim do novo e início do fixo
             d2 = ini_f - fim_novo_abs
-            # só verificar transições positivas (uma coisa a seguir à outra)
-            if 0 <= d1 < MIN:
-                h2, m2 = d1 // 60, d1 % 60
+            # verificar transição fixo→novo
+            if d1 < MIN and fim_f <= fim_novo_abs:  # fixo acaba antes do novo
+                d1_real = max(0, d1)
+                h2, m2 = d1_real // 60, d1_real % 60
                 msgs.append(f"{label}: apenas {h2}h{m2:02d}m de descanso entre '{s_f} ({h_f})' e o serviço novo '{serv_novo} ({hor_novo})'")
-            elif 0 <= d2 < MIN:
-                h2, m2 = d2 // 60, d2 % 60
+            # verificar transição novo→fixo
+            elif d2 < MIN and fim_novo_abs <= fim_f:  # novo acaba antes do fixo
+                d2_real = max(0, d2)
+                h2, m2 = d2_real // 60, d2_real % 60
                 msgs.append(f"{label}: apenas {h2}h{m2:02d}m de descanso entre o serviço novo '{serv_novo} ({hor_novo})' e '{s_f} ({h_f})'")
         return msgs
 
     erros  = verificar_militar(u_id,  serv_d_nome,  hor_d_val,  meu_hor_val, "Não podes fazer esta troca")
     erros += verificar_militar(id_d,  meu_serv_nome, meu_hor_val, hor_d_val,  "O militar de destino não pode fazer esta troca")
     return erros
+
+def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
     """Atualiza o status de uma troca na Google Sheet — batch update numa chamada."""
     try:
         sh = get_sheet()
