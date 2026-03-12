@@ -444,11 +444,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_fill_color(20, 40, 95)
     pdf.rect(10, 10, W, 15, 'F')
     pdf.set_xy(10, 10)
-    pdf.set_font("Arial", "B", 11)
+    pdf.set_font("Arial", "B", 10.5)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(W, 7.5, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
     pdf.set_x(10)
-    pdf.set_font("Arial", "B", 11)
+    pdf.set_font("Arial", "B", 10.5)
     try:
         dt_obj   = _dt.strptime(data, "%d/%m/%Y")
         dias_pt  = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
