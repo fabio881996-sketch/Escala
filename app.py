@@ -229,18 +229,7 @@ def _df_from_records(records) -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 5 min (trocas, etc)."""
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return pd.DataFrame()
-        return _df_from_records(sh.worksheet(aba_nome).get_all_records())
-    except Exception:
-        return pd.DataFrame()
-
-@st.cache_data(ttl=300)
-def load_escala(aba_nome: str) -> pd.DataFrame:
-    """Carrega escala diária com cache de 5 minutos."""
+    """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
     try:
         sh = get_sheet()
         if sh is None:
@@ -260,7 +249,7 @@ def load_utilizadores() -> pd.DataFrame:
         return pd.DataFrame()
 
 def invalidar_trocas():
-    """Limpa só o cache de trocas, preserva escalas diárias."""
+    """Limpa cache de trocas."""
     load_data.clear()
 
 def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
@@ -1168,7 +1157,7 @@ else:
             for d in range(1, n_dias + 1):
                 dt_cal = datetime(ano_sel, mes_sel, d)
                 aba = dt_cal.strftime("%d-%m")
-                df_cal = load_escala(aba)
+                df_cal = load_data(aba)
                 if not df_cal.empty:
                     m_cal = df_cal[df_cal['id'].astype(str) == u_id]
                     if not m_cal.empty:
@@ -1304,7 +1293,7 @@ else:
                     dias_sem_dados = 0
                     encontrou_algum = True
                 else:
-                    df_d = load_escala(dt.strftime("%d-%m"))
+                    df_d = load_data(dt.strftime("%d-%m"))
                     if not df_d.empty:
                         m = df_d[df_d['id'].astype(str) == u_id]
                         if not m.empty:
@@ -1333,7 +1322,7 @@ else:
                                 unsafe_allow_html=True
                             )
                             # Verificar se tem remunerado no mesmo dia
-                            df_rem_dia = load_escala(dt.strftime("%d-%m"))
+                            df_rem_dia = load_data(dt.strftime("%d-%m"))
                             if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
                                 import unicodedata as _ud2
                                 def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
@@ -1457,7 +1446,7 @@ else:
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
-        df_dia = load_escala(d_sel.strftime("%d-%m"))
+        df_dia = load_data(d_sel.strftime("%d-%m"))
 
         if df_dia.empty:
             st.info("Não existem dados para esta data.")
@@ -1503,7 +1492,7 @@ else:
                         paginas = 0
                         while dias_sem2 < 5:
                             dt2 = hj2 + timedelta(days=j2)
-                            df_d2 = load_escala(dt2.strftime("%d-%m"))
+                            df_d2 = load_data(dt2.strftime("%d-%m"))
                             if not df_d2.empty:
                                 df_d2['id_disp'] = df_d2['id'].astype(str)
                                 if not df_trocas.empty:
@@ -1592,7 +1581,7 @@ else:
         st.markdown("---")
 
         dt_s = st.date_input("Data:", format="DD/MM/YYYY")
-        df_d = load_escala(dt_s.strftime("%d-%m"))
+        df_d = load_data(dt_s.strftime("%d-%m"))
 
         if df_d.empty:
             st.info("Não existem dados para esta data.")
@@ -1901,4 +1890,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
