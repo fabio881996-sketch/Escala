@@ -1967,12 +1967,14 @@ else:
                     st.info(f"📋 O teu serviço: **{meu_s}**")
                     meu_serv_orig = meu.iloc[0]['serviço']
                     meu_hor_orig  = meu.iloc[0]['horário']
+                    estou_de_folga = 'folga' in meu_serv_orig.lower()
                     cols = df_d[
                         (df_d['id'].astype(str).str.strip() != u_id) &
                         (df_d['id'].astype(str).str.strip() != '') &
                         (df_d['id'].astype(str).str.strip() != 'nan') &
                         (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)) &
-                        ~((df_d['serviço'] == meu_serv_orig) & (df_d['horário'] == meu_hor_orig))
+                        ~((df_d['serviço'] == meu_serv_orig) & (df_d['horário'] == meu_hor_orig)) &
+                        ~(estou_de_folga & df_d['serviço'].str.lower().str.contains('folga', na=False))
                     ]
                     if cols.empty:
                         st.warning("Não há militares disponíveis para troca neste dia.")
