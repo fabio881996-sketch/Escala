@@ -239,9 +239,9 @@ def load_data(aba_nome: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_escala(aba_nome: str) -> pd.DataFrame:
-    """Carrega escala diária com cache de 1 hora — mudam raramente."""
+    """Carrega escala diária com cache de 5 minutos."""
     try:
         sh = get_sheet()
         if sh is None:
