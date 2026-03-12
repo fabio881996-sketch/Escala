@@ -1571,18 +1571,16 @@ else:
             st.info("Não foram encontrados serviços no histórico.")
         else:
             def categorizar(tipo):
-                if any(x in tipo for x in ['feria','licen','doente']): return 'Ausência'
+                if 'ocorr' in tipo: return 'Patrulha Ocorrências'
+                if any(x in tipo for x in ['patrulha','ronda','po ','vtr']): return 'Patrulha'
                 if 'folga' in tipo: return 'Folga'
                 if any(x in tipo for x in ['remu','grat']): return 'Remunerado'
-                if 'atendimento' in tipo: return 'Atendimento'
                 if 'apoio' in tipo: return 'Apoio Atendimento'
-                if any(x in tipo for x in ['patrulha','ronda','po ','vtr']): return 'Patrulha'
-                if any(x in tipo for x in ['secretaria','inquer','comando','dilig','tribunal','pronto']): return 'ADM'
+                if 'atendimento' in tipo: return 'Atendimento'
+                if any(x in tipo for x in ['feria','licen','doente']): return 'Férias'
                 return 'Outros'
 
             df_stats['categoria'] = df_stats['tipo'].apply(categorizar)
-            total = len(df_stats)
-            st.metric("Total de serviços", total)
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 st.markdown("**Por categoria**")
