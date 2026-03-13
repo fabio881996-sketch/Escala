@@ -2177,7 +2177,10 @@ else:
             if aprv.empty:
                 st.write("Não existem trocas validadas.")
             else:
-                for idx, r in aprv.sort_index(ascending=False).iterrows():
+                aprv = aprv.copy()
+                aprv['_data_ord'] = pd.to_datetime(aprv['data'], format='%d/%m/%Y', errors='coerce')
+                aprv = aprv.sort_values('_data_ord', ascending=False).drop(columns='_data_ord')
+                for idx, r in aprv.iterrows():
                     n_o = get_nome_militar(df_util, r['id_origem'])
                     n_d = get_nome_militar(df_util, r['id_destino'])
                     with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}"):
