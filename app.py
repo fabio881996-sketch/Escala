@@ -227,7 +227,7 @@ def _df_from_records(records) -> pd.DataFrame:
     df.columns = [str(c).strip().lower() for c in df.columns]
     return df.fillna("")
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=0)
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
     try:
