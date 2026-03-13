@@ -552,7 +552,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         return df[mask].copy(), df[~mask].copy()
 
     df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw_com)
-    df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig|tribunal', df_rest)
+    df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig', df_rest)
     df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
     df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
     df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
@@ -1868,8 +1868,8 @@ else:
             # Remover linhas sem militar para a visualização na escala geral
             df_at = _limpar_sem_militar(df_at)
 
-            # Separar ausências primeiro (inclui férias, licenças, doentes, diligências, tribunal)
-            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência", "tribunal"], df_at)
+            # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
+            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência"], df_at)
 
             # Extrair cada grupo do df_res por ordem
             df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
