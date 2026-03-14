@@ -565,7 +565,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
     df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
-    df_outros = df_rest
+    df_giro, df_outros = filtrar(r'giro', df_rest)
 
     # ---- Iniciar PDF ----
     pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -1895,6 +1895,7 @@ else:
             df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],       df_res)
             df_remu, df_res = filtrar_secao(["remu", "grat"],                          df_res)
             df_folga,df_res = filtrar_secao(["folga"],                                 df_res)
+            _,       df_res = filtrar_secao(["giro"],                                  df_res)
             df_outros       = df_res  # o que sobrar são "Outros Serviços"
 
             mostrar_secao("Comando e Administrativos", df_cmd)
@@ -1905,7 +1906,7 @@ else:
             # Remunerados: horário | militares | observações (sem rádio/indicativo)
             if not df_remu.empty:
                 with st.expander("🔹 REMUNERADOS", expanded=True):
-                    cols_grp_r = ['horário'] + [c for c in ['serviço', 'observações'] if c in df_remu.columns]
+                    cols_grp_r = ['horário'] + [c for c in ['observações'] if c in df_remu.columns]
                     ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
                                   .apply(lambda x: ', '.join(x)).reset_index()
                     col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
