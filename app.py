@@ -2395,4 +2395,4 @@ elif menu == "👥 Efetivo":
         cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
         st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
         st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-```
+        
