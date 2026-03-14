@@ -563,9 +563,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig', df_rest)
     df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
     df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
-    df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr', df_rest)
+    df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr|giro', df_rest)
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
-    df_giro, df_outros = filtrar(r'giro', df_rest)
+    df_outros = df_rest
 
     # ---- Iniciar PDF ----
     pdf = FPDF(orientation='P', unit='mm', format='A4')
@@ -1892,11 +1892,10 @@ else:
             df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
             df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
             df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
-            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr"],       df_res)
-            df_remu, df_res = filtrar_secao(["remu", "grat"],                          df_res)
-            df_folga,df_res = filtrar_secao(["folga"],                                 df_res)
-            _,       df_res = filtrar_secao(["giro"],                                  df_res)
-            df_outros       = df_res  # o que sobrar são "Outros Serviços"
+            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr", "giro"], df_res)
+            df_remu, df_res = filtrar_secao(["remu", "grat"],                            df_res)
+            df_folga,df_res = filtrar_secao(["folga"],                                   df_res)
+            df_outros       = df_res
 
             mostrar_secao("Comando e Administrativos", df_cmd)
             mostrar_secao("Atendimento",               df_aten)
