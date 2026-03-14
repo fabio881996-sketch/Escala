@@ -740,45 +740,53 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         has_indic = 'indicativo rádio' in df_pat.columns
         has_radio = 'rádio' in df_pat.columns
         has_vtr   = 'viatura' in df_pat.columns
+        has_giro  = 'giro' in df_pat.columns
 
         cols_grp = ['horário', 'serviço']
         if has_indic: cols_grp.append('indicativo rádio')
         if has_radio: cols_grp.append('rádio')
         if has_vtr:   cols_grp.append('viatura')
+        if has_giro:  cols_grp.append('giro')
 
         agg_dict = {'id_fmt': lambda x: ', '.join(x)}
         if has_obs: agg_dict['observações'] = lambda x: ' | '.join(v for v in x if str(v).strip())
 
         ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
 
-        w_p = [18, 44, 54, 24, 28, 22]
+        # Larguras: Horario/Militares/Servico/Indicativo/Radio/Viatura/Giro
+        w_p  = [18, 40, 48, 22, 26, 20, 16] if has_giro else [18, 44, 54, 24, 28, 22]
+        hdr_p = ["Horario","Militares","Servico","Indicativo","Radio","Viatura"]
+        if has_giro: hdr_p.append("Giro")
 
         # Separar Ocorrências das outras patrulhas
         mask_ocorr = ag['serviço'].str.lower().str.contains('ocorr|ocorrencia', na=False)
         ag_ocorr   = ag[mask_ocorr].sort_values('horário')
         ag_outras  = ag[~mask_ocorr].sort_values('horário')
 
+        def _row_pat(r):
+            vals = [r['horário'], r['id_fmt'], r['serviço'].upper(),
+                    str(r.get('indicativo rádio','')), str(r.get('rádio','')),
+                    r.get('viatura','')]
+            if has_giro: vals.append(str(r.get('giro','')))
+            return vals
+
         # Grupo 1 — Patrulha Ocorrências
         if not ag_ocorr.empty:
             sec_title("Patrulha Ocorrencias", W)
-            tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
+            tbl_hdr(hdr_p, w_p)
             fill = False
             for _, r in ag_ocorr.iterrows():
-                tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
-                         str(r.get('indicativo rádio','')), str(r.get('rádio','')),
-                         r.get('viatura','')], w_p, fill=fill)
+                tbl_row(_row_pat(r), w_p, fill=fill)
                 fill = not fill
 
         # Grupo 2 — Outras Patrulhas e Policiamento
         if not ag_outras.empty:
             pdf.ln(1)
             sec_title("Patrulhas e Policiamento", W)
-            tbl_hdr(["Horario","Militares","Servico","Indicativo","Radio","Viatura"], w_p)
+            tbl_hdr(hdr_p, w_p)
             fill = False
             for _, r in ag_outras.iterrows():
-                tbl_row([r['horário'], r['id_fmt'], r['serviço'].upper(),
-                         str(r.get('indicativo rádio','')), str(r.get('rádio','')),
-                         r.get('viatura','')], w_p, fill=fill)
+                tbl_row(_row_pat(r), w_p, fill=fill)
                 fill = not fill
 
     # ====================================================
