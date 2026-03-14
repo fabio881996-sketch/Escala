@@ -2009,8 +2009,6 @@ else:
                     # Folgas: disponíveis sempre (sem verificação de descanso)
                     mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
                     cols_folga = df_d[base_mask & mask_folga]
-                    st.caption(f"🔍 DEBUG folgas no df_d: {df_d[mask_folga][['id','serviço','horário']].to_dict('records')}")
-                    st.caption(f"🔍 DEBUG cols_folga após base_mask: {cols_folga[['id','serviço']].to_dict('records')}")
                     # Restantes: sujeitos a impedimentos e verificação de descanso
                     cols = df_d[base_mask & ~mask_folga & (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))]
                     if cols.empty and cols_folga.empty:
@@ -2026,7 +2024,6 @@ else:
                             hor_c  = str(row_c['horário'])
                             erros_destino = verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg)
                             erros_dest_only = [e for e in erros_destino if e.startswith("O militar de destino")]
-                            st.caption(f"🔍 DEBUG folga {id_c}: erros={erros_dest_only}")
                             if not erros_dest_only:
                                 opts.append(f"{id_c} - {serv_c} ({hor_c})")
                         # Restantes — com verificação de descanso
