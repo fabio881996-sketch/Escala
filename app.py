@@ -235,7 +235,7 @@ def _df_from_records(records) -> pd.DataFrame:
         df = df[df['id'] != ''].reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=0)
+@st.cache_data(ttl=30)
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
     try:
