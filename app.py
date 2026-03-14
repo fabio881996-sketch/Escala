@@ -384,7 +384,8 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
                                f"({serv_adj} {hor_adj})")
     return True, ""
 
-def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val, df_dia):
+def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_d_nome, hor_d_val, df_dia,
+                             df_anterior=None, df_seguinte=None):
     """Verifica se após a troca ambos os militares respeitam 8h de descanso.
     Usa linha de tempo absoluta em minutos (dia-1=0, dia=1440, dia+1=2880).
     Retorna lista de erros (vazia se tudo ok)."""
@@ -399,12 +400,8 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
         return _e_atendimento(s) or _e_rem(s)
 
     def get_servicos_fixos(mil_id, hor_excluir):
-        """Devolve lista de (ini_abs, fim_abs, serv, hor) para todos os serviços
-        fixos do militar (excluindo o que está a trocar), em minutos absolutos."""
         result = []
-        for delta, offset in [(-1, 0), (0, 1440), (1, 2880)]:
-            dt_adj = dt_s + timedelta(days=delta)
-            df_adj = df_dia if delta == 0 else load_data(dt_adj.strftime("%d-%m"))
+        for delta, offset, df_adj in [(-1, 0, df_anterior), (0, 1440, df_dia), (1, 2880, df_seguinte)]:
             if df_adj is None or df_adj.empty:
                 continue
             rows = df_adj[df_adj['id'].astype(str).str.strip() == str(mil_id).strip()]
@@ -1948,7 +1945,9 @@ else:
             st.info("Não existem dados para esta data.")
         else:
             df_d = df_d.copy()
-
+            # Pré-carregar dias adjacentes uma só vez para verificação de descanso
+            df_ant = load_data((dt_s - timedelta(days=1)).strftime("%d-%m"))
+            df_seg = load_data((dt_s + timedelta(days=1)).strftime("%d-%m"))
             # Aplicar trocas aprovadas a TODOS os militares no df_d (excluindo remunerados)
             # para que as listas mostrem o serviço real de cada um
             servico_override = None
@@ -2013,7 +2012,7 @@ else:
                             id_c   = str(row_c['id'])
                             serv_c = str(row_c['serviço'])
                             hor_c  = str(row_c['horário'])
-                            if not verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d):
+                            if not verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg):
                                 opts.append(f"{id_c} - {serv_c} ({hor_c})")
                         if not opts:
                             st.warning("Não há militares disponíveis para troca neste dia (restrições de descanso).")
