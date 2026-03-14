@@ -1111,10 +1111,21 @@ if "pin_bloqueado_ate" not in st.session_state:
     st.session_state["pin_bloqueado_ate"] = None
 
 def fazer_login(user_row, u_email):
+    u_id = str(user_row['id'])
+    # posto e nome podem não estar no users.json — ir buscar à Sheet
+    if 'posto' in user_row and 'nome' in user_row and str(user_row.get('posto','')).strip():
+        u_nome = f"{user_row['posto']} {user_row['nome']}"
+    else:
+        df_u = load_utilizadores()
+        row_sheet = df_u[df_u['id'].astype(str).str.strip() == u_id]
+        if not row_sheet.empty:
+            u_nome = f"{row_sheet.iloc[0]['posto']} {row_sheet.iloc[0]['nome']}"
+        else:
+            u_nome = u_email
     st.session_state.update({
         "logged_in":  True,
-        "user_id":    str(user_row['id']),
-        "user_nome":  f"{user_row['posto']} {user_row['nome']}",
+        "user_id":    u_id,
+        "user_nome":  u_nome,
         "user_email": u_email,
         "is_admin":   u_email in ADMINS,
         "pin_tentativas": 0,
