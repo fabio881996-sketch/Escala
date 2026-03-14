@@ -220,12 +220,20 @@ def get_sheet():
     return client.open_by_url(st.secrets["gsheet_url"])
 
 def _df_from_records(records) -> pd.DataFrame:
-    """Converte records para DataFrame normalizado."""
+    """Converte records para DataFrame normalizado.
+    Se a coluna 'id' tiver múltiplos IDs separados por vírgula, expande para uma linha por ID."""
     if not records:
         return pd.DataFrame()
     df = pd.DataFrame(records).astype(str)
     df.columns = [str(c).strip().lower() for c in df.columns]
-    return df.fillna("")
+    df = df.fillna("")
+    if 'id' in df.columns:
+        # Expandir linhas com múltiplos IDs (ex: "1089, 1162" → duas linhas)
+        df['id'] = df['id'].str.split(',')
+        df = df.explode('id')
+        df['id'] = df['id'].str.strip()
+        df = df[df['id'] != ''].reset_index(drop=True)
+    return df
 
 @st.cache_data(ttl=0)
 def load_data(aba_nome: str) -> pd.DataFrame:
