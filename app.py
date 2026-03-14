@@ -2024,10 +2024,9 @@ else:
                             id_c   = str(row_c['id'])
                             serv_c = str(row_c['serviço'])
                             hor_c  = str(row_c['horário'])
-                            # Só verificar descanso do destino (ele sai da folga para o meu serviço)
                             erros_destino = verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg)
-                            # Filtrar só erros do destino (ignorar erros do requerente)
                             erros_dest_only = [e for e in erros_destino if e.startswith("O militar de destino")]
+                            st.caption(f"🔍 DEBUG folga {id_c}: erros={erros_dest_only}")
                             if not erros_dest_only:
                                 opts.append(f"{id_c} - {serv_c} ({hor_c})")
                         # Restantes — com verificação de descanso
