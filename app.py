@@ -246,18 +246,6 @@ def load_data(aba_nome: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-@st.cache_resource
-def load_utilizadores() -> pd.DataFrame:
-    """Lê users.json do repositório — sem chamada à API, usado só para login."""
-    try:
-        import json, os
-        path = os.path.join(os.path.dirname(__file__), "users.json")
-        with open(path, encoding="utf-8") as f:
-            data = json.load(f)
-        return pd.DataFrame(data).astype(str)
-    except Exception:
-        return pd.DataFrame()
-
 @st.cache_data(ttl=60)
 def load_utilizadores() -> pd.DataFrame:
     """Carrega utilizadores com cache de 60s — fresco o suficiente para PIN funcionar."""
