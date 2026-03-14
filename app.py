@@ -1112,16 +1112,7 @@ if "pin_bloqueado_ate" not in st.session_state:
 
 def fazer_login(user_row, u_email):
     u_id = str(user_row['id'])
-    # posto e nome podem não estar no users.json — ir buscar à Sheet
-    if 'posto' in user_row and 'nome' in user_row and str(user_row.get('posto','')).strip():
-        u_nome = f"{user_row['posto']} {user_row['nome']}"
-    else:
-        df_u = load_utilizadores()
-        row_sheet = df_u[df_u['id'].astype(str).str.strip() == u_id]
-        if not row_sheet.empty:
-            u_nome = f"{row_sheet.iloc[0]['posto']} {row_sheet.iloc[0]['nome']}"
-        else:
-            u_nome = u_email
+    u_nome = f"{user_row['posto']} {user_row['nome']}"
     st.session_state.update({
         "logged_in":  True,
         "user_id":    u_id,
@@ -1365,7 +1356,7 @@ if not st.session_state["logged_in"]:
                                             break
                                     if linha_user:
                                         ws.update_cell(linha_user, col_pin, pin1)
-                                        load_users_json.cache_clear()
+                                        load_utilizadores.clear()
                                         st.success("✅ PIN criado! Já podes entrar com o PIN.")
                                         st.session_state["login_modo"] = "pin"
                                         st.rerun()
