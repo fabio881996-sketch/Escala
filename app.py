@@ -1154,7 +1154,7 @@ if not st.session_state["logged_in"]:
         """, unsafe_allow_html=True)
 
         dots_html = '<div style="display:flex;gap:16px;justify-content:center;margin-bottom:10px;">'
-        for i in range(6):
+        for i in range(4):
             if err:
                 style = "background:#EF4444;border:2px solid #EF4444;"
             elif i < n:
@@ -1190,10 +1190,10 @@ if not st.session_state["logged_in"]:
                             else:
                                 new = buf + val
                                 st.session_state["pin_erro"] = False
-                                if len(new) == 6:
+                                if len(new) == 4:
                                     df_u = load_utilizadores()
                                     if not df_u.empty and 'pin' in df_u.columns:
-                                        user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(6) == new.zfill(6)]
+                                        user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(4) == new.zfill(4)]
                                         if not user.empty:
                                             fazer_login(user.iloc[0], user.iloc[0]['email'])
                                         else:
@@ -1282,7 +1282,7 @@ if not st.session_state["logged_in"]:
                 u_r = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
                 p_r = st.text_input("🔒 Password", type="password", placeholder="••••••••")
                 st.markdown("---")
-                pin1 = st.text_input("📱 Novo PIN (6 dígitos)", type="password",
+                pin1 = st.text_input("📱 Novo PIN (4 dígitos)", type="password",
                                      placeholder="● ● ● ● ● ●", max_chars=6)
                 pin2 = st.text_input("📱 Confirmar PIN", type="password",
                                      placeholder="● ● ● ● ● ●", max_chars=6)
@@ -1291,8 +1291,8 @@ if not st.session_state["logged_in"]:
                 if registar:
                     if not u_r or not p_r or not pin1 or not pin2:
                         st.warning("Preenche todos os campos.")
-                    elif len(pin1) != 6 or not pin1.isdigit():
-                        st.warning("O PIN deve ter exatamente 6 dígitos numéricos.")
+                    elif len(pin1) != 4 or not pin1.isdigit():
+                        st.warning("O PIN deve ter exatamente 4 dígitos numéricos.")
                     elif pin1 != pin2:
                         st.error("❌ Os PINs não coincidem.")
                     else:
@@ -1309,7 +1309,7 @@ if not st.session_state["logged_in"]:
                             else:
                                 if 'pin' in df_u.columns:
                                     pin_existe = df_u[
-                                        (df_u['pin'].astype(str).str.strip().str.zfill(6) == pin1.zfill(6)) &
+                                        (df_u['pin'].astype(str).str.strip().str.zfill(4) == pin1.zfill(4)) &
                                         (df_u['email'].str.lower() != u_r)
                                     ]
                                     if not pin_existe.empty:
