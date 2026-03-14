@@ -1046,7 +1046,7 @@ def _render_tabela(df: pd.DataFrame, expandivel: bool = False) -> str:
     html += "</tbody></table></div>"
     return html
 
-def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False, excluir_cols: list = []):
+def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False, excluir_cols: list = [], esconder_servico: bool = False):
     """Renderiza uma secção da escala num expander."""
     if df_sec.empty:
         return
@@ -1078,6 +1078,8 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
             'giro': 'Giro',
             'observações': 'Observações',
         })
+        if esconder_servico and 'Serviço' in ag.columns:
+            ag = ag.drop(columns=['Serviço'])
         st.markdown(_render_tabela(ag), unsafe_allow_html=True)
 
 # ============================================================
@@ -1900,12 +1902,15 @@ else:
             df_remu, df_res = filtrar_secao(["remu", "grat"],                            df_res)
             df_folga,df_res = filtrar_secao(["folga"],                                   df_res)
             df_outros       = df_res
+            # Separar Patrulha Ocorrências das outras patrulhas
+            df_pat_ocorr, df_pat_outras = filtrar_secao(["ocorr"], df_pat)
 
             mostrar_secao("Comando e Administrativos", df_cmd)
-            mostrar_secao("Atendimento",               df_aten)
-            mostrar_secao("Apoio ao Atendimento",      df_apoi)
-            mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
-            mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True, excluir_cols=['giro'])
+            mostrar_secao("Atendimento",               df_aten,       esconder_servico=True)
+            mostrar_secao("Apoio ao Atendimento",      df_apoi,       esconder_servico=True)
+            mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
+            mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
+            mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
             # Remunerados: horário | militares | observações (sem rádio/indicativo)
             if not df_remu.empty:
                 with st.expander("🔹 REMUNERADOS", expanded=True):
