@@ -260,6 +260,18 @@ return _df_from_records(sh.worksheet(aba_nome).get_all_records())
 except Exception:
 return pd.DataFrame()
 
+@st.cache_resource
+def load_users_json() -> pd.DataFrame:
+“”“Lê users.json do repositório — sem chamada à API, usado só para login.”””
+try:
+import json, os
+path = os.path.join(os.path.dirname(**file**), “users.json”)
+with open(path, encoding=“utf-8”) as f:
+data = json.load(f)
+return pd.DataFrame(data).astype(str)
+except Exception:
+return pd.DataFrame()
+
 @st.cache_data(ttl=60)
 def load_utilizadores() -> pd.DataFrame:
 “”“Carrega utilizadores com cache de 60s — fresco o suficiente para PIN funcionar.”””
@@ -1195,7 +1207,7 @@ def _keypad_fragment():
                             new = buf + val
                             st.session_state["pin_erro"] = False
                             if len(new) == 4:
-                                df_u = load_utilizadores()
+                                df_u = load_users_json()
                                 if not df_u.empty and 'pin' in df_u.columns:
                                     user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(4) == new.zfill(4)]
                                     if not user.empty:
@@ -1286,7 +1298,7 @@ elif modo == "email":
                 if not u or not p:
                     st.warning("Preenche o email e a password.")
                 else:
-                    df_u = load_utilizadores()
+                    df_u = load_users_json()
                     if df_u.empty or 'email' not in df_u.columns:
                         st.error("❌ Erro ao carregar dados.")
                     else:
@@ -1338,7 +1350,7 @@ elif modo == "registar_pin":
                 elif pin1 != pin2:
                     st.error("❌ Os PINs não coincidem.")
                 else:
-                    df_u = load_utilizadores()
+                    df_u = load_users_json()
                     if df_u.empty or 'email' not in df_u.columns:
                         st.error("❌ Erro ao carregar dados.")
                     else:
@@ -1374,7 +1386,7 @@ elif modo == "registar_pin":
                                         break
                                 if linha_user:
                                     ws.update_cell(linha_user, col_pin, pin1)
-                                    load_utilizadores.clear()
+                                    load_users_json.cache_clear()
                                     st.success("✅ PIN criado! Já podes entrar com o PIN.")
                                     st.session_state["login_modo"] = "pin"
                                     st.rerun()
