@@ -229,7 +229,7 @@ def _df_from_records(records) -> pd.DataFrame:
     df = df.fillna("")
     if 'id' in df.columns:
         # Expandir linhas com múltiplos IDs (ex: "1089, 1162" → duas linhas)
-        df['id'] = df['id'].str.split(',')
+        df['id'] = df['id'].str.split(r'[,;]')
         df = df.explode('id')
         df['id'] = df['id'].str.strip()
         df = df[df['id'] != ''].reset_index(drop=True)
