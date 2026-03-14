@@ -753,6 +753,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
 
+        # Separar Ocorrências das outras patrulhas
+        mask_ocorr = ag['serviço'].str.lower().str.contains('ocorr|ocorrencia', na=False)
+        ag_ocorr   = ag[mask_ocorr].sort_values('horário')
+        ag_outras  = ag[~mask_ocorr].sort_values('horário')
+
         # Larguras sem giro (ocorrências) e com giro (patrulhas)
         w_p_base = [18, 44, 54, 24, 28, 22]
         w_p_giro = [18, 40, 48, 22, 26, 20, 16] if has_giro else w_p_base
@@ -2316,4 +2321,3 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
-            
