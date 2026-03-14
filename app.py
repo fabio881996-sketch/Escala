@@ -1014,21 +1014,8 @@ def _limpar_sem_militar(df: pd.DataFrame) -> pd.DataFrame:
     return df[df['id'].astype(str).str.strip().str.len() > 0].copy()
 
 def _cel_expandivel(val: str, limite: int = 60) -> str:
-    """Renderiza texto longo com 'ver mais' usando <details> nativo do HTML."""
-    txt = str(val)
-    if len(txt) <= limite:
-        return txt
-    resumo = txt[:limite].rstrip() + "…"
-    # Escapar aspas para não quebrar o HTML
-    txt_esc = txt.replace('"', '&quot;').replace("'", "&#39;")
-    resumo_esc = resumo.replace('"', '&quot;').replace("'", "&#39;")
-    return (
-        f"<details style='cursor:pointer'>"
-        f"<summary style='list-style:none;outline:none;color:#1E293B'>{resumo_esc}"
-        f"<span style='color:#1E3A8A;font-size:0.75rem;margin-left:4px'>ver mais</span></summary>"
-        f"<span style='color:#1E293B'>{txt_esc}</span>"
-        f"</details>"
-    )
+    """Renderiza texto diretamente sem truncar."""
+    return str(val).replace('\n', '<br>')
 
 def _render_tabela(df: pd.DataFrame) -> str:
     """Tabela HTML com wrap e células expansíveis para texto longo."""
