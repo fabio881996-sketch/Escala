@@ -1017,14 +1017,25 @@ def _cel_expandivel(val: str, limite: int = 60) -> str:
     """Renderiza texto diretamente sem truncar."""
     return str(val).replace('\n', '<br>')
 
-def _render_tabela(df: pd.DataFrame) -> str:
-    """Tabela HTML com wrap e células expansíveis para texto longo."""
+def _render_tabela(df: pd.DataFrame, expandivel: bool = False) -> str:
+    """Tabela HTML com wrap. Se expandivel=True, texto longo fica colapsado com 'ver mais'."""
+    def _cel(val, limite=60):
+        txt = str(val).replace('\n', '<br>')
+        if not expandivel or len(str(val)) <= limite:
+            return txt
+        resumo = str(val)[:limite].rstrip() + "…"
+        resumo_esc = resumo.replace('"','&quot;').replace("'","&#39;")
+        txt_esc = str(val).replace('"','&quot;').replace("'","&#39;").replace('\n','<br>')
+        return (f"<details style='cursor:pointer'>"
+                f"<summary style='list-style:none;outline:none;color:#1E293B'>{resumo_esc}"
+                f"<span style='color:#1E3A8A;font-size:0.75rem;margin-left:4px'>ver mais</span></summary>"
+                f"<span style='color:#1E293B'>{txt_esc}</span></details>")
+
     th_s = "background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;"
     td_s = "padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;"
     td_a = td_s + "background:#F8FAFC;"
     html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
     for col in df.columns:
-        # Limitar largura da coluna de observações
         extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
         html += f"<th style='{th_s}{extra}'>{str(col).capitalize()}</th>"
     html += "</tr></thead><tbody>"
@@ -1033,7 +1044,7 @@ def _render_tabela(df: pd.DataFrame) -> str:
         html += "<tr>"
         for col, val in zip(df.columns, row):
             extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
-            html += f"<td style='{td}{extra}'>{_cel_expandivel(str(val))}</td>"
+            html += f"<td style='{td}{extra}'>{_cel(str(val))}</td>"
         html += "</tr>"
     html += "</tbody></table></div>"
     return html
@@ -2285,7 +2296,7 @@ else:
                         mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
                     df_g = df_g[mask_g]
 
-                st.markdown(_render_tabela(df_g), unsafe_allow_html=True)
+                st.markdown(_render_tabela(df_g, expandivel=True), unsafe_allow_html=True)
         except Exception:
             st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
 
