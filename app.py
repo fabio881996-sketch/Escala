@@ -1030,7 +1030,7 @@ def _render_tabela(df: pd.DataFrame) -> str:
     for col in df.columns:
         # Limitar largura da coluna de observações
         extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
-        html += f"<th style='{th_s}{extra}'>{col}</th>"
+        html += f"<th style='{th_s}{extra}'>{str(col).capitalize()}</th>"
     html += "</tr></thead><tbody>"
     for i, (_, row) in enumerate(df.iterrows()):
         td = td_a if i % 2 == 0 else td_s
@@ -1049,7 +1049,7 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
     with st.expander(f"🔹 {titulo.upper()}", expanded=True):
         if mostrar_extras:
             cols_ag = ['serviço', 'horário']
-            for col in ['indicativo rádio', 'rádio', 'viatura']:
+            for col in ['indicativo rádio', 'rádio', 'viatura', 'giro']:
                 if col in df_sec.columns:
                     cols_ag.append(col)
             agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
@@ -1057,14 +1057,23 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
                 agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
             ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
             col_order = ['serviço', 'horário', 'id_disp']
-            for col in ['indicativo rádio', 'rádio', 'viatura', 'observações']:
+            for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
                 if col in ag.columns:
                     col_order.append(col)
             ag = ag[col_order]
         else:
             ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                        .apply(lambda x: ', '.join(x)).reset_index()
-        ag = ag.rename(columns={'id_disp': 'Militares'})
+        ag = ag.rename(columns={
+            'id_disp': 'Militares',
+            'serviço': 'Serviço',
+            'horário': 'Horário',
+            'indicativo rádio': 'Indicativo',
+            'rádio': 'Rádio',
+            'viatura': 'Viatura',
+            'giro': 'Giro',
+            'observações': 'Observações',
+        })
         st.markdown(_render_tabela(ag), unsafe_allow_html=True)
 
 # ============================================================
@@ -1900,20 +1909,19 @@ else:
                     ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
                                   .apply(lambda x: ', '.join(x)).reset_index()
                     col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
-                    ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares'})
+                    ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares', 'horário': 'Horário', 'serviço': 'Serviço', 'observações': 'Observações'})
                     st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
-            # Folga sem horário
             if not df_folga.empty:
                 with st.expander("🔹 FOLGA", expanded=True):
                     ag_f = df_folga.groupby('serviço', sort=False)['id_disp'] \
                                    .apply(lambda x: ', '.join(x)).reset_index()
-                    st.markdown(_render_tabela(ag_f.rename(columns={'id_disp':'Militar'})), unsafe_allow_html=True)
+                    st.markdown(_render_tabela(ag_f.rename(columns={'id_disp': 'Militares', 'serviço': 'Serviço'})), unsafe_allow_html=True)
 
             if not df_aus.empty:
                 with st.expander("🔹 AUSENTES", expanded=True):
                     ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
                                .apply(lambda x: ', '.join(x)).reset_index()
-                    st.markdown(_render_tabela(ag), unsafe_allow_html=True)
+                    st.markdown(_render_tabela(ag.rename(columns={'id_disp': 'Militares', 'serviço': 'Serviço'})), unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     elif menu == "🔄 Solicitar Troca":
