@@ -1994,20 +1994,36 @@ else:
                     meu_serv_orig = meu.iloc[0]['serviço']
                     meu_hor_orig  = meu.iloc[0]['horário']
                     estou_de_folga = 'folga' in meu_serv_orig.lower()
-                    cols = df_d[
+                    base_mask = (
                         (df_d['id'].astype(str).str.strip() != u_id) &
                         (df_d['id'].astype(str).str.strip() != '') &
                         (df_d['id'].astype(str).str.strip() != 'nan') &
-                        (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)) &
                         ~((df_d['serviço'] == meu_serv_orig) & (df_d['horário'] == meu_hor_orig)) &
                         ~(estou_de_folga & df_d['serviço'].str.lower().str.contains('folga', na=False))
-                    ]
-                    if cols.empty:
+                    )
+                    # Folgas: disponíveis sempre (sem verificação de descanso)
+                    mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
+                    cols_folga = df_d[base_mask & mask_folga]
+                    # Restantes: sujeitos a impedimentos e verificação de descanso
+                    cols = df_d[base_mask & ~mask_folga & (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))]
+                    if cols.empty and cols_folga.empty:
                         st.warning("Não há militares disponíveis para troca neste dia.")
                     else:
                         meu_serv_nome = meu_s.rsplit('(', 1)[0].strip()
                         meu_hor_val   = meu_s.rsplit('(', 1)[1].rstrip(')') if '(' in meu_s else meu.iloc[0]['horário']
                         opts = []
+                        # Folgas — verificar só o descanso do militar de folga (destino)
+                        for _, row_c in cols_folga.iterrows():
+                            id_c   = str(row_c['id'])
+                            serv_c = str(row_c['serviço'])
+                            hor_c  = str(row_c['horário'])
+                            # Só verificar descanso do destino (ele sai da folga para o meu serviço)
+                            erros_destino = verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg)
+                            # Filtrar só erros do destino (ignorar erros do requerente)
+                            erros_dest_only = [e for e in erros_destino if e.startswith("O militar de destino")]
+                            if not erros_dest_only:
+                                opts.append(f"{id_c} - {serv_c} ({hor_c})")
+                        # Restantes — com verificação de descanso
                         for _, row_c in cols.iterrows():
                             id_c   = str(row_c['id'])
                             serv_c = str(row_c['serviço'])
