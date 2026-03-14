@@ -2009,6 +2009,8 @@ else:
                     # Folgas: disponíveis sempre (sem verificação de descanso)
                     mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
                     cols_folga = df_d[base_mask & mask_folga]
+                    st.caption(f"🔍 DEBUG folgas no df_d: {df_d[mask_folga][['id','serviço','horário']].to_dict('records')}")
+                    st.caption(f"🔍 DEBUG cols_folga após base_mask: {cols_folga[['id','serviço']].to_dict('records')}")
                     # Restantes: sujeitos a impedimentos e verificação de descanso
                     cols = df_d[base_mask & ~mask_folga & (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))]
                     if cols.empty and cols_folga.empty:
