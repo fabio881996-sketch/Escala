@@ -753,40 +753,36 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
 
-        # Larguras: Horario/Militares/Servico/Indicativo/Radio/Viatura/Giro
-        w_p  = [18, 40, 48, 22, 26, 20, 16] if has_giro else [18, 44, 54, 24, 28, 22]
-        hdr_p = ["Horario","Militares","Servico","Indicativo","Radio","Viatura"]
-        if has_giro: hdr_p.append("Giro")
+        # Larguras sem giro (ocorrências) e com giro (patrulhas)
+        w_p_base = [18, 44, 54, 24, 28, 22]
+        w_p_giro = [18, 40, 48, 22, 26, 20, 16] if has_giro else w_p_base
+        hdr_base = ["Horario","Militares","Servico","Indicativo","Radio","Viatura"]
+        hdr_giro = hdr_base + (["Giro"] if has_giro else [])
 
-        # Separar Ocorrências das outras patrulhas
-        mask_ocorr = ag['serviço'].str.lower().str.contains('ocorr|ocorrencia', na=False)
-        ag_ocorr   = ag[mask_ocorr].sort_values('horário')
-        ag_outras  = ag[~mask_ocorr].sort_values('horário')
-
-        def _row_pat(r):
+        def _row_pat(r, com_giro=False):
             vals = [r['horário'], r['id_fmt'], r['serviço'].upper(),
                     str(r.get('indicativo rádio','')), str(r.get('rádio','')),
                     r.get('viatura','')]
-            if has_giro: vals.append(str(r.get('giro','')))
+            if com_giro: vals.append(str(r.get('giro','')))
             return vals
 
-        # Grupo 1 — Patrulha Ocorrências
+        # Grupo 1 — Patrulha Ocorrências (sem giro)
         if not ag_ocorr.empty:
             sec_title("Patrulha Ocorrencias", W)
-            tbl_hdr(hdr_p, w_p)
+            tbl_hdr(hdr_base, w_p_base)
             fill = False
             for _, r in ag_ocorr.iterrows():
-                tbl_row(_row_pat(r), w_p, fill=fill)
+                tbl_row(_row_pat(r, com_giro=False), w_p_base, fill=fill)
                 fill = not fill
 
-        # Grupo 2 — Outras Patrulhas e Policiamento
+        # Grupo 2 — Outras Patrulhas e Policiamento (com giro)
         if not ag_outras.empty:
             pdf.ln(1)
             sec_title("Patrulhas e Policiamento", W)
-            tbl_hdr(hdr_p, w_p)
+            tbl_hdr(hdr_giro, w_p_giro)
             fill = False
             for _, r in ag_outras.iterrows():
-                tbl_row(_row_pat(r), w_p, fill=fill)
+                tbl_row(_row_pat(r, com_giro=has_giro), w_p_giro, fill=fill)
                 fill = not fill
 
     # ====================================================
@@ -1050,7 +1046,7 @@ def _render_tabela(df: pd.DataFrame) -> str:
     html += "</tbody></table></div>"
     return html
 
-def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False):
+def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False, excluir_cols: list = []):
     """Renderiza uma secção da escala num expander."""
     if df_sec.empty:
         return
@@ -1058,7 +1054,7 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         if mostrar_extras:
             cols_ag = ['serviço', 'horário']
             for col in ['indicativo rádio', 'rádio', 'viatura', 'giro']:
-                if col in df_sec.columns:
+                if col in df_sec.columns and col not in excluir_cols:
                     cols_ag.append(col)
             agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
             if 'observações' in df_sec.columns:
@@ -1066,7 +1062,7 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
             ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
             col_order = ['serviço', 'horário', 'id_disp']
             for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
-                if col in ag.columns:
+                if col in ag.columns and col not in excluir_cols:
                     col_order.append(col)
             ag = ag[col_order]
         else:
@@ -1909,7 +1905,7 @@ else:
             mostrar_secao("Atendimento",               df_aten)
             mostrar_secao("Apoio ao Atendimento",      df_apoi)
             mostrar_secao("Patrulhas",                 df_pat,    mostrar_extras=True)
-            mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True)
+            mostrar_secao("Outros Serviços",           df_outros, mostrar_extras=True, excluir_cols=['giro'])
             # Remunerados: horário | militares | observações (sem rádio/indicativo)
             if not df_remu.empty:
                 with st.expander("🔹 REMUNERADOS", expanded=True):
@@ -2320,3 +2316,4 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
