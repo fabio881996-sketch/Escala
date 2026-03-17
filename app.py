@@ -1632,7 +1632,6 @@ else:
                     # Fundo mais quente ao fim de semana
                     if is_fds and bg == "#EFF6FF":
                         bg = "#FFFBEB"
-                    obs_html = ""
                     rems = info.get('remunerados', [])
                     rem_html = "".join([f"<div style='font-size:0.75rem;color:#065F46;margin-top:2px'>{r}</div>" for r in rems]) if rems else ""
                     st.markdown(f"""
@@ -1643,8 +1642,7 @@ else:
                         </div>
                         <div>
                             <div style='font-size:0.9rem;font-weight:700;color:{cor_txt}'>{icone} {info['serviço']}{hoje_badge}</div>
-                            <div style='font-size:0.8rem;color:#475569'>🕒 {info['horário']}{obs_html}</div>
-                            {rem_html}
+                            <div style='font-size:0.8rem;color:#475569'>🕒 {info['horário']}</div>{rem_html}
                         </div>
                     </div>""", unsafe_allow_html=True)
                 elif is_hoje:
