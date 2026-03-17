@@ -1875,11 +1875,11 @@ else:
                                     # Substituir IDs tendo em conta matar remunerado aprovado
                                     serv_rr = str(rr['serviço']).strip().lower()
                                     hor_rr  = str(rr['horário']).strip()
-                                    colegas_rem = df_d[
-                                        (df_d['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
-                                        (df_d['horário'].astype(str).str.strip() == hor_rr) &
-                                        (df_d['id'].astype(str).str.strip() != '') &
-                                        (df_d['id'].astype(str).str.strip() != 'nan')
+                                    colegas_rem = df_rem_dia[
+                                        (df_rem_dia['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
+                                        (df_rem_dia['horário'].astype(str).str.strip() == hor_rr) &
+                                        (df_rem_dia['id'].astype(str).str.strip() != '') &
+                                        (df_rem_dia['id'].astype(str).str.strip() != 'nan')
                                     ]
                                     # Construir lista real de quem vai fazer o remunerado
                                     ids_reais = []
