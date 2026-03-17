@@ -1736,6 +1736,7 @@ else:
                             (df_d['id'].astype(str).str.strip() != '') &
                             (df_d['id'].astype(str).str.strip() != 'nan')
                         ]['id'].astype(str).str.strip().tolist()
+                        st.caption(f"🔍 TROCA serv_novo={repr(serv_novo_nome)} hor_novo={repr(hor_novo)} colegas_orig={colegas_orig_t} trocas_dia={df_trocas[(df_trocas['data']==d_s)&(df_trocas['status']=='Aprovada')][['id_origem','id_destino','servico_origem','servico_destino']].to_dict('records') if not df_trocas.empty else []}")
 
                         ids_finais_t = set()
                         for c_id in colegas_orig_t:
