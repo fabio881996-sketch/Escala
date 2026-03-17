@@ -1632,7 +1632,7 @@ else:
                     # Fundo mais quente ao fim de semana
                     if is_fds and bg == "#EFF6FF":
                         bg = "#FFFBEB"
-                    obs_html = f"<span style='color:#64748B;font-size:0.75rem'> · 📝 {info['obs']}</span>" if info['obs'] else ""
+                    obs_html = ""
                     rem_html = "".join([f"<div style='font-size:0.75rem;color:#065F46;margin-top:2px'>{r}</div>" for r in info.get('remunerados', [])])
                     st.markdown(f"""
                     <div style='background:{bg};border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
