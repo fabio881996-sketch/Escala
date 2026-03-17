@@ -1875,8 +1875,10 @@ else:
                                     # Substituir IDs tendo em conta matar remunerado aprovado
                                     serv_rr = str(rr['serviço']).strip().lower()
                                     hor_rr  = str(rr['horário']).strip()
+                                    obs_rr  = str(rr.get('observações','')).strip().lower()
                                     colegas_rem = df_rem_dia[
                                         (df_rem_dia['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
+                                        (df_rem_dia['horário'].astype(str).str.strip() == hor_rr) &
                                         (df_rem_dia['id'].astype(str).str.strip() != '') &
                                         (df_rem_dia['id'].astype(str).str.strip() != 'nan')
                                     ]
