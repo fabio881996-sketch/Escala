@@ -1725,11 +1725,38 @@ else:
                     except Exception:
                         obs_novo = ''
                     obs_html_t = f'<p>📝 {obs_novo}</p>' if obs_novo else ''
+                    # Colegas no mesmo serviço trocado
+                    colegas_troca_html = ''
+                    if not df_d.empty and row_novo is not None:
+                        colegas_t = df_d[
+                            (df_d['serviço'].astype(str).str.strip().str.lower() == serv_novo_nome.lower()) &
+                            (df_d['horário'].astype(str).str.strip() == hor_novo.strip()) &
+                            (df_d['id'].astype(str).str.strip() != u_id) &
+                            (df_d['id'].astype(str).str.strip() != '') &
+                            (df_d['id'].astype(str).str.strip() != 'nan')
+                        ]
+                        if not colegas_t.empty:
+                            partes = []
+                            for _, c in colegas_t.iterrows():
+                                c_id = str(c['id']).strip()
+                                if 'id' in df_util.columns:
+                                    c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                else:
+                                    c_row = pd.DataFrame()
+                                if not c_row.empty:
+                                    c_posto = c_row.iloc[0].get('posto','')
+                                    c_nomes = c_row.iloc[0].get('nome','').strip().split()
+                                    c_nome_curto = f"{c_nomes[0]} {c_nomes[-1]}" if len(c_nomes) > 1 else ' '.join(c_nomes)
+                                    partes.append(f"{c_id} {c_posto} {c_nome_curto}")
+                                else:
+                                    partes.append(c_id)
+                            colegas_troca_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
                     st.markdown(
                         f'<div class="card-servico card-troca">'
                         f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
                         f'<h3>🔄 {serv_novo_nome}</h3>'
                         f'<p>🕒 {hor_novo}</p>'
+                        f'{colegas_troca_html}'
                         f'<p style="font-size:0.78rem;color:#92400E">👤 c/ {com_nome}</p>'
                         f'{obs_html_t}'
                         f'</div>',
