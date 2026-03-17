@@ -1712,7 +1712,10 @@ else:
                                     partes = []
                                     for _, c in colegas.iterrows():
                                         c_id = str(c['id']).strip()
-                                        c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                        if 'id' in df_util.columns:
+                                            c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                        else:
+                                            c_row = pd.DataFrame()
                                         if not c_row.empty:
                                             c_posto = c_row.iloc[0].get('posto','')
                                             c_nome_completo = c_row.iloc[0].get('nome','')
@@ -1758,7 +1761,10 @@ else:
                                         partes = []
                                         for _, c in colegas_rem.iterrows():
                                             c_id = str(c['id']).strip()
-                                            c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                            if 'id' in df_util.columns:
+                                                c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                            else:
+                                                c_row = pd.DataFrame()
                                             if not c_row.empty:
                                                 c_posto = c_row.iloc[0].get('posto','')
                                                 c_nome_completo = c_row.iloc[0].get('nome','')
