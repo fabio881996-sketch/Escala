@@ -1801,8 +1801,30 @@ else:
                                     partes = []
                                     for _, c in colegas.iterrows():
                                         c_id = str(c['id']).strip()
+                                        # Verificar se este colega trocou o serviço
+                                        id_real = c_id
+                                        if not df_trocas.empty:
+                                            tr_c = df_trocas[
+                                                (df_trocas['data'] == d_s) &
+                                                (df_trocas['status'] == 'Aprovada') &
+                                                (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+                                                (df_trocas['id_origem'].astype(str) == c_id)
+                                            ]
+                                            if not tr_c.empty:
+                                                id_real = str(tr_c.iloc[0]['id_destino'])
+                                            else:
+                                                tr_c2 = df_trocas[
+                                                    (df_trocas['data'] == d_s) &
+                                                    (df_trocas['status'] == 'Aprovada') &
+                                                    (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+                                                    (df_trocas['id_destino'].astype(str) == c_id)
+                                                ]
+                                                if not tr_c2.empty:
+                                                    id_real = str(tr_c2.iloc[0]['id_origem'])
+                                        if id_real == u_id:
+                                            continue
                                         if 'id' in df_util.columns:
-                                            c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                            c_row = df_util[df_util['id'].astype(str).str.strip() == id_real]
                                         else:
                                             c_row = pd.DataFrame()
                                         if not c_row.empty:
@@ -1810,10 +1832,11 @@ else:
                                             c_nome_completo = c_row.iloc[0].get('nome','')
                                             c_nomes = c_nome_completo.strip().split()
                                             c_nome_curto = f"{c_nomes[0]} {c_nomes[-1]}" if len(c_nomes) > 1 else c_nome_completo
-                                            partes.append(f"{c_id} {c_posto} {c_nome_curto}")
+                                            partes.append(f"{id_real} {c_posto} {c_nome_curto}")
                                         else:
-                                            partes.append(c_id)
-                                    colegas_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
+                                            partes.append(id_real)
+                                    if partes:
+                                        colegas_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
 
                             st.markdown(
                                 f'<div class="card-servico {card_class}">'
@@ -1882,6 +1905,14 @@ else:
                                         (df_rem_dia['id'].astype(str).str.strip() != '') &
                                         (df_rem_dia['id'].astype(str).str.strip() != 'nan')
                                     ]
+                                    # Se não encontrou, tentar sem horário (fallback)
+                                    if colegas_rem.empty:
+                                        colegas_rem = df_rem_dia[
+                                            (df_rem_dia['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
+                                            (df_rem_dia['observações'].astype(str).str.strip().str.lower() == obs_rr) &
+                                            (df_rem_dia['id'].astype(str).str.strip() != '') &
+                                            (df_rem_dia['id'].astype(str).str.strip() != 'nan')
+                                        ] if 'observações' in df_rem_dia.columns and obs_rr else colegas_rem
                                     # Construir lista real de quem vai fazer o remunerado
                                     ids_reais = []
                                     for _, c in colegas_rem.iterrows():
