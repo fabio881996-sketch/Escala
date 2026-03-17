@@ -1720,6 +1720,11 @@ else:
                         if mask_novo.any():
                             row_novo = df_d[mask_novo].iloc[0]
                     com_nome = get_nome_militar(df_util, com)
+                    try:
+                        obs_novo = str(row_novo.get('observações','') or '').strip() if row_novo is not None else ''
+                    except Exception:
+                        obs_novo = ''
+                    obs_html_t = f'<p>📝 {obs_novo}</p>' if obs_novo else ''
                     st.markdown(
                         f'<div class="card-servico card-troca">'
                         f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
