@@ -2348,13 +2348,8 @@ else:
                                 if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
                                     id_d  = alvo.split(" - ")[0]
                                     s_d   = alvo.split(" - ", 1)[1]
-                                    email_row = df_util[df_util['id'].astype(str) == id_d]
-                                    if email_row.empty:
-                                        st.error("Militar de destino não encontrado.")
-                                    else:
-                                        em_d = email_row['email'].values[0]
-                                        if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", em_d]):
-                                            st.success("✅ Pedido enviado com sucesso!")
+                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", ""]):
+                                        st.success("✅ Pedido enviado com sucesso!")
 
             # ── Troca a 3 ──
             elif tipo_troca == "🔁 Troca a 3":
@@ -2392,19 +2387,14 @@ else:
                         - **{sel1}** `{serv1}` → vai para o teu serviço
                         - **{sel2}** `{serv2}` → vai para o serviço do 1º
                         """)
-                        email1_rows = df_util[df_util['id'].astype(str) == id1]
-                        email2_rows = df_util[df_util['id'].astype(str) == id2]
                         if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
-                            if email1_rows.empty or email2_rows.empty:
-                                st.error("Não foi possível encontrar o email de um dos militares.")
-                            else:
-                                data_str = dt_s.strftime('%d/%m/%Y')
-                                meu_serv_t3_completo = servico_override if servico_override else f"{meu_serv_t3} ({meu_hor_t3})"
-                                linha1 = [data_str, u_id, meu_serv_t3_completo, id1, f"{serv1} ({hor1})", "Pendente_Militar", email1_rows.iloc[0]['email'], "", ""]
-                                linha2 = [data_str, id1, f"{serv1} ({hor1})", id2, f"{serv2} ({hor2})", "Pendente_Militar", email2_rows.iloc[0]['email'], "", ""]
-                                salvar_troca_gsheet(linha1)
-                                salvar_troca_gsheet(linha2)
-                                st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
+                            data_str = dt_s.strftime('%d/%m/%Y')
+                            meu_serv_t3_completo = servico_override if servico_override else f"{meu_serv_t3} ({meu_hor_t3})"
+                            linha1 = [data_str, u_id, meu_serv_t3_completo, id1, f"{serv1} ({hor1})", "Pendente_Militar", "", "", ""]
+                            linha2 = [data_str, id1, f"{serv1} ({hor1})", id2, f"{serv2} ({hor2})", "Pendente_Militar", "", "", ""]
+                            salvar_troca_gsheet(linha1)
+                            salvar_troca_gsheet(linha2)
+                            st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
 
             # ── Matar Remunerado ──
             elif tipo_troca == "❌ Matar Remunerado":
@@ -2443,14 +2433,8 @@ else:
                             if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
                                 id_d = rem_sel.split(" - ")[0]
                                 s_d  = rem_sel.split(" - ", 1)[1]
-                                email_row = df_util[df_util['id'].astype(str) == id_d]
-                                if email_row.empty:
-                                    st.error("Militar não encontrado.")
-                                else:
-                                    em_d = email_row['email'].values[0]
-                                    # Guardar como matar remunerado — servico_origem é "MATAR" para distinguir
-                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, "MATAR_REMUNERADO", id_d, s_d, "Pendente_Militar", em_d]):
-                                        st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
+                                if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, "MATAR_REMUNERADO", id_d, s_d, "Pendente_Militar", ""]):
+                                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
 
     # --- 📥 PEDIDOS RECEBIDOS ---
     elif menu == "📥 Pedidos Recebidos":
