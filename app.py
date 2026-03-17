@@ -1860,41 +1860,58 @@ else:
                             colegas_html = ''
                             _excluir_cols = ['ferias','licen','doente','folga','pronto','secretaria','inquer','dilig','tribunal']
                             if not any(x in s_norm for x in _excluir_cols):
-                                colegas = df_d[
-                                    (df_d['serviço'].astype(str).str.strip().str.lower() == str(row['serviço']).strip().lower()) &
-                                    (df_d['horário'].astype(str).str.strip() == str(row['horário']).strip()) &
+                                serv_meu = str(row['serviço']).strip().lower()
+                                hor_meu  = str(row['horário']).strip()
+                                # IDs originalmente escalados no mesmo serviço/horário (excluindo eu)
+                                colegas_orig = df_d[
+                                    (df_d['serviço'].astype(str).str.strip().str.lower() == serv_meu) &
+                                    (df_d['horário'].astype(str).str.strip() == hor_meu) &
                                     (df_d['id'].astype(str).str.strip() != u_id) &
                                     (df_d['id'].astype(str).str.strip() != '') &
                                     (df_d['id'].astype(str).str.strip() != 'nan')
-                                ]
-                                if not colegas.empty:
+                                ]['id'].astype(str).str.strip().tolist()
+
+                                ids_finais = set()
+                                for c_id in colegas_orig:
+                                    if not df_trocas.empty:
+                                        # Este colega saiu deste serviço?
+                                        saiu = df_trocas[
+                                            (df_trocas['data'] == d_s) &
+                                            (df_trocas['status'] == 'Aprovada') &
+                                            (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+                                            ((df_trocas['id_origem'].astype(str) == c_id) |
+                                             (df_trocas['id_destino'].astype(str) == c_id))
+                                        ]
+                                        if not saiu.empty:
+                                            continue  # trocou, não vai fazer este serviço
+                                    ids_finais.add(c_id)
+
+                                # Adicionar quem trocou PARA este serviço
+                                if not df_trocas.empty:
+                                    tr_para = df_trocas[
+                                        (df_trocas['data'] == d_s) &
+                                        (df_trocas['status'] == 'Aprovada') &
+                                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+                                    ]
+                                    for _, t in tr_para.iterrows():
+                                        # id_destino fica com servico_origem
+                                        so = t['servico_origem'].rsplit('(', 1)[0].strip().lower()
+                                        ho = t['servico_origem'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_origem'] else ''
+                                        if so == serv_meu and ho.strip() == hor_meu:
+                                            novo = str(t['id_destino'])
+                                            if novo != u_id: ids_finais.add(novo)
+                                        # id_origem fica com servico_destino
+                                        sd = t['servico_destino'].rsplit('(', 1)[0].strip().lower()
+                                        hd = t['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_destino'] else ''
+                                        if sd == serv_meu and hd.strip() == hor_meu:
+                                            novo = str(t['id_origem'])
+                                            if novo != u_id: ids_finais.add(novo)
+
+                                if ids_finais:
                                     partes = []
-                                    for _, c in colegas.iterrows():
-                                        c_id = str(c['id']).strip()
-                                        # Verificar se este colega trocou o serviço
-                                        id_real = c_id
-                                        if not df_trocas.empty:
-                                            tr_c = df_trocas[
-                                                (df_trocas['data'] == d_s) &
-                                                (df_trocas['status'] == 'Aprovada') &
-                                                (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
-                                                (df_trocas['id_origem'].astype(str) == c_id)
-                                            ]
-                                            if not tr_c.empty:
-                                                id_real = str(tr_c.iloc[0]['id_destino'])
-                                            else:
-                                                tr_c2 = df_trocas[
-                                                    (df_trocas['data'] == d_s) &
-                                                    (df_trocas['status'] == 'Aprovada') &
-                                                    (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
-                                                    (df_trocas['id_destino'].astype(str) == c_id)
-                                                ]
-                                                if not tr_c2.empty:
-                                                    id_real = str(tr_c2.iloc[0]['id_origem'])
-                                        if id_real == u_id:
-                                            continue
+                                    for c_id in ids_finais:
                                         if 'id' in df_util.columns:
-                                            c_row = df_util[df_util['id'].astype(str).str.strip() == id_real]
+                                            c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
                                         else:
                                             c_row = pd.DataFrame()
                                         if not c_row.empty:
@@ -1902,9 +1919,9 @@ else:
                                             c_nome_completo = c_row.iloc[0].get('nome','')
                                             c_nomes = c_nome_completo.strip().split()
                                             c_nome_curto = f"{c_nomes[0]} {c_nomes[-1]}" if len(c_nomes) > 1 else c_nome_completo
-                                            partes.append(f"{id_real} {c_posto} {c_nome_curto}")
+                                            partes.append(f"{c_id} {c_posto} {c_nome_curto}")
                                         else:
-                                            partes.append(id_real)
+                                            partes.append(c_id)
                                     if partes:
                                         colegas_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
 
