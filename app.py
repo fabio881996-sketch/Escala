@@ -1569,8 +1569,24 @@ else:
                         import unicodedata as _udc
                         def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
                         rem_cal = rem_cal[rem_cal['serviço'].apply(_nc).str.contains('remu|grat', na=False)]
-                        # Também remunerados obtidos via matar remunerado
                         if not df_trocas.empty:
+                            # Excluir remunerados cedidos
+                            cedidos_cal = df_trocas[
+                                (df_trocas['data'] == dt_cal.strftime('%d/%m/%Y')) &
+                                (df_trocas['status'] == 'Aprovada') &
+                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                (df_trocas['id_destino'].astype(str) == u_id)
+                            ]
+                            for _, cd in cedidos_cal.iterrows():
+                                serv_cd = cd['servico_destino'].rsplit('(', 1)[0].strip()
+                                hor_cd  = cd['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in cd['servico_destino'] else ''
+                                rem_cal = rem_cal[
+                                    ~(
+                                        (rem_cal['serviço'].astype(str).str.strip().str.lower() == serv_cd.lower()) &
+                                        (rem_cal['horário'].astype(str).str.strip() == hor_cd.strip())
+                                    )
+                                ]
+                            # Adicionar remunerados obtidos via matar remunerado
                             matar_cal = df_trocas[
                                 (df_trocas['data'] == dt_cal.strftime('%d/%m/%Y')) &
                                 (df_trocas['status'] == 'Aprovada') &
