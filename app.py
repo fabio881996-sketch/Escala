@@ -1770,6 +1770,23 @@ else:
                                 # Remunerados escalados diretamente
                                 rem_mil = df_rem_dia[df_rem_dia['id'].astype(str) == u_id]
                                 rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
+                                # Excluir remunerados que foram cedidos (matar remunerado aprovado onde sou o cedente)
+                                if not df_trocas.empty:
+                                    cedidos = df_trocas[
+                                        (df_trocas['data'] == d_s) &
+                                        (df_trocas['status'] == 'Aprovada') &
+                                        (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                        (df_trocas['id_destino'].astype(str) == u_id)
+                                    ]
+                                    for _, cd in cedidos.iterrows():
+                                        serv_cd = cd['servico_destino'].rsplit('(', 1)[0].strip()
+                                        hor_cd  = cd['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in cd['servico_destino'] else ''
+                                        rem_mil = rem_mil[
+                                            ~(
+                                                (rem_mil['serviço'].astype(str).str.strip().str.lower() == serv_cd.lower()) &
+                                                (rem_mil['horário'].astype(str).str.strip() == hor_cd.strip())
+                                            )
+                                        ]
                                 # Remunerados obtidos via matar remunerado aprovado
                                 if not df_trocas.empty:
                                     matar_apr = df_trocas[
