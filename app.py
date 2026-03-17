@@ -1920,12 +1920,27 @@ else:
                                             else:
                                                 partes.append(c_id)
                                         colegas_rem_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
+                                    # Verificar se foi obtido via matar remunerado
+                                    matar_html = ''
+                                    if not df_trocas.empty:
+                                        serv_rr_full = f"{str(rr['serviço']).strip()} ({str(rr['horário']).strip()})"
+                                        mt_este = df_trocas[
+                                            (df_trocas['data'] == d_s) &
+                                            (df_trocas['status'] == 'Aprovada') &
+                                            (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                            (df_trocas['id_origem'].astype(str) == u_id) &
+                                            (df_trocas['servico_destino'].str.lower().str.contains(str(rr['serviço']).strip().lower()[:10], na=False))
+                                        ]
+                                        if not mt_este.empty:
+                                            cedente_nome = get_nome_militar(df_util, mt_este.iloc[0]['id_destino'])
+                                            matar_html = f'<p style="font-size:0.78rem;color:#059669">💶 c/ {cedente_nome}</p>'
                                     st.markdown(
                                         f'<div class="card-servico card-rem">'
                                         f'<p><b>💶 REMUNERADO</b></p>'
                                         f'<h3>💰 {rr["serviço"]}</h3>'
                                         f'<p>🕒 {rr["horário"]}</p>'
                                         f'{colegas_rem_html}'
+                                        f'{matar_html}'
                                         f'{obs_r_html}'
                                         f'</div>',
                                         unsafe_allow_html=True
