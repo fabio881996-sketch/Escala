@@ -1694,11 +1694,38 @@ else:
                                 card_class, icone_s = 'card-tribunal', '⚖️'
                             else:
                                 card_class, icone_s = 'card-meu', '🛡️'
+
+                            # Colegas no mesmo serviço e horário (excluindo ausências e ADM)
+                            colegas_html = ''
+                            _excluir_cols = ['ferias','licen','doente','folga','pronto','secretaria','inquer','dilig','tribunal']
+                            if not any(x in s_norm for x in _excluir_cols):
+                                colegas = df_d[
+                                    (df_d['serviço'] == row['serviço']) &
+                                    (df_d['horário'] == row['horário']) &
+                                    (df_d['id'].astype(str) != u_id) &
+                                    (df_d['id'].astype(str).str.strip() != '')
+                                ]
+                                if not colegas.empty:
+                                    partes = []
+                                    for _, c in colegas.iterrows():
+                                        c_id = str(c['id']).strip()
+                                        c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
+                                        if not c_row.empty:
+                                            c_posto = c_row.iloc[0].get('posto','')
+                                            c_nome_completo = c_row.iloc[0].get('nome','')
+                                            c_nomes = c_nome_completo.strip().split()
+                                            c_nome_curto = f"{c_nomes[0]} {c_nomes[-1]}" if len(c_nomes) > 1 else c_nome_completo
+                                            partes.append(f"{c_id} {c_posto} {c_nome_curto}")
+                                        else:
+                                            partes.append(c_id)
+                                    colegas_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
+
                             st.markdown(
                                 f'<div class="card-servico {card_class}">'
                                 f'<p><b>{lbl}</b></p>'
                                 f'<h3>{icone_s} {row["serviço"]}</h3>'
                                 f'<p>🕒 {row["horário"]}</p>'
+                                f'{colegas_html}'
                                 f'{obs_html}'
                                 f'</div>',
                                 unsafe_allow_html=True
@@ -2120,34 +2147,49 @@ else:
 
             # ── Matar Remunerado ──
             elif tipo_troca == "❌ Matar Remunerado":
-                # Procurar militares que TÊM remunerado nesse dia (exceto o próprio)
                 rem_dia = df_d[
-                    (df_d['id'].astype(str) != u_id) &
-                    (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False)) &
-                    (df_d['id'].astype(str).str.strip().str.len() > 0)
+                    (df_d['id'].astype(str).str.strip() != u_id) &
+                    (df_d['id'].astype(str).str.strip() != '') &
+                    (df_d['id'].astype(str).str.strip() != 'nan') &
+                    (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))
                 ]
                 if rem_dia.empty:
                     st.info("Não há serviços remunerados escalados neste dia.")
                 else:
-                    opts_rem = rem_dia.apply(lambda x: f"{x['id']} - {x['serviço']} ({x['horário']})", axis=1).tolist()
-                    with st.form("matar_rem"):
-                        st.info("Seleciona o remunerado que queres fazer.")
-                        rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
-                            id_d = rem_sel.split(" - ")[0]
-                            s_d  = rem_sel.split(" - ", 1)[1]
-                            email_row = df_util[df_util['id'].astype(str) == id_d]
-                            if email_row.empty:
-                                st.error("Militar não encontrado.")
-                            else:
-                                em_d = email_row['email'].values[0]
-                                # Troca normal — pedido vai para o militar que tem o remunerado
-                                meu_serv = meu.iloc[0]['serviço'] if not meu.empty else "Folga"
-                                meu_hor  = meu.iloc[0]['horário'] if not meu.empty else ""
-                                meu_s_rem = f"{meu_serv} ({meu_hor})"
-                                if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s_rem, id_d, s_d, "Pendente_Militar", em_d]):
-                                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
+                    # Verificar sobreposição de horário com o meu serviço
+                    meu_ini, meu_fim = (None, None)
+                    if not meu.empty and meu.iloc[0]['horário']:
+                        meu_ini, meu_fim = _parse_horario(meu.iloc[0]['horário'])
+
+                    opts_rem = []
+                    for _, r in rem_dia.iterrows():
+                        hor_rem = str(r['horário']).strip()
+                        if meu_ini is not None and hor_rem:
+                            ini_r, fim_r = _parse_horario(hor_rem)
+                            if ini_r is not None:
+                                # Sobreposição: os dois intervalos intersectam
+                                if not (fim_r <= meu_ini or ini_r >= meu_fim):
+                                    continue  # sobreposição, excluir
+                        opts_rem.append(f"{r['id']} - {r['serviço']} ({hor_rem})")
+
+                    if not opts_rem:
+                        st.warning("Não há remunerados disponíveis sem sobreposição de horário.")
+                    else:
+                        with st.form("matar_rem"):
+                            st.info("Seleciona o remunerado que queres fazer.")
+                            rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
+                                id_d = rem_sel.split(" - ")[0]
+                                s_d  = rem_sel.split(" - ", 1)[1]
+                                email_row = df_util[df_util['id'].astype(str) == id_d]
+                                if email_row.empty:
+                                    st.error("Militar não encontrado.")
+                                else:
+                                    em_d = email_row['email'].values[0]
+                                    # Guardar como matar remunerado — servico_origem é "MATAR" para distinguir
+                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, "MATAR_REMUNERADO", id_d, s_d, "Pendente_Militar", em_d]):
+                                        st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
 
     # --- 📥 PEDIDOS RECEBIDOS ---
     elif menu == "📥 Pedidos Recebidos":
@@ -2165,18 +2207,31 @@ else:
                 st.markdown(f"**{len(m)} pedido(s) aguardam a tua resposta:**")
                 for idx, r in m.iterrows():
                     nome_orig = get_nome_militar(df_util, r['id_origem'])
-                    st.markdown(
-                        f'<div class="card-servico card-troca">'
-                        f'<p><b>📅 {r["data"]}</b></p>'
-                        f'<p>👤 <b>{nome_orig}</b> quer trocar contigo</p>'
-                        f'<p>🟢 Recebes: <b>{r["servico_origem"]}</b></p>'
-                        f'<p>🔴 Dás: <b>{r["servico_destino"]}</b></p>'
-                        f'</div>',
-                        unsafe_allow_html=True
-                    )
+                    is_matar = str(r['servico_origem']) == 'MATAR_REMUNERADO'
+                    if is_matar:
+                        st.markdown(
+                            f'<div class="card-servico card-troca">'
+                            f'<p><b>📅 {r["data"]}</b></p>'
+                            f'<p>👤 <b>{nome_orig}</b> quer fazer o teu remunerado</p>'
+                            f'<p>🔴 O teu remunerado: <b>{r["servico_destino"]}</b></p>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        st.markdown(
+                            f'<div class="card-servico card-troca">'
+                            f'<p><b>📅 {r["data"]}</b></p>'
+                            f'<p>👤 <b>{nome_orig}</b> quer trocar contigo</p>'
+                            f'<p>🟢 Recebes: <b>{r["servico_origem"]}</b></p>'
+                            f'<p>🔴 Dás: <b>{r["servico_destino"]}</b></p>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
                     c1, c2 = st.columns(2)
                     if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
-                        atualizar_status_gsheet(idx, "Pendente_Admin")
+                        # Matar remunerado: aprovação direta sem validação admin
+                        novo_status = "Aprovada" if is_matar else "Pendente_Admin"
+                        atualizar_status_gsheet(idx, novo_status)
                         st.rerun()
                     if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
                         atualizar_status_gsheet(idx, "Recusada")
@@ -2189,7 +2244,10 @@ else:
             st.info("Sem dados.")
         else:
             # ── Aguardam aceitação do militar ──
-            pnd_mil = df_trocas[df_trocas['status'] == 'Pendente_Militar']
+            pnd_mil = df_trocas[
+                (df_trocas['status'] == 'Pendente_Militar') &
+                (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+            ]
             if not pnd_mil.empty:
                 st.markdown(f"#### 🕐 Aguardam aceitação do militar ({len(pnd_mil)})")
                 for idx, r in pnd_mil.sort_values('data').iterrows():
