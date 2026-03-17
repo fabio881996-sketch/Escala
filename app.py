@@ -1947,7 +1947,7 @@ else:
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
-                # Aplicar matar remunerado — substituir titular do remunerado
+                # Aplicar matar remunerado — mesmo formato que trocas normais
                 matar_apr = df_trocas[
                     (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada') &
@@ -1956,11 +1956,13 @@ else:
                 for _, mt in matar_apr.iterrows():
                     serv_r = mt['servico_destino'].rsplit('(', 1)[0].strip()
                     hor_r  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
-                    m_rem = (
+                    mask_linha = (
                         df_at['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()
                     ) & (df_at['horário'].astype(str).str.strip() == hor_r.strip())
-                    if m_rem.any():
-                        df_at.loc[m_rem, 'id_disp'] = f"{mt['id_origem']} 💶 {mt['id_destino']}"
+                    # Linha do cedente — substitui pelo novo titular
+                    m_cedente = mask_linha & (df_at['id'].astype(str) == str(mt['id_destino']))
+                    if m_cedente.any():
+                        df_at.loc[m_cedente, 'id_disp'] = f"{mt['id_origem']} 🔄 {mt['id_destino']}"
 
             pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
             col_pdf, col_full, _ = st.columns([1, 1.5, 3])
