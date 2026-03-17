@@ -1874,7 +1874,6 @@ else:
                                 for c_id in colegas_orig:
                                     saiu = False
                                     if not df_trocas.empty:
-                                        # Saiu como origem — o seu serviço original é este?
                                         tr_o = df_trocas[
                                             (df_trocas['data'] == d_s) &
                                             (df_trocas['status'] == 'Aprovada') &
@@ -1882,11 +1881,6 @@ else:
                                             (df_trocas['id_origem'].astype(str) == c_id) &
                                             (df_trocas['servico_origem'].str.lower().str.contains(serv_meu[:8], na=False))
                                         ]
-                                        if not tr_o.empty:
-                                            saiu = True
-                                            novo = str(tr_o.iloc[0]['id_destino'])
-                                            if novo != u_id: ids_finais.add(novo)
-                                        # Saiu como destino — o serviço que ficou é este?
                                         tr_d = df_trocas[
                                             (df_trocas['data'] == d_s) &
                                             (df_trocas['status'] == 'Aprovada') &
@@ -1894,6 +1888,11 @@ else:
                                             (df_trocas['id_destino'].astype(str) == c_id) &
                                             (df_trocas['servico_destino'].str.lower().str.contains(serv_meu[:8], na=False))
                                         ]
+                                        st.caption(f"🔍 colega={c_id} serv_meu[:8]={repr(serv_meu[:8])} tr_o={tr_o[['servico_origem']].to_dict('records') if not tr_o.empty else []} tr_d={tr_d[['servico_destino']].to_dict('records') if not tr_d.empty else []}")
+                                        if not tr_o.empty:
+                                            saiu = True
+                                            novo = str(tr_o.iloc[0]['id_destino'])
+                                            if novo != u_id: ids_finais.add(novo)
                                         if not tr_d.empty:
                                             saiu = True
                                             novo = str(tr_d.iloc[0]['id_origem'])
