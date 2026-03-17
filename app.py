@@ -1561,8 +1561,33 @@ else:
                             'serviço': troca_cal if troca_cal else row_cal['serviço'],
                             'horário': row_cal['horário'],
                             'troca': troca_cal is not None,
-                            'obs': str(row_cal.get('observações','') or '').strip()
+                            'obs': str(row_cal.get('observações','') or '').strip(),
+                            'remunerados': []
                         }
+                        # Verificar remunerados no mesmo dia
+                        rem_cal = df_cal[df_cal['id'].astype(str) == u_id]
+                        import unicodedata as _udc
+                        def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                        rem_cal = rem_cal[rem_cal['serviço'].apply(_nc).str.contains('remu|grat', na=False)]
+                        # Também remunerados obtidos via matar remunerado
+                        if not df_trocas.empty:
+                            matar_cal = df_trocas[
+                                (df_trocas['data'] == dt_cal.strftime('%d/%m/%Y')) &
+                                (df_trocas['status'] == 'Aprovada') &
+                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                (df_trocas['id_origem'].astype(str) == u_id)
+                            ]
+                            for _, mt in matar_cal.iterrows():
+                                serv_r = mt['servico_destino'].rsplit('(', 1)[0].strip()
+                                hor_r  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
+                                linha_r = df_cal[
+                                    (df_cal['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()) &
+                                    (df_cal['horário'].astype(str).str.strip() == hor_r.strip())
+                                ]
+                                if not linha_r.empty:
+                                    rem_cal = pd.concat([rem_cal, linha_r.iloc[[0]]], ignore_index=True)
+                        for _, rr in rem_cal.iterrows():
+                            servicos_mes[d]['remunerados'].append(f"💰 {rr['serviço']} ({rr['horário']})")
 
             hoje_d = datetime.now().date()
 
@@ -1608,6 +1633,7 @@ else:
                     if is_fds and bg == "#EFF6FF":
                         bg = "#FFFBEB"
                     obs_html = f"<span style='color:#64748B;font-size:0.75rem'> · 📝 {info['obs']}</span>" if info['obs'] else ""
+                    rem_html = "".join([f"<div style='font-size:0.75rem;color:#065F46;margin-top:2px'>{r}</div>" for r in info.get('remunerados', [])])
                     st.markdown(f"""
                     <div style='background:{bg};border-left:{borda_esq};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px'>
                         <div style='min-width:48px;text-align:center'>
@@ -1617,6 +1643,7 @@ else:
                         <div>
                             <div style='font-size:0.9rem;font-weight:700;color:{cor_txt}'>{icone} {info['serviço']}{hoje_badge}</div>
                             <div style='font-size:0.8rem;color:#475569'>🕒 {info['horário']}{obs_html}</div>
+                            {rem_html}
                         </div>
                     </div>""", unsafe_allow_html=True)
                 elif is_hoje:
@@ -1994,7 +2021,8 @@ else:
                                 if not df_trocas.empty:
                                     tr2 = df_trocas[
                                         (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
-                                        (df_trocas['status'] == 'Aprovada')
+                                        (df_trocas['status'] == 'Aprovada') &
+                                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
                                     ]
                                     mask_rem2 = df_d2['serviço'].str.lower().str.contains('remu|grat', na=False)
                                     for _, t2 in tr2.iterrows():
@@ -2002,6 +2030,21 @@ else:
                                         if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
                                         m_d2 = (df_d2['id'].astype(str) == str(t2['id_destino'])) & ~mask_rem2
                                         if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
+                                    # Matar remunerado
+                                    matar2 = df_trocas[
+                                        (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
+                                        (df_trocas['status'] == 'Aprovada') &
+                                        (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
+                                    ]
+                                    for _, mt2 in matar2.iterrows():
+                                        serv_r2 = mt2['servico_destino'].rsplit('(', 1)[0].strip()
+                                        hor_r2  = mt2['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt2['servico_destino'] else ''
+                                        m_ced2 = (
+                                            (df_d2['serviço'].astype(str).str.strip().str.lower() == serv_r2.lower()) &
+                                            (df_d2['horário'].astype(str).str.strip() == hor_r2.strip()) &
+                                            (df_d2['id'].astype(str) == str(mt2['id_destino']))
+                                        )
+                                        if m_ced2.any(): df_d2.loc[m_ced2, 'id_disp'] = f"{mt2['id_origem']} 🔄 {mt2['id_destino']}"
                                 pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
                                 reader = PdfReader(_io.BytesIO(pb2))
                                 for pg in reader.pages:
