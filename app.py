@@ -1758,7 +1758,7 @@ else:
                         f'<h3>🔄 {serv_novo_nome}</h3>'
                         f'<p>🕒 {hor_novo}</p>'
                         f'{colegas_troca_html}'
-                        f'<p style="font-size:0.78rem;color:#92400E">👤 c/ {com_nome}</p>'
+                        f'<p style="font-size:0.78rem;color:#92400E">🔄 c/ {com_nome}</p>'
                         f'{obs_html_t}'
                         f'</div>',
                         unsafe_allow_html=True
@@ -1933,7 +1933,7 @@ else:
                                         ]
                                         if not mt_este.empty:
                                             cedente_nome = get_nome_militar(df_util, mt_este.iloc[0]['id_destino'])
-                                            matar_html = f'<p style="font-size:0.78rem;color:#059669">💶 c/ {cedente_nome}</p>'
+                                            matar_html = f'<p style="font-size:0.78rem;color:#059669">🔄 c/ {cedente_nome}</p>'
                                     st.markdown(
                                         f'<div class="card-servico card-rem">'
                                         f'<p><b>💶 REMUNERADO</b></p>'
