@@ -343,7 +343,7 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
     if ini_novo is None:
         return True, ""  # não consegue validar, deixa passar
 
-    MIN_DESCANSO = 8 * 60  # 480 minutos
+    MIN_DESCANSO = 6 * 60  # 480 minutos
 
     for delta, label in [(-1, "dia anterior"), (1, "dia seguinte")]:
         dt_adj = data + timedelta(days=delta)
@@ -390,7 +390,7 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
     Usa linha de tempo absoluta em minutos (dia-1=0, dia=1440, dia+1=2880).
     Retorna lista de erros (vazia se tudo ok)."""
     import unicodedata as _ud_loc, re as _re_loc
-    MIN = 8 * 60
+    MIN = 6 * 60
 
     def _norm_serv(s):
         return _ud_loc.normalize('NFKD', str(s).lower()).encode('ascii','ignore').decode('ascii')
