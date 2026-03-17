@@ -1700,10 +1700,11 @@ else:
                             _excluir_cols = ['ferias','licen','doente','folga','pronto','secretaria','inquer','dilig','tribunal']
                             if not any(x in s_norm for x in _excluir_cols):
                                 colegas = df_d[
-                                    (df_d['serviço'] == row['serviço']) &
-                                    (df_d['horário'] == row['horário']) &
-                                    (df_d['id'].astype(str) != u_id) &
-                                    (df_d['id'].astype(str).str.strip() != '')
+                                    (df_d['serviço'].astype(str).str.strip().str.lower() == str(row['serviço']).strip().lower()) &
+                                    (df_d['horário'].astype(str).str.strip() == str(row['horário']).strip()) &
+                                    (df_d['id'].astype(str).str.strip() != u_id) &
+                                    (df_d['id'].astype(str).str.strip() != '') &
+                                    (df_d['id'].astype(str).str.strip() != 'nan')
                                 ]
                                 if not colegas.empty:
                                     partes = []
@@ -2300,33 +2301,44 @@ else:
                 for idx, r in aprv.iterrows():
                     n_o = get_nome_militar(df_util, r['id_origem'])
                     n_d = get_nome_militar(df_util, r['id_destino'])
-                    with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}"):
+                    is_matar = str(r['servico_origem']) == 'MATAR_REMUNERADO'
+                    titulo = f"📅 {r['data']}  |  {n_o} 💶 {n_d}" if is_matar else f"📅 {r['data']}  |  {n_o} ↔️ {n_d}"
+                    with st.expander(titulo):
                         col1, col2 = st.columns(2)
-                        with col1:
-                            st.info(f"**Requerente:**\n\n{n_o}")
-                            st.markdown(f"**Serviço original:**\n`{r['servico_origem']}`")
-                        with col2:
-                            st.success(f"**Substituto:**\n\n{n_d}")
-                            st.markdown(f"**Serviço destino:**\n`{r['servico_destino']}`")
+                        if is_matar:
+                            with col1:
+                                st.info(f"**Requerente:**\n\n{n_o}")
+                                st.markdown("**Ação:** Matar Remunerado")
+                            with col2:
+                                st.success(f"**Cedente:**\n\n{n_d}")
+                                st.markdown(f"**Remunerado:**\n`{r['servico_destino']}`")
+                        else:
+                            with col1:
+                                st.info(f"**Requerente:**\n\n{n_o}")
+                                st.markdown(f"**Serviço original:**\n`{r['servico_origem']}`")
+                            with col2:
+                                st.success(f"**Substituto:**\n\n{n_d}")
+                                st.markdown(f"**Serviço destino:**\n`{r['servico_destino']}`")
                         st.divider()
                         val_por = r.get('validador', 'N/A')
                         val_em  = r.get('data_validacao', 'N/A')
                         st.caption(f"⚖️ Validado por **{val_por}** em {val_em}")
-                        dados_pdf = {
-                            "data":         r['data'],
-                            "id_origem":    r['id_origem'],   "nome_origem":  n_o,
-                            "serv_orig":    r['servico_origem'],
-                            "id_destino":   r['id_destino'],  "nome_destino": n_d,
-                            "serv_dest":    r['servico_destino'],
-                            "validador":    val_por,          "data_val":     val_em,
-                        }
-                        st.download_button(
-                            label="📥 Descarregar Guia de Troca",
-                            data=gerar_pdf_troca(dados_pdf),
-                            file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf",
-                            mime="application/pdf",
-                            key=f"hist_pdf_{idx}"
-                        )
+                        if not is_matar:
+                            dados_pdf = {
+                                "data":         r['data'],
+                                "id_origem":    r['id_origem'],   "nome_origem":  n_o,
+                                "serv_orig":    r['servico_origem'],
+                                "id_destino":   r['id_destino'],  "nome_destino": n_d,
+                                "serv_dest":    r['servico_destino'],
+                                "validador":    val_por,          "data_val":     val_em,
+                            }
+                            st.download_button(
+                                label="📥 Descarregar Guia de Troca",
+                                data=gerar_pdf_troca(dados_pdf),
+                                file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf",
+                                mime="application/pdf",
+                                key=f"hist_pdf_{idx}"
+                            )
 
     # --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
     elif menu == "📋 Histórico de Trocas":
@@ -2347,20 +2359,28 @@ else:
                     outro_nome = get_nome_militar(df_util, outro_id)
                     meu_serv   = r['servico_origem'] if fui_origem else r['servico_destino']
                     outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
-                    papel      = "Requerente" if fui_origem else "Substituto"
+                    is_matar   = str(r['servico_origem']) == 'MATAR_REMUNERADO'
                     status     = r.get('status','')
                     cor = "🟢" if status == "Aprovada" else ("🔴" if status in ("Rejeitada","Cancelada") else "🟡")
-                    with st.expander(f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})", expanded=False):
+
+                    if is_matar:
+                        papel = "Requerente" if fui_origem else "Cedente"
+                        titulo = f"{cor} {r['data']} — Matar Remunerado: {outro_serv} ({status})"
+                    else:
+                        papel = "Requerente" if fui_origem else "Substituto"
+                        titulo = f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})"
+
+                    with st.expander(titulo, expanded=False):
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown(f"**O meu papel:** {papel}")
-                            st.markdown(f"**O meu serviço:** `{meu_serv}`")
+                            if not is_matar:
+                                st.markdown(f"**O meu serviço:** `{meu_serv}`")
                         with col2:
                             st.markdown(f"**Contraparte:** {outro_nome}")
-                            st.markdown(f"**Serviço contraparte:** `{outro_serv}`")
+                            st.markdown(f"**Remunerado:** `{outro_serv}`" if is_matar else f"**Serviço contraparte:** `{outro_serv}`")
                         if status == "Aprovada":
                             st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
-                        # Cancelar só se ainda estiver pendente e o militar for o requerente
                         elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
                             if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
                                 if atualizar_status_gsheet(idx, "Cancelada"):
