@@ -1862,8 +1862,6 @@ else:
                             if not any(x in s_norm for x in _excluir_cols):
                                 serv_meu = str(row['serviço']).strip().lower()
                                 hor_meu  = str(row['horário']).strip()
-                                st.caption(f"🔍 d_s={repr(d_s)} trocas_total={len(df_trocas)} datas_trocas={df_trocas['data'].unique().tolist()[:5] if not df_trocas.empty else []}")
-                                # IDs originalmente escalados no mesmo serviço/horário (excluindo eu)
                                 colegas_orig = df_d[
                                     (df_d['serviço'].astype(str).str.strip().str.lower() == serv_meu) &
                                     (df_d['horário'].astype(str).str.strip() == hor_meu) &
@@ -1874,43 +1872,38 @@ else:
 
                                 ids_finais = set()
                                 for c_id in colegas_orig:
+                                    saiu = False
                                     if not df_trocas.empty:
-                                        # Este colega saiu deste serviço?
-                                        saiu = df_trocas[
+                                        # Saiu como origem — o seu serviço original é este?
+                                        tr_o = df_trocas[
                                             (df_trocas['data'] == d_s) &
                                             (df_trocas['status'] == 'Aprovada') &
                                             (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
-                                            ((df_trocas['id_origem'].astype(str) == c_id) |
-                                             (df_trocas['id_destino'].astype(str) == c_id))
+                                            (df_trocas['id_origem'].astype(str) == c_id) &
+                                            (df_trocas['servico_origem'].str.lower().str.contains(serv_meu[:8], na=False))
                                         ]
-                                        if not saiu.empty:
-                                            continue  # trocou, não vai fazer este serviço
-                                    ids_finais.add(c_id)
-
-                                # Adicionar quem trocou PARA este serviço
-                                if not df_trocas.empty:
-                                    tr_para = df_trocas[
-                                        (df_trocas['data'] == d_s) &
-                                        (df_trocas['status'] == 'Aprovada') &
-                                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
-                                    ]
-                                    for _, t in tr_para.iterrows():
-                                        # id_destino fica com servico_origem
-                                        so = t['servico_origem'].rsplit('(', 1)[0].strip().lower()
-                                        ho = t['servico_origem'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_origem'] else ''
-                                        if so == serv_meu and ho.strip() == hor_meu:
-                                            novo = str(t['id_destino'])
+                                        if not tr_o.empty:
+                                            saiu = True
+                                            novo = str(tr_o.iloc[0]['id_destino'])
                                             if novo != u_id: ids_finais.add(novo)
-                                        # id_origem fica com servico_destino
-                                        sd = t['servico_destino'].rsplit('(', 1)[0].strip().lower()
-                                        hd = t['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_destino'] else ''
-                                        if sd == serv_meu and hd.strip() == hor_meu:
-                                            novo = str(t['id_origem'])
+                                        # Saiu como destino — o serviço que ficou é este?
+                                        tr_d = df_trocas[
+                                            (df_trocas['data'] == d_s) &
+                                            (df_trocas['status'] == 'Aprovada') &
+                                            (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+                                            (df_trocas['id_destino'].astype(str) == c_id) &
+                                            (df_trocas['servico_destino'].str.lower().str.contains(serv_meu[:8], na=False))
+                                        ]
+                                        if not tr_d.empty:
+                                            saiu = True
+                                            novo = str(tr_d.iloc[0]['id_origem'])
                                             if novo != u_id: ids_finais.add(novo)
+                                    if not saiu:
+                                        ids_finais.add(c_id)
 
                                 if ids_finais:
                                     partes = []
-                                    for c_id in ids_finais:
+                                    for c_id in sorted(ids_finais):
                                         if 'id' in df_util.columns:
                                             c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
                                         else:
