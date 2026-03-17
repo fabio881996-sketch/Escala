@@ -1732,6 +1732,7 @@ else:
                             (df_d['serviço'].astype(str).str.strip().str.lower() == serv_novo_nome.lower()) &
                             (df_d['horário'].astype(str).str.strip() == hor_novo.strip()) &
                             (df_d['id'].astype(str).str.strip() != u_id) &
+                            (df_d['id'].astype(str).str.strip() != str(com).strip()) &
                             (df_d['id'].astype(str).str.strip() != '') &
                             (df_d['id'].astype(str).str.strip() != 'nan')
                         ]
