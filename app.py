@@ -1796,13 +1796,45 @@ else:
                         for _, rr in rem_mil_t.iterrows():
                             obs_r = str(rr.get('observações','') or '').strip()
                             obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
+                            serv_rr_t = str(rr['serviço']).strip().lower()
+                            hor_rr_t  = str(rr['horário']).strip()
+                            # Colegas no mesmo remunerado
+                            colegas_r = df_d_rem[
+                                (df_d_rem['serviço'].astype(str).str.strip().str.lower() == serv_rr_t) &
+                                (df_d_rem['horário'].astype(str).str.strip() == hor_rr_t) &
+                                (df_d_rem['id'].astype(str).str.strip() != u_id) &
+                                (df_d_rem['id'].astype(str).str.strip() != '') &
+                                (df_d_rem['id'].astype(str).str.strip() != 'nan')
+                            ]
+                            ids_r = []
+                            for _, c in colegas_r.iterrows():
+                                c_id = str(c['id']).strip()
+                                if not df_trocas.empty:
+                                    cedeu = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') & (df_trocas['id_destino'].astype(str) == c_id) & (df_trocas['servico_destino'].str.lower().str.contains(serv_rr_t[:10], na=False))]
+                                    if not cedeu.empty:
+                                        novo_id = str(cedeu.iloc[0]['id_origem'])
+                                        if novo_id != u_id: ids_r.append(novo_id)
+                                        continue
+                                if c_id != u_id: ids_r.append(c_id)
+                            colegas_r_html = ''
+                            if ids_r:
+                                partes = []
+                                for c_id in ids_r:
+                                    c_row = df_util[df_util['id'].astype(str).str.strip() == c_id] if 'id' in df_util.columns else pd.DataFrame()
+                                    if not c_row.empty:
+                                        c_nomes = c_row.iloc[0].get('nome','').strip().split()
+                                        c_nome_curto = f"{c_nomes[0]} {c_nomes[-1]}" if len(c_nomes) > 1 else ' '.join(c_nomes)
+                                        partes.append(f"{c_id} {c_row.iloc[0].get('posto','')} {c_nome_curto}")
+                                    else:
+                                        partes.append(c_id)
+                                colegas_r_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
                             matar_html_t = ''
                             if not df_trocas.empty:
-                                mt_este = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') & (df_trocas['id_origem'].astype(str) == u_id) & (df_trocas['servico_destino'].str.lower().str.contains(str(rr['serviço']).strip().lower()[:10], na=False))]
+                                mt_este = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') & (df_trocas['id_origem'].astype(str) == u_id) & (df_trocas['servico_destino'].str.lower().str.contains(serv_rr_t[:10], na=False))]
                                 if not mt_este.empty:
                                     cedente_nome = get_nome_militar(df_util, mt_este.iloc[0]['id_destino'])
                                     matar_html_t = f'<p style="font-size:0.78rem;color:#059669">🔄 c/ {cedente_nome}</p>'
-                            st.markdown(f'<div class="card-servico card-rem"><p><b>💶 REMUNERADO</b></p><h3>💰 {rr["serviço"]}</h3><p>🕒 {rr["horário"]}</p>{matar_html_t}{obs_r_html}</div>', unsafe_allow_html=True)
+                            st.markdown(f'<div class="card-servico card-rem"><p><b>💶 REMUNERADO</b></p><h3>💰 {rr["serviço"]}</h3><p>🕒 {rr["horário"]}</p>{colegas_r_html}{matar_html_t}{obs_r_html}</div>', unsafe_allow_html=True)
                 else:
                     df_d = load_data(dt.strftime("%d-%m"))
                     if not df_d.empty:
@@ -1940,6 +1972,7 @@ else:
                                     colegas_rem = df_rem_dia[
                                         (df_rem_dia['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
                                         (df_rem_dia['horário'].astype(str).str.strip() == hor_rr) &
+                                        (df_rem_dia['id'].astype(str).str.strip() != u_id) &
                                         (df_rem_dia['id'].astype(str).str.strip() != '') &
                                         (df_rem_dia['id'].astype(str).str.strip() != 'nan')
                                     ]
