@@ -1725,25 +1725,49 @@ else:
                     except Exception:
                         obs_novo = ''
                     obs_html_t = f'<p>📝 {obs_novo}</p>' if obs_novo else ''
-                    # Colegas no mesmo serviço trocado
+                    # Colegas no mesmo serviço trocado (com trocas aplicadas)
                     colegas_troca_html = ''
                     if not df_d.empty and row_novo is not None:
-                        colegas_t = df_d[
+                        colegas_orig_t = df_d[
                             (df_d['serviço'].astype(str).str.strip().str.lower() == serv_novo_nome.lower()) &
                             (df_d['horário'].astype(str).str.strip() == hor_novo.strip()) &
                             (df_d['id'].astype(str).str.strip() != u_id) &
                             (df_d['id'].astype(str).str.strip() != str(com).strip()) &
                             (df_d['id'].astype(str).str.strip() != '') &
                             (df_d['id'].astype(str).str.strip() != 'nan')
-                        ]
-                        if not colegas_t.empty:
+                        ]['id'].astype(str).str.strip().tolist()
+
+                        ids_finais_t = set()
+                        for c_id in colegas_orig_t:
+                            saiu = False
+                            if not df_trocas.empty:
+                                tr_o = df_trocas[
+                                    (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
+                                    (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+                                    (df_trocas['id_origem'].astype(str) == c_id) &
+                                    (df_trocas['servico_origem'].str.lower().str.contains(serv_novo_nome[:8], na=False))
+                                ]
+                                if not tr_o.empty:
+                                    saiu = True
+                                    novo = str(tr_o.iloc[0]['id_destino'])
+                                    if novo != u_id: ids_finais_t.add(novo)
+                                tr_d = df_trocas[
+                                    (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
+                                    (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+                                    (df_trocas['id_destino'].astype(str) == c_id) &
+                                    (df_trocas['servico_destino'].str.lower().str.contains(serv_novo_nome[:8], na=False))
+                                ]
+                                if not tr_d.empty:
+                                    saiu = True
+                                    novo = str(tr_d.iloc[0]['id_origem'])
+                                    if novo != u_id: ids_finais_t.add(novo)
+                            if not saiu:
+                                ids_finais_t.add(c_id)
+
+                        if ids_finais_t:
                             partes = []
-                            for _, c in colegas_t.iterrows():
-                                c_id = str(c['id']).strip()
-                                if 'id' in df_util.columns:
-                                    c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
-                                else:
-                                    c_row = pd.DataFrame()
+                            for c_id in sorted(ids_finais_t):
+                                c_row = df_util[df_util['id'].astype(str).str.strip() == c_id] if 'id' in df_util.columns else pd.DataFrame()
                                 if not c_row.empty:
                                     c_posto = c_row.iloc[0].get('posto','')
                                     c_nomes = c_row.iloc[0].get('nome','').strip().split()
