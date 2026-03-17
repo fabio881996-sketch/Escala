@@ -1862,6 +1862,7 @@ else:
                             if not any(x in s_norm for x in _excluir_cols):
                                 serv_meu = str(row['serviço']).strip().lower()
                                 hor_meu  = str(row['horário']).strip()
+                                st.caption(f"🔍 serv={repr(serv_meu)} hor={repr(hor_meu)} trocas_dia={df_trocas[(df_trocas['data']==d_s)&(df_trocas['status']=='Aprovada')][['id_origem','id_destino','servico_origem','servico_destino']].to_dict('records') if not df_trocas.empty else []}")
                                 # IDs originalmente escalados no mesmo serviço/horário (excluindo eu)
                                 colegas_orig = df_d[
                                     (df_d['serviço'].astype(str).str.strip().str.lower() == serv_meu) &
