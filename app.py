@@ -1766,18 +1766,41 @@ else:
                                     obs_r = str(rr.get('observações', '') or '').strip()
                                     obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
                                     # Colegas no mesmo remunerado
+                                    # Substituir IDs tendo em conta matar remunerado aprovado
+                                    serv_rr = str(rr['serviço']).strip().lower()
+                                    hor_rr  = str(rr['horário']).strip()
                                     colegas_rem = df_d[
-                                        (df_d['serviço'].astype(str).str.strip().str.lower() == str(rr['serviço']).strip().lower()) &
-                                        (df_d['horário'].astype(str).str.strip() == str(rr['horário']).strip()) &
-                                        (df_d['id'].astype(str).str.strip() != u_id) &
+                                        (df_d['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
+                                        (df_d['horário'].astype(str).str.strip() == hor_rr) &
                                         (df_d['id'].astype(str).str.strip() != '') &
                                         (df_d['id'].astype(str).str.strip() != 'nan')
                                     ]
+                                    # Construir lista real de quem vai fazer o remunerado
+                                    ids_reais = []
+                                    for _, c in colegas_rem.iterrows():
+                                        c_id = str(c['id']).strip()
+                                        # Ver se este ID cedeu o remunerado a alguém
+                                        if not df_trocas.empty:
+                                            cedeu = df_trocas[
+                                                (df_trocas['data'] == d_s) &
+                                                (df_trocas['status'] == 'Aprovada') &
+                                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                                (df_trocas['id_destino'].astype(str) == c_id) &
+                                                (df_trocas['servico_destino'].str.lower().str.contains(serv_rr[:10], na=False))
+                                            ]
+                                            if not cedeu.empty:
+                                                # Substituir pelo novo titular
+                                                novo_id = str(cedeu.iloc[0]['id_origem'])
+                                                if novo_id != u_id:
+                                                    ids_reais.append(novo_id)
+                                                continue
+                                        if c_id != u_id:
+                                            ids_reais.append(c_id)
+
                                     colegas_rem_html = ''
-                                    if not colegas_rem.empty:
+                                    if ids_reais:
                                         partes = []
-                                        for _, c in colegas_rem.iterrows():
-                                            c_id = str(c['id']).strip()
+                                        for c_id in ids_reais:
                                             if 'id' in df_util.columns:
                                                 c_row = df_util[df_util['id'].astype(str).str.strip() == c_id]
                                             else:
