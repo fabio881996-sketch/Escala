@@ -1746,7 +1746,8 @@ else:
                                     (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
                                     (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
                                     (df_trocas['id_origem'].astype(str) == c_id) &
-                                    (df_trocas['servico_origem'].str.lower().str.contains(serv_novo_nome[:8], na=False))
+                                    (df_trocas['servico_origem'].str.lower().str.contains(serv_novo_nome.lower()[:8], na=False)) &
+                                    (df_trocas['servico_origem'].str.contains(hor_novo, na=False))
                                 ]
                                 if not tr_o.empty:
                                     saiu = True
@@ -1756,7 +1757,8 @@ else:
                                     (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
                                     (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
                                     (df_trocas['id_destino'].astype(str) == c_id) &
-                                    (df_trocas['servico_destino'].str.lower().str.contains(serv_novo_nome[:8], na=False))
+                                    (df_trocas['servico_destino'].str.lower().str.contains(serv_novo_nome.lower()[:8], na=False)) &
+                                    (df_trocas['servico_destino'].str.contains(hor_novo, na=False))
                                 ]
                                 if not tr_d.empty:
                                     saiu = True
@@ -1904,16 +1906,17 @@ else:
                                             (df_trocas['status'] == 'Aprovada') &
                                             (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
                                             (df_trocas['id_origem'].astype(str) == c_id) &
-                                            (df_trocas['servico_origem'].str.lower().str.contains(serv_meu[:8], na=False))
+                                            (df_trocas['servico_origem'].str.lower().str.contains(serv_meu[:8], na=False)) &
+                                            (df_trocas['servico_origem'].str.contains(hor_meu, na=False))
                                         ]
                                         tr_d = df_trocas[
                                             (df_trocas['data'] == d_s) &
                                             (df_trocas['status'] == 'Aprovada') &
                                             (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
                                             (df_trocas['id_destino'].astype(str) == c_id) &
-                                            (df_trocas['servico_destino'].str.lower().str.contains(serv_meu[:8], na=False))
+                                            (df_trocas['servico_destino'].str.lower().str.contains(serv_meu[:8], na=False)) &
+                                            (df_trocas['servico_destino'].str.contains(hor_meu, na=False))
                                         ]
-                                        st.caption(f"🔍 colega={c_id} serv_meu[:8]={repr(serv_meu[:8])} tr_o={tr_o[['servico_origem']].to_dict('records') if not tr_o.empty else []} tr_d={tr_d[['servico_destino']].to_dict('records') if not tr_d.empty else []}")
                                         if not tr_o.empty:
                                             saiu = True
                                             novo = str(tr_o.iloc[0]['id_destino'])
