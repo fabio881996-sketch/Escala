@@ -1741,10 +1741,27 @@ else:
                             if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
                                 import unicodedata as _ud2
                                 def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                                rem_mil = df_rem_dia[
-                                    df_rem_dia['id'].astype(str) == u_id
-                                ]
+                                # Remunerados escalados diretamente
+                                rem_mil = df_rem_dia[df_rem_dia['id'].astype(str) == u_id]
                                 rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
+                                # Remunerados obtidos via matar remunerado aprovado
+                                if not df_trocas.empty:
+                                    matar_apr = df_trocas[
+                                        (df_trocas['data'] == d_s) &
+                                        (df_trocas['status'] == 'Aprovada') &
+                                        (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                        (df_trocas['id_origem'].astype(str) == u_id)
+                                    ]
+                                    for _, mt in matar_apr.iterrows():
+                                        # Encontrar a linha do remunerado na escala
+                                        serv_r = mt['servico_destino'].rsplit('(', 1)[0].strip()
+                                        hor_r  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
+                                        linha_rem = df_rem_dia[
+                                            (df_rem_dia['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()) &
+                                            (df_rem_dia['horário'].astype(str).str.strip() == hor_r.strip())
+                                        ]
+                                        if not linha_rem.empty:
+                                            rem_mil = pd.concat([rem_mil, linha_rem.iloc[[0]]], ignore_index=True)
                                 for _, rr in rem_mil.iterrows():
                                     obs_r = str(rr.get('observações', '') or '').strip()
                                     obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
@@ -1906,6 +1923,21 @@ else:
                     m_d = (df_at['id'].astype(str) == str(t['id_destino'])) & ~mask_rem
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+
+                # Aplicar matar remunerado — substituir titular do remunerado
+                matar_apr = df_trocas[
+                    (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
+                    (df_trocas['status'] == 'Aprovada') &
+                    (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
+                ]
+                for _, mt in matar_apr.iterrows():
+                    serv_r = mt['servico_destino'].rsplit('(', 1)[0].strip()
+                    hor_r  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
+                    m_rem = (
+                        df_at['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()
+                    ) & (df_at['horário'].astype(str).str.strip() == hor_r.strip())
+                    if m_rem.any():
+                        df_at.loc[m_rem, 'id_disp'] = f"{mt['id_origem']} 💶 {mt['id_destino']}"
 
             pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
             col_pdf, col_full, _ = st.columns([1, 1.5, 3])
