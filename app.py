@@ -1765,6 +1765,44 @@ else:
                     )
                     dias_sem_dados = 0
                     encontrou_algum = True
+                    # Verificar remunerados mesmo quando há troca de serviço
+                    df_d_rem = load_data(dt.strftime("%d-%m"))
+                    if not df_d_rem.empty and 'serviço' in df_d_rem.columns:
+                        import unicodedata as _ud2r
+                        def _nr(t): return _ud2r.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+                        rem_mil_t = df_d_rem[df_d_rem['id'].astype(str) == u_id]
+                        rem_mil_t = rem_mil_t[rem_mil_t['serviço'].apply(_nr).str.contains('remu|grat', na=False)]
+                        if not df_trocas.empty:
+                            cedidos_t = df_trocas[
+                                (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
+                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                (df_trocas['id_destino'].astype(str) == u_id)
+                            ]
+                            for _, cd in cedidos_t.iterrows():
+                                serv_cd = cd['servico_destino'].rsplit('(', 1)[0].strip()
+                                hor_cd  = cd['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in cd['servico_destino'] else ''
+                                rem_mil_t = rem_mil_t[~((rem_mil_t['serviço'].astype(str).str.strip().str.lower() == serv_cd.lower()) & (rem_mil_t['horário'].astype(str).str.strip() == hor_cd.strip()))]
+                            matar_apr_t = df_trocas[
+                                (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
+                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                (df_trocas['id_origem'].astype(str) == u_id)
+                            ]
+                            for _, mt in matar_apr_t.iterrows():
+                                serv_r2 = mt['servico_destino'].rsplit('(', 1)[0].strip()
+                                hor_r2  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
+                                linha_r2 = df_d_rem[(df_d_rem['serviço'].astype(str).str.strip().str.lower() == serv_r2.lower()) & (df_d_rem['horário'].astype(str).str.strip() == hor_r2.strip())]
+                                if not linha_r2.empty:
+                                    rem_mil_t = pd.concat([rem_mil_t, linha_r2.iloc[[0]]], ignore_index=True)
+                        for _, rr in rem_mil_t.iterrows():
+                            obs_r = str(rr.get('observações','') or '').strip()
+                            obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
+                            matar_html_t = ''
+                            if not df_trocas.empty:
+                                mt_este = df_trocas[(df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') & (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') & (df_trocas['id_origem'].astype(str) == u_id) & (df_trocas['servico_destino'].str.lower().str.contains(str(rr['serviço']).strip().lower()[:10], na=False))]
+                                if not mt_este.empty:
+                                    cedente_nome = get_nome_militar(df_util, mt_este.iloc[0]['id_destino'])
+                                    matar_html_t = f'<p style="font-size:0.78rem;color:#059669">🔄 c/ {cedente_nome}</p>'
+                            st.markdown(f'<div class="card-servico card-rem"><p><b>💶 REMUNERADO</b></p><h3>💰 {rr["serviço"]}</h3><p>🕒 {rr["horário"]}</p>{matar_html_t}{obs_r_html}</div>', unsafe_allow_html=True)
                 else:
                     df_d = load_data(dt.strftime("%d-%m"))
                     if not df_d.empty:
