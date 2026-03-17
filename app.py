@@ -1720,17 +1720,12 @@ else:
                         if mask_novo.any():
                             row_novo = df_d[mask_novo].iloc[0]
                     com_nome = get_nome_militar(df_util, com)
-                    indic_html = f'<p>📻 {row_novo["indicativo rádio"]}</p>' if row_novo is not None and str(row_novo.get("indicativo rádio","")).strip() else ''
-                    vtr_html   = f'<p>🚗 {row_novo["viatura"]}</p>'         if row_novo is not None and str(row_novo.get("viatura","")).strip() else ''
-                    obs_novo   = str(row_novo.get('observações','') or '').strip() if row_novo is not None else ''
-                    obs_html_t = f'<p>📝 {obs_novo}</p>' if obs_novo else ''
                     st.markdown(
                         f'<div class="card-servico card-troca">'
                         f'<p><b>{lbl}</b> &nbsp;·&nbsp; <span style="color:#92400E;">Troca Aprovada</span></p>'
                         f'<h3>🔄 {serv_novo_nome}</h3>'
                         f'<p>🕒 {hor_novo}</p>'
-                        f'{indic_html}{vtr_html}'
-                        f'<p style="font-size:0.78rem;color:#92400E">↩️ Original: {era} · 👤 c/ {com_nome}</p>'
+                        f'<p style="font-size:0.78rem;color:#92400E">👤 c/ {com_nome}</p>'
                         f'{obs_html_t}'
                         f'</div>',
                         unsafe_allow_html=True
