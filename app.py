@@ -2394,6 +2394,7 @@ else:
                     st.info("Não tens férias planeadas para este ano.")
                 else:
                     row_f = mil_f.iloc[0]
+                    st.caption(f"🔍 p1_ini={repr(str(row_f.get('p1_ini','')))} p1_fim={repr(str(row_f.get('p1_fim','')))} total={repr(str(row_f.get(total_col_f,'') if total_col_f else ''))}")
                     total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
                     periodos = render_periodos(row_f, fer_f)
                     total_du = sum(p[2] for p in periodos)
@@ -3209,3 +3210,4 @@ else:
                     st.warning(a)
             else:
                 st.success("✅ Sem alertas")
+                
