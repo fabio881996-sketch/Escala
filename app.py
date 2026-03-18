@@ -264,7 +264,7 @@ def load_ferias(ano: int) -> pd.DataFrame:
         sh = get_sheet()
         if sh is None:
             return pd.DataFrame()
-        ws = sh.worksheet(f"férias {ano}")
+        ws = sh.worksheet(f"ferias_{ano}")
         valores = ws.get_all_values()
         if not valores or len(valores) < 2:
             return pd.DataFrame()
@@ -1514,7 +1514,7 @@ else:
             "👥 Efetivo",
         ]
         if is_admin:
-            menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas"]
+            menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
@@ -3174,3 +3174,4 @@ else:
                     st.warning(a)
             else:
                 st.success("✅ Sem alertas")
+                
