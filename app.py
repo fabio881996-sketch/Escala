@@ -311,7 +311,7 @@ def load_feriados(ano: int) -> list:
     except Exception as e:
         return []
 
-def _parse_data_ferias(s):
+def _parse_data_ferias(s, ano=None):
     """Tenta parsear uma data em vários formatos."""
     s = str(s).strip()
     for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%m/%d/%Y'):
@@ -319,6 +319,12 @@ def _parse_data_ferias(s):
             return datetime.strptime(s, fmt).date()
         except:
             pass
+    # Formato MM/DD sem ano
+    try:
+        d = datetime.strptime(s, '%m/%d').date()
+        return d.replace(year=ano if ano else datetime.now().year)
+    except:
+        pass
     return None
 
 def _fim_ferias_real(fim_d, feriados_list):
@@ -347,14 +353,15 @@ def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: l
         return False
     if isinstance(data, datetime):
         data = data.date()
+    ano_data = data.year if data else datetime.now().year
     for ini_c, fim_c in zip(ini_cols, fim_cols):
         for _, row in mil.iterrows():
             ini_s = str(row.get(ini_c, '')).strip()
             fim_s = str(row.get(fim_c, '')).strip()
             if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan':
                 continue
-            ini_d = _parse_data_ferias(ini_s)
-            fim_d = _parse_data_ferias(fim_s)
+            ini_d = _parse_data_ferias(ini_s, ano_data)
+            fim_d = _parse_data_ferias(fim_s, ano_data)
             if not ini_d or not fim_d:
                 continue
             fim_real = _fim_ferias_real(fim_d, feriados_list)
