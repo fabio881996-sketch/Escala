@@ -284,12 +284,17 @@ def load_feriados(ano: int) -> list:
             return []
         ws = sh.worksheet("feriados")
         valores = ws.get_all_values()
+        if not valores:
+            return []
         feriados = []
-        for col in zip(*valores):
-            col = [str(v).strip() for v in col if str(v).strip()]
+        # Percorrer cada coluna
+        num_cols = max(len(r) for r in valores)
+        for ci in range(num_cols):
+            col = [str(r[ci]).strip() if ci < len(r) else '' for r in valores]
+            col = [v for v in col if v]
             if not col:
                 continue
-            # Primeira linha é o ano
+            # Primeira célula da coluna é o ano
             try:
                 ano_col = int(col[0])
             except:
@@ -297,10 +302,13 @@ def load_feriados(ano: int) -> list:
             if ano_col != ano:
                 continue
             for v in col[1:]:
-                try:
-                    feriados.append(datetime.strptime(v, '%d/%m/%Y').date())
-                except:
-                    pass
+                # Tentar vários formatos
+                for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y'):
+                    try:
+                        feriados.append(datetime.strptime(v, fmt).date())
+                        break
+                    except:
+                        pass
         return feriados
     except Exception:
         return []
