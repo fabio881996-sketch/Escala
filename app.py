@@ -1102,6 +1102,16 @@ def get_nome_militar(df_util: pd.DataFrame, id_m) -> str:
     res = df_util[df_util['id'].astype(str) == str(id_m)]
     return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
 
+def get_nome_curto(df_util: pd.DataFrame, id_m) -> str:
+    """Posto + primeiro e último nome."""
+    res = df_util[df_util['id'].astype(str) == str(id_m)]
+    if res.empty:
+        return f"ID {id_m}"
+    posto = res.iloc[0]['posto']
+    nomes = res.iloc[0]['nome'].strip().split()
+    nome_curto = f"{nomes[0]} {nomes[-1]}" if len(nomes) > 1 else nomes[0]
+    return f"{posto} {nome_curto}"
+
 def filtrar_secao(keys: list, df_f: pd.DataFrame) -> tuple:
     """Filtra linhas pelo padrão de keys. Devolve (df_secção, df_restante)."""
     pattern = '|'.join(k for k in keys if k).lower()
@@ -2758,7 +2768,7 @@ else:
                             erros_destino = verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg)
                             erros_dest_only = [e for e in erros_destino if e.startswith("O militar de destino")]
                             if not erros_dest_only:
-                                nome_c = get_nome_militar(df_util, id_c)
+                                nome_c = get_nome_curto(df_util, id_c)
                                 opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c})")
                         # Restantes — com verificação de descanso
                         for _, row_c in cols.iterrows():
@@ -2766,7 +2776,7 @@ else:
                             serv_c = str(row_c['serviço'])
                             hor_c  = str(row_c['horário'])
                             if not verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg):
-                                nome_c = get_nome_militar(df_util, id_c)
+                                nome_c = get_nome_curto(df_util, id_c)
                                 opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c})")
                         if not opts:
                             st.warning("Não há militares disponíveis para troca neste dia (restrições de descanso).")
@@ -2849,7 +2859,7 @@ else:
                             if ini_r is not None:
                                 if not (fim_r <= meu_ini or ini_r >= meu_fim):
                                     continue
-                        nome_r = get_nome_militar(df_util, str(r['id']))
+                        nome_r = get_nome_curto(df_util, str(r["id"]))
                         opts_rem.append(f"{r['id']} {nome_r} - {r['serviço']} ({hor_rem})")
 
                     if not opts_rem:
