@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, date
 from fpdf import FPDF
 import io
 import re
+import unicodedata
 
 def norm(t):
     """Normaliza texto para comparação — remove acentos e coloca em minúsculas."""
