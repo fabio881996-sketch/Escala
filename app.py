@@ -2345,20 +2345,30 @@ else:
 
             def render_periodos(row_f, fer_f):
                 periodos = []
+                def parse_data(s):
+                    s = str(s).strip()
+                    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%m/%d', '%m/%d/%Y', '%d-%m-%Y'):
+                        try:
+                            d = datetime.strptime(s, fmt).date()
+                            # Se não tem ano (ex: 04/27), assumir ano atual
+                            if fmt == '%m/%d':
+                                d = d.replace(year=ano_sel_f)
+                            return d
+                        except:
+                            pass
+                    return None
                 for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
                     ini_v = str(row_f.get(ini_c, '')).strip()
                     fim_v = str(row_f.get(fim_c, '')).strip()
                     if not ini_v or ini_v == 'nan': continue
-                    try:
-                        ini_d = datetime.strptime(ini_v, '%d/%m/%Y').date()
-                        fim_d = datetime.strptime(fim_v, '%d/%m/%Y').date()
-                        du = sum(1 for n in range((fim_d - ini_d).days + 1)
-                                if (ini_d + timedelta(days=n)).weekday() < 5
-                                and (ini_d + timedelta(days=n)) not in fer_f)
-                        dc = (fim_d - ini_d).days + 1
-                        periodos.append((ini_d, fim_d, du, dc))
-                    except:
-                        pass
+                    ini_d = parse_data(ini_v)
+                    fim_d = parse_data(fim_v)
+                    if not ini_d or not fim_d: continue
+                    du = sum(1 for n in range((fim_d - ini_d).days + 1)
+                            if (ini_d + timedelta(days=n)).weekday() < 5
+                            and (ini_d + timedelta(days=n)) not in fer_f)
+                    dc = (fim_d - ini_d).days + 1
+                    periodos.append((ini_d, fim_d, du, dc))
                 return periodos
 
             if is_admin:
@@ -3210,4 +3220,3 @@ else:
                     st.warning(a)
             else:
                 st.success("✅ Sem alertas")
-                
