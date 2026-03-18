@@ -658,6 +658,7 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
 
+def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     """Gera PDF da escala diaria em A4 retrato. Inclui indicacao de trocas."""
     from datetime import datetime as _dt
 
