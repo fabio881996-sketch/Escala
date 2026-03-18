@@ -2757,6 +2757,17 @@ else:
 
             meu = df_d[df_d['id'].astype(str) == u_id]
 
+            # IDs que já têm troca pendente nesse dia — excluir das listas
+            ids_com_troca = set()
+            if not df_trocas.empty:
+                tr_ocupados = df_trocas[
+                    (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
+                    (df_trocas['status'].isin(['Pendente_Militar', 'Pendente_Admin']))
+                ]
+                ids_com_troca = set(tr_ocupados['id_origem'].astype(str).tolist() +
+                                    tr_ocupados['id_destino'].astype(str).tolist())
+                ids_com_troca.discard(u_id)  # não excluir o próprio
+
             # ── Troca Simples ──
             if tipo_troca == "🔄 Troca Simples":
                 if meu.empty:
@@ -2771,6 +2782,7 @@ else:
                         (df_d['id'].astype(str).str.strip() != u_id) &
                         (df_d['id'].astype(str).str.strip() != '') &
                         (df_d['id'].astype(str).str.strip() != 'nan') &
+                        (~df_d['id'].astype(str).str.strip().isin(ids_com_troca)) &
                         ~((df_d['serviço'] == meu_serv_orig) & (df_d['horário'] == meu_hor_orig)) &
                         ~(estou_de_folga & df_d['serviço'].str.lower().str.contains('folga', na=False))
                     )
@@ -2830,7 +2842,8 @@ else:
                     outros_t3 = df_d[
                         (df_d['id'].astype(str).str.strip() != u_id) &
                         (df_d['id'].astype(str).str.strip() != '') &
-                        (df_d['id'].astype(str).str.strip() != 'nan')
+                        (df_d['id'].astype(str).str.strip() != 'nan') &
+                        (~df_d['id'].astype(str).str.strip().isin(ids_com_troca))
                     ]
                     outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
                     opcoes_t3 = {f"{r['id']} {get_nome_curto(df_util, str(r['id']))} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
@@ -2866,6 +2879,7 @@ else:
                     (df_d['id'].astype(str).str.strip() != u_id) &
                     (df_d['id'].astype(str).str.strip() != '') &
                     (df_d['id'].astype(str).str.strip() != 'nan') &
+                    (~df_d['id'].astype(str).str.strip().isin(ids_com_troca)) &
                     (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))
                 ]
                 if rem_dia.empty:
