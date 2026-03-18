@@ -2766,6 +2766,13 @@ else:
                 ]
                 ids_com_troca = set(tr_ocupados['id_origem'].astype(str).tolist() +
                                     tr_ocupados['id_destino'].astype(str).tolist())
+                # Excluir também cedentes de fazer remunerado aprovados
+                rem_apr = df_trocas[
+                    (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
+                    (df_trocas['status'] == 'Aprovada') &
+                    (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
+                ]
+                ids_com_troca.update(rem_apr['id_destino'].astype(str).tolist())
                 ids_com_troca.discard(u_id)  # não excluir o próprio
 
             # ── Troca Simples ──
