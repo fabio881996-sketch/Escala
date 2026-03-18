@@ -2436,6 +2436,23 @@ else:
                     if m_cedente.any():
                         df_at.loc[m_cedente, 'id_disp'] = f"{mt['id_origem']} 🔄 {mt['id_destino']}"
 
+            # Adicionar militares de férias que não estão na escala diária
+            if not df_ferias.empty and not df_util.empty:
+                ids_na_escala = set(df_at['id'].astype(str).str.strip().tolist())
+                cols_f = df_ferias.columns.tolist()
+                id_col_f = 'id' if 'id' in cols_f else cols_f[0]
+                for _, row_f in df_ferias.iterrows():
+                    mid_f = str(row_f.get(id_col_f, '')).strip()
+                    if not mid_f or mid_f in ids_na_escala:
+                        continue
+                    if militar_de_ferias(mid_f, d_sel, df_ferias):
+                        nova_linha = {c: '' for c in df_at.columns}
+                        nova_linha['id'] = mid_f
+                        nova_linha['id_disp'] = mid_f
+                        nova_linha['serviço'] = 'Férias'
+                        nova_linha['horário'] = ''
+                        df_at = pd.concat([df_at, pd.DataFrame([nova_linha])], ignore_index=True)
+
             pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
             col_pdf, col_full, _ = st.columns([1, 1.5, 3])
             with col_pdf:
@@ -2490,6 +2507,21 @@ else:
                                             (df_d2['id'].astype(str) == str(mt2['id_destino']))
                                         )
                                         if m_ced2.any(): df_d2.loc[m_ced2, 'id_disp'] = f"{mt2['id_origem']} 🔄 {mt2['id_destino']}"
+                                # Adicionar militares de férias
+                                if not df_ferias.empty and not df_util.empty:
+                                    ids_esc2 = set(df_d2['id'].astype(str).str.strip().tolist())
+                                    cols_f2 = df_ferias.columns.tolist()
+                                    id_col_f2 = 'id' if 'id' in cols_f2 else cols_f2[0]
+                                    for _, row_f2 in df_ferias.iterrows():
+                                        mid_f2 = str(row_f2.get(id_col_f2, '')).strip()
+                                        if not mid_f2 or mid_f2 in ids_esc2: continue
+                                        if militar_de_ferias(mid_f2, dt2.date(), df_ferias):
+                                            nl2 = {c: '' for c in df_d2.columns}
+                                            nl2['id'] = mid_f2
+                                            nl2['id_disp'] = mid_f2
+                                            nl2['serviço'] = 'Férias'
+                                            nl2['horário'] = ''
+                                            df_d2 = pd.concat([df_d2, pd.DataFrame([nl2])], ignore_index=True)
                                 pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
                                 reader = PdfReader(_io.BytesIO(pb2))
                                 for pg in reader.pages:
@@ -3110,6 +3142,9 @@ else:
                 ids_na_escala = set(df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).str.strip().tolist())
                 esquecidos = ids_ativos - ids_na_escala
                 for mid in sorted(esquecidos):
+                    # Excluir militares de férias
+                    if militar_de_ferias(mid, dt_a.date(), df_ferias):
+                        continue
                     n = get_nome_militar(df_util, mid)
                     alertas_esquecidos.append(f"**{d_s_a}** — {n} (ID: {mid}) não está escalado")
         with st.expander(f"🔍 Militares não escalados ({len(alertas_esquecidos)})", expanded=len(alertas_esquecidos) > 0):
