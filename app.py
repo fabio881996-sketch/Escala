@@ -2880,46 +2880,54 @@ else:
                             salvar_troca_gsheet(linha2)
                             st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
 
-            # ── Matar Remunerado ──
+            # ── Fazer Remunerado ──
             elif tipo_troca == "💶 Fazer Remunerado":
-                rem_dia = df_d[
-                    (df_d['id'].astype(str).str.strip() != u_id) &
-                    (df_d['id'].astype(str).str.strip() != '') &
-                    (df_d['id'].astype(str).str.strip() != 'nan') &
-                    (~df_d['id'].astype(str).str.strip().isin(ids_com_troca)) &
-                    (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))
-                ]
-                if rem_dia.empty:
-                    st.info("Não há serviços remunerados escalados neste dia.")
+                _imp_rem = r'ferias|licen|doente|dilig|tribunal|pronto|secretaria|inquer'
+                _requerente_impedido = (
+                    (not meu.empty and bool(re.search(_imp_rem, norm(meu.iloc[0]['serviço'])))) or
+                    militar_de_ferias(u_id, dt_s.date(), df_ferias, feriados)
+                )
+                if _requerente_impedido:
+                    st.warning("Não podes fazer remunerados quando tens impedimento ou estás de férias.")
                 else:
-                    # Verificar sobreposição de horário com o meu serviço
-                    meu_ini, meu_fim = (None, None)
-                    if not meu.empty and meu.iloc[0]['horário']:
-                        meu_ini, meu_fim = _parse_horario(meu.iloc[0]['horário'])
-
-                    opts_rem = []
-                    for _, r in rem_dia.iterrows():
-                        hor_rem = str(r['horário']).strip()
-                        if meu_ini is not None and hor_rem:
-                            ini_r, fim_r = _parse_horario(hor_rem)
-                            if ini_r is not None:
-                                if not (fim_r <= meu_ini or ini_r >= meu_fim):
-                                    continue
-                        nome_r = get_nome_curto(df_util, str(r["id"]))
-                        opts_rem.append(f"{r['id']} {nome_r} - {r['serviço']} ({hor_rem})")
-
-                    if not opts_rem:
-                        st.warning("Não há remunerados disponíveis sem sobreposição de horário.")
+                    rem_dia = df_d[
+                        (df_d['id'].astype(str).str.strip() != u_id) &
+                        (df_d['id'].astype(str).str.strip() != '') &
+                        (df_d['id'].astype(str).str.strip() != 'nan') &
+                        (~df_d['id'].astype(str).str.strip().isin(ids_com_troca)) &
+                        (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))
+                    ]
+                    if rem_dia.empty:
+                        st.info("Não há serviços remunerados escalados neste dia.")
                     else:
-                        with st.form("matar_rem"):
-                            st.info("Seleciona o remunerado que queres fazer.")
-                            rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
-                                id_d = rem_sel.split(" ")[0]
-                                s_d  = rem_sel.split(" - ", 1)[1]
-                                if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, "MATAR_REMUNERADO", id_d, s_d, "Pendente_Militar", ""]):
-                                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
+                        # Verificar sobreposição de horário com o meu serviço
+                        meu_ini, meu_fim = (None, None)
+                        if not meu.empty and meu.iloc[0]['horário']:
+                            meu_ini, meu_fim = _parse_horario(meu.iloc[0]['horário'])
+
+                        opts_rem = []
+                        for _, r in rem_dia.iterrows():
+                            hor_rem = str(r['horário']).strip()
+                            if meu_ini is not None and hor_rem:
+                                ini_r, fim_r = _parse_horario(hor_rem)
+                                if ini_r is not None:
+                                    if not (fim_r <= meu_ini or ini_r >= meu_fim):
+                                        continue
+                            nome_r = get_nome_curto(df_util, str(r["id"]))
+                            opts_rem.append(f"{r['id']} {nome_r} - {r['serviço']} ({hor_rem})")
+
+                        if not opts_rem:
+                            st.warning("Não há remunerados disponíveis sem sobreposição de horário.")
+                        else:
+                            with st.form("matar_rem"):
+                                st.info("Seleciona o remunerado que queres fazer.")
+                                rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
+                                    id_d = rem_sel.split(" ")[0]
+                                    s_d  = rem_sel.split(" - ", 1)[1]
+                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, "MATAR_REMUNERADO", id_d, s_d, "Pendente_Militar", ""]):
+                                        st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
 
     # --- 📥 PEDIDOS RECEBIDOS ---
     elif menu == "📥 Pedidos Recebidos":
