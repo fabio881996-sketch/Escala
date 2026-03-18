@@ -2325,6 +2325,12 @@ else:
         df_f = load_ferias(ano_sel_f)
         fer_f = load_feriados(ano_sel_f)
 
+        meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+
+        def fmt_data_ext(d):
+            return f"{d.day} de {meses_pt[d.month]} de {d.year}"
+
         if df_f.empty:
             st.info(f"Não há plano de férias para {ano_sel_f}.")
         else:
@@ -2335,61 +2341,87 @@ else:
             dias_cols_f = [c for c in cols_f if 'dias' in c.lower() and 'total' not in c.lower()]
             total_col_f = next((c for c in cols_f if 'total' in c.lower()), None)
 
+            def render_periodos(row_f, fer_f):
+                periodos = []
+                for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
+                    ini_v = str(row_f.get(ini_c, '')).strip()
+                    fim_v = str(row_f.get(fim_c, '')).strip()
+                    if not ini_v or ini_v == 'nan': continue
+                    try:
+                        ini_d = datetime.strptime(ini_v, '%d/%m/%Y').date()
+                        fim_d = datetime.strptime(fim_v, '%d/%m/%Y').date()
+                        du = sum(1 for n in range((fim_d - ini_d).days + 1)
+                                if (ini_d + timedelta(days=n)).weekday() < 5
+                                and (ini_d + timedelta(days=n)) not in fer_f)
+                        dc = (fim_d - ini_d).days + 1
+                        periodos.append((ini_d, fim_d, du, dc))
+                    except:
+                        pass
+                return periodos
+
             if is_admin:
-                # Admin vê todos os militares
                 st.markdown("#### 👥 Plano Geral")
                 for _, row_f in df_f.iterrows():
                     mid_f = str(row_f.get(id_col_f, '')).strip()
                     if not mid_f: continue
                     nome_f = get_nome_militar(df_util, mid_f)
                     total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
-                    with st.expander(f"👤 {nome_f} {f'— {total_f} dias' if total_f and total_f != 'nan' else ''}"):
-                        for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
-                            ini_v = str(row_f.get(ini_c, '')).strip()
-                            fim_v = str(row_f.get(fim_c, '')).strip()
-                            if not ini_v or ini_v == 'nan': continue
-                            # Calcular dias úteis
-                            try:
-                                ini_d = datetime.strptime(ini_v, '%d/%m/%Y').date()
-                                fim_d = datetime.strptime(fim_v, '%d/%m/%Y').date()
-                                du = sum(1 for n in range((fim_d - ini_d).days + 1)
-                                        if (ini_d + timedelta(days=n)).weekday() < 5
-                                        and (ini_d + timedelta(days=n)) not in fer_f)
-                                st.markdown(f"📅 **{ini_v}** → **{fim_v}** &nbsp;·&nbsp; {du} dias úteis")
-                            except:
-                                st.markdown(f"📅 {ini_v} → {fim_v}")
+                    periodos = render_periodos(row_f, fer_f)
+                    label = f"👤 {nome_f}"
+                    if total_f and total_f != 'nan':
+                        label += f" — {total_f} dias úteis"
+                    with st.expander(label):
+                        for i, (ini_d, fim_d, du, dc) in enumerate(periodos, 1):
+                            st.markdown(
+                                f'<div style="background:#F0FDF4;border-left:3px solid #16A34A;border-radius:8px;'
+                                f'padding:10px 14px;margin-bottom:8px">'
+                                f'<div style="font-size:0.75rem;color:#16A34A;font-weight:700;letter-spacing:0.05em">PERÍODO {i}</div>'
+                                f'<div style="font-size:0.95rem;font-weight:700;color:#14532D;margin:4px 0">'
+                                f'🏖️ {fmt_data_ext(ini_d)}</div>'
+                                f'<div style="font-size:0.85rem;color:#166534">até {fmt_data_ext(fim_d)}</div>'
+                                f'<div style="margin-top:6px;display:flex;gap:12px">'
+                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:2px 8px;border-radius:10px">📆 {dc} dias corridos</span>'
+                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:2px 8px;border-radius:10px">💼 {du} dias úteis</span>'
+                                f'</div></div>',
+                                unsafe_allow_html=True
+                            )
             else:
-                # Militar vê só as suas férias
                 mil_f = df_f[df_f[id_col_f].astype(str).str.strip() == u_id]
                 if mil_f.empty:
                     st.info("Não tens férias planeadas para este ano.")
                 else:
                     row_f = mil_f.iloc[0]
                     total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
-                    if total_f and total_f != 'nan':
-                        st.metric("Total de dias úteis", total_f)
-                    st.markdown("---")
-                    for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
-                        ini_v = str(row_f.get(ini_c, '')).strip()
-                        fim_v = str(row_f.get(fim_c, '')).strip()
-                        if not ini_v or ini_v == 'nan': continue
-                        try:
-                            ini_d = datetime.strptime(ini_v, '%d/%m/%Y').date()
-                            fim_d = datetime.strptime(fim_v, '%d/%m/%Y').date()
-                            du = sum(1 for n in range((fim_d - ini_d).days + 1)
-                                    if (ini_d + timedelta(days=n)).weekday() < 5
-                                    and (ini_d + timedelta(days=n)) not in fer_f)
-                            num_periodo = ini_cols_f.index(ini_c) + 1
-                            st.markdown(
-                                f'<div class="card-servico card-ausencia">'
-                                f'<p><b>Período {num_periodo}</b></p>'
-                                f'<h3>🏖️ {ini_v} → {fim_v}</h3>'
-                                f'<p>📆 {du} dias úteis</p>'
-                                f'</div>',
-                                unsafe_allow_html=True
-                            )
-                        except:
-                            st.markdown(f"📅 {ini_v} → {fim_v}")
+                    periodos = render_periodos(row_f, fer_f)
+                    total_du = sum(p[2] for p in periodos)
+                    total_dc = sum(p[3] for p in periodos)
+
+                    # Resumo no topo
+                    st.markdown(
+                        f'<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:12px;'
+                        f'padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
+                        f'<div><div style="font-size:0.8rem;color:#065F46;font-weight:600">PLANO DE FÉRIAS {ano_sel_f}</div>'
+                        f'<div style="font-size:1.1rem;font-weight:800;color:#064E3B">{u_nome}</div></div>'
+                        f'<div style="text-align:right">'
+                        f'<div style="font-size:1.8rem;font-weight:900;color:#059669">{total_du}</div>'
+                        f'<div style="font-size:0.75rem;color:#065F46">dias úteis</div>'
+                        f'</div></div>',
+                        unsafe_allow_html=True
+                    )
+
+                    for i, (ini_d, fim_d, du, dc) in enumerate(periodos, 1):
+                        st.markdown(
+                            f'<div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:10px;'
+                            f'padding:14px 18px;margin-bottom:10px">'
+                            f'<div style="font-size:0.72rem;color:#16A34A;font-weight:700;letter-spacing:0.08em;margin-bottom:6px">PERÍODO {i}</div>'
+                            f'<div style="font-size:1rem;font-weight:700;color:#14532D">🏖️ {fmt_data_ext(ini_d)}</div>'
+                            f'<div style="font-size:0.85rem;color:#166534;margin:2px 0 10px 0">até {fmt_data_ext(fim_d)}</div>'
+                            f'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+                            f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">📅 {dc} dias corridos</span>'
+                            f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">💼 {du} dias úteis</span>'
+                            f'</div></div>',
+                            unsafe_allow_html=True
+                        )
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
@@ -3174,4 +3206,3 @@ else:
                     st.warning(a)
             else:
                 st.success("✅ Sem alertas")
-                
