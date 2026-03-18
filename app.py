@@ -2341,6 +2341,7 @@ else:
             fim_cols_f  = [c for c in cols_f if 'fim' in c.lower()]
             dias_cols_f = [c for c in cols_f if 'dias' in c.lower() and 'total' not in c.lower()]
             total_col_f = next((c for c in cols_f if 'total' in c.lower()), None)
+            st.caption(f"🔍 ini_cols={ini_cols_f} fim_cols={fim_cols_f} total_col={total_col_f} u_id={u_id} is_admin={is_admin}")
 
             def render_periodos(row_f, fer_f):
                 periodos = []
