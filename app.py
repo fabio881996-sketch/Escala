@@ -2389,6 +2389,7 @@ else:
                             )
             else:
                 mil_f = df_f[df_f[id_col_f].astype(str).str.strip() == u_id]
+                st.caption(f"🔍 ids_na_sheet={df_f[id_col_f].astype(str).str.strip().tolist()[:5]} match={len(mil_f)}")
                 if mil_f.empty:
                     st.info("Não tens férias planeadas para este ano.")
                 else:
