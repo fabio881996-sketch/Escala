@@ -632,7 +632,32 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
     return pdf.output(dest='S').encode('latin-1', 'replace')
 
-def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
+def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_fill_color(26, 43, 74)
+    pdf.rect(0, 0, 210, 30, 'F')
+    pdf.set_font("Arial", "B", 17.5)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(190, 30, "GNR - Comprovativo de Remunerado", 0, 1, 'C')
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(10)
+    pdf.set_font("Arial", "", 10.5)
+    texto = (
+        f"Certifica-se que o militar {s(dados['nome_cedente'])} (ID {s(dados['id_cedente'])}) "
+        f"cedeu o servico remunerado '{s(dados['remunerado'])}' do dia {s(dados['data'])} "
+        f"ao militar {s(dados['nome_requerente'])} (ID {s(dados['id_requerente'])}).\n\n"
+        f"O pedido foi aceite pelo militar cedente e validado superiormente por "
+        f"{s(dados['validador'])} no dia {s(dados['data_val'])}."
+    )
+    pdf.multi_cell(190, 8, texto)
+    pdf.ln(15)
+    pdf.set_font("Arial", "I", 8)
+    pdf.set_text_color(100, 100, 100)
+    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
+    return pdf.output(dest='S').encode('latin-1', 'replace')
+
+
     """Gera PDF da escala diaria em A4 retrato. Inclui indicacao de trocas."""
     from datetime import datetime as _dt
 
@@ -3033,6 +3058,21 @@ else:
                                 file_name=f"Guia_Troca_{r['data'].replace('/','-')}.pdf",
                                 mime="application/pdf",
                                 key=f"hist_pdf_{idx}"
+                            )
+                        else:
+                            dados_pdf_rem = {
+                                "data":            r['data'],
+                                "id_requerente":   r['id_origem'],  "nome_requerente": n_o,
+                                "id_cedente":      r['id_destino'], "nome_cedente":    n_d,
+                                "remunerado":      r['servico_destino'],
+                                "validador":       val_por,         "data_val":        val_em,
+                            }
+                            st.download_button(
+                                label="📥 Descarregar Comprovativo",
+                                data=gerar_pdf_fazer_remunerado(dados_pdf_rem),
+                                file_name=f"Remunerado_{r['data'].replace('/','-')}.pdf",
+                                mime="application/pdf",
+                                key=f"rem_pdf_{idx}"
                             )
 
     # --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
