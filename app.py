@@ -287,8 +287,6 @@ def load_feriados(ano: int) -> list:
         if not valores:
             return []
         # Debug temporário — guardar em session_state para mostrar
-        import streamlit as _st
-        _st.session_state['_debug_feriados'] = str(valores[:5])
         feriados = []
         num_cols = max(len(r) for r in valores)
         for ci in range(num_cols):
@@ -311,8 +309,6 @@ def load_feriados(ano: int) -> list:
                         pass
         return feriados
     except Exception as e:
-        import streamlit as _st
-        _st.session_state['_debug_feriados'] = f"ERRO: {e}"
         return []
 
 def militar_de_ferias(u_id: str, data: date, df_ferias: pd.DataFrame) -> bool:
@@ -2334,9 +2330,6 @@ else:
         ano_sel_f = st.selectbox("Ano:", [ano_atual, ano_atual + 1], index=0)
         df_f = load_ferias(ano_sel_f)
         fer_f = load_feriados(ano_sel_f)
-        st.caption(f"🔍 feriados={fer_f}")
-        if '_debug_feriados' in st.session_state:
-            st.caption(f"🔍 raw_sheet={st.session_state['_debug_feriados']}")
 
         meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
