@@ -311,10 +311,33 @@ def load_feriados(ano: int) -> list:
     except Exception as e:
         return []
 
-def militar_de_ferias(u_id: str, data: date, df_ferias: pd.DataFrame) -> bool:
-    """Verifica se um militar está de férias numa data."""
+def _parse_data_ferias(s):
+    """Tenta parsear uma data em vários formatos."""
+    s = str(s).strip()
+    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%m/%d/%Y'):
+        try:
+            return datetime.strptime(s, fmt).date()
+        except:
+            pass
+    return None
+
+def _fim_ferias_real(fim_d, feriados_list):
+    """Estende o fim das férias para incluir fins de semana e feriados subsequentes."""
+    fim_ext = fim_d
+    while True:
+        proximo = fim_ext + timedelta(days=1)
+        if proximo.weekday() >= 5 or proximo in feriados_list:
+            fim_ext = proximo
+        else:
+            break
+    return fim_ext
+
+def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: list = None) -> bool:
+    """Verifica se um militar está de férias numa data (incluindo extensão de fds e feriados)."""
     if df_ferias.empty:
         return False
+    if feriados_list is None:
+        feriados_list = []
     cols = df_ferias.columns.tolist()
     ini_cols = [c for c in cols if 'ini' in c.lower()]
     fim_cols  = [c for c in cols if 'fim' in c.lower()]
@@ -322,19 +345,21 @@ def militar_de_ferias(u_id: str, data: date, df_ferias: pd.DataFrame) -> bool:
     mil = df_ferias[df_ferias[id_col].astype(str).str.strip() == str(u_id).strip()]
     if mil.empty:
         return False
+    if isinstance(data, datetime):
+        data = data.date()
     for ini_c, fim_c in zip(ini_cols, fim_cols):
         for _, row in mil.iterrows():
             ini_s = str(row.get(ini_c, '')).strip()
             fim_s = str(row.get(fim_c, '')).strip()
             if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan':
                 continue
-            try:
-                ini_d = datetime.strptime(ini_s, '%d/%m/%Y').date()
-                fim_d = datetime.strptime(fim_s, '%d/%m/%Y').date()
-                if ini_d <= data <= fim_d:
-                    return True
-            except:
-                pass
+            ini_d = _parse_data_ferias(ini_s)
+            fim_d = _parse_data_ferias(fim_s)
+            if not ini_d or not fim_d:
+                continue
+            fim_real = _fim_ferias_real(fim_d, feriados_list)
+            if ini_d <= data <= fim_real:
+                return True
     return False
 
 
@@ -2208,7 +2233,7 @@ else:
                             is_fds_a = dt.weekday() >= 5
                             is_fer_a = dt.date() in feriados
                             # Verificar se está de férias
-                            if militar_de_ferias(u_id, dt.date(), df_ferias):
+                            if militar_de_ferias(u_id, dt.date(), df_ferias, feriados):
                                 st.markdown(
                                     f'<div class="card-servico card-ausencia">'
                                     f'<p><b>{lbl}</b></p>'
@@ -2351,16 +2376,26 @@ else:
                 periodos = []
                 def parse_data(s):
                     s = str(s).strip()
-                    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%m/%d', '%m/%d/%Y', '%d-%m-%Y'):
+                    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%m/%d', '%m/%d/%Y', '%d-%m-%Y', '%Y/%m/%d'):
                         try:
                             d = datetime.strptime(s, fmt).date()
-                            # Se não tem ano (ex: 04/27), assumir ano atual
                             if fmt == '%m/%d':
                                 d = d.replace(year=ano_sel_f)
                             return d
                         except:
                             pass
                     return None
+
+                def dias_corridos_reais(ini_d, fim_d, fer_f):
+                    # Estender fim_d para incluir fins de semana e feriados subsequentes
+                    fim_ext = fim_d
+                    while True:
+                        proximo = fim_ext + timedelta(days=1)
+                        if proximo.weekday() >= 5 or proximo in fer_f:
+                            fim_ext = proximo
+                        else:
+                            break
+                    return (fim_ext - ini_d).days + 1
                 for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
                     ini_v = str(row_f.get(ini_c, '')).strip()
                     fim_v = str(row_f.get(fim_c, '')).strip()
@@ -2371,7 +2406,7 @@ else:
                     du = sum(1 for n in range((fim_d - ini_d).days + 1)
                             if (ini_d + timedelta(days=n)).weekday() < 5
                             and (ini_d + timedelta(days=n)) not in fer_f)
-                    dc = (fim_d - ini_d).days + 1
+                    dc = dias_corridos_reais(ini_d, fim_d, fer_f)
                     periodos.append((ini_d, fim_d, du, dc))
                 return periodos
 
@@ -2493,7 +2528,7 @@ else:
                     mid_f = str(row_f.get(id_col_f, '')).strip()
                     if not mid_f or mid_f in ids_na_escala:
                         continue
-                    if militar_de_ferias(mid_f, d_sel, df_ferias):
+                    if militar_de_ferias(mid_f, d_sel, df_ferias, feriados):
                         nova_linha = {c: '' for c in df_at.columns}
                         nova_linha['id'] = mid_f
                         nova_linha['id_disp'] = mid_f
@@ -2563,7 +2598,7 @@ else:
                                     for _, row_f2 in df_ferias.iterrows():
                                         mid_f2 = str(row_f2.get(id_col_f2, '')).strip()
                                         if not mid_f2 or mid_f2 in ids_esc2: continue
-                                        if militar_de_ferias(mid_f2, dt2.date(), df_ferias):
+                                        if militar_de_ferias(mid_f2, dt2.date(), df_ferias, feriados):
                                             nl2 = {c: '' for c in df_d2.columns}
                                             nl2['id'] = mid_f2
                                             nl2['id_disp'] = mid_f2
@@ -3191,7 +3226,7 @@ else:
                 esquecidos = ids_ativos - ids_na_escala
                 for mid in sorted(esquecidos):
                     # Excluir militares de férias
-                    if militar_de_ferias(mid, dt_a.date(), df_ferias):
+                    if militar_de_ferias(mid, dt_a.date(), df_ferias, feriados):
                         continue
                     n = get_nome_militar(df_util, mid)
                     alertas_esquecidos.append(f"**{d_s_a}** — {n} (ID: {mid}) não está escalado")
