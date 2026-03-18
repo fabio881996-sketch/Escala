@@ -2,9 +2,14 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from fpdf import FPDF
 import io
+import re
+
+def norm(t):
+    """Normaliza texto para comparação — remove acentos e coloca em minúsculas."""
+    return unicodedata.normalize('NFKD', str(t).lower()).encode('ascii', 'ignore').decode('ascii')
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -373,14 +378,10 @@ def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: l
                 return True
     return False
 
-
-
-import unicodedata as _ud3
-
 @st.cache_data(ttl=86400)
 def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
     """Conta serviços históricos de um militar — cache 24h."""
-    def _n3(t): return _ud3.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+    def _n3(t): return norm(t)
     try:
         client = get_gsheet_client()
         sh = client.open_by_key(sheet_id_c)
@@ -442,9 +443,7 @@ def _parse_horario(hor: str):
         return None, None
 
 def _e_atendimento(serv: str) -> bool:
-    import unicodedata as _u
-    n = _u.normalize('NFKD', str(serv).lower()).encode('ascii','ignore').decode('ascii')
-    return bool(__import__('re').search(ATENDIMENTO_PATTERN, n))
+    return bool(re.search(ATENDIMENTO_PATTERN, norm(serv)))
 
 def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo: str, serv_orig_hor: str = "") -> tuple:
     """Verifica se o militar tem >= 8h de descanso entre o serviço novo e os adjacentes.
@@ -475,8 +474,7 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
                 continue
             if _e_atendimento(serv_adj):
                 continue  # exceção — adjacente é atendimento/apoio
-            import unicodedata as _ud_loc, re as _re_loc
-            if _re_loc.search(r'remu|grat', _ud_loc.normalize('NFKD', serv_adj.lower()).encode('ascii','ignore').decode('ascii')):
+            if re.search(r'remu|grat', norm(serv_adj)):
                 continue  # remunerados não contam para descanso
             ini_adj, fim_adj = _parse_horario(hor_adj)
             if ini_adj is None:
@@ -503,13 +501,10 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
     """Verifica se após a troca ambos os militares respeitam 8h de descanso.
     Usa linha de tempo absoluta em minutos (dia-1=0, dia=1440, dia+1=2880).
     Retorna lista de erros (vazia se tudo ok)."""
-    import unicodedata as _ud_loc, re as _re_loc
     MIN = 6 * 60
 
-    def _norm_serv(s):
-        return _ud_loc.normalize('NFKD', str(s).lower()).encode('ascii','ignore').decode('ascii')
     def _e_rem(s):
-        return bool(_re_loc.search(r'remu|grat', _norm_serv(s)))
+        return bool(re.search(r'remu|grat', norm(s)))
     def _isento(s):
         return _e_atendimento(s) or _e_rem(s)
 
@@ -609,7 +604,6 @@ def salvar_troca_gsheet(linha: list) -> bool:
 # ============================================================
 def s(txt) -> str:
     """Remove acentos e caracteres especiais para compatibilidade com fpdf/latin-1."""
-    import unicodedata
     return unicodedata.normalize('NFKD', str(txt)).encode('latin-1', 'ignore').decode('latin-1')
 
 def gerar_pdf_troca(dados: dict) -> bytes:
@@ -639,7 +633,6 @@ def gerar_pdf_troca(dados: dict) -> bytes:
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     """Gera PDF da escala diaria em A4 retrato. Inclui indicacao de trocas."""
-    import unicodedata
     from datetime import datetime as _dt
 
     def c(txt):
@@ -656,9 +649,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         return t
 
     df_raw = df_raw.copy()
-    import unicodedata as _ud
-    def _norm(t): return _ud.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-    df_raw['servico_col'] = df_raw['serviço'].apply(_norm)
+    df_raw["servico_col"] = df_raw["serviço"].apply(norm)
     df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
 
     # Separar logo à partida linhas sem militar (id vazio) — não aparecem nas tabelas
@@ -1718,9 +1709,7 @@ else:
                         }
                         # Verificar remunerados no mesmo dia
                         rem_cal = df_cal[df_cal['id'].astype(str) == u_id]
-                        import unicodedata as _udc
-                        def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                        rem_cal = rem_cal[rem_cal['serviço'].apply(_nc).str.contains('remu|grat', na=False)]
+                        rem_cal = rem_cal[rem_cal['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                         if not df_trocas.empty:
                             # Excluir remunerados cedidos
                             cedidos_cal = df_trocas[
@@ -1785,9 +1774,7 @@ else:
                     if info['troca']:
                         bg, cor_txt, icone = "#FFFBEB", "#92400E", "🔄"
                     else:
-                        import unicodedata as _udc
-                        def _nc(t): return _udc.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                        s_n = _nc(info['serviço'])
+                        s_n = norm(info['serviço'])
                         if any(x in s_n for x in ['ferias','licen','doente']):
                             bg, cor_txt, icone = "#F8FAFC", "#64748B", "🏖️"
                         elif 'folga' in s_n:
@@ -1945,12 +1932,10 @@ else:
                     dias_sem_dados = 0
                     encontrou_algum = True
                     # Verificar remunerados mesmo quando há troca de serviço
-                    df_d_rem = load_data(dt.strftime("%d-%m"))
+                    df_d_rem = df_d  # já carregado acima
                     if not df_d_rem.empty and 'serviço' in df_d_rem.columns:
-                        import unicodedata as _ud2r
-                        def _nr(t): return _ud2r.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
                         rem_mil_t = df_d_rem[df_d_rem['id'].astype(str) == u_id]
-                        rem_mil_t = rem_mil_t[rem_mil_t['serviço'].apply(_nr).str.contains('remu|grat', na=False)]
+                        rem_mil_t = rem_mil_t[rem_mil_t['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                         if not df_trocas.empty:
                             cedidos_t = df_trocas[
                                 (df_trocas['data'] == d_s) & (df_trocas['status'] == 'Aprovada') &
@@ -2023,9 +2008,7 @@ else:
                             obs_val = str(row.get('observações', '') or '').strip()
                             obs_html = f'<p>📝 {obs_val}</p>' if obs_val else ''
                             # Escolher classe e ícone conforme o tipo de serviço
-                            import unicodedata as _uds
-                            def _ns(t): return _uds.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-                            s_norm = _ns(row['serviço'])
+                            s_norm = norm(row['serviço'])
                             if any(x in s_norm for x in ['ferias','licen','doente']):
                                 card_class, icone_s = 'card-ausencia', '🏖️'
                             elif 'folga' in s_norm:
@@ -2109,13 +2092,11 @@ else:
                                 unsafe_allow_html=True
                             )
                             # Verificar se tem remunerado no mesmo dia
-                            df_rem_dia = load_data(dt.strftime("%d-%m"))
+                            df_rem_dia = df_d  # já carregado acima
                             if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
-                                import unicodedata as _ud2
-                                def _n(t): return _ud2.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
                                 # Remunerados escalados diretamente
                                 rem_mil = df_rem_dia[df_rem_dia['id'].astype(str) == u_id]
-                                rem_mil = rem_mil[rem_mil['serviço'].apply(_n).str.contains('remu|grat', na=False)]
+                                rem_mil = rem_mil[rem_mil['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                                 # Excluir remunerados que foram cedidos (matar remunerado aprovado onde sou o cedente)
                                 if not df_trocas.empty:
                                     cedidos = df_trocas[
@@ -3145,9 +3126,6 @@ else:
             st.warning("Acesso restrito a administradores.")
             st.stop()
 
-        import unicodedata as _uda
-        def _na(t): return _uda.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
-
         hoje_a = datetime.now()
         # Verificar os próximos 30 dias
         alertas_trocas   = []
@@ -3194,7 +3172,7 @@ else:
                             alertas_trocas.append(f"**{d_s_a}** — Troca {n_o} ↔ {n_d}: serviço `{t['servico_origem']}` já não existe na escala")
 
                 # ── Alerta 2: Militar escalado em 2 serviços no mesmo dia ──
-                df_a_serv = df_a[~df_a['serviço'].apply(_na).str.contains('remu|grat', na=False)]
+                df_a_serv = df_a[~df_a['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                 contagem = df_a_serv[df_a_serv['id'].astype(str).str.strip() != ''].groupby('id').size()
                 for mid, count in contagem.items():
                     if count > 1:
@@ -3211,11 +3189,11 @@ else:
                     for mid in ids_hoje:
                         rows_hoje = df_a[
                             (df_a['id'].astype(str) == mid) &
-                            (~df_a['serviço'].apply(_na).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
+                            (~df_a['serviço'].apply(norm).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
                         ]
                         rows_ant = df_ant_a[
                             (df_ant_a['id'].astype(str) == mid) &
-                            (~df_ant_a['serviço'].apply(_na).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
+                            (~df_ant_a['serviço'].apply(norm).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
                         ]
                         for _, rh in rows_hoje.iterrows():
                             ini_h, fim_h = _parse_horario(rh['horário'])
