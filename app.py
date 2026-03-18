@@ -2808,7 +2808,7 @@ else:
                         (df_d['id'].astype(str).str.strip() != 'nan')
                     ]
                     outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
-                    opcoes_t3 = {f"{r['id']} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
+                    opcoes_t3 = {f"{r['id']} {get_nome_curto(df_util, str(r['id']))} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
                     if len(opcoes_t3) < 2:
                         st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
                     else:
