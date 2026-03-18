@@ -711,7 +711,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def sec_title(label, w=W, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 10)
+        pdf.set_font("Arial", "B", 10.5)
         pdf.set_fill_color(26, 46, 100)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(w, 5.5, c(f"  {label.upper()}"), 1, 1, 'L', True)
@@ -720,7 +720,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def tbl_hdr(cols, widths, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("Arial", "B", 9.5)
+        pdf.set_font("Arial", "B", 10.0)
         pdf.set_fill_color(205, 215, 242)
         pdf.set_text_color(15, 35, 90)
         for col, w in zip(cols, widths):
@@ -729,7 +729,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         pdf.set_text_color(0, 0, 0)
 
     def tbl_row(vals, widths, x=None, fill=False):
-        pdf.set_font("Arial", "", 8)
+        pdf.set_font("Arial", "", 8.5)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
@@ -780,11 +780,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_fill_color(20, 40, 95)
     pdf.rect(10, 10, W, 14, 'F')
     pdf.set_xy(10, 11)
-    pdf.set_font("Arial", "B", 10.5)
+    pdf.set_font("Arial", "B", 11.0)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(W, 6, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
     pdf.set_x(10)
-    pdf.set_font("Arial", "B", 10.5)
+    pdf.set_font("Arial", "B", 11.0)
     try:
         dt_obj   = _dt.strptime(data, "%d/%m/%Y")
         dias_pt  = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
@@ -809,7 +809,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C1)
-            pdf.set_font("Arial", "", 8.5)
+            pdf.set_font("Arial", "", 9.0)
             pdf.set_fill_color(255, 245, 245)
             pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C1)
@@ -822,7 +822,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C2)
-            pdf.set_font("Arial", "", 8.5)
+            pdf.set_font("Arial", "", 9.0)
             pdf.set_fill_color(245, 245, 255)
             horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
             pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
@@ -972,7 +972,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 grupo.append(j)
                 j += 1
 
-            pdf.set_font("Arial", "", 8.5)
+            pdf.set_font("Arial", "", 9.0)
             if fill:
                 pdf.set_fill_color(235, 241, 255)
             else:
@@ -1058,7 +1058,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 horario_val = str(r.get('horário','') or '').strip()
                 if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
                     indic = f"{indic}\n{horario_val}"
-                pdf.set_font("Arial", "", 8.5)
+                pdf.set_font("Arial", "", 9.0)
                 if fill:
                     pdf.set_fill_color(255, 255, 220)
                 else:
@@ -1113,7 +1113,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_xy(10, 282)
     pdf.set_draw_color(160, 160, 160)
     pdf.line(10, 282, 200, 282)
-    pdf.set_font("Arial", "I", 8)
+    pdf.set_font("Arial", "I", 8.5)
     pdf.set_text_color(120, 120, 120)
     pdf.set_xy(10, 283)
     pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
