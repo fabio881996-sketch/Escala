@@ -2883,12 +2883,13 @@ else:
             # ── Fazer Remunerado ──
             elif tipo_troca == "💶 Fazer Remunerado":
                 _imp_rem = r'ferias|licen|doente|dilig|tribunal|pronto|secretaria|inquer'
-                _requerente_impedido = (
-                    (not meu.empty and bool(re.search(_imp_rem, norm(meu.iloc[0]['serviço'])))) or
-                    militar_de_ferias(u_id, dt_s.date(), df_ferias, feriados)
-                )
-                if _requerente_impedido:
-                    st.warning("Não podes fazer remunerados quando tens impedimento ou estás de férias.")
+                _motivo_imp = ''
+                if not meu.empty and re.search(_imp_rem, norm(meu.iloc[0]['serviço'])):
+                    _motivo_imp = meu.iloc[0]['serviço']
+                elif militar_de_ferias(u_id, dt_s, df_ferias, feriados):
+                    _motivo_imp = 'Férias'
+                if _motivo_imp:
+                    st.warning(f"Não podes fazer remunerados — estás com **{_motivo_imp}**.")
                 else:
                     rem_dia = df_d[
                         (df_d['id'].astype(str).str.strip() != u_id) &
