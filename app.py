@@ -2324,6 +2324,7 @@ else:
         ano_sel_f = st.selectbox("Ano:", [ano_atual, ano_atual + 1], index=0)
         df_f = load_ferias(ano_sel_f)
         fer_f = load_feriados(ano_sel_f)
+        st.caption(f"🔍 feriados={fer_f}")
 
         meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
@@ -2335,13 +2336,11 @@ else:
             st.info(f"Não há plano de férias para {ano_sel_f}.")
         else:
             cols_f = df_f.columns.tolist()
-            st.caption(f"🔍 colunas={cols_f[:8]} linhas={len(df_f)}")
             id_col_f = 'id' if 'id' in cols_f else cols_f[0]
             ini_cols_f = [c for c in cols_f if 'ini' in c.lower()]
             fim_cols_f  = [c for c in cols_f if 'fim' in c.lower()]
             dias_cols_f = [c for c in cols_f if 'dias' in c.lower() and 'total' not in c.lower()]
             total_col_f = next((c for c in cols_f if 'total' in c.lower()), None)
-            st.caption(f"🔍 ini_cols={ini_cols_f} fim_cols={fim_cols_f} total_col={total_col_f} u_id={u_id} is_admin={is_admin}")
 
             def render_periodos(row_f, fer_f):
                 periodos = []
@@ -2399,12 +2398,10 @@ else:
                             )
             else:
                 mil_f = df_f[df_f[id_col_f].astype(str).str.strip() == u_id]
-                st.caption(f"🔍 ids_na_sheet={df_f[id_col_f].astype(str).str.strip().tolist()[:5]} match={len(mil_f)}")
                 if mil_f.empty:
                     st.info("Não tens férias planeadas para este ano.")
                 else:
                     row_f = mil_f.iloc[0]
-                    st.caption(f"🔍 p1_ini={repr(str(row_f.get('p1_ini','')))} p1_fim={repr(str(row_f.get('p1_fim','')))} total={repr(str(row_f.get(total_col_f,'') if total_col_f else ''))}")
                     total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
                     periodos = render_periodos(row_f, fer_f)
                     total_du = sum(p[2] for p in periodos)
