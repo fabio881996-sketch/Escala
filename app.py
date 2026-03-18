@@ -235,9 +235,9 @@ def _df_from_records(records) -> pd.DataFrame:
         df = df[df['id'] != ''].reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=120)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
+    """Carrega dados de uma aba da Google Sheet com cache de 2 minutos."""
     try:
         sh = get_sheet()
         if sh is None:
@@ -257,9 +257,81 @@ def load_utilizadores() -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-def invalidar_trocas():
-    """Limpa cache de trocas."""
-    load_data.clear()
+@st.cache_data(ttl=3600)
+def load_ferias(ano: int) -> pd.DataFrame:
+    """Carrega plano de férias de um ano — cache 1h."""
+    try:
+        sh = get_sheet()
+        if sh is None:
+            return pd.DataFrame()
+        ws = sh.worksheet(f"férias {ano}")
+        valores = ws.get_all_values()
+        if not valores or len(valores) < 2:
+            return pd.DataFrame()
+        headers = [str(h).strip() for h in valores[0]]
+        df = pd.DataFrame(valores[1:], columns=headers)
+        df = df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+        return df
+    except Exception:
+        return pd.DataFrame()
+
+@st.cache_data(ttl=86400)
+def load_feriados(ano: int) -> list:
+    """Carrega feriados de um ano da aba 'feriados' — cache 24h."""
+    try:
+        sh = get_sheet()
+        if sh is None:
+            return []
+        ws = sh.worksheet("feriados")
+        valores = ws.get_all_values()
+        feriados = []
+        for col in zip(*valores):
+            col = [str(v).strip() for v in col if str(v).strip()]
+            if not col:
+                continue
+            # Primeira linha é o ano
+            try:
+                ano_col = int(col[0])
+            except:
+                continue
+            if ano_col != ano:
+                continue
+            for v in col[1:]:
+                try:
+                    feriados.append(datetime.strptime(v, '%d/%m/%Y').date())
+                except:
+                    pass
+        return feriados
+    except Exception:
+        return []
+
+def militar_de_ferias(u_id: str, data: date, df_ferias: pd.DataFrame) -> bool:
+    """Verifica se um militar está de férias numa data."""
+    if df_ferias.empty:
+        return False
+    cols = df_ferias.columns.tolist()
+    ini_cols = [c for c in cols if 'ini' in c.lower()]
+    fim_cols  = [c for c in cols if 'fim' in c.lower()]
+    id_col = 'id' if 'id' in cols else cols[0]
+    mil = df_ferias[df_ferias[id_col].astype(str).str.strip() == str(u_id).strip()]
+    if mil.empty:
+        return False
+    for ini_c, fim_c in zip(ini_cols, fim_cols):
+        for _, row in mil.iterrows():
+            ini_s = str(row.get(ini_c, '')).strip()
+            fim_s = str(row.get(fim_c, '')).strip()
+            if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan':
+                continue
+            try:
+                ini_d = datetime.strptime(ini_s, '%d/%m/%Y').date()
+                fim_d = datetime.strptime(fim_s, '%d/%m/%Y').date()
+                if ini_d <= data <= fim_d:
+                    return True
+            except:
+                pass
+    return False
+
+
 
 import unicodedata as _ud3
 
@@ -1370,6 +1442,9 @@ else:
     # Carregar dados globais uma vez por sessão de render
     df_trocas = load_data("registos_trocas")
     df_util   = load_utilizadores()
+    ano_atual = datetime.now().year
+    df_ferias  = load_ferias(ano_atual)
+    feriados   = load_feriados(ano_atual)
 
     u_id      = str(st.session_state['user_id'])
     u_nome    = st.session_state['user_nome']
@@ -1416,13 +1491,14 @@ else:
             "📅 Minha Escala",
             "🔍 Escala Geral",
             "📊 Estatísticas",
+            "🏖️ Férias",
             "🔄 Solicitar Troca",
             "📥 Pedidos Recebidos",
             "📋 Histórico de Trocas",
             "🔄 Giros",
             "👥 Efetivo",
         ]
-        menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas"]
+        menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas"]
 
         st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
 
@@ -1430,6 +1506,7 @@ else:
             "📅 Minha Escala",
             "🔍 Escala Geral",
             "📊 Estatísticas",
+            "🏖️ Férias",
             "🔄 Solicitar Troca",
             "📥 Pedidos Recebidos",
             "📋 Histórico de Trocas",
@@ -1467,6 +1544,39 @@ else:
         ])
         if n_pend > 0:
             st.warning(f"🔔 Tens **{n_pend} pedido(s) de troca** por responder! Vai a **📥 Pedidos Recebidos**.")
+
+        # Verificar trocas validadas cujo serviço original já não existe na escala
+        minhas_apr = df_trocas[
+            (df_trocas['status'] == 'Aprovada') &
+            (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
+            ((df_trocas['id_origem'].astype(str) == u_id) |
+             (df_trocas['id_destino'].astype(str) == u_id))
+        ]
+        for _, t in minhas_apr.iterrows():
+            fui_origem = str(t['id_origem']) == u_id
+            serv_meu_t = t['servico_origem'] if fui_origem else t['servico_destino']
+            id_meu     = u_id
+            serv_nome  = serv_meu_t.rsplit('(', 1)[0].strip().lower()
+            hor_val    = serv_meu_t.rsplit('(', 1)[1].rstrip(')') if '(' in serv_meu_t else ''
+            try:
+                dt_t = datetime.strptime(t['data'], '%d/%m/%Y')
+            except:
+                continue
+            # Só verificar nos próximos 30 dias
+            hoje_b = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            if dt_t < hoje_b or (dt_t - hoje_b).days > 30:
+                continue
+            df_dia_t = load_data(dt_t.strftime('%d-%m'))
+            if df_dia_t.empty:
+                continue
+            existe = df_dia_t[
+                (df_dia_t['id'].astype(str) == id_meu) &
+                (df_dia_t['serviço'].astype(str).str.strip().str.lower() == serv_nome) &
+                (df_dia_t['horário'].astype(str).str.strip() == hor_val.strip())
+            ]
+            if existe.empty:
+                outro_nome = get_nome_militar(df_util, t['id_destino'] if fui_origem else t['id_origem'])
+                st.error(f"⚠️ **Atenção!** A tua troca de **{t['data']}** com **{outro_nome}** pode estar afetada por uma alteração na escala. Contacta o teu superior.")
 
     # ============================================================
     # EXPIRAÇÃO DE SESSÃO (4 horas)
@@ -1619,11 +1729,12 @@ else:
                 is_hoje = dt_cel == hoje_d
                 weekday = dt_cel.weekday()
                 dia_sem = nomes_dia[weekday]
-                is_fds = weekday >= 5  # Sábado=5, Domingo=6
+                is_fds = weekday >= 5
+                is_feriado = dt_cel in feriados
 
-                borda_esq = "4px solid #1E3A8A" if is_hoje else ("3px solid #F59E0B" if is_fds else "3px solid #E2E8F0")
-                cor_num = "#B45309" if is_fds else "#1E293B"
-                cor_dia = "#B45309" if is_fds else "#64748B"
+                borda_esq = "4px solid #1E3A8A" if is_hoje else ("3px solid #DC2626" if is_feriado else ("3px solid #F59E0B" if is_fds else "3px solid #E2E8F0"))
+                cor_num = "#DC2626" if is_feriado else ("#B45309" if is_fds else "#1E293B")
+                cor_dia = "#DC2626" if is_feriado else ("#B45309" if is_fds else "#64748B")
                 hoje_badge = " <span style='background:#1E3A8A;color:white;font-size:0.65rem;padding:1px 6px;border-radius:10px'>HOJE</span>" if is_hoje else ""
 
                 if d in servicos_mes:
@@ -2086,7 +2197,34 @@ else:
                                         unsafe_allow_html=True
                                     )
                             encontrou_algum = True
-                        # Aba existe mas o militar não está escalado — não conta como "sem dados"
+                        # Aba existe mas o militar não está escalado
+                        else:
+                            is_fds_a = dt.weekday() >= 5
+                            is_fer_a = dt.date() in feriados
+                            # Verificar se está de férias
+                            if militar_de_ferias(u_id, dt.date(), df_ferias):
+                                st.markdown(
+                                    f'<div class="card-servico card-ausencia">'
+                                    f'<p><b>{lbl}</b></p>'
+                                    f'<h3>🏖️ Férias</h3>'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
+                                encontrou_algum = True
+                            else:
+                                borda_a = "3px solid #DC2626" if is_fer_a else ("3px solid #F59E0B" if is_fds_a else "3px solid #E2E8F0")
+                                cor_a = "#DC2626" if is_fer_a else ("#94A3B8" if not is_fds_a else "#B45309")
+                                msg_a = "🎌 Feriado" if is_fer_a else "Sem serviço escalado"
+                                st.markdown(
+                                    f'<div style="background:#F8FAFC;border-left:{borda_a};border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:12px">'
+                                    f'<div style="min-width:48px;text-align:center">'
+                                    f'<div style="font-size:1.2rem;font-weight:800;color:{cor_a};line-height:1">{dt.day}</div>'
+                                    f'<div style="font-size:0.7rem;color:{cor_a}">{"Sáb" if dt.weekday()==5 else "Dom" if dt.weekday()==6 else dt.strftime("%a").capitalize()}</div>'
+                                    f'</div>'
+                                    f'<div style="color:{cor_a};font-size:0.85rem">{msg_a}</div>'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
                         dias_sem_dados = 0
                     else:
                         dias_sem_dados += 1
@@ -2179,6 +2317,79 @@ else:
                     st.markdown("**Detalhe por serviço**")
                     df_det = df_filtrado.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False)
                     st.dataframe(df_det, use_container_width=True, hide_index=True)
+
+    # --- 🏖️ FÉRIAS ---
+    elif menu == "🏖️ Férias":
+        st.title("🏖️ Plano de Férias")
+        ano_sel_f = st.selectbox("Ano:", [ano_atual, ano_atual + 1], index=0)
+        df_f = load_ferias(ano_sel_f)
+        fer_f = load_feriados(ano_sel_f)
+
+        if df_f.empty:
+            st.info(f"Não há plano de férias para {ano_sel_f}.")
+        else:
+            cols_f = df_f.columns.tolist()
+            id_col_f = 'id' if 'id' in cols_f else cols_f[0]
+            ini_cols_f = [c for c in cols_f if 'ini' in c.lower()]
+            fim_cols_f  = [c for c in cols_f if 'fim' in c.lower()]
+            dias_cols_f = [c for c in cols_f if 'dias' in c.lower() and 'total' not in c.lower()]
+            total_col_f = next((c for c in cols_f if 'total' in c.lower()), None)
+
+            if is_admin:
+                # Admin vê todos os militares
+                st.markdown("#### 👥 Plano Geral")
+                for _, row_f in df_f.iterrows():
+                    mid_f = str(row_f.get(id_col_f, '')).strip()
+                    if not mid_f: continue
+                    nome_f = get_nome_militar(df_util, mid_f)
+                    total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
+                    with st.expander(f"👤 {nome_f} {f'— {total_f} dias' if total_f and total_f != 'nan' else ''}"):
+                        for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
+                            ini_v = str(row_f.get(ini_c, '')).strip()
+                            fim_v = str(row_f.get(fim_c, '')).strip()
+                            if not ini_v or ini_v == 'nan': continue
+                            # Calcular dias úteis
+                            try:
+                                ini_d = datetime.strptime(ini_v, '%d/%m/%Y').date()
+                                fim_d = datetime.strptime(fim_v, '%d/%m/%Y').date()
+                                du = sum(1 for n in range((fim_d - ini_d).days + 1)
+                                        if (ini_d + timedelta(days=n)).weekday() < 5
+                                        and (ini_d + timedelta(days=n)) not in fer_f)
+                                st.markdown(f"📅 **{ini_v}** → **{fim_v}** &nbsp;·&nbsp; {du} dias úteis")
+                            except:
+                                st.markdown(f"📅 {ini_v} → {fim_v}")
+            else:
+                # Militar vê só as suas férias
+                mil_f = df_f[df_f[id_col_f].astype(str).str.strip() == u_id]
+                if mil_f.empty:
+                    st.info("Não tens férias planeadas para este ano.")
+                else:
+                    row_f = mil_f.iloc[0]
+                    total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
+                    if total_f and total_f != 'nan':
+                        st.metric("Total de dias úteis", total_f)
+                    st.markdown("---")
+                    for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
+                        ini_v = str(row_f.get(ini_c, '')).strip()
+                        fim_v = str(row_f.get(fim_c, '')).strip()
+                        if not ini_v or ini_v == 'nan': continue
+                        try:
+                            ini_d = datetime.strptime(ini_v, '%d/%m/%Y').date()
+                            fim_d = datetime.strptime(fim_v, '%d/%m/%Y').date()
+                            du = sum(1 for n in range((fim_d - ini_d).days + 1)
+                                    if (ini_d + timedelta(days=n)).weekday() < 5
+                                    and (ini_d + timedelta(days=n)) not in fer_f)
+                            num_periodo = ini_cols_f.index(ini_c) + 1
+                            st.markdown(
+                                f'<div class="card-servico card-ausencia">'
+                                f'<p><b>Período {num_periodo}</b></p>'
+                                f'<h3>🏖️ {ini_v} → {fim_v}</h3>'
+                                f'<p>📆 {du} dias úteis</p>'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                        except:
+                            st.markdown(f"📅 {ini_v} → {fim_v}")
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
@@ -2439,14 +2650,16 @@ else:
                             erros_destino = verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg)
                             erros_dest_only = [e for e in erros_destino if e.startswith("O militar de destino")]
                             if not erros_dest_only:
-                                opts.append(f"{id_c} - {serv_c} ({hor_c})")
+                                nome_c = get_nome_militar(df_util, id_c)
+                                opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c})")
                         # Restantes — com verificação de descanso
                         for _, row_c in cols.iterrows():
                             id_c   = str(row_c['id'])
                             serv_c = str(row_c['serviço'])
                             hor_c  = str(row_c['horário'])
                             if not verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg):
-                                opts.append(f"{id_c} - {serv_c} ({hor_c})")
+                                nome_c = get_nome_militar(df_util, id_c)
+                                opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c})")
                         if not opts:
                             st.warning("Não há militares disponíveis para troca neste dia (restrições de descanso).")
                         else:
@@ -2454,7 +2667,7 @@ else:
                                 alvo = st.selectbox("👤 Trocar com:", opts)
                                 st.markdown("<br>", unsafe_allow_html=True)
                                 if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
-                                    id_d  = alvo.split(" - ")[0]
+                                    id_d  = alvo.split(" ")[0]
                                     s_d   = alvo.split(" - ", 1)[1]
                                     if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", ""]):
                                         st.success("✅ Pedido enviado com sucesso!")
@@ -2526,10 +2739,10 @@ else:
                         if meu_ini is not None and hor_rem:
                             ini_r, fim_r = _parse_horario(hor_rem)
                             if ini_r is not None:
-                                # Sobreposição: os dois intervalos intersectam
                                 if not (fim_r <= meu_ini or ini_r >= meu_fim):
-                                    continue  # sobreposição, excluir
-                        opts_rem.append(f"{r['id']} - {r['serviço']} ({hor_rem})")
+                                    continue
+                        nome_r = get_nome_militar(df_util, str(r['id']))
+                        opts_rem.append(f"{r['id']} {nome_r} - {r['serviço']} ({hor_rem})")
 
                     if not opts_rem:
                         st.warning("Não há remunerados disponíveis sem sobreposição de horário.")
@@ -2539,7 +2752,7 @@ else:
                             rem_sel = st.selectbox("Serviço remunerado:", opts_rem)
                             st.markdown("<br>", unsafe_allow_html=True)
                             if st.form_submit_button("✅ QUERO FAZER ESTE REMUNERADO", use_container_width=True):
-                                id_d = rem_sel.split(" - ")[0]
+                                id_d = rem_sel.split(" ")[0]
                                 s_d  = rem_sel.split(" - ", 1)[1]
                                 if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, "MATAR_REMUNERADO", id_d, s_d, "Pendente_Militar", ""]):
                                     st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
@@ -2561,10 +2774,16 @@ else:
                 for idx, r in m.iterrows():
                     nome_orig = get_nome_militar(df_util, r['id_origem'])
                     is_matar = str(r['servico_origem']) == 'MATAR_REMUNERADO'
+                    try:
+                        dt_r = datetime.strptime(r['data'], '%d/%m/%Y')
+                        dia_sem_r = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"][dt_r.weekday()]
+                        data_fmt = f"{r['data']} ({dia_sem_r})"
+                    except:
+                        data_fmt = r['data']
                     if is_matar:
                         st.markdown(
                             f'<div class="card-servico card-troca">'
-                            f'<p><b>📅 {r["data"]}</b></p>'
+                            f'<h3>📅 {data_fmt}</h3>'
                             f'<p>👤 <b>{nome_orig}</b> quer fazer o teu remunerado</p>'
                             f'<p>🔴 O teu remunerado: <b>{r["servico_destino"]}</b></p>'
                             f'</div>',
@@ -2573,7 +2792,7 @@ else:
                     else:
                         st.markdown(
                             f'<div class="card-servico card-troca">'
-                            f'<p><b>📅 {r["data"]}</b></p>'
+                            f'<h3>📅 {data_fmt}</h3>'
                             f'<p>👤 <b>{nome_orig}</b> quer trocar contigo</p>'
                             f'<p>🟢 Recebes: <b>{r["servico_origem"]}</b></p>'
                             f'<p>🔴 Dás: <b>{r["servico_destino"]}</b></p>'
@@ -2701,10 +2920,17 @@ else:
             minhas = df_trocas[
                 (df_trocas['id_origem'].astype(str) == u_id) |
                 (df_trocas['id_destino'].astype(str) == u_id)
-            ].copy().sort_values('data', ascending=False)
+            ].copy()
+            minhas['_data_ord'] = pd.to_datetime(minhas['data'], format='%d/%m/%Y', errors='coerce')
+            minhas = minhas.sort_values('_data_ord', ascending=False).drop(columns='_data_ord')
             if minhas.empty:
                 st.info("Não tens trocas registadas.")
             else:
+                estados = ["Todos"] + sorted(minhas['status'].dropna().unique().tolist())
+                filtro = st.selectbox("Filtrar por estado:", estados)
+                if filtro != "Todos":
+                    minhas = minhas[minhas['status'] == filtro]
+                st.caption(f"{len(minhas)} registo(s)")
                 for idx, r in minhas.iterrows():
                     fui_origem = str(r['id_origem']) == u_id
                     outro_id   = r['id_destino'] if fui_origem else r['id_origem']
@@ -2785,3 +3011,131 @@ else:
             cols_show = [c for c in ['id','nim','posto','nome','telemóvel','email'] if c in df_show.columns]
             st.markdown(f"**{len(df_show)} militar(es) encontrado(s)**")
             st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+
+    # --- 🚨 ALERTAS (ADMIN) ---
+    elif menu == "🚨 Alertas":
+        st.title("🚨 Alertas da Escala")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        import unicodedata as _uda
+        def _na(t): return _uda.normalize('NFKD', str(t).lower()).encode('ascii','ignore').decode('ascii')
+
+        hoje_a = datetime.now()
+        # Verificar os próximos 30 dias
+        alertas_trocas   = []
+        alertas_duplos   = []
+        alertas_descanso = []
+        alertas_esquecidos = []
+
+        # IDs de todos os militares ativos
+        ids_ativos = set(df_util['id'].astype(str).str.strip().tolist()) if not df_util.empty else set()
+
+        with st.spinner("A verificar escalas..."):
+            dias_sem = 0
+            j = 0
+            while dias_sem < 5 and j < 60:
+                dt_a = hoje_a + timedelta(days=j)
+                d_s_a = dt_a.strftime('%d/%m/%Y')
+                aba_a = dt_a.strftime('%d-%m')
+                df_a = load_data(aba_a)
+                j += 1
+                if df_a.empty:
+                    dias_sem += 1
+                    continue
+                dias_sem = 0
+
+                # ── Alerta 1: Trocas validadas com escala alterada ──
+                if not df_trocas.empty:
+                    tr_val = df_trocas[
+                        (df_trocas['data'] == d_s_a) &
+                        (df_trocas['status'] == 'Aprovada') &
+                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+                    ]
+                    for _, t in tr_val.iterrows():
+                        # Verificar se o servico_origem ainda existe para id_origem
+                        serv_o = t['servico_origem'].rsplit('(', 1)[0].strip().lower()
+                        hor_o  = t['servico_origem'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_origem'] else ''
+                        existe = df_a[
+                            (df_a['id'].astype(str) == str(t['id_origem'])) &
+                            (df_a['serviço'].astype(str).str.strip().str.lower() == serv_o) &
+                            (df_a['horário'].astype(str).str.strip() == hor_o.strip())
+                        ]
+                        if existe.empty:
+                            n_o = get_nome_militar(df_util, t['id_origem'])
+                            n_d = get_nome_militar(df_util, t['id_destino'])
+                            alertas_trocas.append(f"**{d_s_a}** — Troca {n_o} ↔ {n_d}: serviço `{t['servico_origem']}` já não existe na escala")
+
+                # ── Alerta 2: Militar escalado em 2 serviços no mesmo dia ──
+                df_a_serv = df_a[~df_a['serviço'].apply(_na).str.contains('remu|grat', na=False)]
+                contagem = df_a_serv[df_a_serv['id'].astype(str).str.strip() != ''].groupby('id').size()
+                for mid, count in contagem.items():
+                    if count > 1:
+                        n = get_nome_militar(df_util, mid)
+                        servs = df_a_serv[df_a_serv['id'].astype(str) == str(mid)][['serviço','horário']].values.tolist()
+                        servs_str = ' / '.join([f"{s} ({h})" for s, h in servs])
+                        alertas_duplos.append(f"**{d_s_a}** — {n}: {servs_str}")
+
+                # ── Alerta 3: Menos de 8h de descanso entre dias consecutivos ──
+                dt_ant = dt_a - timedelta(days=1)
+                df_ant_a = load_data(dt_ant.strftime('%d-%m'))
+                if not df_ant_a.empty:
+                    ids_hoje = df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).unique()
+                    for mid in ids_hoje:
+                        rows_hoje = df_a[
+                            (df_a['id'].astype(str) == mid) &
+                            (~df_a['serviço'].apply(_na).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
+                        ]
+                        rows_ant = df_ant_a[
+                            (df_ant_a['id'].astype(str) == mid) &
+                            (~df_ant_a['serviço'].apply(_na).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
+                        ]
+                        for _, rh in rows_hoje.iterrows():
+                            ini_h, fim_h = _parse_horario(rh['horário'])
+                            if ini_h is None: continue
+                            if _e_atendimento(rh['serviço']): continue
+                            for _, ra in rows_ant.iterrows():
+                                ini_a, fim_a = _parse_horario(ra['horário'])
+                                if ini_a is None: continue
+                                if _e_atendimento(ra['serviço']): continue
+                                # fim do dia anterior → início de hoje
+                                descanso = (ini_h + 1440) - fim_a
+                                if 0 <= descanso < 480:
+                                    n = get_nome_militar(df_util, mid)
+                                    h2, m2 = descanso // 60, descanso % 60
+                                    alertas_descanso.append(f"**{d_s_a}** — {n}: apenas {h2}h{m2:02d}m entre `{ra['serviço']} ({ra['horário']})` ({dt_ant.strftime('%d/%m')}) e `{rh['serviço']} ({rh['horário']})`")
+
+                # ── Alerta 4: Militar não escalado no dia ──
+                ids_na_escala = set(df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).str.strip().tolist())
+                esquecidos = ids_ativos - ids_na_escala
+                for mid in sorted(esquecidos):
+                    n = get_nome_militar(df_util, mid)
+                    alertas_esquecidos.append(f"**{d_s_a}** — {n} (ID: {mid}) não está escalado")
+        with st.expander(f"🔍 Militares não escalados ({len(alertas_esquecidos)})", expanded=len(alertas_esquecidos) > 0):
+            if alertas_esquecidos:
+                for a in alertas_esquecidos:
+                    st.warning(a)
+            else:
+                st.success("✅ Sem alertas")
+
+        with st.expander(f"⚠️ Trocas com escala alterada ({len(alertas_trocas)})", expanded=len(alertas_trocas) > 0):
+            if alertas_trocas:
+                for a in alertas_trocas:
+                    st.warning(a)
+            else:
+                st.success("✅ Sem alertas")
+
+        with st.expander(f"👥 Militar escalado em 2 serviços ({len(alertas_duplos)})", expanded=len(alertas_duplos) > 0):
+            if alertas_duplos:
+                for a in alertas_duplos:
+                    st.warning(a)
+            else:
+                st.success("✅ Sem alertas")
+
+        with st.expander(f"😴 Menos de 8h de descanso ({len(alertas_descanso)})", expanded=len(alertas_descanso) > 0):
+            if alertas_descanso:
+                for a in alertas_descanso:
+                    st.warning(a)
+            else:
+                st.success("✅ Sem alertas")
