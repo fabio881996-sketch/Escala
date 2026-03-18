@@ -303,7 +303,7 @@ def load_feriados(ano: int) -> list:
             if ano_col != ano:
                 continue
             for v in col[1:]:
-                for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y'):
+                for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y', '%Y/%m/%d'):
                     try:
                         feriados.append(datetime.strptime(v, fmt).date())
                         break
