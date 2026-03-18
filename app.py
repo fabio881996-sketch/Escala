@@ -2335,6 +2335,7 @@ else:
             st.info(f"Não há plano de férias para {ano_sel_f}.")
         else:
             cols_f = df_f.columns.tolist()
+            st.caption(f"🔍 colunas={cols_f[:8]} linhas={len(df_f)}")
             id_col_f = 'id' if 'id' in cols_f else cols_f[0]
             ini_cols_f = [c for c in cols_f if 'ini' in c.lower()]
             fim_cols_f  = [c for c in cols_f if 'fim' in c.lower()]
