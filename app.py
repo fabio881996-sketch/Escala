@@ -257,6 +257,10 @@ def load_utilizadores() -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+def invalidar_trocas():
+    """Limpa cache de trocas."""
+    load_data.clear()
+
 @st.cache_data(ttl=3600)
 def load_ferias(ano: int) -> pd.DataFrame:
     """Carrega plano de férias de um ano — cache 1h."""
