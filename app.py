@@ -2680,7 +2680,7 @@ else:
 
         tipo_troca = st.radio(
             "Tipo de pedido:",
-            ["🔄 Troca Simples", "🔁 Troca a 3", "❌ Matar Remunerado"],
+            ["🔄 Troca Simples", "🔁 Troca a 3", "💶 Fazer Remunerado"],
             horizontal=True
         )
         st.markdown("---")
@@ -2836,7 +2836,7 @@ else:
                             st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
 
             # ── Matar Remunerado ──
-            elif tipo_troca == "❌ Matar Remunerado":
+            elif tipo_troca == "💶 Fazer Remunerado":
                 rem_dia = df_d[
                     (df_d['id'].astype(str).str.strip() != u_id) &
                     (df_d['id'].astype(str).str.strip() != '') &
@@ -2919,9 +2919,7 @@ else:
                         )
                     c1, c2 = st.columns(2)
                     if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
-                        # Matar remunerado: aprovação direta sem validação admin
-                        novo_status = "Aprovada" if is_matar else "Pendente_Admin"
-                        atualizar_status_gsheet(idx, novo_status)
+                        atualizar_status_gsheet(idx, "Pendente_Admin")
                         st.rerun()
                     if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
                         atualizar_status_gsheet(idx, "Recusada")
@@ -2960,12 +2958,20 @@ else:
                 for idx, r in pnd.iterrows():
                     n_o = get_nome_militar(df_util, r['id_origem'])
                     n_d = get_nome_militar(df_util, r['id_destino'])
-                    with st.expander(f"📅 {r['data']}  |  {n_o} ↔️ {n_d}", expanded=True):
+                    is_matar_v = str(r['servico_origem']) == 'MATAR_REMUNERADO'
+                    titulo = f"📅 {r['data']}  |  💶 {n_o} faz remunerado de {n_d}" if is_matar_v else f"📅 {r['data']}  |  {n_o} ↔️ {n_d}"
+                    with st.expander(titulo, expanded=True):
                         col1, col2 = st.columns(2)
-                        with col1:
-                            st.info(f"**{n_o}**\n\n`{r['servico_origem']}`")
-                        with col2:
-                            st.success(f"**{n_d}**\n\n`{r['servico_destino']}`")
+                        if is_matar_v:
+                            with col1:
+                                st.info(f"**Requerente:**\n\n{n_o}")
+                            with col2:
+                                st.success(f"**Cedente:**\n\n{n_d}\n\n`{r['servico_destino']}`")
+                        else:
+                            with col1:
+                                st.info(f"**{n_o}**\n\n`{r['servico_origem']}`")
+                            with col2:
+                                st.success(f"**{n_d}**\n\n`{r['servico_destino']}`")
                         c1, c2 = st.columns(2)
                         if c1.button("✔️ VALIDAR",  key=f"ok_{idx}", use_container_width=True):
                             atualizar_status_gsheet(idx, "Aprovada",  u_nome)
@@ -2997,7 +3003,7 @@ else:
                         if is_matar:
                             with col1:
                                 st.info(f"**Requerente:**\n\n{n_o}")
-                                st.markdown("**Ação:** Matar Remunerado")
+                                st.markdown("**Ação:** Fazer Remunerado")
                             with col2:
                                 st.success(f"**Cedente:**\n\n{n_d}")
                                 st.markdown(f"**Remunerado:**\n`{r['servico_destino']}`")
@@ -3061,7 +3067,7 @@ else:
 
                     if is_matar:
                         papel = "Requerente" if fui_origem else "Cedente"
-                        titulo = f"{cor} {r['data']} — Matar Remunerado: {outro_serv} ({status})"
+                        titulo = f"{cor} {r['data']} — Fazer Remunerado: {outro_serv} ({status})"
                     else:
                         papel = "Requerente" if fui_origem else "Substituto"
                         titulo = f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})"
