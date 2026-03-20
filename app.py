@@ -3370,12 +3370,12 @@ else:
                 if upd:
                     ws_dia_c.batch_update(upd)
                 st.caption(f"🔍 emap restante: {list(emap.keys())} | updates: {len(upd)}")
-                # Debug linhas da aba
-                for i, row in enumerate(linhas_c[1:6], start=2):
+                # Debug todas as linhas
+                for i, row in enumerate(linhas_c[1:], start=2):
                     sc = norm(row[ix_serv]) if ix_serv < len(row) else ''
                     hc = str(row[ix_hor]).strip() if ix_hor < len(row) else ''
                     ic = str(row[ix_id]).strip()  if ix_id  < len(row) else ''
-                    st.caption(f"🔍 linha {i}: serv={repr(sc)} hor={repr(hc)} id={repr(ic)}")
+                    st.caption(f"🔍 L{i}: serv={repr(sc)} hor={repr(hc)} id={repr(ic)}")
                 nova_o = [headers_c]
                 ml = max(len(v) for v in ordem_c.values())
                 for i in range(ml):
