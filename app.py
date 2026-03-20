@@ -3323,12 +3323,10 @@ else:
             st.warning("Acesso restrito a administradores.")
             st.stop()
 
-        st.caption(f"🔍 session_state keys: {[k for k in st.session_state.keys() if 'escala' in k or 'Form' in k]}")
 
         # ── Processar confirmação pendente ──
         form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
         if st.session_state.get(form_key) and 'escala_gerada' in st.session_state:
-            st.caption(f"🔍 A processar confirmação...")
             del st.session_state[form_key]
             dados = st.session_state['escala_gerada']
             escalados_c = dados['escalados']
@@ -3359,7 +3357,7 @@ else:
                     emap[(norm(serv), hor.strip())] = mid
                 upd = []
                 for i, row in enumerate(linhas_c[1:], start=2):
-                    sc = norm(row[ix_serv]) if ix_serv < len(row) else ''
+                    sc = norm(row[ix_serv].strip()) if ix_serv < len(row) else ''
                     hc = str(row[ix_hor]).strip() if ix_hor < len(row) else ''
                     ic = str(row[ix_id]).strip()  if ix_id  < len(row) else ''
                     ch = (sc, hc)
@@ -3369,10 +3367,9 @@ else:
                         del emap[ch]
                 if upd:
                     ws_dia_c.batch_update(upd)
-                st.caption(f"🔍 emap restante: {list(emap.keys())} | updates: {len(upd)}")
                 # Debug todas as linhas
                 for i, row in enumerate(linhas_c[1:], start=2):
-                    sc = norm(row[ix_serv]) if ix_serv < len(row) else ''
+                    sc = norm(row[ix_serv].strip()) if ix_serv < len(row) else ''
                     hc = str(row[ix_hor]).strip() if ix_hor < len(row) else ''
                     ic = str(row[ix_id]).strip()  if ix_id  < len(row) else ''
                     st.caption(f"🔍 L{i}: serv={repr(sc)} hor={repr(hc)} id={repr(ic)}")
@@ -3551,7 +3548,6 @@ else:
 
                 st.markdown("---")
                 form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
-                st.caption(f"🔍 form_key value: {repr(st.session_state.get(form_key, 'NAO_EXISTE'))}")
                 # Verificar se o form foi submetido no rerun anterior
                 if st.session_state.get(form_key, False):
                     del st.session_state[form_key]
