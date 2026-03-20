@@ -3487,6 +3487,7 @@ else:
 
                 st.markdown("---")
                 form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
+                st.caption(f"🔍 form_key value: {repr(st.session_state.get(form_key, 'NAO_EXISTE'))}")
                 # Verificar se o form foi submetido no rerun anterior
                 if st.session_state.get(form_key, False):
                     del st.session_state[form_key]
