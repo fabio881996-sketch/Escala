@@ -3369,6 +3369,7 @@ else:
                         del emap[ch]
                 if upd:
                     ws_dia_c.batch_update(upd)
+                st.caption(f"🔍 emap restante (não encontrado): {list(emap.keys())} | updates feitos: {len(upd)}")
                 nova_o = [headers_c]
                 ml = max(len(v) for v in ordem_c.values())
                 for i in range(ml):
