@@ -3486,14 +3486,10 @@ else:
                     st.dataframe(pd.DataFrame(sobra_data), use_container_width=True, hide_index=True)
 
                 st.markdown("---")
-                with st.form("form_confirmar_escala"):
-                    st.markdown("Confirmas a escrita na aba do dia e atualização da ordem?")
-                    submitted = st.form_submit_button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True)
-
                 form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
-                if submitted or st.session_state.get(form_key, False):
-                    if form_key in st.session_state:
-                        del st.session_state[form_key]
+                # Verificar se o form foi submetido no rerun anterior
+                if st.session_state.get(form_key, False):
+                    del st.session_state[form_key]
                     st.write("🔍 A processar...")
                     try:
                         sh2 = get_sheet()
@@ -3543,6 +3539,10 @@ else:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao escrever: {e}")
+                else:
+                    with st.form("form_confirmar_escala"):
+                        st.markdown("Confirmas a escrita na aba do dia e atualização da ordem?")
+                        st.form_submit_button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True)
 
         if st.session_state.pop('escala_ok', False):
             st.success("✅ Escala escrita e ordem atualizada!")
