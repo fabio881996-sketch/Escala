@@ -1568,7 +1568,7 @@ else:
             "🔄 Giros",
             "👥 Efetivo",
         ]
-        menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas"]
+        menu_admin = ["⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala"]
 
         st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
 
@@ -1584,7 +1584,7 @@ else:
             "👥 Efetivo",
         ]
         if is_admin:
-            menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas"]
+            menu_opt += ["", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
@@ -2440,68 +2440,49 @@ else:
                 return periodos
 
             if is_admin:
-                st.markdown("#### 👥 Plano Geral")
-                for _, row_f in df_f.iterrows():
-                    mid_f = str(row_f.get(id_col_f, '')).strip()
-                    if not mid_f: continue
-                    nome_f = get_nome_militar(df_util, mid_f)
-                    total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
-                    periodos = render_periodos(row_f, fer_f)
-                    label = f"👤 {nome_f}"
-                    if total_f and total_f != 'nan':
-                        label += f" — {total_f} dias úteis"
-                    with st.expander(label):
-                        for i, (ini_d, fim_d, du, dc) in enumerate(periodos, 1):
-                            st.markdown(
-                                f'<div style="background:#F0FDF4;border-left:3px solid #16A34A;border-radius:8px;'
-                                f'padding:10px 14px;margin-bottom:8px">'
-                                f'<div style="font-size:0.75rem;color:#16A34A;font-weight:700;letter-spacing:0.05em">PERÍODO {i}</div>'
-                                f'<div style="font-size:0.95rem;font-weight:700;color:#14532D;margin:4px 0">'
-                                f'🏖️ {fmt_data_ext(ini_d)}</div>'
-                                f'<div style="font-size:0.85rem;color:#166534">até {fmt_data_ext(fim_d)}</div>'
-                                f'<div style="margin-top:6px;display:flex;gap:12px">'
-                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:2px 8px;border-radius:10px">📆 {dc} dias corridos</span>'
-                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:2px 8px;border-radius:10px">💼 {du} dias úteis</span>'
-                                f'</div></div>',
-                                unsafe_allow_html=True
-                            )
+                militares_opts_f = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
+                sel_mil_f = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts_f.keys()))
+                alvo_id_f = u_id if sel_mil_f == "— O meu próprio —" else militares_opts_f[sel_mil_f]
             else:
-                mil_f = df_f[df_f[id_col_f].astype(str).str.strip() == u_id]
-                if mil_f.empty:
-                    st.info("Não tens férias planeadas para este ano.")
-                else:
-                    row_f = mil_f.iloc[0]
-                    total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
-                    periodos = render_periodos(row_f, fer_f)
-                    total_du = sum(p[2] for p in periodos)
-                    total_dc = sum(p[3] for p in periodos)
+                alvo_id_f = u_id
 
-                    # Resumo no topo
+            mil_f = df_f[df_f[id_col_f].astype(str).str.strip() == alvo_id_f]
+            if mil_f.empty:
+                st.info("Não há férias planeadas para este militar.")
+            else:
+                row_f = mil_f.iloc[0]
+                nome_exibir = get_nome_militar(df_util, alvo_id_f)
+                total_f = str(row_f.get(total_col_f, '')).strip() if total_col_f else ''
+                periodos = render_periodos(row_f, fer_f)
+                total_du = sum(p[2] for p in periodos)
+                total_dc = sum(p[3] for p in periodos)
+
+                # Resumo no topo
+                st.markdown(
+                    f'<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:12px;'
+                    f'padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
+                    f'<div><div style="font-size:0.8rem;color:#065F46;font-weight:600">PLANO DE FÉRIAS {ano_sel_f}</div>'
+                    f'<div style="font-size:1.1rem;font-weight:800;color:#064E3B">{nome_exibir}</div></div>'
+                    f'<div style="text-align:right">'
+                    f'<div style="font-size:1.8rem;font-weight:900;color:#059669">{total_du}</div>'
+                    f'<div style="font-size:0.75rem;color:#065F46">dias úteis</div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True
+                )
+
+                for i, (ini_d, fim_d, du, dc) in enumerate(periodos, 1):
                     st.markdown(
-                        f'<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:12px;'
-                        f'padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
-                        f'<div><div style="font-size:0.8rem;color:#065F46;font-weight:600">PLANO DE FÉRIAS {ano_sel_f}</div>'
-                        f'<div style="font-size:1.1rem;font-weight:800;color:#064E3B">{u_nome}</div></div>'
-                        f'<div style="text-align:right">'
-                        f'<div style="font-size:1.8rem;font-weight:900;color:#059669">{total_du}</div>'
-                        f'<div style="font-size:0.75rem;color:#065F46">dias úteis</div>'
+                        f'<div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:10px;'
+                        f'padding:14px 18px;margin-bottom:10px">'
+                        f'<div style="font-size:0.72rem;color:#16A34A;font-weight:700;letter-spacing:0.08em;margin-bottom:6px">PERÍODO {i}</div>'
+                        f'<div style="font-size:1rem;font-weight:700;color:#14532D">🏖️ {fmt_data_ext(ini_d)}</div>'
+                        f'<div style="font-size:0.85rem;color:#166534;margin:2px 0 10px 0">até {fmt_data_ext(fim_d)}</div>'
+                        f'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+                        f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">📅 {dc} dias corridos</span>'
+                        f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">💼 {du} dias úteis</span>'
                         f'</div></div>',
                         unsafe_allow_html=True
                     )
-
-                    for i, (ini_d, fim_d, du, dc) in enumerate(periodos, 1):
-                        st.markdown(
-                            f'<div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:10px;'
-                            f'padding:14px 18px;margin-bottom:10px">'
-                            f'<div style="font-size:0.72rem;color:#16A34A;font-weight:700;letter-spacing:0.08em;margin-bottom:6px">PERÍODO {i}</div>'
-                            f'<div style="font-size:1rem;font-weight:700;color:#14532D">🏖️ {fmt_data_ext(ini_d)}</div>'
-                            f'<div style="font-size:0.85rem;color:#166534;margin:2px 0 10px 0">até {fmt_data_ext(fim_d)}</div>'
-                            f'<div style="display:flex;gap:10px;flex-wrap:wrap">'
-                            f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">📅 {dc} dias corridos</span>'
-                            f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">💼 {du} dias úteis</span>'
-                            f'</div></div>',
-                            unsafe_allow_html=True
-                        )
 
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
@@ -3334,3 +3315,202 @@ else:
                     st.warning(a)
             else:
                 st.success("✅ Sem alertas")
+
+    # --- ⚙️ GERAR ESCALA (ADMIN) ---
+    elif menu == "⚙️ Gerar Escala":
+        st.title("⚙️ Gerar Escala Automática")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        # ── Selecionar data ──
+        d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
+        aba_dia = d_gerar.strftime("%d-%m")
+
+        if st.button("⚙️ GERAR ESCALA", use_container_width=True, type="primary"):
+            with st.spinner("A gerar escala..."):
+                try:
+                    sh = get_sheet()
+
+                    # ── Carregar abas ──
+                    # Serviços que cada militar pode fazer
+                    ws_serv = sh.worksheet("servicos")
+                    serv_vals = ws_serv.get_all_values()
+                    serv_headers = [str(h).strip() for h in serv_vals[0]]
+                    df_serv = pd.DataFrame(serv_vals[1:], columns=serv_headers)
+                    # Mapear: id -> lista de serviços que pode fazer
+                    militares_servicos = {}
+                    for col in serv_headers:
+                        ids_col = [str(v).strip() for v in df_serv[col] if str(v).strip()]
+                        for mid in ids_col:
+                            if mid not in militares_servicos:
+                                militares_servicos[mid] = []
+                            militares_servicos[mid].append(col)
+
+                    # Ordem de escala por serviço/horário
+                    ws_ordem = sh.worksheet("ordem_escala")
+                    ordem_vals = ws_ordem.get_all_values()
+                    ordem_headers = [str(h).strip() for h in ordem_vals[0]]
+                    ordem_data = {h: [] for h in ordem_headers}
+                    for row in ordem_vals[1:]:
+                        for i, h in enumerate(ordem_headers):
+                            val = str(row[i]).strip() if i < len(row) else ''
+                            if val:
+                                ordem_data[h].append(val)
+
+                    # Aba do dia — militares já com exceções
+                    try:
+                        ws_dia = sh.worksheet(aba_dia)
+                        dia_vals = ws_dia.get_all_values()
+                        dia_headers = [str(h).strip().lower() for h in dia_vals[0]]
+                        df_dia_atual = pd.DataFrame(dia_vals[1:], columns=dia_headers)
+                        df_dia_atual = df_dia_atual[df_dia_atual.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+                    except:
+                        df_dia_atual = pd.DataFrame()
+
+                    # Férias do dia
+                    df_ferias_g = load_ferias(d_gerar.year)
+                    feriados_g  = load_feriados(d_gerar.year)
+
+                    # ── Determinar militares indisponíveis ──
+                    ids_indisponiveis = set()
+                    if not df_dia_atual.empty and 'id' in df_dia_atual.columns:
+                        for _, row in df_dia_atual.iterrows():
+                            mid = str(row.get('id', '')).strip()
+                            if mid:
+                                ids_indisponiveis.add(mid)
+
+                    # Adicionar militares de férias
+                    todos_ids = list(militares_servicos.keys())
+                    for mid in todos_ids:
+                        if militar_de_ferias(mid, d_gerar, df_ferias_g, feriados_g):
+                            ids_indisponiveis.add(mid)
+
+                    # ── Slots a preencher ──
+                    SLOTS = [
+                        ("Atendimento",         "00-08", 1),
+                        ("Atendimento",         "08-16", 1),
+                        ("Atendimento",         "16-24", 1),
+                        ("Patrulha Ocorrências", "00-08", 2),
+                        ("Patrulha Ocorrências", "08-16", 2),
+                        ("Patrulha Ocorrências", "16-24", 2),
+                        ("Apoio Atendimento",    "08-16", 1),
+                        ("Apoio Atendimento",    "16-24", 1),
+                    ]
+
+                    escalados = []      # (id, serviço, horário)
+                    ids_escalados = set()
+                    ordem_atualizada = {h: list(v) for h, v in ordem_data.items()}
+
+                    for servico, horario, num in SLOTS:
+                        col_key = f"{servico} {horario}"
+                        if col_key not in ordem_atualizada:
+                            continue
+                        lista = ordem_atualizada[col_key]
+                        colocados = []
+                        for mid in lista:
+                            if len(colocados) >= num:
+                                break
+                            if mid in ids_indisponiveis or mid in ids_escalados:
+                                continue
+                            # Verificar se pode fazer este serviço
+                            pode = servico in militares_servicos.get(mid, [])
+                            if not pode:
+                                continue
+                            # Verificar descanso
+                            df_ant_g = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
+                            df_seg_g = load_data((d_gerar + timedelta(days=1)).strftime("%d-%m"))
+                            ok, _ = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
+                            if not ok:
+                                continue
+                            colocados.append(mid)
+                            ids_escalados.add(mid)
+                            escalados.append((mid, servico, horario))
+
+                        # Mover escalados para o fim da lista
+                        for mid in colocados:
+                            ordem_atualizada[col_key].remove(mid)
+                            ordem_atualizada[col_key].append(mid)
+
+                    # ── Militares de sobra ──
+                    todos_disponiveis = [mid for mid in todos_ids
+                                        if mid not in ids_indisponiveis and mid not in ids_escalados]
+
+                    # ── Mostrar resultado ──
+                    st.success(f"✅ {len(escalados)} militares escalados!")
+                    st.markdown("---")
+
+                    # Tabela de escalados
+                    st.markdown("#### 📋 Escala gerada")
+                    df_resultado = pd.DataFrame(escalados, columns=['ID', 'Serviço', 'Horário'])
+                    df_resultado['Nome'] = df_resultado['ID'].apply(lambda x: get_nome_curto(df_util, x))
+                    st.dataframe(df_resultado[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
+
+                    # Militares de sobra
+                    if todos_disponiveis:
+                        st.markdown("#### 👥 Militares de sobra (escalar manualmente)")
+                        sobra_data = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in todos_disponiveis]
+                        st.dataframe(pd.DataFrame(sobra_data), use_container_width=True, hide_index=True)
+
+                    # ── Confirmar e escrever no Sheets ──
+                    st.markdown("---")
+                    if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
+                        try:
+                            ws_dia = sh.worksheet(aba_dia)
+                            dia_headers_raw = ws_dia.row_values(1)
+                            dia_headers_low = [h.strip().lower() for h in dia_headers_raw]
+                            idx_id   = dia_headers_low.index('id')   if 'id'      in dia_headers_low else 0
+                            idx_serv = dia_headers_low.index('serviço') if 'serviço' in dia_headers_low else 1
+                            idx_hor  = dia_headers_low.index('horário') if 'horário' in dia_headers_low else 2
+
+                            # Encontrar próxima linha vazia
+                            todas_linhas = ws_dia.get_all_values()
+                            proxima = len(todas_linhas) + 1
+
+                            # Agrupar Patrulha com 2 militares em IDs separados por ;
+                            from collections import defaultdict
+                            agrupados = defaultdict(list)
+                            linha_simples = []
+                            for mid, serv, hor in escalados:
+                                if serv == "Patrulha Ocorrências":
+                                    agrupados[(serv, hor)].append(mid)
+                                else:
+                                    linha_simples.append((mid, serv, hor))
+
+                            linhas_escrever = []
+                            for (serv, hor), ids in agrupados.items():
+                                nova = [''] * len(dia_headers_raw)
+                                nova[idx_id]   = ';'.join(ids)
+                                nova[idx_serv] = serv
+                                nova[idx_hor]  = hor
+                                linhas_escrever.append(nova)
+                            for mid, serv, hor in linha_simples:
+                                nova = [''] * len(dia_headers_raw)
+                                nova[idx_id]   = mid
+                                nova[idx_serv] = serv
+                                nova[idx_hor]  = hor
+                                linhas_escrever.append(nova)
+
+                            ws_dia.append_rows(linhas_escrever, value_input_option='RAW')
+
+                            # Atualizar ordem_escala
+                            nova_ordem = [ordem_headers]
+                            max_len = max(len(v) for v in ordem_atualizada.values())
+                            for i in range(max_len):
+                                row_o = []
+                                for h in ordem_headers:
+                                    lst = ordem_atualizada[h]
+                                    row_o.append(lst[i] if i < len(lst) else '')
+                                nova_ordem.append(row_o)
+                            ws_ordem.clear()
+                            ws_ordem.update('A1', nova_ordem)
+
+                            # Invalidar cache
+                            load_data.clear()
+                            st.success("✅ Escala escrita e ordem atualizada!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao escrever: {e}")
+
+                except Exception as e:
+                    st.error(f"Erro ao gerar escala: {e}")
