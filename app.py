@@ -3488,56 +3488,61 @@ else:
                 st.markdown("---")
                 with st.form("form_confirmar_escala"):
                     st.markdown("Confirmas a escrita na aba do dia e atualização da ordem?")
-                    if st.form_submit_button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
-                        st.write("🔍 Botão clicado!")
-                        try:
-                            sh2 = get_sheet()
-                            ws_dia2 = sh2.worksheet(aba_dia_saved)
-                            ws_ordem2 = sh2.worksheet("ordem_escala")
-                            todas_linhas = ws_dia2.get_all_values()
-                            dia_headers_raw = todas_linhas[0]
-                            dia_headers_low = [h.strip().lower() for h in dia_headers_raw]
-                            idx_id   = dia_headers_low.index('id')      if 'id'      in dia_headers_low else 0
-                            idx_serv = dia_headers_low.index('serviço') if 'serviço' in dia_headers_low else 1
-                            idx_hor  = dia_headers_low.index('horário') if 'horário' in dia_headers_low else 2
-                            from collections import defaultdict
-                            agrupados = defaultdict(list)
-                            linha_simples = []
-                            for mid, serv, hor in escalados:
-                                if serv == "Patrulha Ocorrências":
-                                    agrupados[(serv, hor)].append(mid)
-                                else:
-                                    linha_simples.append((mid, serv, hor))
-                            escrita_map = {}
-                            for (serv, hor), ids in agrupados.items():
-                                escrita_map[(norm(serv), hor.strip())] = ';'.join(ids)
-                            for mid, serv, hor in linha_simples:
-                                escrita_map[(norm(serv), hor.strip())] = mid
-                            updates = []
-                            for i, row in enumerate(todas_linhas[1:], start=2):
-                                serv_cell = norm(row[idx_serv]) if idx_serv < len(row) else ''
-                                hor_cell  = str(row[idx_hor]).strip() if idx_hor < len(row) else ''
-                                id_cell   = str(row[idx_id]).strip()  if idx_id  < len(row) else ''
-                                chave = (serv_cell, hor_cell)
-                                if chave in escrita_map and not id_cell:
-                                    col_letra = chr(ord('A') + idx_id)
-                                    updates.append({'range': f'{col_letra}{i}', 'values': [[escrita_map[chave]]]})
-                                    del escrita_map[chave]
-                            if updates:
-                                ws_dia2.batch_update(updates)
-                            nova_ordem = [ordem_headers]
-                            max_len = max(len(v) for v in ordem_atualizada.values())
-                            for i in range(max_len):
-                                row_o = [ordem_atualizada[h][i] if i < len(ordem_atualizada[h]) else '' for h in ordem_headers]
-                                nova_ordem.append(row_o)
-                            ws_ordem2.clear()
-                            ws_ordem2.update('A1', nova_ordem)
-                            load_data.clear()
-                            del st.session_state['escala_gerada']
-                            st.session_state['escala_ok'] = True
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao escrever: {e}")
+                    submitted = st.form_submit_button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True)
+
+                form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
+                if submitted or st.session_state.get(form_key, False):
+                    if form_key in st.session_state:
+                        del st.session_state[form_key]
+                    st.write("🔍 A processar...")
+                    try:
+                        sh2 = get_sheet()
+                        ws_dia2 = sh2.worksheet(aba_dia_saved)
+                        ws_ordem2 = sh2.worksheet("ordem_escala")
+                        todas_linhas = ws_dia2.get_all_values()
+                        dia_headers_raw = todas_linhas[0]
+                        dia_headers_low = [h.strip().lower() for h in dia_headers_raw]
+                        idx_id   = dia_headers_low.index('id')      if 'id'      in dia_headers_low else 0
+                        idx_serv = dia_headers_low.index('serviço') if 'serviço' in dia_headers_low else 1
+                        idx_hor  = dia_headers_low.index('horário') if 'horário' in dia_headers_low else 2
+                        from collections import defaultdict
+                        agrupados = defaultdict(list)
+                        linha_simples = []
+                        for mid, serv, hor in escalados:
+                            if serv == "Patrulha Ocorrências":
+                                agrupados[(serv, hor)].append(mid)
+                            else:
+                                linha_simples.append((mid, serv, hor))
+                        escrita_map = {}
+                        for (serv, hor), ids in agrupados.items():
+                            escrita_map[(norm(serv), hor.strip())] = ';'.join(ids)
+                        for mid, serv, hor in linha_simples:
+                            escrita_map[(norm(serv), hor.strip())] = mid
+                        updates = []
+                        for i, row in enumerate(todas_linhas[1:], start=2):
+                            serv_cell = norm(row[idx_serv]) if idx_serv < len(row) else ''
+                            hor_cell  = str(row[idx_hor]).strip() if idx_hor < len(row) else ''
+                            id_cell   = str(row[idx_id]).strip()  if idx_id  < len(row) else ''
+                            chave = (serv_cell, hor_cell)
+                            if chave in escrita_map and not id_cell:
+                                col_letra = chr(ord('A') + idx_id)
+                                updates.append({'range': f'{col_letra}{i}', 'values': [[escrita_map[chave]]]})
+                                del escrita_map[chave]
+                        if updates:
+                            ws_dia2.batch_update(updates)
+                        nova_ordem = [ordem_headers]
+                        max_len = max(len(v) for v in ordem_atualizada.values())
+                        for i in range(max_len):
+                            row_o = [ordem_atualizada[h][i] if i < len(ordem_atualizada[h]) else '' for h in ordem_headers]
+                            nova_ordem.append(row_o)
+                        ws_ordem2.clear()
+                        ws_ordem2.update('A1', nova_ordem)
+                        load_data.clear()
+                        del st.session_state['escala_gerada']
+                        st.session_state['escala_ok'] = True
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao escrever: {e}")
 
         if st.session_state.pop('escala_ok', False):
             st.success("✅ Escala escrita e ordem atualizada!")
