@@ -3447,83 +3447,92 @@ else:
                     todos_disponiveis = [mid for mid in todos_ids
                                         if mid not in ids_indisponiveis and mid not in ids_escalados]
 
-                    # ── Mostrar resultado ──
-                    st.success(f"✅ {len(escalados)} militares escalados!")
-                    st.markdown("---")
-
-                    # Tabela de escalados
-                    st.markdown("#### 📋 Escala gerada")
-                    df_resultado = pd.DataFrame(escalados, columns=['ID', 'Serviço', 'Horário'])
-                    df_resultado['Nome'] = df_resultado['ID'].apply(lambda x: get_nome_curto(df_util, x))
-                    st.dataframe(df_resultado[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
-
-                    # Militares de sobra
-                    if todos_disponiveis:
-                        st.markdown("#### 👥 Militares de sobra (escalar manualmente)")
-                        sobra_data = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in todos_disponiveis]
-                        st.dataframe(pd.DataFrame(sobra_data), use_container_width=True, hide_index=True)
-
-                    # ── Confirmar e escrever no Sheets ──
-                    st.markdown("---")
-                    if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
-                        try:
-                            ws_dia = sh.worksheet(aba_dia)
-                            todas_linhas = ws_dia.get_all_values()
-                            dia_headers_raw = todas_linhas[0]
-                            dia_headers_low = [h.strip().lower() for h in dia_headers_raw]
-                            idx_id   = dia_headers_low.index('id')      if 'id'      in dia_headers_low else 0
-                            idx_serv = dia_headers_low.index('serviço') if 'serviço' in dia_headers_low else 1
-                            idx_hor  = dia_headers_low.index('horário') if 'horário' in dia_headers_low else 2
-
-                            # Agrupar Patrulha Ocorrências por horário (2 ids juntos)
-                            from collections import defaultdict
-                            agrupados = defaultdict(list)
-                            linha_simples = []
-                            for mid, serv, hor in escalados:
-                                if serv == "Patrulha Ocorrências":
-                                    agrupados[(serv, hor)].append(mid)
-                                else:
-                                    linha_simples.append((mid, serv, hor))
-
-                            # Construir mapa de (serviço_norm, horário) → id a escrever
-                            escrita_map = {}
-                            for (serv, hor), ids in agrupados.items():
-                                escrita_map[(norm(serv), hor.strip())] = ';'.join(ids)
-                            for mid, serv, hor in linha_simples:
-                                escrita_map[(norm(serv), hor.strip())] = mid
-
-                            # Percorrer linhas da aba e preencher IDs onde id está vazio
-                            updates = []
-                            for i, row in enumerate(todas_linhas[1:], start=2):
-                                serv_cell = norm(row[idx_serv]) if idx_serv < len(row) else ''
-                                hor_cell  = str(row[idx_hor]).strip() if idx_hor < len(row) else ''
-                                id_cell   = str(row[idx_id]).strip()  if idx_id  < len(row) else ''
-                                chave = (serv_cell, hor_cell)
-                                if chave in escrita_map and not id_cell:
-                                    col_letra = chr(ord('A') + idx_id)
-                                    updates.append({
-                                        'range': f'{col_letra}{i}',
-                                        'values': [[escrita_map[chave]]]
-                                    })
-                                    del escrita_map[chave]  # só preenche uma vez por chave
-
-                            if updates:
-                                ws_dia.batch_update(updates)
-
-                            # Atualizar ordem_escala
-                            nova_ordem = [ordem_headers]
-                            max_len = max(len(v) for v in ordem_atualizada.values())
-                            for i in range(max_len):
-                                row_o = [ordem_atualizada[h][i] if i < len(ordem_atualizada[h]) else '' for h in ordem_headers]
-                                nova_ordem.append(row_o)
-                            ws_ordem.clear()
-                            ws_ordem.update('A1', nova_ordem)
-
-                            load_data.clear()
-                            st.success("✅ Escala escrita e ordem atualizada!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao escrever: {e}")
+                    # Guardar em session_state para persistir quando confirmar
+                    st.session_state['escala_gerada'] = {
+                        'escalados': escalados,
+                        'ordem_atualizada': ordem_atualizada,
+                        'ordem_headers': ordem_headers,
+                        'aba_dia': aba_dia,
+                        'todos_disponiveis': todos_disponiveis,
+                    }
 
                 except Exception as e:
                     st.error(f"Erro ao gerar escala: {e}")
+
+            # ── Mostrar resultado (fora do bloco gerar) ──
+            if 'escala_gerada' in st.session_state and st.session_state['escala_gerada'].get('aba_dia') == aba_dia:
+                dados = st.session_state['escala_gerada']
+                escalados = dados['escalados']
+                ordem_atualizada = dados['ordem_atualizada']
+                ordem_headers = dados['ordem_headers']
+                todos_disponiveis = dados['todos_disponiveis']
+
+                st.success(f"✅ {len(escalados)} militares escalados!")
+                st.markdown("---")
+
+                st.markdown("#### 📋 Escala gerada")
+                df_resultado = pd.DataFrame(escalados, columns=['ID', 'Serviço', 'Horário'])
+                df_resultado['Nome'] = df_resultado['ID'].apply(lambda x: get_nome_curto(df_util, x))
+                st.dataframe(df_resultado[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
+
+                if todos_disponiveis:
+                    st.markdown("#### 👥 Militares de sobra (escalar manualmente)")
+                    sobra_data = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in todos_disponiveis]
+                    st.dataframe(pd.DataFrame(sobra_data), use_container_width=True, hide_index=True)
+
+                st.markdown("---")
+                if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
+                    try:
+                        sh2 = get_sheet()
+                        ws_dia2 = sh2.worksheet(aba_dia)
+                        ws_ordem2 = sh2.worksheet("ordem_escala")
+                        todas_linhas = ws_dia2.get_all_values()
+                        dia_headers_raw = todas_linhas[0]
+                        dia_headers_low = [h.strip().lower() for h in dia_headers_raw]
+                        idx_id   = dia_headers_low.index('id')      if 'id'      in dia_headers_low else 0
+                        idx_serv = dia_headers_low.index('serviço') if 'serviço' in dia_headers_low else 1
+                        idx_hor  = dia_headers_low.index('horário') if 'horário' in dia_headers_low else 2
+
+                        from collections import defaultdict
+                        agrupados = defaultdict(list)
+                        linha_simples = []
+                        for mid, serv, hor in escalados:
+                            if serv == "Patrulha Ocorrências":
+                                agrupados[(serv, hor)].append(mid)
+                            else:
+                                linha_simples.append((mid, serv, hor))
+
+                        escrita_map = {}
+                        for (serv, hor), ids in agrupados.items():
+                            escrita_map[(norm(serv), hor.strip())] = ';'.join(ids)
+                        for mid, serv, hor in linha_simples:
+                            escrita_map[(norm(serv), hor.strip())] = mid
+
+                        updates = []
+                        for i, row in enumerate(todas_linhas[1:], start=2):
+                            serv_cell = norm(row[idx_serv]) if idx_serv < len(row) else ''
+                            hor_cell  = str(row[idx_hor]).strip() if idx_hor < len(row) else ''
+                            id_cell   = str(row[idx_id]).strip()  if idx_id  < len(row) else ''
+                            chave = (serv_cell, hor_cell)
+                            if chave in escrita_map and not id_cell:
+                                col_letra = chr(ord('A') + idx_id)
+                                updates.append({'range': f'{col_letra}{i}', 'values': [[escrita_map[chave]]]})
+                                del escrita_map[chave]
+
+                        if updates:
+                            ws_dia2.batch_update(updates)
+
+                        nova_ordem = [ordem_headers]
+                        max_len = max(len(v) for v in ordem_atualizada.values())
+                        for i in range(max_len):
+                            row_o = [ordem_atualizada[h][i] if i < len(ordem_atualizada[h]) else '' for h in ordem_headers]
+                            nova_ordem.append(row_o)
+                        ws_ordem2.clear()
+                        ws_ordem2.update('A1', nova_ordem)
+
+                        load_data.clear()
+                        del st.session_state['escala_gerada']
+                        st.success("✅ Escala escrita e ordem atualizada!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao escrever: {e}")
