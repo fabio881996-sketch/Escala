@@ -3323,6 +3323,8 @@ else:
             st.warning("Acesso restrito a administradores.")
             st.stop()
 
+        st.caption(f"🔍 session_state keys: {[k for k in st.session_state.keys() if 'escala' in k]}")
+
         # ── Selecionar data ──
         d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
         aba_dia = d_gerar.strftime("%d-%m")
