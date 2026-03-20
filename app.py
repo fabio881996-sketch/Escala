@@ -3334,7 +3334,7 @@ else:
 
                     # ── Carregar abas ──
                     # Serviços que cada militar pode fazer
-                    ws_serv = sh.worksheet("servicos")
+                    ws_serv = sh.worksheet("serviços")
                     serv_vals = ws_serv.get_all_values()
                     serv_headers = [str(h).strip() for h in serv_vals[0]]
                     df_serv = pd.DataFrame(serv_vals[1:], columns=serv_headers)
