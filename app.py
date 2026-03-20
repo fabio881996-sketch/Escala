@@ -3487,6 +3487,7 @@ else:
 
                 st.markdown("---")
                 if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
+                    st.write("🔍 Botão clicado!")
                     try:
                         sh2 = get_sheet()
                         ws_dia2 = sh2.worksheet(aba_dia_saved)
