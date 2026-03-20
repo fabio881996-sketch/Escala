@@ -3323,7 +3323,64 @@ else:
             st.warning("Acesso restrito a administradores.")
             st.stop()
 
-        st.caption(f"🔍 session_state keys: {[k for k in st.session_state.keys() if 'escala' in k]}")
+        st.caption(f"🔍 session_state keys: {[k for k in st.session_state.keys() if 'escala' in k or 'Form' in k]}")
+
+        # ── Processar confirmação pendente ──
+        form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
+        if st.session_state.get(form_key) and 'escala_gerada' in st.session_state:
+            st.caption(f"🔍 A processar confirmação...")
+            del st.session_state[form_key]
+            dados = st.session_state['escala_gerada']
+            escalados_c = dados['escalados']
+            ordem_c = dados['ordem_atualizada']
+            headers_c = dados['ordem_headers']
+            aba_c = dados['aba_dia']
+            try:
+                sh_c = get_sheet()
+                ws_dia_c = sh_c.worksheet(aba_c)
+                ws_ord_c = sh_c.worksheet("ordem_escala")
+                linhas_c = ws_dia_c.get_all_values()
+                hdrs = [h.strip().lower() for h in linhas_c[0]]
+                ix_id   = hdrs.index('id')      if 'id'      in hdrs else 0
+                ix_serv = hdrs.index('serviço') if 'serviço' in hdrs else 1
+                ix_hor  = hdrs.index('horário') if 'horário' in hdrs else 2
+                from collections import defaultdict
+                agr = defaultdict(list)
+                simp = []
+                for mid, serv, hor in escalados_c:
+                    if serv == "Patrulha Ocorrências":
+                        agr[(serv, hor)].append(mid)
+                    else:
+                        simp.append((mid, serv, hor))
+                emap = {}
+                for (serv, hor), ids in agr.items():
+                    emap[(norm(serv), hor.strip())] = ';'.join(ids)
+                for mid, serv, hor in simp:
+                    emap[(norm(serv), hor.strip())] = mid
+                upd = []
+                for i, row in enumerate(linhas_c[1:], start=2):
+                    sc = norm(row[ix_serv]) if ix_serv < len(row) else ''
+                    hc = str(row[ix_hor]).strip() if ix_hor < len(row) else ''
+                    ic = str(row[ix_id]).strip()  if ix_id  < len(row) else ''
+                    ch = (sc, hc)
+                    if ch in emap and not ic:
+                        cl = chr(ord('A') + ix_id)
+                        upd.append({'range': f'{cl}{i}', 'values': [[emap[ch]]]})
+                        del emap[ch]
+                if upd:
+                    ws_dia_c.batch_update(upd)
+                nova_o = [headers_c]
+                ml = max(len(v) for v in ordem_c.values())
+                for i in range(ml):
+                    nova_o.append([ordem_c[h][i] if i < len(ordem_c[h]) else '' for h in headers_c])
+                ws_ord_c.clear()
+                ws_ord_c.update('A1', nova_o)
+                load_data.clear()
+                del st.session_state['escala_gerada']
+                st.success("✅ Escala escrita e ordem atualizada!")
+                st.stop()
+            except Exception as e:
+                st.error(f"Erro ao escrever: {e}")
 
         # ── Selecionar data ──
         d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
