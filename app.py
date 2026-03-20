@@ -3460,12 +3460,14 @@ else:
                     st.error(f"Erro ao gerar escala: {e}")
 
             # ── Mostrar resultado (fora do bloco gerar) ──
-            if 'escala_gerada' in st.session_state and st.session_state['escala_gerada'].get('aba_dia') == aba_dia:
+            if 'escala_gerada' in st.session_state:
                 dados = st.session_state['escala_gerada']
                 escalados = dados['escalados']
                 ordem_atualizada = dados['ordem_atualizada']
                 ordem_headers = dados['ordem_headers']
                 todos_disponiveis = dados['todos_disponiveis']
+                aba_dia_saved = dados['aba_dia']
+                st.caption(f"🔍 Escala gerada para: {aba_dia_saved} | {len(escalados)} escalados")
 
                 st.success(f"✅ {len(escalados)} militares escalados!")
                 st.markdown("---")
@@ -3484,7 +3486,7 @@ else:
                 if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
                     try:
                         sh2 = get_sheet()
-                        ws_dia2 = sh2.worksheet(aba_dia)
+                        ws_dia2 = sh2.worksheet(aba_dia_saved)
                         ws_ordem2 = sh2.worksheet("ordem_escala")
                         todas_linhas = ws_dia2.get_all_values()
                         dia_headers_raw = todas_linhas[0]
