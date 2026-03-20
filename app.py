@@ -3358,7 +3358,7 @@ else:
                             if val:
                                 ordem_data[h].append(val)
 
-                    # Aba do dia — militares já com exceções
+                    # Aba do dia — ler todas as linhas
                     try:
                         ws_dia = sh.worksheet(aba_dia)
                         dia_vals = ws_dia.get_all_values()
@@ -3373,12 +3373,17 @@ else:
                     feriados_g  = load_feriados(d_gerar.year)
 
                     # ── Determinar militares indisponíveis ──
+                    # Só quem já tem ID preenchido na aba (exceções manuais)
                     ids_indisponiveis = set()
                     if not df_dia_atual.empty and 'id' in df_dia_atual.columns:
                         for _, row in df_dia_atual.iterrows():
                             mid = str(row.get('id', '')).strip()
-                            if mid:
-                                ids_indisponiveis.add(mid)
+                            if mid and mid != 'nan':
+                                # Expandir IDs separados por ; ou ,
+                                for m in re.split(r'[;,]', mid):
+                                    m = m.strip()
+                                    if m:
+                                        ids_indisponiveis.add(m)
 
                     # Adicionar militares de férias
                     todos_ids = list(militares_servicos.keys())
@@ -3408,6 +3413,8 @@ else:
                             continue
                         lista = ordem_atualizada[col_key]
                         colocados = []
+                        _servicos_escalaveis = ['atendimento', 'patrulha ocorrencias', 'apoio atendimento', 'patrulha ocorrências']
+                        df_ant_g = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
                         for mid in lista:
                             if len(colocados) >= num:
                                 break
@@ -3417,12 +3424,16 @@ else:
                             pode = servico in militares_servicos.get(mid, [])
                             if not pode:
                                 continue
-                            # Verificar descanso
-                            df_ant_g = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
-                            df_seg_g = load_data((d_gerar + timedelta(days=1)).strftime("%d-%m"))
-                            ok, _ = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
-                            if not ok:
-                                continue
+                            # Verificar descanso só se o dia anterior tiver serviço escalável
+                            if not df_ant_g.empty:
+                                rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
+                                tem_serv_escalavel = rows_ant['serviço'].apply(
+                                    lambda s: any(x in norm(s) for x in _servicos_escalaveis)
+                                ).any()
+                                if tem_serv_escalavel:
+                                    ok, _ = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
+                                    if not ok:
+                                        continue
                             colocados.append(mid)
                             ids_escalados.add(mid)
                             escalados.append((mid, servico, horario))
@@ -3457,17 +3468,14 @@ else:
                     if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True):
                         try:
                             ws_dia = sh.worksheet(aba_dia)
-                            dia_headers_raw = ws_dia.row_values(1)
+                            todas_linhas = ws_dia.get_all_values()
+                            dia_headers_raw = todas_linhas[0]
                             dia_headers_low = [h.strip().lower() for h in dia_headers_raw]
-                            idx_id   = dia_headers_low.index('id')   if 'id'      in dia_headers_low else 0
+                            idx_id   = dia_headers_low.index('id')      if 'id'      in dia_headers_low else 0
                             idx_serv = dia_headers_low.index('serviço') if 'serviço' in dia_headers_low else 1
                             idx_hor  = dia_headers_low.index('horário') if 'horário' in dia_headers_low else 2
 
-                            # Encontrar próxima linha vazia
-                            todas_linhas = ws_dia.get_all_values()
-                            proxima = len(todas_linhas) + 1
-
-                            # Agrupar Patrulha com 2 militares em IDs separados por ;
+                            # Agrupar Patrulha Ocorrências por horário (2 ids juntos)
                             from collections import defaultdict
                             agrupados = defaultdict(list)
                             linha_simples = []
@@ -3477,35 +3485,40 @@ else:
                                 else:
                                     linha_simples.append((mid, serv, hor))
 
-                            linhas_escrever = []
+                            # Construir mapa de (serviço_norm, horário) → id a escrever
+                            escrita_map = {}
                             for (serv, hor), ids in agrupados.items():
-                                nova = [''] * len(dia_headers_raw)
-                                nova[idx_id]   = ';'.join(ids)
-                                nova[idx_serv] = serv
-                                nova[idx_hor]  = hor
-                                linhas_escrever.append(nova)
+                                escrita_map[(norm(serv), hor.strip())] = ';'.join(ids)
                             for mid, serv, hor in linha_simples:
-                                nova = [''] * len(dia_headers_raw)
-                                nova[idx_id]   = mid
-                                nova[idx_serv] = serv
-                                nova[idx_hor]  = hor
-                                linhas_escrever.append(nova)
+                                escrita_map[(norm(serv), hor.strip())] = mid
 
-                            ws_dia.append_rows(linhas_escrever, value_input_option='RAW')
+                            # Percorrer linhas da aba e preencher IDs onde id está vazio
+                            updates = []
+                            for i, row in enumerate(todas_linhas[1:], start=2):
+                                serv_cell = norm(row[idx_serv]) if idx_serv < len(row) else ''
+                                hor_cell  = str(row[idx_hor]).strip() if idx_hor < len(row) else ''
+                                id_cell   = str(row[idx_id]).strip()  if idx_id  < len(row) else ''
+                                chave = (serv_cell, hor_cell)
+                                if chave in escrita_map and not id_cell:
+                                    col_letra = chr(ord('A') + idx_id)
+                                    updates.append({
+                                        'range': f'{col_letra}{i}',
+                                        'values': [[escrita_map[chave]]]
+                                    })
+                                    del escrita_map[chave]  # só preenche uma vez por chave
+
+                            if updates:
+                                ws_dia.batch_update(updates)
 
                             # Atualizar ordem_escala
                             nova_ordem = [ordem_headers]
                             max_len = max(len(v) for v in ordem_atualizada.values())
                             for i in range(max_len):
-                                row_o = []
-                                for h in ordem_headers:
-                                    lst = ordem_atualizada[h]
-                                    row_o.append(lst[i] if i < len(lst) else '')
+                                row_o = [ordem_atualizada[h][i] if i < len(ordem_atualizada[h]) else '' for h in ordem_headers]
                                 nova_ordem.append(row_o)
                             ws_ordem.clear()
                             ws_ordem.update('A1', nova_ordem)
 
-                            # Invalidar cache
                             load_data.clear()
                             st.success("✅ Escala escrita e ordem atualizada!")
                             st.rerun()
