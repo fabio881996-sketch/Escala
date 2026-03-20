@@ -3332,6 +3332,7 @@ else:
         if st.button("⚙️ GERAR ESCALA", use_container_width=True, type="primary"):
             with st.spinner("A gerar escala..."):
                 try:
+                    st.write("🔍 A carregar serviços...")
                     sh = get_sheet()
 
                     # ── Carregar abas ──
