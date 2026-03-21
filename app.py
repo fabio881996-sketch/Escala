@@ -3367,12 +3367,22 @@ else:
                         del emap[ch]
                 if upd:
                     ws_dia_c.batch_update(upd)
+
+                # Escrever disponíveis na linha "Disponíveis"
+                if dados.get('todos_disponiveis'):
+                    ids_disp = ';'.join(dados['todos_disponiveis'])
+                    for i, row in enumerate(linhas_c[1:], start=2):
+                        sc2 = norm(row[ix_serv].strip()) if ix_serv < len(row) else ''
+                        ic2 = str(row[ix_id]).strip() if ix_id < len(row) else ''
+                        if sc2 == 'disponiveis' and not ic2:
+                            cl = chr(ord('A') + ix_id)
+                            ws_dia_c.update(f'{cl}{i}', [[ids_disp]])
+                            break
                 # Debug todas as linhas
                 for i, row in enumerate(linhas_c[1:], start=2):
                     sc = norm(row[ix_serv].strip()) if ix_serv < len(row) else ''
                     hc = str(row[ix_hor]).strip() if ix_hor < len(row) else ''
                     ic = str(row[ix_id]).strip()  if ix_id  < len(row) else ''
-                    st.caption(f"🔍 L{i}: serv={repr(sc)} hor={repr(hc)} id={repr(ic)}")
                 nova_o = [headers_c]
                 ml = max(len(v) for v in ordem_c.values())
                 for i in range(ml):
@@ -3393,7 +3403,6 @@ else:
         if st.button("⚙️ GERAR ESCALA", use_container_width=True, type="primary"):
             with st.spinner("A gerar escala..."):
                 try:
-                    st.write("🔍 A carregar serviços...")
                     sh = get_sheet()
 
                     # ── Carregar abas ──
@@ -3531,7 +3540,6 @@ else:
                 ordem_headers = dados['ordem_headers']
                 todos_disponiveis = dados['todos_disponiveis']
                 aba_dia_saved = dados['aba_dia']
-                st.caption(f"🔍 Escala gerada para: {aba_dia_saved} | {len(escalados)} escalados")
 
                 st.success(f"✅ {len(escalados)} militares escalados!")
                 st.markdown("---")
@@ -3551,7 +3559,6 @@ else:
                 # Verificar se o form foi submetido no rerun anterior
                 if st.session_state.get(form_key, False):
                     del st.session_state[form_key]
-                    st.write("🔍 A processar...")
                     try:
                         sh2 = get_sheet()
                         ws_dia2 = sh2.worksheet(aba_dia_saved)
