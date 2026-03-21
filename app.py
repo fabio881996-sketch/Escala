@@ -2801,6 +2801,15 @@ else:
                                 return True  # tem remunerado não cedido
                         return False
                     mask_rem_nao_cedido = df_d['id'].astype(str).apply(_tem_rem_nao_cedido)
+                    # Debug — ver o ID do militar em questão
+                    for _, row_debug in df_d[df_d['id'].astype(str).str.strip() != ''].iterrows():
+                        mid_d = str(row_debug['id']).strip()
+                        in_base = base_mask[row_debug.name] if row_debug.name in base_mask.index else False
+                        in_folga = mask_folga[row_debug.name] if row_debug.name in mask_folga.index else False
+                        in_imp = mask_imp[row_debug.name] if row_debug.name in mask_imp.index else False
+                        in_rem = mask_rem_nao_cedido[row_debug.name] if row_debug.name in mask_rem_nao_cedido.index else False
+                        if not in_base or in_imp or in_rem:
+                            st.caption(f"🔍 {mid_d} excluído: base={in_base} imp={in_imp} rem={in_rem} serv={row_debug['serviço']}")
                     cols_folga = df_d[base_mask & mask_folga]
                     cols = df_d[base_mask & ~mask_folga & ~mask_imp & ~mask_rem_nao_cedido]
                     if cols.empty and cols_folga.empty:
