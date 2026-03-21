@@ -1128,11 +1128,15 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 # 6. HELPERS UI
 # ============================================================
 def get_nome_militar(df_util: pd.DataFrame, id_m) -> str:
+    if df_util.empty or 'id' not in df_util.columns:
+        return f"ID {id_m}"
     res = df_util[df_util['id'].astype(str) == str(id_m)]
     return f"{res.iloc[0]['posto']} {res.iloc[0]['nome']}" if not res.empty else f"ID {id_m}"
 
 def get_nome_curto(df_util: pd.DataFrame, id_m) -> str:
     """Posto + primeiro e último nome."""
+    if df_util.empty or 'id' not in df_util.columns:
+        return f"ID {id_m}"
     res = df_util[df_util['id'].astype(str) == str(id_m)]
     if res.empty:
         return f"ID {id_m}"
