@@ -2751,14 +2751,17 @@ else:
                 ]
                 ids_com_troca = set(tr_ocupados['id_origem'].astype(str).tolist() +
                                     tr_ocupados['id_destino'].astype(str).tolist())
-                # Excluir também cedentes de fazer remunerado aprovados
+                ids_com_troca.discard(u_id)  # não excluir o próprio
+
+            # IDs a excluir só do fazer remunerado (cedentes aprovados)
+            ids_sem_remunerado = set()
+            if not df_trocas.empty:
                 rem_apr = df_trocas[
                     (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada') &
                     (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
                 ]
-                ids_com_troca.update(rem_apr['id_destino'].astype(str).tolist())
-                ids_com_troca.discard(u_id)  # não excluir o próprio
+                ids_sem_remunerado.update(rem_apr['id_destino'].astype(str).tolist())
 
             # ── Troca Simples ──
             if tipo_troca == "🔄 Troca Simples":
@@ -2783,33 +2786,17 @@ else:
                     mask_imp   = df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)
                     # Remunerados que NÃO foram cedidos — são impedimento
                     def _tem_rem_nao_cedido(mid):
-                        rows_rem = df_d[(df_d['id'].astype(str).str.strip() == str(mid)) &
+                        mid = str(mid).strip()
+                        rows_rem = df_d[(df_d['id'].astype(str).str.strip() == mid) &
                                         (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))]
                         if rows_rem.empty:
                             return False
-                        if df_trocas.empty:
-                            return True
-                        for _, rr in rows_rem.iterrows():
-                            cedeu = df_trocas[
-                                (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
-                                (df_trocas['status'] == 'Aprovada') &
-                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
-                                (df_trocas['id_destino'].astype(str) == str(mid)) &
-                                (df_trocas['servico_destino'].str.lower().str.contains(norm(rr['serviço'])[:10], na=False))
-                            ]
-                            if cedeu.empty:
-                                return True  # tem remunerado não cedido
-                        return False
+                        # Se está em ids_sem_remunerado, cedeu — não é impedimento
+                        if mid in ids_sem_remunerado:
+                            return False
+                        return True
                     mask_rem_nao_cedido = df_d['id'].astype(str).apply(_tem_rem_nao_cedido)
-                    # Debug — ver o ID do militar em questão
-                    for _, row_debug in df_d[df_d['id'].astype(str).str.strip() != ''].iterrows():
-                        mid_d = str(row_debug['id']).strip()
-                        in_base = base_mask[row_debug.name] if row_debug.name in base_mask.index else False
-                        in_folga = mask_folga[row_debug.name] if row_debug.name in mask_folga.index else False
-                        in_imp = mask_imp[row_debug.name] if row_debug.name in mask_imp.index else False
-                        in_rem = mask_rem_nao_cedido[row_debug.name] if row_debug.name in mask_rem_nao_cedido.index else False
-                        if not in_base or in_imp or in_rem:
-                            st.caption(f"🔍 {mid_d} excluído: base={in_base} imp={in_imp} rem={in_rem} serv={row_debug['serviço']}")
+                    # Debug
                     cols_folga = df_d[base_mask & mask_folga]
                     cols = df_d[base_mask & ~mask_folga & ~mask_imp & ~mask_rem_nao_cedido]
                     if cols.empty and cols_folga.empty:
@@ -2911,6 +2898,7 @@ else:
                         (df_d['id'].astype(str).str.strip() != '') &
                         (df_d['id'].astype(str).str.strip() != 'nan') &
                         (~df_d['id'].astype(str).str.strip().isin(ids_com_troca)) &
+                        (~df_d['id'].astype(str).str.strip().isin(ids_sem_remunerado)) &
                         (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))
                     ]
                     if rem_dia.empty:
