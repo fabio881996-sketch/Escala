@@ -547,6 +547,9 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
         fixos = get_servicos_fixos(mil_id, hor_excluir)
         msgs = []
         for ini_f, fim_f, s_f, h_f in fixos:
+            # Se qualquer um dos serviços for atendimento/apoio — isento
+            if _isento(s_f):
+                continue
             # descanso entre fim do fixo e início do novo
             d1 = ini_novo_abs - fim_f
             # descanso entre fim do novo e início do fixo
@@ -3391,8 +3394,8 @@ else:
                 ws_ord_c.update('A1', nova_o)
                 load_data.clear()
                 del st.session_state['escala_gerada']
-                st.success("✅ Escala escrita e ordem atualizada!")
-                st.stop()
+                st.session_state['escala_ok'] = True
+                st.rerun()
             except Exception as e:
                 st.error(f"Erro ao escrever: {e}")
 
