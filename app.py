@@ -195,7 +195,7 @@ hr { border-color: #E2E8F0 !important; }
 # 3. CONSTANTES
 # ============================================================
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
-IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito", "remuner", "gratific"]
+IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
 IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 
 # ============================================================
@@ -2780,9 +2780,29 @@ else:
                     )
                     # Folgas: disponíveis sempre (sem verificação de descanso)
                     mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
+                    mask_imp   = df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)
+                    # Remunerados que NÃO foram cedidos — são impedimento
+                    def _tem_rem_nao_cedido(mid):
+                        rows_rem = df_d[(df_d['id'].astype(str).str.strip() == str(mid)) &
+                                        (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))]
+                        if rows_rem.empty:
+                            return False
+                        if df_trocas.empty:
+                            return True
+                        for _, rr in rows_rem.iterrows():
+                            cedeu = df_trocas[
+                                (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
+                                (df_trocas['status'] == 'Aprovada') &
+                                (df_trocas['servico_origem'] == 'MATAR_REMUNERADO') &
+                                (df_trocas['id_destino'].astype(str) == str(mid)) &
+                                (df_trocas['servico_destino'].str.lower().str.contains(norm(rr['serviço'])[:10], na=False))
+                            ]
+                            if cedeu.empty:
+                                return True  # tem remunerado não cedido
+                        return False
+                    mask_rem_nao_cedido = df_d['id'].astype(str).apply(_tem_rem_nao_cedido)
                     cols_folga = df_d[base_mask & mask_folga]
-                    # Restantes: sujeitos a impedimentos e verificação de descanso
-                    cols = df_d[base_mask & ~mask_folga & (~df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False))]
+                    cols = df_d[base_mask & ~mask_folga & ~mask_imp & ~mask_rem_nao_cedido]
                     if cols.empty and cols_folga.empty:
                         st.warning("Não há militares disponíveis para troca neste dia.")
                     else:
@@ -2838,6 +2858,7 @@ else:
                         (~df_d['id'].astype(str).str.strip().isin(ids_com_troca))
                     ]
                     outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
+                    outros_t3 = outros_t3[~outros_t3['id'].astype(str).apply(_tem_rem_nao_cedido)]
                     opcoes_t3 = {f"{r['id']} {get_nome_curto(df_util, str(r['id']))} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
                     if len(opcoes_t3) < 2:
                         st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
