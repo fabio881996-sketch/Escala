@@ -3632,7 +3632,8 @@ else:
                                     lambda s: any(x in norm(s) for x in _servicos_escalaveis)
                                 ).any()
                                 if tem_serv_escalavel:
-                                    ok, _ = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
+                                    ok, motivo = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
+                                    st.caption(f"🔍 {mid} {servico} {horario} | ant={rows_ant[['serviço','horário']].values.tolist()} | ok={ok} | {motivo}")
                                     if not ok:
                                         continue
 
