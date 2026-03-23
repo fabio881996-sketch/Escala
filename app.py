@@ -3628,14 +3628,18 @@ else:
                             # Verificar descanso face ao dia anterior
                             if not df_ant_g.empty:
                                 rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
+                                st.caption(f"🔍 {mid} | ant vazio={rows_ant.empty} | serviços ant={rows_ant['serviço'].tolist() if not rows_ant.empty else []}")
                                 tem_serv_escalavel = rows_ant['serviço'].apply(
                                     lambda s: any(x in norm(s) for x in _servicos_escalaveis)
                                 ).any()
+                                st.caption(f"🔍 {mid} tem_serv_escalavel={tem_serv_escalavel}")
                                 if tem_serv_escalavel:
                                     ok, motivo = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
-                                    st.caption(f"🔍 {mid} {servico} {horario} | ant={rows_ant[['serviço','horário']].values.tolist()} | ok={ok} | {motivo}")
+                                    st.caption(f"🔍 {mid} {servico} {horario} ok={ok} motivo={motivo}")
                                     if not ok:
                                         continue
+                            else:
+                                st.caption(f"🔍 {mid} df_ant_g VAZIO")
 
                             # Verificar descanso face a serviços já escalados no próprio dia
                             ini_novo, fim_novo = _parse_horario(horario)
