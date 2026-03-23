@@ -3615,10 +3615,12 @@ else:
                     ]
                     # Ajustar número de vagas por slot conforme já preenchidos
                     SLOTS_AJUSTADOS = []
+                    st.caption(f"🔍 slots_preenchidos: {slots_preenchidos}")
                     for servico_s, horario_s, num_s in SLOTS:
                         chave_s = (norm(servico_s), horario_s)
                         ja_preenchidos = slots_preenchidos.get(chave_s, 0)
                         vagas = max(0, num_s - ja_preenchidos)
+                        st.caption(f"🔍 {servico_s} {horario_s} | chave={chave_s} | já={ja_preenchidos} | vagas={vagas}")
                         if vagas > 0:
                             SLOTS_AJUSTADOS.append((servico_s, horario_s, vagas))
 
