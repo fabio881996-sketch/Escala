@@ -457,7 +457,7 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
     if ini_novo is None:
         return True, ""  # não consegue validar, deixa passar
 
-    MIN_DESCANSO = 6 * 60  # 480 minutos
+    MIN_DESCANSO = 8 * 60  # 480 minutos
 
     for delta, label in [(-1, "dia anterior"), (1, "dia seguinte")]:
         dt_adj = data + timedelta(days=delta)
@@ -482,13 +482,15 @@ def verificar_descanso(militar_id: str, data: datetime, serv_novo: str, hor_novo
                 continue
 
             if delta == -1:
-                # serviço anterior acaba, novo começa
-                fim_adj_rel = fim_adj - 1440
-                descanso = ini_novo - fim_adj_rel
+                # serviço do dia anterior: fim em minutos absolutos (ex: 16-24 → fim=1440)
+                # serviço novo: começa em minutos do dia (ex: 00-08 → ini=0)
+                # descanso = 1440 - fim_adj + ini_novo (minutos entre meia-noite anterior e início novo)
+                descanso = (1440 - fim_adj) + ini_novo
             else:
-                # novo acaba, próximo começa
-                ini_adj_rel = ini_adj + 1440
-                descanso = ini_adj_rel - fim_novo
+                # serviço do dia seguinte: começa em minutos do dia (ex: 00-08 → ini=0)
+                # serviço novo: fim em minutos do dia (ex: 16-24 → fim=1440)
+                # descanso = 1440 - fim_novo + ini_adj
+                descanso = (1440 - fim_novo) + ini_adj
 
             if descanso < MIN_DESCANSO:
                 horas = descanso // 60
@@ -3622,7 +3624,8 @@ else:
                             pode = servico in militares_servicos.get(mid, [])
                             if not pode:
                                 continue
-                            # Verificar descanso só se o dia anterior tiver serviço escalável
+
+                            # Verificar descanso face ao dia anterior
                             if not df_ant_g.empty:
                                 rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
                                 tem_serv_escalavel = rows_ant['serviço'].apply(
@@ -3632,6 +3635,33 @@ else:
                                     ok, _ = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
                                     if not ok:
                                         continue
+
+                            # Verificar descanso face a serviços já escalados no próprio dia
+                            ini_novo, fim_novo = _parse_horario(horario)
+                            if ini_novo is not None:
+                                conflito = False
+                                for mid_e, serv_e, hor_e in escalados:
+                                    if mid_e != mid:
+                                        continue
+                                    ini_e, fim_e = _parse_horario(hor_e)
+                                    if ini_e is None:
+                                        continue
+                                    # Normalizar para linha de tempo absoluta (00-08 pode ser no dia seguinte)
+                                    # fim_e → ini_novo: descanso após serviço anterior
+                                    # fim_novo → ini_e: descanso após serviço novo
+                                    # Considerar que 00-08 significa 1440-1920 se o serviço anterior acabou depois de 1200
+                                    ini_novo_abs = ini_novo + (1440 if fim_e > 1200 and ini_novo < fim_e else 0)
+                                    fim_novo_abs = ini_novo_abs + (fim_novo - ini_novo)
+                                    ini_e_abs = ini_e
+                                    fim_e_abs = fim_e
+                                    d1 = ini_novo_abs - fim_e_abs
+                                    d2 = ini_e_abs - (fim_novo + (1440 if ini_e < fim_novo else 0))
+                                    if 0 < d1 < 480 or 0 < d2 < 480:
+                                        conflito = True
+                                        break
+                                if conflito:
+                                    continue
+
                             colocados.append(mid)
                             ids_escalados.add(mid)
                             escalados.append((mid, servico, horario))
