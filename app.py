@@ -3592,6 +3592,17 @@ else:
                             ids_indisponiveis.add(mid)
 
                     # ── Slots a preencher ──
+                    # Verificar quais já estão preenchidos na aba
+                    slots_preenchidos = {}  # (serv_norm, hor) → count já preenchidos
+                    if not df_dia_atual.empty and 'id' in df_dia_atual.columns and 'serviço' in df_dia_atual.columns:
+                        for _, row in df_dia_atual.iterrows():
+                            mid_r = str(row.get('id', '')).strip()
+                            serv_r = norm(str(row.get('serviço', '')).strip())
+                            hor_r  = str(row.get('horário', '')).strip()
+                            if mid_r and mid_r != 'nan' and serv_r and hor_r:
+                                chave_r = (serv_r, hor_r)
+                                slots_preenchidos[chave_r] = slots_preenchidos.get(chave_r, 0) + len([x for x in re.split(r'[;,]', mid_r) if x.strip()])
+
                     SLOTS = [
                         ("Atendimento",         "00-08", 1),
                         ("Atendimento",         "08-16", 1),
@@ -3602,12 +3613,20 @@ else:
                         ("Apoio Atendimento",    "08-16", 1),
                         ("Apoio Atendimento",    "16-24", 1),
                     ]
+                    # Ajustar número de vagas por slot conforme já preenchidos
+                    SLOTS_AJUSTADOS = []
+                    for servico_s, horario_s, num_s in SLOTS:
+                        chave_s = (norm(servico_s), horario_s)
+                        ja_preenchidos = slots_preenchidos.get(chave_s, 0)
+                        vagas = max(0, num_s - ja_preenchidos)
+                        if vagas > 0:
+                            SLOTS_AJUSTADOS.append((servico_s, horario_s, vagas))
 
                     escalados = []      # (id, serviço, horário)
                     ids_escalados = set()
                     ordem_atualizada = {h: list(v) for h, v in ordem_data.items()}
 
-                    for servico, horario, num in SLOTS:
+                    for servico, horario, num in SLOTS_AJUSTADOS:
                         col_key = f"{servico} {horario}"
                         if col_key not in ordem_atualizada:
                             continue
