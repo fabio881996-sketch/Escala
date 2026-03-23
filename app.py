@@ -3625,21 +3625,24 @@ else:
                             if not pode:
                                 continue
 
-                            # Verificar descanso face ao dia anterior
+                            # Verificar descanso face ao dia anterior (só horário, independente do serviço)
                             if not df_ant_g.empty:
                                 rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
-                                st.caption(f"🔍 {mid} | ant vazio={rows_ant.empty} | serviços ant={rows_ant['serviço'].tolist() if not rows_ant.empty else []}")
-                                tem_serv_escalavel = rows_ant['serviço'].apply(
-                                    lambda s: any(x in norm(s) for x in _servicos_escalaveis)
-                                ).any()
-                                st.caption(f"🔍 {mid} tem_serv_escalavel={tem_serv_escalavel}")
-                                if tem_serv_escalavel:
-                                    ok, motivo = verificar_descanso(mid, datetime.combine(d_gerar, datetime.min.time()), servico, horario, "")
-                                    st.caption(f"🔍 {mid} {servico} {horario} ok={ok} motivo={motivo}")
-                                    if not ok:
+                                ini_novo_g, _ = _parse_horario(horario)
+                                descanso_ok = True
+                                for _, r_ant in rows_ant.iterrows():
+                                    hor_ant = str(r_ant.get('horário', '')).strip()
+                                    if not hor_ant:
                                         continue
-                            else:
-                                st.caption(f"🔍 {mid} df_ant_g VAZIO")
+                                    _, fim_ant_g = _parse_horario(hor_ant)
+                                    if fim_ant_g is None or ini_novo_g is None:
+                                        continue
+                                    descanso = (1440 - fim_ant_g) + ini_novo_g
+                                    if descanso < 480:
+                                        descanso_ok = False
+                                        break
+                                if not descanso_ok:
+                                    continue
 
                             # Verificar descanso face a serviços já escalados no próprio dia
                             ini_novo, fim_novo = _parse_horario(horario)
