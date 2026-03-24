@@ -713,12 +713,26 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     from datetime import datetime as _dt
 
     def c(txt):
-        # fpdf 1.7.2 precisa de latin-1 — encode para bytes e volta a string latin-1
+        # fpdf 1.7.2 em Python 3: passar string latin-1 diretamente
         t = unicodedata.normalize('NFC', str(txt))
-        return t.encode('latin-1', 'replace').decode('latin-1')
-
-    import fpdf as _fpdf_mod
-    st.caption(f"🔍 fpdf version: {getattr(_fpdf_mod, 'FPDF_VERSION', getattr(_fpdf_mod, '__version__', 'unknown'))} | c('Férias')={repr(c('Férias'))}")
+        # Substituir manualmente caracteres problemáticos
+        replacements = {
+            'ã': '\xe3', 'â': '\xe2', 'á': '\xe1', 'à': '\xe0', 'ä': '\xe4',
+            'é': '\xe9', 'ê': '\xea', 'è': '\xe8', 'ë': '\xeb',
+            'í': '\xed', 'î': '\xee', 'ì': '\xec', 'ï': '\xef',
+            'ó': '\xf3', 'ô': '\xf4', 'ò': '\xf2', 'õ': '\xf5', 'ö': '\xf6',
+            'ú': '\xfa', 'û': '\xfb', 'ù': '\xf9', 'ü': '\xfc',
+            'ç': '\xe7', 'ñ': '\xf1',
+            'Ã': '\xc3', 'Â': '\xc2', 'Á': '\xc1', 'À': '\xc0', 'Ä': '\xc4',
+            'É': '\xc9', 'Ê': '\xca', 'È': '\xc8', 'Ë': '\xcb',
+            'Í': '\xcd', 'Î': '\xce', 'Ì': '\xcc', 'Ï': '\xcf',
+            'Ó': '\xd3', 'Ô': '\xd4', 'Ò': '\xd2', 'Õ': '\xd5', 'Ö': '\xd6',
+            'Ú': '\xda', 'Û': '\xdb', 'Ù': '\xd9', 'Ü': '\xdc',
+            'Ç': '\xc7', 'Ñ': '\xd1',
+        }
+        for k, v in replacements.items():
+            t = t.replace(k, v)
+        return t
 
     # ---- formatar id_disp para mostrar troca de forma legivel ----
     # id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
