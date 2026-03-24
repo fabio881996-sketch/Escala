@@ -252,16 +252,20 @@ def load_data(aba_nome: str) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def load_utilizadores() -> pd.DataFrame:
-    """Carrega utilizadores com cache de 60s — fresco o suficiente para PIN funcionar."""
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return pd.DataFrame()
-        return _df_from_records(sh.worksheet("utilizadores").get_all_records())
-    except Exception:
-        return pd.DataFrame()
+    """Carrega utilizadores com cache de 5min e retry automático."""
+    import time
+    for tentativa in range(3):
+        try:
+            sh = get_sheet()
+            if sh is None:
+                return pd.DataFrame()
+            return _df_from_records(sh.worksheet("utilizadores").get_all_records())
+        except Exception:
+            if tentativa < 2:
+                time.sleep(1)
+    return pd.DataFrame()
 
 def invalidar_trocas():
     """Limpa cache de trocas."""
