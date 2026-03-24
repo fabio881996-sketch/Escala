@@ -609,30 +609,34 @@ def salvar_troca_gsheet(linha: list) -> bool:
 # 5. FUNÇÕES PDF
 # ============================================================
 def s(txt) -> str:
-    """Mantém acentos e caracteres especiais — compatível com fonte DejaVu TTF."""
     return str(txt)
 
-def _pdf_base(orientation='P') -> FPDF:
-    """Cria um PDF base com fonte DejaVu que suporta caracteres portugueses."""
-    import os
-    pdf = FPDF(orientation=orientation, unit='mm', format='A4')
-    font_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf.add_font('DejaVu', style='', fname=os.path.join(font_dir, 'DejaVuSans.ttf'))
-    pdf.add_font('DejaVu', style='B', fname=os.path.join(font_dir, 'DejaVuSans-Bold.ttf'))
-    pdf.add_font('DejaVu', style='I', fname=os.path.join(font_dir, 'DejaVuSans.ttf'))
-    return pdf
+def _rl_header(c_obj, titulo):
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.units import mm
+    c_obj.setFillColor(HexColor('#1a2b4a'))
+    c_obj.rect(0, 267*mm, 210*mm, 30*mm, fill=1, stroke=0)
+    c_obj.setFillColor(HexColor('#ffffff'))
+    c_obj.setFont("Helvetica-Bold", 16)
+    c_obj.drawCentredString(105*mm, 278*mm, titulo)
 
 def gerar_pdf_troca(dados: dict) -> bytes:
-    pdf = _pdf_base()
-    pdf.add_page()
-    pdf.set_fill_color(26, 43, 74)
-    pdf.rect(0, 0, 210, 30, 'F')
-    pdf.set_font("DejaVu", "B", 17.5)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 30, "GNR - Comprovativo de Troca de Serviço", 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(10)
-    pdf.set_font("DejaVu", size=10.5)
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    # Cabeçalho
+    c.setFillColor(HexColor('#1a2b4a'))
+    c.rect(0, h-30*mm, w, 30*mm, fill=1, stroke=0)
+    c.setFillColor(HexColor('#ffffff'))
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(w/2, h-18*mm, "GNR - Comprovativo de Troca de Serviço")
+    # Corpo
+    c.setFillColor(HexColor('#000000'))
+    c.setFont("Helvetica", 11)
     texto = (
         f"Certifica-se que o militar {s(dados['nome_origem'])} (ID {s(dados['id_origem'])}), "
         f"requereu a troca do serviço '{s(dados['serv_orig'])}' pelo serviço '{s(dados['serv_dest'])}' "
@@ -640,24 +644,39 @@ def gerar_pdf_troca(dados: dict) -> bytes:
         f"O pedido foi aceite pelo militar de destino e validado superiormente por "
         f"{s(dados['validador'])} no dia {s(dados['data_val'])}."
     )
-    pdf.multi_cell(190, 8, texto)
-    pdf.ln(15)
-    pdf.set_font("DejaVu", size=8)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
-    return bytes(pdf.output())
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import Paragraph, SimpleDocTemplate
+    from reportlab.lib.styles import ParagraphStyle
+    style = ParagraphStyle('body', fontName='Helvetica', fontSize=11, leading=16, spaceAfter=10)
+    y = h - 50*mm
+    for linha in texto.split('\n'):
+        if linha.strip():
+            p = Paragraph(linha, style)
+            pw, ph = p.wrap(170*mm, h)
+            p.drawOn(c, 20*mm, y - ph)
+            y -= ph + 6*mm
+    c.setFont("Helvetica-Oblique", 8)
+    c.setFillColor(HexColor('#646464'))
+    c.drawRightString(w-20*mm, 15*mm, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    c.save()
+    return buf.getvalue()
 
 def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
-    pdf = _pdf_base()
-    pdf.add_page()
-    pdf.set_fill_color(26, 43, 74)
-    pdf.rect(0, 0, 210, 30, 'F')
-    pdf.set_font("DejaVu", "B", 17.5)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(190, 30, "GNR - Comprovativo de Remunerado", 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(10)
-    pdf.set_font("DejaVu", size=10.5)
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.platypus import Paragraph
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    w, h = A4
+    c.setFillColor(HexColor('#1a2b4a'))
+    c.rect(0, h-30*mm, w, 30*mm, fill=1, stroke=0)
+    c.setFillColor(HexColor('#ffffff'))
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(w/2, h-18*mm, "GNR - Comprovativo de Remunerado")
+    c.setFillColor(HexColor('#000000'))
     texto = (
         f"Certifica-se que o militar {s(dados['nome_cedente'])} (ID {s(dados['id_cedente'])}) "
         f"cedeu o serviço remunerado '{s(dados['remunerado'])}' do dia {s(dados['data'])} "
@@ -665,12 +684,19 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
         f"O pedido foi aceite pelo militar cedente e validado superiormente por "
         f"{s(dados['validador'])} no dia {s(dados['data_val'])}."
     )
-    pdf.multi_cell(190, 8, texto)
-    pdf.ln(15)
-    pdf.set_font("DejaVu", size=8)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
-    return bytes(pdf.output())
+    style = ParagraphStyle('body', fontName='Helvetica', fontSize=11, leading=16)
+    y = h - 50*mm
+    for linha in texto.split('\n'):
+        if linha.strip():
+            p = Paragraph(linha, style)
+            pw, ph = p.wrap(170*mm, h)
+            p.drawOn(c, 20*mm, y - ph)
+            y -= ph + 6*mm
+    c.setFont("Helvetica-Oblique", 8)
+    c.setFillColor(HexColor('#646464'))
+    c.drawRightString(w-20*mm, 15*mm, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}")
+    c.save()
+    return buf.getvalue()
 
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
@@ -678,7 +704,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     from datetime import datetime as _dt
 
     def c(txt):
-        return str(txt)  # DejaVu suporta acentos diretamente
+        # cp1252 suporta caracteres portugueses (ç, ã, é, etc.)
+        return str(txt).encode('cp1252', 'replace').decode('cp1252')
 
     # ---- formatar id_disp para mostrar troca de forma legivel ----
     # id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
@@ -705,14 +732,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
     df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw_com)
     df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig', df_rest)
-    df_ap,   df_rest = filtrar(r'apoio', df_rest)           # apoio ANTES do atendimento
-    df_at,   df_rest = filtrar(r'atendimento', df_rest)     # agora não apanha apoio
+    df_ap,   df_rest = filtrar(r'apoio', df_rest)
+    df_at,   df_rest = filtrar(r'atendimento', df_rest)
     df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr|giro', df_rest)
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
     df_outros = df_rest
 
     # ---- Iniciar PDF ----
-    pdf = _pdf_base()
+    pdf = FPDF(orientation='P', unit='mm', format='A4')
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
@@ -726,7 +753,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def sec_title(label, w=W, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("DejaVu", "B", 10.5)
+        pdf.set_font("Arial", "B", 10.5)
         pdf.set_fill_color(26, 46, 100)
         pdf.set_text_color(255, 255, 255)
         pdf.cell(w, 5.5, c(f"  {label.upper()}"), 1, 1, 'L', True)
@@ -735,7 +762,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     def tbl_hdr(cols, widths, x=None):
         if x is not None:
             pdf.set_x(x)
-        pdf.set_font("DejaVu", "B", 10.0)
+        pdf.set_font("Arial", "B", 10.0)
         pdf.set_fill_color(205, 215, 242)
         pdf.set_text_color(15, 35, 90)
         for col, w in zip(cols, widths):
@@ -744,7 +771,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         pdf.set_text_color(0, 0, 0)
 
     def tbl_row(vals, widths, x=None, fill=False):
-        pdf.set_font("DejaVu", size=8.5)
+        pdf.set_font("Arial", size=8.5)
         if fill:
             pdf.set_fill_color(235, 241, 255)
         else:
@@ -795,11 +822,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_fill_color(20, 40, 95)
     pdf.rect(10, 10, W, 14, 'F')
     pdf.set_xy(10, 11)
-    pdf.set_font("DejaVu", "B", 11.0)
+    pdf.set_font("Arial", "B", 11.0)
     pdf.set_text_color(255, 255, 255)
     pdf.cell(W, 6, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
     pdf.set_x(10)
-    pdf.set_font("DejaVu", "B", 11.0)
+    pdf.set_font("Arial", "B", 11.0)
     try:
         dt_obj   = _dt.strptime(data, "%d/%m/%Y")
         dias_pt  = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
@@ -824,7 +851,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C1)
-            pdf.set_font("DejaVu", size=9.0)
+            pdf.set_font("Arial", size=9.0)
             pdf.set_fill_color(255, 245, 245)
             pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
     pdf.set_x(C1)
@@ -837,7 +864,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
         for _, r in ag.iterrows():
             pdf.set_x(C2)
-            pdf.set_font("DejaVu", size=9.0)
+            pdf.set_font("Arial", size=9.0)
             pdf.set_fill_color(245, 245, 255)
             horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
             pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
@@ -987,7 +1014,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 grupo.append(j)
                 j += 1
 
-            pdf.set_font("DejaVu", size=9.0)
+            pdf.set_font("Arial", size=9.0)
             if fill:
                 pdf.set_fill_color(235, 241, 255)
             else:
@@ -1073,7 +1100,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 horario_val = str(r.get('horário','') or '').strip()
                 if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
                     indic = f"{indic}\n{horario_val}"
-                pdf.set_font("DejaVu", size=9.0)
+                pdf.set_font("Arial", size=9.0)
                 if fill:
                     pdf.set_fill_color(255, 255, 220)
                 else:
@@ -1128,13 +1155,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.set_xy(10, 282)
     pdf.set_draw_color(160, 160, 160)
     pdf.line(10, 282, 200, 282)
-    pdf.set_font("DejaVu", size=8.5)
+    pdf.set_font("Arial", size=8.5)
     pdf.set_text_color(120, 120, 120)
     pdf.set_xy(10, 283)
     pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
     pdf.cell(95, 4, c("O COMANDANTE"), 0, 0, 'R')
 
-    return bytes(pdf.output())
+    return bytes(pdf.output(dest='S').encode('latin-1', 'replace'))
 
 # ============================================================
 # 6. HELPERS UI
