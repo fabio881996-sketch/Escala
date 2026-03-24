@@ -1028,8 +1028,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
             if obs == 'nan': obs = ""
-            obs_lines = wrap_text(obs, max_pts_rm)
-            row_h = max(5*mm, len(obs_lines) * 5*mm)
+            obs_lines = wrap_text(obs, max_pts_rm) if obs else [""]
+            ids_lines = wrap_text(ids, (wids_rm[1] - 3*mm) * (72/25.4))
+            row_h = max(5*mm, max(len(obs_lines), len(ids_lines)) * 5*mm)
             if y - row_h < 20*mm: y = new_page()
             if fill:
                 c.setFillColor(FILL_ALT)
@@ -1037,7 +1038,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(hor))
-            c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-3.5*mm, ids)
+            for li, id_l in enumerate(ids_lines):
+                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-(li*5*mm)-3.5*mm, id_l)
             for li, obs_l in enumerate(obs_lines):
                 c.drawString(LM+wids_rm[0]+wids_rm[1]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
             c.setStrokeColor(CINZA_LN)
@@ -1049,34 +1051,37 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
-    # Agrupar por obs: se indicativo igual com obs diferente, mostrar horário
-    obs_por_ind = {}  # ind -> lista de (hor, obs)
+    # Agrupar por indicativo/serviço: mostrar horário só se mesmo indicativo tem obs diferentes ou uma tem obs e outra não
+    obs_por_ind = {}  # label -> {obs -> [hors]}
     for df_sec in [df_pat, df_at, df_ap, df_outros]:
         if df_sec.empty or "observações" not in df_sec.columns:
             continue
         for _, row in df_sec.iterrows():
             obs = str(row.get("observações", "")).strip()
-            if not obs or obs == 'nan':
-                continue
             ind = str(row.get("indicativo rádio", "")).strip() if "indicativo rádio" in df_sec.columns else ""
             serv = str(row.get("serviço", "")).strip()
             hor  = str(row.get("horário", "")).strip()
             label = ind if ind else serv
-            obs_por_ind.setdefault(label, []).append((hor, obs))
+            if label not in obs_por_ind:
+                obs_por_ind[label] = {}
+            obs_key = obs if (obs and obs != 'nan') else ""
+            obs_por_ind[label].setdefault(obs_key, []).append(hor)
 
-    # Construir lista final: agrupar obs iguais, só mostrar horário se mesmo indicativo tem obs diferente
-    obs_final = {}  # obs -> labels
-    for label, entradas in obs_por_ind.items():
-        obs_unicas = list(dict.fromkeys([e[1] for e in entradas]))  # obs únicas mantendo ordem
-        tem_multiplas_obs = len(obs_unicas) > 1
-        for hor, obs in entradas:
-            chave = obs
-            lbl = f"{label} {hor}" if tem_multiplas_obs else label
-            obs_final.setdefault(chave, [])
-            if lbl not in obs_final[chave]:
-                obs_final[chave].append(lbl)
+    # Decidir se mostrar horário: sim se o mesmo indicativo tem obs diferentes ou uma linha sem obs
+    obs_final = {}  # (label_com_hor, obs) -> já inserido
+    obs_lista = []
+    for label, obs_map in obs_por_ind.items():
+        obs_com = {k: v for k, v in obs_map.items() if k}
+        obs_sem = {k: v for k, v in obs_map.items() if not k}
+        tem_multiplas = len(obs_com) > 1 or (obs_com and obs_sem)
+        for obs_txt, hors in obs_com.items():
+            if tem_multiplas:
+                lbl = f"{label}\n{', '.join(hors)}"
+            else:
+                lbl = label
+            obs_lista.append((lbl, obs_txt))
 
-    if obs_final:
+    if obs_lista:
         if y < 40*mm: y = new_page()
         y = sec_title(y, "Observações")
         cols_ob = ["Indicativo / Serviço", "Detalhe"]
@@ -1084,8 +1089,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         y = tbl_header(y, cols_ob, wids_ob)
         fill = False
         max_pts_ob = (wids_ob[1] - 3*mm) * (72/25.4)
-        for obs, labels in obs_final.items():
-            label_lines = labels
+        for lbl, obs in obs_lista:
+            label_lines = lbl.split('\n')
             obs_lines = wrap_text(obs, max_pts_ob)
             row_h = max(5*mm, max(len(obs_lines), len(label_lines)) * 5*mm)
             if y - row_h < 20*mm: y = new_page()
@@ -1094,8 +1099,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 c.rect(LM, y-row_h, TW, row_h, fill=1, stroke=0)
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
-            for li, lbl in enumerate(label_lines):
-                c.drawCentredString(LM+wids_ob[0]/2, y-(li*5*mm)-3.5*mm, lbl)
+            for li, l in enumerate(label_lines):
+                c.drawCentredString(LM+wids_ob[0]/2, y-(li*5*mm)-3.5*mm, l)
             for li, obs_l in enumerate(obs_lines):
                 c.drawString(LM+wids_ob[0]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
             c.setStrokeColor(CINZA_LN)
