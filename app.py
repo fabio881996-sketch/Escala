@@ -3548,9 +3548,14 @@ else:
                     nova_o.append([ordem_c[h][i] if i < len(ordem_c[h]) else '' for h in headers_c])
 
                 # Renomear ordem_escala para ordem_escala DD-MM e criar nova
-                ws_ord_c.update_title(f"ordem_escala {aba_c}")
-                nova_ws = sh_c.add_worksheet(title="ordem_escala", rows=100, cols=len(headers_c))
-                nova_ws.update('A1', nova_o)
+                nome_novo = f"ordem_escala {aba_c}"
+                try:
+                    sh_c.worksheet(nome_novo).clear()
+                    sh_c.worksheet(nome_novo).update('A1', nova_o)
+                    ws_ord_c2 = sh_c.worksheet(nome_novo)
+                except:
+                    ws_ord_c2 = sh_c.add_worksheet(title=nome_novo, rows=100, cols=len(headers_c))
+                    ws_ord_c2.update('A1', nova_o)
 
                 load_data.clear()
                 del st.session_state['escala_gerada']
@@ -3583,8 +3588,12 @@ else:
                                 militares_servicos[mid] = []
                             militares_servicos[mid].append(col)
 
-                    # Ordem de escala por serviço/horário
-                    ws_ordem = sh.worksheet("ordem_escala")
+                    # Ordem de escala — usar snapshot do dia anterior se existir
+                    aba_ordem_ant = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
+                    try:
+                        ws_ordem = sh.worksheet(aba_ordem_ant)
+                    except:
+                        ws_ordem = sh.worksheet("ordem_escala")
                     ordem_vals = ws_ordem.get_all_values()
                     ordem_headers = [str(h).strip() for h in ordem_vals[0]]
                     ordem_data = {h: [] for h in ordem_headers}
