@@ -709,36 +709,19 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
 
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
-    """Gera PDF da escala diaria em A4 retrato. Inclui indicacao de trocas."""
+    """Gera PDF da escala diaria em A4 retrato usando reportlab."""
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.colors import HexColor, white, black
+    from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib import colors
     from datetime import datetime as _dt
 
-    def c(txt):
-        # fpdf 1.7.2 em Python 3: passar string latin-1 diretamente
-        t = unicodedata.normalize('NFC', str(txt))
-        # Substituir manualmente caracteres problemáticos
-        replacements = {
-            'ã': '\xe3', 'â': '\xe2', 'á': '\xe1', 'à': '\xe0', 'ä': '\xe4',
-            'é': '\xe9', 'ê': '\xea', 'è': '\xe8', 'ë': '\xeb',
-            'í': '\xed', 'î': '\xee', 'ì': '\xec', 'ï': '\xef',
-            'ó': '\xf3', 'ô': '\xf4', 'ò': '\xf2', 'õ': '\xf5', 'ö': '\xf6',
-            'ú': '\xfa', 'û': '\xfb', 'ù': '\xf9', 'ü': '\xfc',
-            'ç': '\xe7', 'ñ': '\xf1',
-            'Ã': '\xc3', 'Â': '\xc2', 'Á': '\xc1', 'À': '\xc0', 'Ä': '\xc4',
-            'É': '\xc9', 'Ê': '\xca', 'È': '\xc8', 'Ë': '\xcb',
-            'Í': '\xcd', 'Î': '\xce', 'Ì': '\xcc', 'Ï': '\xcf',
-            'Ó': '\xd3', 'Ô': '\xd4', 'Ò': '\xd2', 'Õ': '\xd5', 'Ö': '\xd6',
-            'Ú': '\xda', 'Û': '\xdb', 'Ù': '\xd9', 'Ü': '\xdc',
-            'Ç': '\xc7', 'Ñ': '\xd1',
-        }
-        for k, v in replacements.items():
-            t = t.replace(k, v)
-        return t
-
-    # ---- formatar id_disp para mostrar troca de forma legivel ----
-    # id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
     def fmt_id(txt):
         t = str(txt)
-        if '\U0001f504' in t:          # emoji 🔄
+        if '\U0001f504' in t:
             parts = t.split('\U0001f504')
             a, b = parts[0].strip(), parts[1].strip()
             return f"{a} (Troca c/{b})"
@@ -747,12 +730,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_raw = df_raw.copy()
     df_raw["servico_col"] = df_raw["serviço"].apply(norm)
     df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
-
-    # Separar logo à partida linhas sem militar (id vazio) — não aparecem nas tabelas
     df_raw_com = df_raw[df_raw['id'].astype(str).str.strip().str.len() > 0].copy()
-    df_raw_sem = df_raw[df_raw['id'].astype(str).str.strip().str.len() == 0].copy()
 
-    # Filtros sequenciais sobre linhas COM militar
     def filtrar(pat, df):
         mask = df['servico_col'].str.contains(pat, na=False)
         return df[mask].copy(), df[~mask].copy()
@@ -765,438 +744,127 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
     df_outros = df_rest
 
-    # ---- Iniciar PDF ----
-    pdf = FPDF(orientation='P', unit='mm', format='A4')
-    pdf.core_fonts_encoding = 'latin-1'
-    pdf.set_margins(10, 10, 10)
-    pdf.set_auto_page_break(auto=False)
-    pdf.add_page()
+    buf = io.BytesIO()
+    w_pg, h_pg = A4
+    c = canvas.Canvas(buf, pagesize=A4)
 
-    W  = 190
-    C1 = 10
-    C2 = 107
-    CW = 92
+    # Estilos
+    azul_esc = HexColor('#14285f')
+    azul_med = HexColor('#cdd7f2')
+    cinza    = HexColor('#787878')
+    fill_alt = HexColor('#ebf1ff')
 
-    # ---- Helpers ----
-    def sec_title(label, w=W, x=None):
-        if x is not None:
-            pdf.set_x(x)
-        pdf.set_font("Arial", "B", 10.5)
-        pdf.set_fill_color(26, 46, 100)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(w, 5.5, c(f"  {label.upper()}"), 1, 1, 'L', True)
-        pdf.set_text_color(0, 0, 0)
+    def draw_header():
+        c.setFillColor(HexColor('#14285f'))
+        c.rect(10*mm, h_pg-24*mm, 190*mm, 14*mm, fill=1, stroke=0)
+        c.setFillColor(white)
+        c.setFont("Helvetica-Bold", 11)
+        try:
+            dt_obj   = _dt.strptime(data, "%d/%m/%Y")
+            dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
+                        "Sexta-feira","Sábado","Domingo"]
+            meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+            titulo = f"ESCALA DE SERVIÇO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
+        except:
+            titulo = f"ESCALA DE SERVIÇO  |  {data}"
+        c.drawCentredString(w_pg/2, h_pg-14*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(w_pg/2, h_pg-20*mm, titulo)
 
-    def tbl_hdr(cols, widths, x=None):
-        if x is not None:
-            pdf.set_x(x)
-        pdf.set_font("Arial", "B", 10.0)
-        pdf.set_fill_color(205, 215, 242)
-        pdf.set_text_color(15, 35, 90)
-        for col, w in zip(cols, widths):
-            pdf.cell(w, 5, c(col), 1, 0, 'C', True)
-        pdf.ln(5)
-        pdf.set_text_color(0, 0, 0)
+    def draw_section_title(y, label):
+        c.setFillColor(azul_esc)
+        c.rect(10*mm, y-4*mm, 190*mm, 5.5*mm, fill=1, stroke=0)
+        c.setFillColor(white)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(12*mm, y-1*mm, f"  {label.upper()}")
+        return y - 6*mm
 
-    def tbl_row(vals, widths, x=None, fill=False):
-        pdf.set_font("Arial", size=8.5)
-        if fill:
-            pdf.set_fill_color(235, 241, 255)
-        else:
-            pdf.set_fill_color(255, 255, 255)
-        x0 = x if x is not None else pdf.get_x()
-        y0 = pdf.get_y()
-
-        # Calcular altura real necessária para cada célula
-        def calc_altura(txt, w):
-            if not txt:
-                return 5
-            words = txt.replace('\n', ' \n ').split(' ')
-            linha_w = 0
-            n_linhas = 1
-            for word in words:
-                if word == '\n':
-                    n_linhas += 1
-                    linha_w = 0
-                    continue
-                ww = pdf.get_string_width(word + ' ')
-                if linha_w + ww > w - 2:
-                    n_linhas += 1
-                    linha_w = ww
-                else:
-                    linha_w += ww
-            return max(5, n_linhas * 5)
-
-        altura_max = 5
-        for v, w in zip(vals, widths):
-            altura_max = max(altura_max, calc_altura(c(str(v)), w))
-
-        # Desenhar todas as células com a mesma altura
-        xi = x0
-        for v, w in zip(vals, widths):
-            txt = c(str(v))
-            pdf.set_xy(xi, y0)
-            pdf.multi_cell(w, 5, txt, 1, 'C', fill)
-            cell_h = pdf.get_y() - y0
-            if cell_h < altura_max:
-                pdf.set_xy(xi, y0 + cell_h)
-                pdf.cell(w, altura_max - cell_h, '', 'LRB', 0, 'C', fill)
-            xi += w
-        pdf.set_xy(x0, y0 + altura_max)
-
-    # ====================================================
-    # CABECALHO
-    # ====================================================
-    pdf.set_fill_color(20, 40, 95)
-    pdf.rect(10, 10, W, 14, 'F')
-    pdf.set_xy(10, 11)
-    pdf.set_font("Arial", "B", 11.0)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(W, 6, c("POSTO TERRITORIAL DE VILA NOVA DE FAMALICAO"), 0, 1, 'C')
-    pdf.set_x(10)
-    pdf.set_font("Arial", "B", 11.0)
-    try:
-        dt_obj   = _dt.strptime(data, "%d/%m/%Y")
-        dias_pt  = ["Segunda-feira","Terca-feira","Quarta-feira","Quinta-feira",
-                    "Sexta-feira","Sabado","Domingo"]
-        meses_pt = ["","Janeiro","Fevereiro","Marco","Abril","Maio","Junho",
-                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-        titulo   = f"ESCALA DE SERVICO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
-    except Exception:
-        titulo = f"ESCALA DE SERVICO  |  {data}"
-    pdf.cell(W, 6, c(titulo), 0, 1, 'C')
-    pdf.set_text_color(0, 0, 0)
-    pdf.ln(2)
-
-    # ====================================================
-    # BLOCO 1 — AUSENCIAS (esq) | ADM (dir)
-    # ====================================================
-    y_top = pdf.get_y()
-
-    pdf.set_x(C1)
-    sec_title("Ausencias, Folgas e Licencas", CW, C1)
-    if not df_aus.empty:
-        ag = df_aus.groupby('serviço')['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        for _, r in ag.iterrows():
-            pdf.set_x(C1)
-            pdf.set_font("Arial", size=9.0)
-            pdf.set_fill_color(255, 245, 245)
-            pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}: {r['id_fmt']}"), border='LR', align='L', fill=True)
-    pdf.set_x(C1)
-    pdf.cell(CW, 0.5, "", border='T', ln=1)
-    y_c1 = pdf.get_y()
-
-    pdf.set_xy(C2, y_top)
-    sec_title("Outras Situacoes / ADM", CW, C2)
-    if not df_adm.empty:
-        ag = df_adm.groupby(['serviço','horário'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        for _, r in ag.iterrows():
-            pdf.set_x(C2)
-            pdf.set_font("Arial", size=9.0)
-            pdf.set_fill_color(245, 245, 255)
-            horario_txt = f" ({r['horário']})" if str(r['horário']).strip() else ""
-            pdf.multi_cell(CW, 3.5, c(f"  {r['serviço'].upper()}{horario_txt}: {r['id_fmt']}"), border='LR', align='L', fill=True)
-    pdf.set_x(C2)
-    pdf.cell(CW, 0.5, "", border='T', ln=1)
-    y_c2 = pdf.get_y()
-
-    pdf.set_y(max(y_c1, y_c2) + 2)
-
-    # ====================================================
-    # BLOCO 2 — ATENDIMENTO (esq) | APOIO (dir)
-    # ====================================================
-    y_top2 = pdf.get_y()
-
-    pdf.set_x(C1)
-    sec_title("Atendimento", CW, C1)
-    tbl_hdr(["Horario", "Militar(es)"], [26, CW-26], C1)
-    if not df_at.empty:
-        ag = df_at.groupby(['horário','serviço'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
+    def draw_table(y, df_sec, cols, col_names, col_widths):
+        if df_sec.empty:
+            return y
+        # Cabeçalho
+        c.setFillColor(azul_med)
+        c.rect(10*mm, y-5*mm, 190*mm, 5*mm, fill=1, stroke=0)
+        c.setFillColor(HexColor('#0f235a'))
+        c.setFont("Helvetica-Bold", 9)
+        x = 10*mm
+        for name, cw in zip(col_names, col_widths):
+            c.drawCentredString(x + cw*mm/2, y-2*mm, name)
+            x += cw*mm
+        y -= 5*mm
+        # Linhas
         fill = False
-        for _, r in ag.sort_values('horário').iterrows():
-            tbl_row([r['horário'], r['id_fmt']], [26, CW-26], C1, fill)
-            fill = not fill
-    y_at = pdf.get_y()
-
-    pdf.set_xy(C2, y_top2)
-    sec_title("Apoio ao Atendimento", CW, C2)
-    tbl_hdr(["Horario", "Militar(es)"], [26, CW-26], C2)
-    if not df_ap.empty:
-        ag = df_ap.groupby(['horário','serviço'])['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        fill = False
-        for _, r in ag.sort_values('horário').iterrows():
-            tbl_row([r['horário'], r['id_fmt']], [26, CW-26], C2, fill)
-            fill = not fill
-    y_ap = pdf.get_y()
-
-    pdf.set_y(max(y_at, y_ap) + 2)
-
-    # ====================================================
-    # BLOCO 3 — PATRULHAS (largura total)
-    # ====================================================
-    if not df_pat.empty:
-        has_obs   = 'observações' in df_pat.columns
-        has_indic = 'indicativo rádio' in df_pat.columns
-        has_radio = 'rádio' in df_pat.columns
-        has_vtr   = 'viatura' in df_pat.columns
-        has_giro  = 'giro' in df_pat.columns
-
-        cols_grp = ['horário', 'serviço']
-        if has_indic: cols_grp.append('indicativo rádio')
-        if has_radio: cols_grp.append('rádio')
-        if has_vtr:   cols_grp.append('viatura')
-        if has_giro:  cols_grp.append('giro')
-
-        agg_dict = {'id_fmt': lambda x: ', '.join(x)}
-        if has_obs: agg_dict['observações'] = lambda x: ' | '.join(v for v in x if str(v).strip())
-
-        ag = df_pat.groupby(cols_grp, as_index=False).agg(agg_dict)
-
-        # Separar Ocorrências das outras patrulhas
-        mask_ocorr = ag['serviço'].str.lower().str.contains('ocorr|ocorrencia', na=False)
-        ag_ocorr   = ag[mask_ocorr].sort_values('horário')
-        ag_outras  = ag[~mask_ocorr].sort_values('horário')
-
-        # Larguras sem giro (ocorrências) e com giro (patrulhas)
-        w_p_base = [18, 44, 54, 24, 28, 22]
-        w_p_giro = [18, 40, 48, 22, 26, 20, 16] if has_giro else w_p_base
-        hdr_base = ["Horario","Militares","Servico","Indicativo","Radio","Viatura"]
-        hdr_giro = hdr_base + (["Giro"] if has_giro else [])
-
-        def _row_pat(r, com_giro=False):
-            vals = [r['horário'], r['id_fmt'], r['serviço'].upper(),
-                    str(r.get('indicativo rádio','')), str(r.get('rádio','')),
-                    r.get('viatura','')]
-            if com_giro: vals.append(str(r.get('giro','')))
-            return vals
-
-        # Grupo 1 — Patrulha Ocorrências (sem giro)
-        if not ag_ocorr.empty:
-            sec_title("Patrulha Ocorrencias", W)
-            tbl_hdr(hdr_base, w_p_base)
-            fill = False
-            for _, r in ag_ocorr.iterrows():
-                tbl_row(_row_pat(r, com_giro=False), w_p_base, fill=fill)
-                fill = not fill
-
-        # Grupo 2 — Outras Patrulhas e Policiamento (com giro)
-        if not ag_outras.empty:
-            pdf.ln(1)
-            sec_title("Patrulhas e Policiamento", W)
-            tbl_hdr(hdr_giro, w_p_giro)
-            fill = False
-            for _, r in ag_outras.iterrows():
-                tbl_row(_row_pat(r, com_giro=has_giro), w_p_giro, fill=fill)
-                fill = not fill
-
-    # ====================================================
-    # BLOCO 4 — OUTROS SERVIÇOS
-    # ====================================================
-    if not df_outros.empty:
-        pdf.ln(1)
-        sec_title("Outros Servicos", W)
-        has_vtr_o   = 'viatura' in df_outros.columns
-        has_indic_o = 'indicativo rádio' in df_outros.columns
-        has_radio_o = 'rádio' in df_outros.columns
-        cols_grp_o  = ['horário', 'serviço']
-        if has_indic_o: cols_grp_o.append('indicativo rádio')
-        if has_radio_o: cols_grp_o.append('rádio')
-        if has_vtr_o:   cols_grp_o.append('viatura')
-        ag_out = df_outros.groupby(cols_grp_o, as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-
-        hdr_o = ["Horario","Militares","Servico"]
-        w_o2  = [18, 54, 44]
-        if has_indic_o: hdr_o.append("Indicativo"); w_o2.append(24)
-        if has_radio_o: hdr_o.append("Radio");      w_o2.append(24)
-        if has_vtr_o:   hdr_o.append("Viatura");    w_o2.append(190 - sum(w_o2))
-        tbl_hdr(hdr_o, w_o2)
-        fill = False
-        for _, r in ag_out.sort_values(['serviço','horário']).iterrows():
-            vals = [r['horário'], r['id_fmt'], r['serviço'].upper()]
-            if has_indic_o: vals.append(r.get('indicativo rádio',''))
-            if has_radio_o: vals.append(r.get('rádio',''))
-            if has_vtr_o:   vals.append(r.get('viatura',''))
-            tbl_row(vals, w_o2, fill=fill)
-            fill = not fill
-
-    # ====================================================
-    # BLOCO 5 — REMUNERADOS
-    # ====================================================
-    if not df_rem.empty:
-        pdf.ln(1)
-        sec_title("Servicos Remunerados / Gratificados", W)
-        w_r = [22, 38, 130]
-        tbl_hdr(["Horario","Militares","Observacao"], w_r)
-        obs_col = 'observações' if 'observações' in df_rem.columns else 'serviço'
-        ag = df_rem.groupby(['horário', obs_col], as_index=False)['id_fmt'].apply(lambda x: ', '.join(x)).reset_index()
-        ag = ag.sort_values([obs_col, 'horário']).reset_index(drop=True)
-
-        # Agrupar linhas consecutivas com a mesma observação
-        i = 0
-        fill = False
-        while i < len(ag):
-            obs_txt = str(ag.loc[i, obs_col])
-            grupo = [i]
-            j = i + 1
-            while j < len(ag) and str(ag.loc[j, obs_col]) == obs_txt:
-                grupo.append(j)
-                j += 1
-
-            pdf.set_font("Arial", size=9.0)
+        for _, row in df_sec.iterrows():
+            vals = [str(row.get(col, '')) for col in cols]
+            row_h = 5*mm
             if fill:
-                pdf.set_fill_color(235, 241, 255)
-            else:
-                pdf.set_fill_color(255, 255, 255)
-
-            y_grupo = pdf.get_y()
-
-            # Calcular altura mínima para cada linha do grupo
-            h_linha = 5
-
-            # Calcular altura da observação (multi_cell)
-            def _h_rem(txt, w):
-                words = c(txt).replace('\n',' \n ').split(' ')
-                lw, nl = 0, 1
-                for wd in words:
-                    if wd == '\n': nl += 1; lw = 0; continue
-                    ww = pdf.get_string_width(wd + ' ')
-                    if lw + ww > w - 2: nl += 1; lw = ww
-                    else: lw += ww
-                return max(h_linha * len(grupo), nl * h_linha)
-
-            altura_obs = _h_rem(obs_txt, w_r[2])
-            altura_total = max(altura_obs, h_linha * len(grupo))
-            altura_linha = altura_total / len(grupo)
-
-            # Desenhar observação (célula única para todo o grupo)
-            pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo)
-            pdf.multi_cell(w_r[2], 5, c(obs_txt), border=1, align='L', fill=fill)
-            y_fim_obs = pdf.get_y()
-            altura_real = y_fim_obs - y_grupo
-            altura_total = max(altura_real, h_linha * len(grupo))
-            altura_linha = altura_total / len(grupo)
-
-            # Completar borda da observação se necessário
-            if altura_real < altura_total:
-                pdf.set_xy(C1 + w_r[0] + w_r[1], y_grupo + altura_real)
-                pdf.cell(w_r[2], altura_total - altura_real, '', 'LRB', 0, 'L', fill)
-
-            # Desenhar horário e militares linha a linha
-            for k, idx in enumerate(grupo):
-                y_linha = y_grupo + k * altura_linha
-                pdf.set_xy(C1, y_linha)
-                pdf.cell(w_r[0], altura_linha, c(str(ag.loc[idx, 'horário'])), 1, 0, 'C', fill)
-                pdf.cell(w_r[1], altura_linha, c(ag.loc[idx, 'id_fmt']), 1, 0, 'C', fill)
-
-            pdf.set_y(y_grupo + altura_total)
+                c.setFillColor(fill_alt)
+                c.rect(10*mm, y-row_h, 190*mm, row_h, fill=1, stroke=0)
+            c.setFillColor(black)
+            c.setFont("Helvetica", 8.5)
+            x = 10*mm
+            for val, cw in zip(vals, col_widths):
+                c.drawCentredString(x + cw*mm/2, y-3.5*mm, val[:30])
+                x += cw*mm
+            # Linha horizontal
+            c.setStrokeColor(HexColor('#c0c0c0'))
+            c.line(10*mm, y-row_h, 200*mm, y-row_h)
+            y -= row_h
             fill = not fill
-            i = j
+            if y < 20*mm:
+                break
+        return y
 
-    # ====================================================
-    # BLOCO 6 — OBSERVACOES DE PATRULHA
-    # ====================================================
-    def get_indic(r):
-        return (str(r.get('indicativo rádio','') or '').strip()
-             or str(r.get('rádio','') or '').strip()
-             or str(r.get('serviço','') or '').strip()
-             or 'S/I')
+    draw_header()
+    y = h_pg - 26*mm
 
-    df_obs_total = pd.concat([df_pat, df_outros], ignore_index=True) if not df_outros.empty else df_pat
-    if not df_obs_total.empty and 'observações' in df_obs_total.columns:
-        obs_df = df_obs_total[df_obs_total['observações'].str.strip().str.len() > 0].copy()
-        if not obs_df.empty:
-            pdf.ln(1)
-            sec_title("Observacoes de Patrulha", W)
-            w_o = [28, 162]
-            tbl_hdr(["Indicativo","Detalhe"], w_o)
+    # Secções
+    secoes = [
+        ("Patrulha / Operacional", df_pat,
+         ['id_fmt','serviço','horário','viatura','rádio','indicativo rádio','giro'],
+         ['ID','Serviço','Horário','Viatura','Rádio','Indicativo','Giro'],
+         [20,50,20,25,20,25,30]),
+        ("Atendimento / Apoio", pd.concat([df_at, df_ap]),
+         ['id_fmt','serviço','horário','rádio'],
+         ['ID','Serviço','Horário','Rádio'],
+         [20,70,20,80]),
+        ("Remunerados / Outros", pd.concat([df_rem, df_outros]),
+         ['id_fmt','serviço','horário'],
+         ['ID','Serviço','Horário'],
+         [20,100,70]),
+        ("Administrativo", df_adm,
+         ['id_fmt','serviço','horário'],
+         ['ID','Serviço','Horário'],
+         [20,100,70]),
+        ("Ausências", df_aus,
+         ['id_fmt','serviço'],
+         ['ID','Serviço/Situação'],
+         [20,170]),
+    ]
 
-            obs_df['_indic'] = obs_df.apply(get_indic, axis=1)
+    for titulo_sec, df_sec, cols, col_names, col_widths in secoes:
+        if df_sec.empty:
+            continue
+        if y < 40*mm:
+            c.showPage()
+            y = h_pg - 20*mm
+        y = draw_section_title(y, titulo_sec)
+        y = draw_table(y, df_sec, cols, col_names, col_widths)
+        y -= 3*mm
 
-            # Agrupar por observação, juntando indicativos diferentes
-            obs_grp = obs_df.groupby('observações', sort=False).agg(
-                _indic=('_indic', lambda x: ' / '.join(dict.fromkeys(v for v in x if v and v != 'S/I')) or 'S/I'),
-                horário=('horário', 'first')
-            ).reset_index()
+    # Rodapé
+    c.setStrokeColor(HexColor('#a0a0a0'))
+    c.line(10*mm, 15*mm, 200*mm, 15*mm)
+    c.setFillColor(cinza)
+    c.setFont("Helvetica-Oblique", 8)
+    c.drawString(10*mm, 11*mm, f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}")
+    c.drawRightString(200*mm, 11*mm, "O COMANDANTE")
 
-            # Detetar indicativos duplicados para mostrar horário
-            indics_count = obs_df['_indic'].value_counts()
-            indics_duplicados = set(indics_count[indics_count > 1].index)
+    c.save()
+    return buf.getvalue()
 
-            fill = False
-            for _, r in obs_grp.iterrows():
-                indic = r['_indic']
-                horario_val = str(r.get('horário','') or '').strip()
-                if any(i in indics_duplicados for i in indic.split(' / ')) and horario_val:
-                    indic = f"{indic}\n{horario_val}"
-                pdf.set_font("Arial", size=9.0)
-                if fill:
-                    pdf.set_fill_color(255, 255, 220)
-                else:
-                    pdf.set_fill_color(255, 255, 255)
-                y_antes = pdf.get_y()
 
-                # Se não cabe no espaço restante, parar (rodapé fixo em 282)
-                if y_antes > 270:
-                    break
-
-                # Calcular altura real de cada coluna
-                def _h(txt, w):
-                    words = c(txt).replace('\n',' \n ').split(' ')
-                    lw, nl = 0, 1
-                    for wd in words:
-                        if wd == '\n': nl += 1; lw = 0; continue
-                        ww = pdf.get_string_width(wd + ' ')
-                        if lw + ww > w - 2: nl += 1; lw = ww
-                        else: lw += ww
-                    return max(5, nl * 5)
-
-                h_indic = _h(indic, 28)
-                h_obs   = _h(r['observações'], 162)
-                altura  = max(h_indic, h_obs)
-
-                # Se esta linha ultrapassa o rodapé, truncar
-                if y_antes + altura > 278:
-                    break
-
-                # Desenhar observação
-                pdf.set_xy(C1 + 28, y_antes)
-                pdf.multi_cell(162, 5, c(r['observações']), border=1, align='L', fill=fill)
-                h_obs_real = pdf.get_y() - y_antes
-                if h_obs_real < altura:
-                    pdf.set_xy(C1 + 28, y_antes + h_obs_real)
-                    pdf.cell(162, altura - h_obs_real, '', 'LRB', 0, 'L', fill)
-
-                # Desenhar indicativo
-                pdf.set_xy(C1, y_antes)
-                pdf.multi_cell(28, 5, c(indic), border=1, align='C', fill=fill)
-                h_ind_real = pdf.get_y() - y_antes
-                if h_ind_real < altura:
-                    pdf.set_xy(C1, y_antes + h_ind_real)
-                    pdf.cell(28, altura - h_ind_real, '', 'LRB', 0, 'C', fill)
-
-                pdf.set_y(y_antes + altura)
-                fill = not fill
-
-    # ====================================================
-    # RODAPE — fixo no fundo da pagina
-    # ====================================================
-    pdf.set_xy(10, 282)
-    pdf.set_draw_color(160, 160, 160)
-    pdf.line(10, 282, 200, 282)
-    pdf.set_font("Arial", size=8.5)
-    pdf.set_text_color(120, 120, 120)
-    pdf.set_xy(10, 283)
-    pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
-    pdf.cell(95, 4, c("O COMANDANTE"), 0, 0, 'R')
-
-    out = pdf.output(dest='S')
-    if isinstance(out, (bytes, bytearray)):
-        return bytes(out)
-    return out.encode('latin-1', 'replace')
-
-# ============================================================
-# 6. HELPERS UI
-# ============================================================
 def get_nome_militar(df_util: pd.DataFrame, id_m) -> str:
     if df_util.empty or 'id' not in df_util.columns:
         return f"ID {id_m}"
