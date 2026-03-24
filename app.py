@@ -1002,8 +1002,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # ---- REMUNERADOS ----
     if not df_rem.empty:
         y = sec_title(y, "Serviços Remunerados / Gratificados")
-        # Dar o máximo espaço à observação
-        wids_rm = [18*mm, 30*mm, TW-48*mm]
+        wids_rm = [15*mm, 25*mm, TW-40*mm]
         cols_rm = ["Horário", "Militares", "Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
@@ -1023,13 +1022,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 if curr: lines.append(curr)
             return lines if lines else [""]
 
-        max_pts_rm = (wids_rm[2] - 3*mm) * (72/25.4)
+        max_pts_rm = (wids_rm[2] - 2*mm) * (72/25.4)
         for hor, grp in df_rem.groupby("horário", sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
             if obs == 'nan': obs = ""
             obs_lines = wrap_text(obs, max_pts_rm) if obs else [""]
-            ids_lines = wrap_text(ids, (wids_rm[1] - 3*mm) * (72/25.4))
+            ids_lines = wrap_text(ids, (wids_rm[1] - 2*mm) * (72/25.4))
             row_h = max(5*mm, max(len(obs_lines), len(ids_lines)) * 5*mm)
             if y - row_h < 20*mm: y = new_page()
             if fill:
@@ -1051,8 +1050,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
-    # Agrupar por indicativo/serviço: mostrar horário só se mesmo indicativo tem obs diferentes ou uma tem obs e outra não
-    obs_por_ind = {}  # label -> {obs -> [hors]}
+    obs_por_ind = {}  # label -> {obs -> set(hors)}
     for df_sec in [df_pat, df_at, df_ap, df_outros]:
         if df_sec.empty or "observações" not in df_sec.columns:
             continue
@@ -1065,10 +1063,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             if label not in obs_por_ind:
                 obs_por_ind[label] = {}
             obs_key = obs if (obs and obs != 'nan') else ""
-            obs_por_ind[label].setdefault(obs_key, []).append(hor)
+            if obs_key not in obs_por_ind[label]:
+                obs_por_ind[label][obs_key] = set()
+            obs_por_ind[label][obs_key].add(hor)  # set evita duplicados
 
-    # Decidir se mostrar horário: sim se o mesmo indicativo tem obs diferentes ou uma linha sem obs
-    obs_final = {}  # (label_com_hor, obs) -> já inserido
     obs_lista = []
     for label, obs_map in obs_por_ind.items():
         obs_com = {k: v for k, v in obs_map.items() if k}
@@ -1076,7 +1074,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         tem_multiplas = len(obs_com) > 1 or (obs_com and obs_sem)
         for obs_txt, hors in obs_com.items():
             if tem_multiplas:
-                lbl = f"{label}\n{', '.join(hors)}"
+                hors_unicos = sorted(hors)  # já é set, sem duplicados
+                lbl = f"{label}\n{', '.join(hors_unicos)}"
             else:
                 lbl = label
             obs_lista.append((lbl, obs_txt))
