@@ -1022,7 +1022,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 if curr: lines.append(curr)
             return lines if lines else [""]
 
-        max_pts_rm = (wids_rm[2] - 2*mm) * (72/25.4)
+        x_obs_start = LM + wids_rm[0] + wids_rm[1] + 2*mm
+        x_obs_end   = LM + TW - 2*mm
+        max_pts_rm  = (x_obs_end - x_obs_start) * (72/25.4)
         for hor, grp in df_rem.groupby("horário", sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
@@ -1040,7 +1042,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-(li*5*mm)-3.5*mm, id_l)
             for li, obs_l in enumerate(obs_lines):
-                c.drawString(LM+wids_rm[0]+wids_rm[1]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
+                c.drawString(x_obs_start, y-(li*5*mm)-3.5*mm, obs_l)
             c.setStrokeColor(CINZA_LN)
             c.rect(LM, y-row_h, TW, row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
