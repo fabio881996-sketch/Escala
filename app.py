@@ -612,9 +612,9 @@ def s(txt) -> str:
     """Mantém acentos e caracteres especiais — compatível com fonte DejaVu TTF."""
     return str(txt)
 
-def _pdf_base() -> FPDF:
+def _pdf_base(orientation='P') -> FPDF:
     """Cria um PDF base com fonte DejaVu que suporta caracteres portugueses."""
-    pdf = FPDF()
+    pdf = FPDF(orientation=orientation, unit='mm', format='A4')
     pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
     pdf.add_font('DejaVu', 'B', 'DejaVuSans.ttf', uni=True)
     return pdf
@@ -710,7 +710,6 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
     # ---- Iniciar PDF ----
     pdf = _pdf_base()
-    pdf.set_orientation('P')
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
