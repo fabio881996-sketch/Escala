@@ -194,7 +194,7 @@ hr { border-color: #E2E8F0 !important; }
 # ============================================================
 # 3. CONSTANTES
 # ============================================================
-ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt", "barreto.pms@gnr.pt"]
+ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
 IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
 IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 
@@ -3510,6 +3510,43 @@ else:
                 for i in range(ml):
                     nova_o.append([ordem_c[h][i] if i < len(ordem_c[h]) else '' for h in headers_c])
 
+                # Contabilizar escalas manuais — mover para o fim da coluna respetiva
+                _slots_map = {
+                    (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
+                    (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
+                    (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
+                    (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
+                    (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
+                    (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
+                    (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
+                    (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
+                }
+                # IDs já escalados automaticamente
+                ids_auto = set(m for m, _, _ in escalados_c)
+                for row_m in linhas_c[1:]:
+                    serv_m = norm(row_m[ix_serv].strip()) if ix_serv < len(row_m) else ''
+                    hor_m  = str(row_m[ix_hor]).strip()   if ix_hor  < len(row_m) else ''
+                    id_m   = str(row_m[ix_id]).strip()    if ix_id   < len(row_m) else ''
+                    if not id_m or id_m == 'nan':
+                        continue
+                    col_key_m = _slots_map.get((serv_m, hor_m))
+                    if not col_key_m or col_key_m not in ordem_c:
+                        continue
+                    for mid_m in re.split(r'[;,]', id_m):
+                        mid_m = mid_m.strip()
+                        if not mid_m or mid_m in ids_auto:
+                            continue
+                        # É escala manual — mover para o fim da coluna
+                        if mid_m in ordem_c[col_key_m]:
+                            ordem_c[col_key_m].remove(mid_m)
+                            ordem_c[col_key_m].append(mid_m)
+
+                # Recalcular nova_o com manuais incluídos
+                nova_o = [headers_c]
+                ml = max(len(v) for v in ordem_c.values())
+                for i in range(ml):
+                    nova_o.append([ordem_c[h][i] if i < len(ordem_c[h]) else '' for h in headers_c])
+
                 # Renomear ordem_escala para ordem_escala DD-MM e criar nova
                 ws_ord_c.update_title(f"ordem_escala {aba_c}")
                 nova_ws = sh_c.add_worksheet(title="ordem_escala", rows=100, cols=len(headers_c))
@@ -3642,6 +3679,13 @@ else:
                             pode = servico in militares_servicos.get(mid, [])
                             if not pode:
                                 continue
+
+                            # Quem vem de férias não pode entrar antes das 08h
+                            ini_novo_g, _ = _parse_horario(horario)
+                            if ini_novo_g is not None and ini_novo_g < 480:
+                                d_ant = d_gerar - timedelta(days=1)
+                                if militar_de_ferias(mid, d_ant, df_ferias_g, feriados_g):
+                                    continue
 
                             # Verificar descanso face ao dia anterior (só horário, independente do serviço)
                             if not df_ant_g.empty:
