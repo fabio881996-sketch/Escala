@@ -3090,6 +3090,60 @@ else:
                             st.rerun()
 
         # --- ⚖️ VALIDAR TROCAS (ADMIN) ---
+    # --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
+        with tab_hist:
+            st.title("📋 Histórico das Minhas Trocas")
+            if df_trocas.empty:
+                st.info("Não existem trocas registadas.")
+            else:
+                minhas = df_trocas[
+                    (df_trocas['id_origem'].astype(str) == u_id) |
+                    (df_trocas['id_destino'].astype(str) == u_id)
+                ].copy()
+                minhas['_data_ord'] = pd.to_datetime(minhas['data'], format='%d/%m/%Y', errors='coerce')
+                minhas = minhas.sort_values('_data_ord', ascending=False).drop(columns='_data_ord')
+                if minhas.empty:
+                    st.info("Não tens trocas registadas.")
+                else:
+                    estados = ["Todos"] + sorted(minhas['status'].dropna().unique().tolist())
+                    filtro = st.selectbox("Filtrar por estado:", estados)
+                    if filtro != "Todos":
+                        minhas = minhas[minhas['status'] == filtro]
+                    st.caption(f"{len(minhas)} registo(s)")
+                    for idx, r in minhas.iterrows():
+                        fui_origem = str(r['id_origem']) == u_id
+                        outro_id   = r['id_destino'] if fui_origem else r['id_origem']
+                        outro_nome = get_nome_militar(df_util, outro_id)
+                        meu_serv   = r['servico_origem'] if fui_origem else r['servico_destino']
+                        outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
+                        is_matar   = str(r['servico_origem']) == 'MATAR_REMUNERADO'
+                        status     = r.get('status','')
+                        cor = "🟢" if status == "Aprovada" else ("🔴" if status in ("Rejeitada","Cancelada") else "🟡")
+
+                        if is_matar:
+                            papel = "Requerente" if fui_origem else "Cedente"
+                            titulo = f"{cor} {r['data']} — Fazer Remunerado: {outro_serv} ({status})"
+                        else:
+                            papel = "Requerente" if fui_origem else "Substituto"
+                            titulo = f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})"
+
+                        with st.expander(titulo, expanded=False):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.markdown(f"**O meu papel:** {papel}")
+                                if not is_matar:
+                                    st.markdown(f"**O meu serviço:** `{meu_serv}`")
+                            with col2:
+                                st.markdown(f"**Contraparte:** {outro_nome}")
+                                st.markdown(f"**Remunerado:** `{outro_serv}`" if is_matar else f"**Serviço contraparte:** `{outro_serv}`")
+                            if status == "Aprovada":
+                                st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
+                            elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
+                                if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
+                                    if atualizar_status_gsheet(idx, "Cancelada"):
+                                        st.success("Pedido cancelado.")
+                                        st.rerun()
+
     elif menu == "⚖️ Validar Trocas":
         st.title("⚖️ Validação Superior de Trocas")
         if df_trocas.empty:
@@ -3213,60 +3267,6 @@ else:
                                 mime="application/pdf",
                                 key=f"rem_pdf_{idx}"
                             )
-
-    # --- 📋 HISTÓRICO DE TROCAS DO PRÓPRIO ---
-        with tab_hist:
-            st.title("📋 Histórico das Minhas Trocas")
-            if df_trocas.empty:
-                st.info("Não existem trocas registadas.")
-            else:
-                minhas = df_trocas[
-                    (df_trocas['id_origem'].astype(str) == u_id) |
-                    (df_trocas['id_destino'].astype(str) == u_id)
-                ].copy()
-                minhas['_data_ord'] = pd.to_datetime(minhas['data'], format='%d/%m/%Y', errors='coerce')
-                minhas = minhas.sort_values('_data_ord', ascending=False).drop(columns='_data_ord')
-                if minhas.empty:
-                    st.info("Não tens trocas registadas.")
-                else:
-                    estados = ["Todos"] + sorted(minhas['status'].dropna().unique().tolist())
-                    filtro = st.selectbox("Filtrar por estado:", estados)
-                    if filtro != "Todos":
-                        minhas = minhas[minhas['status'] == filtro]
-                    st.caption(f"{len(minhas)} registo(s)")
-                    for idx, r in minhas.iterrows():
-                        fui_origem = str(r['id_origem']) == u_id
-                        outro_id   = r['id_destino'] if fui_origem else r['id_origem']
-                        outro_nome = get_nome_militar(df_util, outro_id)
-                        meu_serv   = r['servico_origem'] if fui_origem else r['servico_destino']
-                        outro_serv = r['servico_destino'] if fui_origem else r['servico_origem']
-                        is_matar   = str(r['servico_origem']) == 'MATAR_REMUNERADO'
-                        status     = r.get('status','')
-                        cor = "🟢" if status == "Aprovada" else ("🔴" if status in ("Rejeitada","Cancelada") else "🟡")
-
-                        if is_matar:
-                            papel = "Requerente" if fui_origem else "Cedente"
-                            titulo = f"{cor} {r['data']} — Fazer Remunerado: {outro_serv} ({status})"
-                        else:
-                            papel = "Requerente" if fui_origem else "Substituto"
-                            titulo = f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})"
-
-                        with st.expander(titulo, expanded=False):
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.markdown(f"**O meu papel:** {papel}")
-                                if not is_matar:
-                                    st.markdown(f"**O meu serviço:** `{meu_serv}`")
-                            with col2:
-                                st.markdown(f"**Contraparte:** {outro_nome}")
-                                st.markdown(f"**Remunerado:** `{outro_serv}`" if is_matar else f"**Serviço contraparte:** `{outro_serv}`")
-                            if status == "Aprovada":
-                                st.caption(f"⚖️ Validado por **{r.get('validador','N/A')}** em {r.get('data_validacao','N/A')}")
-                            elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
-                                if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
-                                    if atualizar_status_gsheet(idx, "Cancelada"):
-                                        st.success("Pedido cancelado.")
-                                        st.rerun()
 
     # --- 🔄 GIROS ---
     elif menu == "🔄 Giros":
@@ -3505,17 +3505,16 @@ else:
                             cl = chr(ord('A') + ix_id)
                             ws_dia_c.update(f'{cl}{i}', [[ids_disp]])
                             break
-                # Debug todas as linhas
-                for i, row in enumerate(linhas_c[1:], start=2):
-                    sc = norm(row[ix_serv].strip()) if ix_serv < len(row) else ''
-                    hc = str(row[ix_hor]).strip() if ix_hor < len(row) else ''
-                    ic = str(row[ix_id]).strip()  if ix_id  < len(row) else ''
                 nova_o = [headers_c]
                 ml = max(len(v) for v in ordem_c.values())
                 for i in range(ml):
                     nova_o.append([ordem_c[h][i] if i < len(ordem_c[h]) else '' for h in headers_c])
-                ws_ord_c.clear()
-                ws_ord_c.update('A1', nova_o)
+
+                # Renomear ordem_escala para ordem_escala DD-MM e criar nova
+                ws_ord_c.update_title(f"ordem_escala {aba_c}")
+                nova_ws = sh_c.add_worksheet(title="ordem_escala", rows=100, cols=len(headers_c))
+                nova_ws.update('A1', nova_o)
+
                 load_data.clear()
                 del st.session_state['escala_gerada']
                 st.session_state['escala_ok'] = True
