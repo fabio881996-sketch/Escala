@@ -709,13 +709,11 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
 
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
-    """Gera PDF da escala diaria em A4 retrato usando reportlab."""
+    """Gera PDF da escala diaria em A4 retrato usando reportlab - layout original."""
+    from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib.colors import HexColor, white, black
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib import colors
     from datetime import datetime as _dt
 
     def fmt_id(txt):
@@ -742,139 +740,228 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     df_rem,  df_rest = filtrar(r"remu|grat", df_rest)
     df_outros = df_rest
 
-    # Cores
+    # Agrupar patrulha ocorrencias por horario
+    df_ocorr = df_pat[df_pat["servico_col"].str.contains(r"ocorr", na=False)].copy()
+    df_outras_pat = df_pat[~df_pat["servico_col"].str.contains(r"ocorr", na=False)].copy()
+
     AZUL_ESC  = HexColor("#14285f")
     AZUL_MED  = HexColor("#cdd7f2")
     FILL_ALT  = HexColor("#ebf1ff")
     CINZA_LN  = HexColor("#c0c0c0")
     CINZA_TXT = HexColor("#787878")
 
-    # Estilos de parágrafo para células com texto longo
-    st_cell = ParagraphStyle("cell", fontName="Helvetica", fontSize=8.5, leading=10)
-    st_bold = ParagraphStyle("bold", fontName="Helvetica-Bold", fontSize=8.5, leading=10)
-
-    def make_table(df_sec, cols, col_names, col_widths_mm):
-        """Cria uma Table reportlab para uma secção."""
-        # Cabeçalho
-        header = [Paragraph(f"<b>{n}</b>", ParagraphStyle("hdr", fontName="Helvetica-Bold",
-                   fontSize=8.5, textColor=HexColor("#0f235a"), alignment=1)) for n in col_names]
-        rows = [header]
-        for _, row in df_sec.iterrows():
-            r = []
-            for col in cols:
-                val = str(row.get(col, ""))
-                r.append(Paragraph(val, st_cell))
-            rows.append(r)
-
-        col_widths = [w*mm for w in col_widths_mm]
-        t = Table(rows, colWidths=col_widths, repeatRows=1)
-
-        style = [
-            # Cabeçalho
-            ("BACKGROUND",  (0,0), (-1,0), AZUL_MED),
-            ("TEXTCOLOR",   (0,0), (-1,0), HexColor("#0f235a")),
-            ("FONTNAME",    (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE",    (0,0), (-1,-1), 8.5),
-            ("ALIGN",       (0,0), (-1,-1), "CENTER"),
-            ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
-            ("ROWBACKGROUND",(0,1), (-1,-1), [white, FILL_ALT]),
-            ("GRID",        (0,0), (-1,-1), 0.5, CINZA_LN),
-            ("LEFTPADDING",  (0,0), (-1,-1), 3),
-            ("RIGHTPADDING", (0,0), (-1,-1), 3),
-            ("TOPPADDING",   (0,0), (-1,-1), 2),
-            ("BOTTOMPADDING",(0,0), (-1,-1), 2),
-        ]
-        t.setStyle(TableStyle(style))
-        return t
-
-    def section_title(label):
-        return Paragraph(
-            f"<b>&nbsp;&nbsp;{label.upper()}</b>",
-            ParagraphStyle("sec", fontName="Helvetica-Bold", fontSize=10,
-                           textColor=white, backColor=AZUL_ESC,
-                           leading=14, leftIndent=4, spaceAfter=1)
-        )
-
-    # Título
-    try:
-        dt_obj   = _dt.strptime(data, "%d/%m/%Y")
-        dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
-                    "Sexta-feira","Sábado","Domingo"]
-        meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-        titulo = f"ESCALA DE SERVIÇO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
-    except:
-        titulo = f"ESCALA DE SERVIÇO  |  {data}"
-
-    header_table = Table(
-        [[Paragraph("<b>POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO</b>",
-                    ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=11,
-                                   textColor=white, alignment=1))],
-         [Paragraph(f"<b>{titulo}</b>",
-                    ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=10,
-                                   textColor=white, alignment=1))]],
-        colWidths=[190*mm]
-    )
-    header_table.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), AZUL_ESC),
-        ("TOPPADDING",    (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
-    ]))
-
-    # Construir conteúdo
-    story = [header_table, Spacer(1, 4*mm)]
-
-    secoes = [
-        ("Patrulha / Operacional", df_pat,
-         ["id_fmt","serviço","horário","viatura","rádio","indicativo rádio","giro"],
-         ["ID","Serviço","Horário","Viatura","Rádio","Indicativo","Giro"],
-         [22,52,18,22,20,24,32]),
-        ("Atendimento / Apoio", pd.concat([df_at, df_ap]),
-         ["id_fmt","serviço","horário","rádio"],
-         ["ID","Serviço","Horário","Rádio"],
-         [22,70,18,80]),
-        ("Remunerados / Outros", pd.concat([df_rem, df_outros]),
-         ["id_fmt","serviço","horário"],
-         ["ID","Serviço","Horário"],
-         [22,118,50]),
-        ("Administrativo", df_adm,
-         ["id_fmt","serviço","horário"],
-         ["ID","Serviço","Horário"],
-         [22,118,50]),
-        ("Ausências", df_aus,
-         ["id_fmt","serviço"],
-         ["ID","Serviço/Situação"],
-         [22,168]),
-    ]
-
-    for titulo_sec, df_sec, cols, col_names, col_widths in secoes:
-        if df_sec.empty:
-            continue
-        story.append(section_title(titulo_sec))
-        story.append(make_table(df_sec, cols, col_names, col_widths))
-        story.append(Spacer(1, 3*mm))
-
-    # Rodapé
-    rodape = Table(
-        [[Paragraph(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}",
-                    ParagraphStyle("rf", fontName="Helvetica-Oblique", fontSize=8, textColor=CINZA_TXT)),
-          Paragraph("O COMANDANTE",
-                    ParagraphStyle("rc", fontName="Helvetica-Oblique", fontSize=8,
-                                   textColor=CINZA_TXT, alignment=2))]],
-        colWidths=[95*mm, 95*mm]
-    )
-    rodape.setStyle(TableStyle([
-        ("LINEABOVE", (0,0), (-1,0), 0.5, CINZA_LN),
-        ("TOPPADDING", (0,0), (-1,-1), 3),
-    ]))
-    story.append(Spacer(1, 3*mm))
-    story.append(rodape)
-
+    W, H = A4
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=10*mm, rightMargin=10*mm,
-                            topMargin=8*mm, bottomMargin=10*mm)
-    doc.build(story)
+    c = rl_canvas.Canvas(buf, pagesize=A4)
+
+    # ---- helpers ----
+    LM = 10*mm   # margem esquerda
+    RM = 10*mm   # margem direita
+    TW = W - LM - RM  # largura total
+
+    def new_page():
+        c.showPage()
+        return H - 10*mm
+
+    def draw_header(y):
+        c.setFillColor(AZUL_ESC)
+        c.rect(LM, y-14*mm, TW, 14*mm, fill=1, stroke=0)
+        c.setFillColor(white)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(W/2, y-7*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
+        try:
+            dt_obj   = _dt.strptime(data, "%d/%m/%Y")
+            dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
+                        "Sexta-feira","Sábado","Domingo"]
+            meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+            titulo = f"ESCALA DE SERVIÇO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
+        except:
+            titulo = f"ESCALA DE SERVIÇO  |  {data}"
+        c.setFont("Helvetica-Bold", 10)
+        c.drawCentredString(W/2, y-12*mm, titulo)
+        return y - 16*mm
+
+    def sec_title(y, label, x=LM, w=TW):
+        c.setFillColor(AZUL_ESC)
+        c.rect(x, y-5.5*mm, w, 5.5*mm, fill=1, stroke=0)
+        c.setFillColor(white)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x+2*mm, y-4*mm, f"  {label.upper()}")
+        return y - 6.5*mm
+
+    def tbl_header(y, cols, widths, x=LM):
+        c.setFillColor(AZUL_MED)
+        c.rect(x, y-5*mm, sum(widths), 5*mm, fill=1, stroke=0)
+        c.setFillColor(HexColor("#0f235a"))
+        c.setFont("Helvetica-Bold", 8.5)
+        xi = x
+        for col, w in zip(cols, widths):
+            c.drawCentredString(xi + w/2, y-3.5*mm, col)
+            xi += w
+        c.setStrokeColor(CINZA_LN)
+        c.line(x, y-5*mm, x+sum(widths), y-5*mm)
+        return y - 5*mm
+
+    def tbl_row(y, vals, widths, fill=False, x=LM, h=5*mm):
+        if fill:
+            c.setFillColor(FILL_ALT)
+            c.rect(x, y-h, sum(widths), h, fill=1, stroke=0)
+        c.setFillColor(black)
+        c.setFont("Helvetica", 8.5)
+        xi = x
+        for val, w in zip(vals, widths):
+            txt = str(val)[:28]
+            c.drawCentredString(xi + w/2, y-3.5*mm, txt)
+            xi += w
+        c.setStrokeColor(CINZA_LN)
+        c.line(x, y-h, x+sum(widths), y-h)
+        return y - h
+
+    def draw_ids_line(y, label, ids, x=LM, w=TW):
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(AZUL_ESC)
+        c.drawString(x+2*mm, y-3.5*mm, f"  {label}:")
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(black)
+        ids_txt = ", ".join(ids)
+        c.drawString(x+35*mm, y-3.5*mm, ids_txt[:80])
+        return y - 5*mm
+
+    def rodape():
+        c.setStrokeColor(CINZA_LN)
+        c.line(LM, 15*mm, W-RM, 15*mm)
+        c.setFillColor(CINZA_TXT)
+        c.setFont("Helvetica-Oblique", 8)
+        c.drawString(LM, 11*mm, f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}")
+        c.drawRightString(W-RM, 11*mm, "O COMANDANTE")
+
+    # ======= INÍCIO =======
+    y = H - 10*mm
+    y = draw_header(y)
+    y -= 2*mm
+
+    # ---- AUSÊNCIAS (compacto) ----
+    y = sec_title(y, "Ausências, Folgas e Licenças")
+    grupos_aus = {}
+    for _, row in df_aus.iterrows():
+        serv = str(row.get("serviço", "")).strip()
+        mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
+        grupos_aus.setdefault(serv, []).append(mid)
+    for serv, ids in grupos_aus.items():
+        y = draw_ids_line(y, serv, ids)
+        if y < 20*mm: y = new_page()
+    y -= 2*mm
+
+    # ---- ADM (compacto) ----
+    if not df_adm.empty:
+        y = sec_title(y, "Outras Situações / ADM")
+        grupos_adm = {}
+        for _, row in df_adm.iterrows():
+            serv = str(row.get("serviço", "")).strip()
+            mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
+            grupos_adm.setdefault(serv, []).append(mid)
+        for serv, ids in grupos_adm.items():
+            y = draw_ids_line(y, serv, ids)
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- ATENDIMENTO ----
+    if not df_at.empty:
+        y = sec_title(y, "Atendimento")
+        cols_at  = ["Horário", "Militar(es)"]
+        wids_at  = [25*mm, TW-25*mm]
+        y = tbl_header(y, cols_at, wids_at)
+        fill = False
+        for hor, grp in df_at.groupby("horário", sort=False):
+            ids = ", ".join(grp["id_fmt"].tolist())
+            y = tbl_row(y, [hor, ids], wids_at, fill)
+            fill = not fill
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- APOIO AO ATENDIMENTO ----
+    if not df_ap.empty:
+        y = sec_title(y, "Apoio ao Atendimento")
+        y = tbl_header(y, cols_at, wids_at)
+        fill = False
+        for hor, grp in df_ap.groupby("horário", sort=False):
+            ids = ", ".join(grp["id_fmt"].tolist())
+            y = tbl_row(y, [hor, ids], wids_at, fill)
+            fill = not fill
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- PATRULHA OCORRÊNCIAS ----
+    if not df_ocorr.empty:
+        y = sec_title(y, "Patrulha Ocorrências")
+        cols_oc = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
+        wids_oc = [18*mm, 35*mm, 42*mm, 22*mm, 22*mm, 51*mm]
+        y = tbl_header(y, cols_oc, wids_oc)
+        fill = False
+        for hor, grp in df_ocorr.groupby("horário", sort=False):
+            ids  = ", ".join(grp["id_fmt"].tolist())
+            serv = grp["serviço"].iloc[0]
+            ind  = grp["indicativo rádio"].iloc[0] if "indicativo rádio" in grp.columns else ""
+            rad  = grp["rádio"].iloc[0] if "rádio" in grp.columns else ""
+            vtr  = grp["viatura"].iloc[0] if "viatura" in grp.columns else ""
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
+            fill = not fill
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- PATRULHAS E POLICIAMENTO ----
+    if not df_outras_pat.empty:
+        y = sec_title(y, "Patrulhas e Policiamento")
+        cols_pp = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura", "Giro"]
+        wids_pp = [18*mm, 35*mm, 37*mm, 22*mm, 22*mm, 36*mm, 20*mm]
+        y = tbl_header(y, cols_pp, wids_pp)
+        fill = False
+        for hor, grp in df_outras_pat.groupby("horário", sort=False):
+            ids  = ", ".join(grp["id_fmt"].tolist())
+            serv = grp["serviço"].iloc[0]
+            ind  = grp["indicativo rádio"].iloc[0] if "indicativo rádio" in grp.columns else ""
+            rad  = grp["rádio"].iloc[0] if "rádio" in grp.columns else ""
+            vtr  = grp["viatura"].iloc[0] if "viatura" in grp.columns else ""
+            giro = grp["giro"].iloc[0] if "giro" in grp.columns else ""
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill)
+            fill = not fill
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- OUTROS SERVIÇOS ----
+    if not df_outros.empty:
+        y = sec_title(y, "Outros Serviços")
+        cols_ot = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
+        wids_ot = [18*mm, 35*mm, 42*mm, 22*mm, 22*mm, 51*mm]
+        y = tbl_header(y, cols_ot, wids_ot)
+        fill = False
+        for _, row in df_outros.iterrows():
+            ind = str(row.get("indicativo rádio", "")) if "indicativo rádio" in df_outros.columns else ""
+            rad = str(row.get("rádio", "")) if "rádio" in df_outros.columns else ""
+            vtr = str(row.get("viatura", "")) if "viatura" in df_outros.columns else ""
+            y = tbl_row(y, [row.get("horário",""), row["id_fmt"], row.get("serviço",""), ind, rad, vtr], wids_ot, fill)
+            fill = not fill
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- REMUNERADOS ----
+    if not df_rem.empty:
+        y = sec_title(y, "Serviços Remunerados / Gratificados")
+        cols_rm = ["Horário", "Militares", "Observação"]
+        wids_rm = [18*mm, 35*mm, TW-53*mm]
+        y = tbl_header(y, cols_rm, wids_rm)
+        fill = False
+        for hor, grp in df_rem.groupby("horário", sort=False):
+            ids = ", ".join(grp["id_fmt"].tolist())
+            obs = grp["observações"].iloc[0] if "observações" in grp.columns else ""
+            y = tbl_row(y, [hor, ids, str(obs)[:60]], wids_rm, fill)
+            fill = not fill
+            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    rodape()
+    c.save()
     return buf.getvalue()
 
 
