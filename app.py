@@ -615,8 +615,8 @@ def s(txt) -> str:
 def _pdf_base(orientation='P') -> FPDF:
     """Cria um PDF base com fonte DejaVu que suporta caracteres portugueses."""
     pdf = FPDF(orientation=orientation, unit='mm', format='A4')
-    pdf.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
-    pdf.add_font('DejaVu', 'B', 'DejaVuSans.ttf', uni=True)
+    pdf.add_font('DejaVu', style='', fname='DejaVuSans.ttf')
+    pdf.add_font('DejaVu', style='B', fname='DejaVuSans-Bold.ttf')
     return pdf
 
 def gerar_pdf_troca(dados: dict) -> bytes:
