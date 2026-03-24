@@ -1002,14 +1002,15 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # ---- REMUNERADOS ----
     if not df_rem.empty:
         y = sec_title(y, "Serviços Remunerados / Gratificados")
+        # Dar o máximo espaço à observação
+        wids_rm = [18*mm, 30*mm, TW-48*mm]
         cols_rm = ["Horário", "Militares", "Observação"]
-        wids_rm = [18*mm, 35*mm, TW-53*mm]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
 
         def wrap_text(txt, max_pts):
             lines = []
-            for paragrafo in txt.split('\n'):
+            for paragrafo in str(txt).split('\n'):
                 words = paragrafo.split()
                 curr = ""
                 for word in words:
@@ -1022,7 +1023,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 if curr: lines.append(curr)
             return lines if lines else [""]
 
-        max_pts_rm = (wids_rm[2] - 4*mm) * (72/25.4)
+        max_pts_rm = (wids_rm[2] - 3*mm) * (72/25.4)
         for hor, grp in df_rem.groupby("horário", sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
@@ -1036,7 +1037,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(hor))
-            c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-3.5*mm, ids[:30])
+            c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-3.5*mm, ids)
             for li, obs_l in enumerate(obs_lines):
                 c.drawString(LM+wids_rm[0]+wids_rm[1]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
             c.setStrokeColor(CINZA_LN)
@@ -1048,8 +1049,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
-    # Recolher: label = indicativo se existir, senão serviço; agrupar por obs igual
-    obs_dict = {}  # obs_texto -> lista de labels
+    # Agrupar por obs: se indicativo igual com obs diferente, mostrar horário
+    obs_por_ind = {}  # ind -> lista de (hor, obs)
     for df_sec in [df_pat, df_at, df_ap, df_outros]:
         if df_sec.empty or "observações" not in df_sec.columns:
             continue
@@ -1060,25 +1061,32 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             ind = str(row.get("indicativo rádio", "")).strip() if "indicativo rádio" in df_sec.columns else ""
             serv = str(row.get("serviço", "")).strip()
             hor  = str(row.get("horário", "")).strip()
-            label = ind if ind else serv  # indicativo ou nome do serviço
-            obs_dict.setdefault(obs, {"labels": [], "hor": hor})
-            if label not in obs_dict[obs]["labels"]:
-                obs_dict[obs]["labels"].append(label)
+            label = ind if ind else serv
+            obs_por_ind.setdefault(label, []).append((hor, obs))
 
-    if obs_dict:
+    # Construir lista final: agrupar obs iguais, só mostrar horário se mesmo indicativo tem obs diferente
+    obs_final = {}  # obs -> labels
+    for label, entradas in obs_por_ind.items():
+        obs_unicas = list(dict.fromkeys([e[1] for e in entradas]))  # obs únicas mantendo ordem
+        tem_multiplas_obs = len(obs_unicas) > 1
+        for hor, obs in entradas:
+            chave = obs
+            lbl = f"{label} {hor}" if tem_multiplas_obs else label
+            obs_final.setdefault(chave, [])
+            if lbl not in obs_final[chave]:
+                obs_final[chave].append(lbl)
+
+    if obs_final:
         if y < 40*mm: y = new_page()
         y = sec_title(y, "Observações")
         cols_ob = ["Indicativo / Serviço", "Detalhe"]
         wids_ob = [35*mm, TW-35*mm]
         y = tbl_header(y, cols_ob, wids_ob)
         fill = False
-        max_pts_ob = (wids_ob[1] - 4*mm) * (72/25.4)
-        for obs, info in obs_dict.items():
-            label_str = ", ".join(info["labels"])
-            if info["hor"]:
-                label_str += f"\n{info['hor']}"
+        max_pts_ob = (wids_ob[1] - 3*mm) * (72/25.4)
+        for obs, labels in obs_final.items():
+            label_lines = labels
             obs_lines = wrap_text(obs, max_pts_ob)
-            label_lines = label_str.split('\n')
             row_h = max(5*mm, max(len(obs_lines), len(label_lines)) * 5*mm)
             if y - row_h < 20*mm: y = new_page()
             if fill:
