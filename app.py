@@ -2330,10 +2330,16 @@ else:
                     col1s, col2s = st.columns(2)
                     with col1s:
                         st.markdown("**Por categoria**")
-                        st.dataframe(df_f2.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False), use_container_width=True, hide_index=True)
+                        if 'categoria' in df_f2.columns:
+                            st.dataframe(df_f2.groupby('categoria').size().reset_index(name='total').sort_values('total', ascending=False), use_container_width=True, hide_index=True)
+                        else:
+                            st.info("Sem dados de categoria.")
                     with col2s:
                         st.markdown("**Detalhe por serviço**")
-                        st.dataframe(df_f2.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False), use_container_width=True, hide_index=True)
+                        if 'serviço' in df_f2.columns:
+                            st.dataframe(df_f2.groupby('serviço').size().reset_index(name='vezes').sort_values('vezes', ascending=False), use_container_width=True, hide_index=True)
+                        else:
+                            st.info("Sem dados de serviço.")
 
             with tab_ferias:
                 ano_tf = datetime.now().year
