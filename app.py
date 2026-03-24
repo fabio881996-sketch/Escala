@@ -1025,6 +1025,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                         curr = word
                 if curr: obs_lines.append(curr)
             row_h = max(5*mm, len(obs_lines if obs_lines else [""]) * 5*mm)
+            # Verificar espaço na página
+            if y - row_h < 20*mm: y = new_page()
             # Desenhar linha com altura certa
             if fill:
                 c.setFillColor(FILL_ALT)
@@ -1037,14 +1039,60 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
                 c.drawString(LM+wids_rm[0]+wids_rm[1]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
             c.setStrokeColor(CINZA_LN)
             c.rect(LM, y-row_h, TW, row_h, fill=0, stroke=1)
-            # Linhas verticais
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
             c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)
             y -= row_h
             fill = not fill
-            if y < 20*mm: y = new_page()
+        y -= 2*mm
+
+    # ---- OBSERVAÇÕES (todos exceto remunerados) ----
+    # Recolher observações de todas as secções exceto remunerados
+    obs_gerais = []
+    for df_sec in [df_pat, df_at, df_ap, df_outros]:
+        if df_sec.empty or "observações" not in df_sec.columns:
+            continue
+        for _, row in df_sec.iterrows():
+            obs = str(row.get("observações", "")).strip()
+            if obs and obs != 'nan':
+                ind = str(row.get("indicativo rádio", "")).strip() if "indicativo rádio" in df_sec.columns else ""
+                hor = str(row.get("horário", "")).strip()
+                obs_gerais.append((ind or hor, obs))
+
+    if obs_gerais:
+        if y < 40*mm: y = new_page()
+        y = sec_title(y, "Observações")
+        cols_ob = ["Indicativo / Horário", "Detalhe"]
+        wids_ob = [30*mm, TW-30*mm]
+        y = tbl_header(y, cols_ob, wids_ob)
+        fill = False
+        max_pts_ob = (wids_ob[1] - 4*mm) * (72/25.4)
+        for ind_hor, obs in obs_gerais:
+            obs_lines = []
+            words = obs.split()
+            curr = ""
+            for word in words:
+                test = (curr + " " + word).strip()
+                if c.stringWidth(test, "Helvetica", 8.5) < max_pts_ob:
+                    curr = test
+                else:
+                    if curr: obs_lines.append(curr)
+                    curr = word
+            if curr: obs_lines.append(curr)
+            row_h = max(5*mm, len(obs_lines) * 5*mm)
+            if y - row_h < 20*mm: y = new_page()
+            if fill:
+                c.setFillColor(FILL_ALT)
+                c.rect(LM, y-row_h, TW, row_h, fill=1, stroke=0)
+            c.setFillColor(black)
+            c.setFont("Helvetica", 8.5)
+            c.drawCentredString(LM+wids_ob[0]/2, y-3.5*mm, ind_hor)
+            for li, obs_l in enumerate(obs_lines):
+                c.drawString(LM+wids_ob[0]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
+            c.setStrokeColor(CINZA_LN)
+            c.rect(LM, y-row_h, TW, row_h, fill=0, stroke=1)
+            c.line(LM+wids_ob[0], y, LM+wids_ob[0], y-row_h)
+            y -= row_h
             fill = not fill
-            if y < 20*mm: y = new_page()
         y -= 2*mm
 
     rodape()
