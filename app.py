@@ -710,158 +710,171 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     """Gera PDF da escala diaria em A4 retrato usando reportlab."""
-    from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib.colors import HexColor, white, black
-    from reportlab.platypus import Table, TableStyle, Paragraph, SimpleDocTemplate
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Spacer, Paragraph
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib import colors
     from datetime import datetime as _dt
 
     def fmt_id(txt):
         t = str(txt)
-        if '\U0001f504' in t:
-            parts = t.split('\U0001f504')
-            a, b = parts[0].strip(), parts[1].strip()
-            return f"{a} (Troca c/{b})"
+        if "\U0001f504" in t:
+            parts = t.split("\U0001f504")
+            return f"{parts[0].strip()} (Troca c/{parts[1].strip()})"
         return t
 
     df_raw = df_raw.copy()
     df_raw["servico_col"] = df_raw["serviço"].apply(norm)
-    df_raw['id_fmt'] = df_raw['id_disp'].apply(fmt_id)
-    df_raw_com = df_raw[df_raw['id'].astype(str).str.strip().str.len() > 0].copy()
+    df_raw["id_fmt"] = df_raw["id_disp"].apply(fmt_id)
+    df_raw_com = df_raw[df_raw["id"].astype(str).str.strip().str.len() > 0].copy()
 
     def filtrar(pat, df):
-        mask = df['servico_col'].str.contains(pat, na=False)
+        mask = df["servico_col"].str.contains(pat, na=False)
         return df[mask].copy(), df[~mask].copy()
 
-    df_aus,  df_rest = filtrar(r'ferias|licen|doente|folga', df_raw_com)
-    df_adm,  df_rest = filtrar(r'pronto|secretaria|inquer|comando|dilig', df_rest)
-    df_ap,   df_rest = filtrar(r'apoio', df_rest)
-    df_at,   df_rest = filtrar(r'atendimento', df_rest)
-    df_pat,  df_rest = filtrar(r'po|patrulha|ronda|vtr|giro', df_rest)
-    df_rem,  df_rest = filtrar(r'remu|grat', df_rest)
+    df_aus,  df_rest = filtrar(r"ferias|licen|doente|folga", df_raw_com)
+    df_adm,  df_rest = filtrar(r"pronto|secretaria|inquer|comando|dilig", df_rest)
+    df_ap,   df_rest = filtrar(r"apoio", df_rest)
+    df_at,   df_rest = filtrar(r"atendimento", df_rest)
+    df_pat,  df_rest = filtrar(r"po|patrulha|ronda|vtr|giro", df_rest)
+    df_rem,  df_rest = filtrar(r"remu|grat", df_rest)
     df_outros = df_rest
 
-    buf = io.BytesIO()
-    w_pg, h_pg = A4
-    c = canvas.Canvas(buf, pagesize=A4)
+    # Cores
+    AZUL_ESC  = HexColor("#14285f")
+    AZUL_MED  = HexColor("#cdd7f2")
+    FILL_ALT  = HexColor("#ebf1ff")
+    CINZA_LN  = HexColor("#c0c0c0")
+    CINZA_TXT = HexColor("#787878")
 
-    # Estilos
-    azul_esc = HexColor('#14285f')
-    azul_med = HexColor('#cdd7f2')
-    cinza    = HexColor('#787878')
-    fill_alt = HexColor('#ebf1ff')
+    # Estilos de parágrafo para células com texto longo
+    st_cell = ParagraphStyle("cell", fontName="Helvetica", fontSize=8.5, leading=10)
+    st_bold = ParagraphStyle("bold", fontName="Helvetica-Bold", fontSize=8.5, leading=10)
 
-    def draw_header():
-        c.setFillColor(HexColor('#14285f'))
-        c.rect(10*mm, h_pg-24*mm, 190*mm, 14*mm, fill=1, stroke=0)
-        c.setFillColor(white)
-        c.setFont("Helvetica-Bold", 11)
-        try:
-            dt_obj   = _dt.strptime(data, "%d/%m/%Y")
-            dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
-                        "Sexta-feira","Sábado","Domingo"]
-            meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-            titulo = f"ESCALA DE SERVIÇO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
-        except:
-            titulo = f"ESCALA DE SERVIÇO  |  {data}"
-        c.drawCentredString(w_pg/2, h_pg-14*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
-        c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(w_pg/2, h_pg-20*mm, titulo)
-
-    def draw_section_title(y, label):
-        c.setFillColor(azul_esc)
-        c.rect(10*mm, y-4*mm, 190*mm, 5.5*mm, fill=1, stroke=0)
-        c.setFillColor(white)
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(12*mm, y-1*mm, f"  {label.upper()}")
-        return y - 6*mm
-
-    def draw_table(y, df_sec, cols, col_names, col_widths):
-        if df_sec.empty:
-            return y
+    def make_table(df_sec, cols, col_names, col_widths_mm):
+        """Cria uma Table reportlab para uma secção."""
         # Cabeçalho
-        c.setFillColor(azul_med)
-        c.rect(10*mm, y-5*mm, 190*mm, 5*mm, fill=1, stroke=0)
-        c.setFillColor(HexColor('#0f235a'))
-        c.setFont("Helvetica-Bold", 9)
-        x = 10*mm
-        for name, cw in zip(col_names, col_widths):
-            c.drawCentredString(x + cw*mm/2, y-2*mm, name)
-            x += cw*mm
-        y -= 5*mm
-        # Linhas
-        fill = False
+        header = [Paragraph(f"<b>{n}</b>", ParagraphStyle("hdr", fontName="Helvetica-Bold",
+                   fontSize=8.5, textColor=HexColor("#0f235a"), alignment=1)) for n in col_names]
+        rows = [header]
         for _, row in df_sec.iterrows():
-            vals = [str(row.get(col, '')) for col in cols]
-            row_h = 5*mm
-            if fill:
-                c.setFillColor(fill_alt)
-                c.rect(10*mm, y-row_h, 190*mm, row_h, fill=1, stroke=0)
-            c.setFillColor(black)
-            c.setFont("Helvetica", 8.5)
-            x = 10*mm
-            for val, cw in zip(vals, col_widths):
-                c.drawCentredString(x + cw*mm/2, y-3.5*mm, val[:30])
-                x += cw*mm
-            # Linha horizontal
-            c.setStrokeColor(HexColor('#c0c0c0'))
-            c.line(10*mm, y-row_h, 200*mm, y-row_h)
-            y -= row_h
-            fill = not fill
-            if y < 20*mm:
-                break
-        return y
+            r = []
+            for col in cols:
+                val = str(row.get(col, ""))
+                r.append(Paragraph(val, st_cell))
+            rows.append(r)
 
-    draw_header()
-    y = h_pg - 26*mm
+        col_widths = [w*mm for w in col_widths_mm]
+        t = Table(rows, colWidths=col_widths, repeatRows=1)
 
-    # Secções
+        style = [
+            # Cabeçalho
+            ("BACKGROUND",  (0,0), (-1,0), AZUL_MED),
+            ("TEXTCOLOR",   (0,0), (-1,0), HexColor("#0f235a")),
+            ("FONTNAME",    (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE",    (0,0), (-1,-1), 8.5),
+            ("ALIGN",       (0,0), (-1,-1), "CENTER"),
+            ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+            ("ROWBACKGROUND",(0,1), (-1,-1), [white, FILL_ALT]),
+            ("GRID",        (0,0), (-1,-1), 0.5, CINZA_LN),
+            ("LEFTPADDING",  (0,0), (-1,-1), 3),
+            ("RIGHTPADDING", (0,0), (-1,-1), 3),
+            ("TOPPADDING",   (0,0), (-1,-1), 2),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 2),
+        ]
+        t.setStyle(TableStyle(style))
+        return t
+
+    def section_title(label):
+        return Paragraph(
+            f"<b>&nbsp;&nbsp;{label.upper()}</b>",
+            ParagraphStyle("sec", fontName="Helvetica-Bold", fontSize=10,
+                           textColor=white, backColor=AZUL_ESC,
+                           leading=14, leftIndent=4, spaceAfter=1)
+        )
+
+    # Título
+    try:
+        dt_obj   = _dt.strptime(data, "%d/%m/%Y")
+        dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
+                    "Sexta-feira","Sábado","Domingo"]
+        meses_pt = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                    "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+        titulo = f"ESCALA DE SERVIÇO  |  {dias_pt[dt_obj.weekday()]}  {dt_obj.day} de {meses_pt[dt_obj.month]} de {dt_obj.year}"
+    except:
+        titulo = f"ESCALA DE SERVIÇO  |  {data}"
+
+    header_table = Table(
+        [[Paragraph("<b>POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO</b>",
+                    ParagraphStyle("h1", fontName="Helvetica-Bold", fontSize=11,
+                                   textColor=white, alignment=1))],
+         [Paragraph(f"<b>{titulo}</b>",
+                    ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=10,
+                                   textColor=white, alignment=1))]],
+        colWidths=[190*mm]
+    )
+    header_table.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), AZUL_ESC),
+        ("TOPPADDING",    (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+    ]))
+
+    # Construir conteúdo
+    story = [header_table, Spacer(1, 4*mm)]
+
     secoes = [
         ("Patrulha / Operacional", df_pat,
-         ['id_fmt','serviço','horário','viatura','rádio','indicativo rádio','giro'],
-         ['ID','Serviço','Horário','Viatura','Rádio','Indicativo','Giro'],
-         [20,50,20,25,20,25,30]),
+         ["id_fmt","serviço","horário","viatura","rádio","indicativo rádio","giro"],
+         ["ID","Serviço","Horário","Viatura","Rádio","Indicativo","Giro"],
+         [22,52,18,22,20,24,32]),
         ("Atendimento / Apoio", pd.concat([df_at, df_ap]),
-         ['id_fmt','serviço','horário','rádio'],
-         ['ID','Serviço','Horário','Rádio'],
-         [20,70,20,80]),
+         ["id_fmt","serviço","horário","rádio"],
+         ["ID","Serviço","Horário","Rádio"],
+         [22,70,18,80]),
         ("Remunerados / Outros", pd.concat([df_rem, df_outros]),
-         ['id_fmt','serviço','horário'],
-         ['ID','Serviço','Horário'],
-         [20,100,70]),
+         ["id_fmt","serviço","horário"],
+         ["ID","Serviço","Horário"],
+         [22,118,50]),
         ("Administrativo", df_adm,
-         ['id_fmt','serviço','horário'],
-         ['ID','Serviço','Horário'],
-         [20,100,70]),
+         ["id_fmt","serviço","horário"],
+         ["ID","Serviço","Horário"],
+         [22,118,50]),
         ("Ausências", df_aus,
-         ['id_fmt','serviço'],
-         ['ID','Serviço/Situação'],
-         [20,170]),
+         ["id_fmt","serviço"],
+         ["ID","Serviço/Situação"],
+         [22,168]),
     ]
 
     for titulo_sec, df_sec, cols, col_names, col_widths in secoes:
         if df_sec.empty:
             continue
-        if y < 40*mm:
-            c.showPage()
-            y = h_pg - 20*mm
-        y = draw_section_title(y, titulo_sec)
-        y = draw_table(y, df_sec, cols, col_names, col_widths)
-        y -= 3*mm
+        story.append(section_title(titulo_sec))
+        story.append(make_table(df_sec, cols, col_names, col_widths))
+        story.append(Spacer(1, 3*mm))
 
     # Rodapé
-    c.setStrokeColor(HexColor('#a0a0a0'))
-    c.line(10*mm, 15*mm, 200*mm, 15*mm)
-    c.setFillColor(cinza)
-    c.setFont("Helvetica-Oblique", 8)
-    c.drawString(10*mm, 11*mm, f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}")
-    c.drawRightString(200*mm, 11*mm, "O COMANDANTE")
+    rodape = Table(
+        [[Paragraph(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}",
+                    ParagraphStyle("rf", fontName="Helvetica-Oblique", fontSize=8, textColor=CINZA_TXT)),
+          Paragraph("O COMANDANTE",
+                    ParagraphStyle("rc", fontName="Helvetica-Oblique", fontSize=8,
+                                   textColor=CINZA_TXT, alignment=2))]],
+        colWidths=[95*mm, 95*mm]
+    )
+    rodape.setStyle(TableStyle([
+        ("LINEABOVE", (0,0), (-1,0), 0.5, CINZA_LN),
+        ("TOPPADDING", (0,0), (-1,-1), 3),
+    ]))
+    story.append(Spacer(1, 3*mm))
+    story.append(rodape)
 
-    c.save()
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=10*mm, rightMargin=10*mm,
+                            topMargin=8*mm, bottomMargin=10*mm)
+    doc.build(story)
     return buf.getvalue()
 
 
