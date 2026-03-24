@@ -244,13 +244,18 @@ def _df_from_records(records) -> pd.DataFrame:
 @st.cache_data(ttl=120)
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega dados de uma aba da Google Sheet com cache de 2 minutos."""
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return pd.DataFrame()
-        return _df_from_records(sh.worksheet(aba_nome).get_all_records())
-    except Exception:
-        return pd.DataFrame()
+    import time
+    for tentativa in range(3):
+        try:
+            sh = get_sheet()
+            if sh is None:
+                return pd.DataFrame()
+            return _df_from_records(sh.worksheet(aba_nome).get_all_records())
+        except Exception:
+            if tentativa < 2:
+                get_sheet.clear()
+                time.sleep(1)
+    return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def load_utilizadores() -> pd.DataFrame:
@@ -708,8 +713,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     from datetime import datetime as _dt
 
     def c(txt):
-        # cp1252 suporta caracteres portugueses (ç, ã, é, etc.)
-        return str(txt).encode('cp1252', 'replace').decode('cp1252')
+        # latin-1 suporta caracteres portugueses (ç, ã, é, etc.) e é o encoding nativo do fpdf1
+        return unicodedata.normalize('NFC', str(txt)).encode('latin-1', 'replace').decode('latin-1')
 
     # ---- formatar id_disp para mostrar troca de forma legivel ----
     # id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
