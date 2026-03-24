@@ -999,6 +999,22 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
             if y < 20*mm: y = new_page()
         y -= 2*mm
 
+    # ---- helper wrap ----
+    def wrap_text(txt, max_pts):
+        lines = []
+        for paragrafo in str(txt).split('\n'):
+            words = paragrafo.split()
+            curr = ""
+            for word in words:
+                test = (curr + " " + word).strip()
+                if c.stringWidth(test, "Helvetica", 8.5) < max_pts:
+                    curr = test
+                else:
+                    if curr: lines.append(curr)
+                    curr = word
+            if curr: lines.append(curr)
+        return lines if lines else [""]
+
     # ---- REMUNERADOS ----
     if not df_rem.empty:
         y = sec_title(y, "Serviços Remunerados / Gratificados")
@@ -1006,21 +1022,6 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         cols_rm = ["Horário", "Militares", "Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
-
-        def wrap_text(txt, max_pts):
-            lines = []
-            for paragrafo in str(txt).split('\n'):
-                words = paragrafo.split()
-                curr = ""
-                for word in words:
-                    test = (curr + " " + word).strip()
-                    if c.stringWidth(test, "Helvetica", 8.5) < max_pts:
-                        curr = test
-                    else:
-                        if curr: lines.append(curr)
-                        curr = word
-                if curr: lines.append(curr)
-            return lines if lines else [""]
 
         x_obs_start = LM + wids_rm[0] + wids_rm[1] + 2*mm
         x_obs_end   = LM + TW - 2*mm
