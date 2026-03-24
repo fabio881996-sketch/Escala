@@ -867,6 +867,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
     # Linhas esquerda
     y_esq = y_col
+    max_pts_esq = CW2 - 37*mm  # já em pontos
+    label_w_esq = 35*mm
     for serv, ids in grupos_aus.items():
         ids_txt = ", ".join(ids)
         c.setFont("Helvetica-Bold", 8.5)
@@ -874,27 +876,28 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         c.drawString(LM+2*mm, y_esq-3.5*mm, f"  {serv}:")
         c.setFont("Helvetica", 8.5)
         c.setFillColor(black)
-        # Wrap IDs se necessário
-        max_w = CW2 - 37*mm
+        # Wrap IDs em múltiplas linhas
         words = ids_txt.split(", ")
-        line1, line2 = [], []
-        curr_w = 0
+        curr_line, curr_w = [], 0
+        linhas_ids = []
         for w_id in words:
             tw = c.stringWidth(w_id + ", ", "Helvetica", 8.5)
-            if curr_w + tw < max_w * 2.83465:  # mm to points
-                line1.append(w_id)
+            if curr_w + tw < max_pts_esq:
+                curr_line.append(w_id)
                 curr_w += tw
             else:
-                line2.append(w_id)
-        c.drawString(LM+37*mm, y_esq-3.5*mm, ", ".join(line1))
-        y_esq -= 5*mm
-        if line2:
-            c.drawString(LM+5*mm, y_esq-3.5*mm, ", ".join(line2))
+                if curr_line: linhas_ids.append(", ".join(curr_line))
+                curr_line, curr_w = [w_id], tw
+        if curr_line: linhas_ids.append(", ".join(curr_line))
+        for li, ln in enumerate(linhas_ids):
+            indent = LM+label_w_esq if li == 0 else LM+5*mm
+            c.drawString(indent, y_esq-3.5*mm, ln)
             y_esq -= 5*mm
 
     # Linhas direita
     y_dir = y_col
     x_dir = LM + CW2 + GAP
+    max_pts_dir = CW2 - 37*mm
     for serv, ids in grupos_adm.items():
         ids_txt = ", ".join(ids)
         c.setFont("Helvetica-Bold", 8.5)
@@ -902,8 +905,22 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         c.drawString(x_dir+2*mm, y_dir-3.5*mm, f"  {serv}:")
         c.setFont("Helvetica", 8.5)
         c.setFillColor(black)
-        c.drawString(x_dir+37*mm, y_dir-3.5*mm, ids_txt[:35])
-        y_dir -= 5*mm
+        words = ids_txt.split(", ")
+        curr_line, curr_w = [], 0
+        linhas_ids = []
+        for w_id in words:
+            tw = c.stringWidth(w_id + ", ", "Helvetica", 8.5)
+            if curr_w + tw < max_pts_dir:
+                curr_line.append(w_id)
+                curr_w += tw
+            else:
+                if curr_line: linhas_ids.append(", ".join(curr_line))
+                curr_line, curr_w = [w_id], tw
+        if curr_line: linhas_ids.append(", ".join(curr_line))
+        for li, ln in enumerate(linhas_ids):
+            indent = x_dir+label_w_esq if li == 0 else x_dir+5*mm
+            c.drawString(indent, y_dir-3.5*mm, ln)
+            y_dir -= 5*mm
 
     # Avançar y para o máximo das duas colunas
     y = min(y_esq, y_dir) - 2*mm
