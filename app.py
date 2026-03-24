@@ -1024,13 +1024,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
         x_obs_start = LM + wids_rm[0] + wids_rm[1] + 2*mm
         x_obs_end   = LM + TW - 2*mm
-        max_pts_rm  = (x_obs_end - x_obs_start) * (72/25.4)
+        max_pts_rm  = x_obs_end - x_obs_start  # já em pontos, não multiplicar
         for hor, grp in df_rem.groupby("horário", sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
             if obs == 'nan': obs = ""
             obs_lines = wrap_text(obs, max_pts_rm) if obs else [""]
-            ids_lines = wrap_text(ids, (wids_rm[1] - 2*mm) * (72/25.4))
+            ids_lines = wrap_text(ids, (wids_rm[1] - 2*mm))
             row_h = max(5*mm, max(len(obs_lines), len(ids_lines)) * 5*mm)
             if y - row_h < 20*mm: y = new_page()
             if fill:
@@ -1089,7 +1089,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         wids_ob = [35*mm, TW-35*mm]
         y = tbl_header(y, cols_ob, wids_ob)
         fill = False
-        max_pts_ob = (wids_ob[1] - 3*mm) * (72/25.4)
+        max_pts_ob = (wids_ob[1] - 3*mm)
         for lbl, obs in obs_lista:
             label_lines = lbl.split('\n')
             obs_lines = wrap_text(obs, max_pts_ob)
