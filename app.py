@@ -713,8 +713,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     from datetime import datetime as _dt
 
     def c(txt):
-        # latin-1 suporta caracteres portugueses (ç, ã, é, etc.) e é o encoding nativo do fpdf1
-        return unicodedata.normalize('NFC', str(txt)).encode('latin-1', 'replace').decode('latin-1')
+        # fpdf 1.7.2 precisa de latin-1 — encode para bytes e volta a string latin-1
+        t = unicodedata.normalize('NFC', str(txt))
+        return t.encode('latin-1', 'replace').decode('latin-1')
 
     import fpdf as _fpdf_mod
     st.caption(f"🔍 fpdf version: {getattr(_fpdf_mod, 'FPDF_VERSION', getattr(_fpdf_mod, '__version__', 'unknown'))} | c('Férias')={repr(c('Férias'))}")
@@ -752,6 +753,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
     # ---- Iniciar PDF ----
     pdf = FPDF(orientation='P', unit='mm', format='A4')
+    pdf.core_fonts_encoding = 'latin-1'
     pdf.set_margins(10, 10, 10)
     pdf.set_auto_page_break(auto=False)
     pdf.add_page()
