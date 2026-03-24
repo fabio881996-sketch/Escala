@@ -2,6 +2,6 @@ streamlit
 pandas
 gspread
 google-auth
-fpdf2
+fpdf==1.7.2
 pypdf
 reportlab
