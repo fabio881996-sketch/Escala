@@ -1165,7 +1165,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
     pdf.cell(95, 4, c("O COMANDANTE"), 0, 0, 'R')
 
-    return bytes(pdf.output(dest='S').encode('latin-1', 'replace'))
+    out = pdf.output(dest='S')
+    return out if isinstance(out, bytes) else out.encode('latin-1', 'replace')
 
 # ============================================================
 # 6. HELPERS UI
