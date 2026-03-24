@@ -841,30 +841,72 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     y = draw_header(y)
     y -= 2*mm
 
-    # ---- AUSÊNCIAS (compacto) ----
-    y = sec_title(y, "Ausências, Folgas e Licenças")
+    # ---- AUSÊNCIAS e ADM lado a lado ----
+    CW2 = TW/2 - 1*mm   # largura de cada coluna
+    GAP = 2*mm
+
+    # Recolher grupos
     grupos_aus = {}
     for _, row in df_aus.iterrows():
         serv = str(row.get("serviço", "")).strip()
         mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
         grupos_aus.setdefault(serv, []).append(mid)
-    for serv, ids in grupos_aus.items():
-        y = draw_ids_line(y, serv, ids)
-        if y < 20*mm: y = new_page()
-    y -= 2*mm
 
-    # ---- ADM (compacto) ----
-    if not df_adm.empty:
-        y = sec_title(y, "Outras Situações / ADM")
-        grupos_adm = {}
-        for _, row in df_adm.iterrows():
-            serv = str(row.get("serviço", "")).strip()
-            mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
-            grupos_adm.setdefault(serv, []).append(mid)
-        for serv, ids in grupos_adm.items():
-            y = draw_ids_line(y, serv, ids)
-            if y < 20*mm: y = new_page()
-        y -= 2*mm
+    grupos_adm = {}
+    for _, row in df_adm.iterrows():
+        serv = str(row.get("serviço", "")).strip()
+        mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
+        grupos_adm.setdefault(serv, []).append(mid)
+
+    # Títulos das duas colunas
+    y_col = y
+    sec_title(y_col, "Ausências, Folgas e Licenças", x=LM, w=CW2)
+    if grupos_adm:
+        sec_title(y_col, "Outras Situações / ADM", x=LM+CW2+GAP, w=CW2)
+    y_col -= 6.5*mm
+
+    # Linhas esquerda
+    y_esq = y_col
+    for serv, ids in grupos_aus.items():
+        ids_txt = ", ".join(ids)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(AZUL_ESC)
+        c.drawString(LM+2*mm, y_esq-3.5*mm, f"  {serv}:")
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(black)
+        # Wrap IDs se necessário
+        max_w = CW2 - 37*mm
+        words = ids_txt.split(", ")
+        line1, line2 = [], []
+        curr_w = 0
+        for w_id in words:
+            tw = c.stringWidth(w_id + ", ", "Helvetica", 8.5)
+            if curr_w + tw < max_w * 2.83465:  # mm to points
+                line1.append(w_id)
+                curr_w += tw
+            else:
+                line2.append(w_id)
+        c.drawString(LM+37*mm, y_esq-3.5*mm, ", ".join(line1))
+        y_esq -= 5*mm
+        if line2:
+            c.drawString(LM+5*mm, y_esq-3.5*mm, ", ".join(line2))
+            y_esq -= 5*mm
+
+    # Linhas direita
+    y_dir = y_col
+    x_dir = LM + CW2 + GAP
+    for serv, ids in grupos_adm.items():
+        ids_txt = ", ".join(ids)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(AZUL_ESC)
+        c.drawString(x_dir+2*mm, y_dir-3.5*mm, f"  {serv}:")
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(black)
+        c.drawString(x_dir+37*mm, y_dir-3.5*mm, ids_txt[:35])
+        y_dir -= 5*mm
+
+    # Avançar y para o máximo das duas colunas
+    y = min(y_esq, y_dir) - 2*mm
 
     # ---- ATENDIMENTO ----
     if not df_at.empty:
@@ -954,8 +996,28 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         fill = False
         for hor, grp in df_rem.groupby("horário", sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
-            obs = grp["observações"].iloc[0] if "observações" in grp.columns else ""
-            y = tbl_row(y, [hor, ids, str(obs)[:60]], wids_rm, fill)
+            obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
+            # Observação sem truncar — quebrar em múltiplas linhas se necessário
+            obs_lines = []
+            if obs and obs != 'nan':
+                words = obs.split()
+                curr = ""
+                for word in words:
+                    test = (curr + " " + word).strip()
+                    if c.stringWidth(test, "Helvetica", 8.5) < (wids_rm[2] - 4*mm) * 2.83465:
+                        curr = test
+                    else:
+                        obs_lines.append(curr)
+                        curr = word
+                if curr:
+                    obs_lines.append(curr)
+            obs_str = obs_lines[0] if obs_lines else ""
+            row_h = max(5*mm, len(obs_lines) * 5*mm)
+            y = tbl_row(y, [hor, ids, obs_str], wids_rm, fill, h=row_h)
+            # Linhas adicionais da observação
+            for extra in obs_lines[1:]:
+                c.setFont("Helvetica", 8.5)
+                c.drawString(LM + wids_rm[0] + wids_rm[1] + 2*mm, y + (row_h - 5*mm) - 3.5*mm, extra)
             fill = not fill
             if y < 20*mm: y = new_page()
         y -= 2*mm
