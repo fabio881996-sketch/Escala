@@ -3683,8 +3683,27 @@ else:
                             # Quem vem de férias não pode entrar antes das 08h
                             ini_novo_g, _ = _parse_horario(horario)
                             if ini_novo_g is not None and ini_novo_g < 480:
+                                # Bloquear se estava de férias ontem
                                 d_ant = d_gerar - timedelta(days=1)
                                 if militar_de_ferias(mid, d_ant, df_ferias_g, feriados_g):
+                                    continue
+                                # Bloquear se as férias terminam hoje (fim_real == hoje)
+                                _cols_f = df_ferias_g.columns.tolist()
+                                _id_col_f = 'id' if 'id' in _cols_f else _cols_f[0]
+                                _mil_f = df_ferias_g[df_ferias_g[_id_col_f].astype(str).str.strip() == str(mid).strip()]
+                                _fim_hoje = False
+                                for _, _row_f in _mil_f.iterrows():
+                                    for _fc in [c for c in _cols_f if 'fim' in c.lower()]:
+                                        _fs = str(_row_f.get(_fc, '')).strip()
+                                        if not _fs or _fs == 'nan': continue
+                                        _fd = _parse_data_ferias(_fs, d_gerar.year)
+                                        if not _fd: continue
+                                        _fr = _fim_ferias_real(_fd, feriados_g)
+                                        if _fr == d_gerar:
+                                            _fim_hoje = True
+                                            break
+                                    if _fim_hoje: break
+                                if _fim_hoje:
                                     continue
 
                             # Verificar descanso face ao dia anterior (só horário, independente do serviço)
