@@ -908,31 +908,42 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     # Avançar y para o máximo das duas colunas
     y = min(y_esq, y_dir) - 2*mm
 
-    # ---- ATENDIMENTO ----
-    if not df_at.empty:
-        y = sec_title(y, "Atendimento")
-        cols_at  = ["Horário", "Militar(es)"]
-        wids_at  = [25*mm, TW-25*mm]
-        y = tbl_header(y, cols_at, wids_at)
-        fill = False
-        for hor, grp in df_at.groupby("horário", sort=False):
-            ids = ", ".join(grp["id_fmt"].tolist())
-            y = tbl_row(y, [hor, ids], wids_at, fill)
-            fill = not fill
-            if y < 20*mm: y = new_page()
-        y -= 2*mm
+    # ---- ATENDIMENTO e APOIO lado a lado ----
+    if not df_at.empty or not df_ap.empty:
+        y_at = y
+        # Títulos
+        if not df_at.empty:
+            sec_title(y_at, "Atendimento", x=LM, w=CW2)
+        if not df_ap.empty:
+            sec_title(y_at, "Apoio ao Atendimento", x=LM+CW2+GAP, w=CW2)
+        y_at -= 6.5*mm
 
-    # ---- APOIO AO ATENDIMENTO ----
-    if not df_ap.empty:
-        y = sec_title(y, "Apoio ao Atendimento")
-        y = tbl_header(y, cols_at, wids_at)
-        fill = False
-        for hor, grp in df_ap.groupby("horário", sort=False):
-            ids = ", ".join(grp["id_fmt"].tolist())
-            y = tbl_row(y, [hor, ids], wids_at, fill)
-            fill = not fill
-            if y < 20*mm: y = new_page()
-        y -= 2*mm
+        cols_at = ["Horário", "Militar(es)"]
+
+        # Coluna esquerda — Atendimento
+        y_esq2 = y_at
+        if not df_at.empty:
+            wids_at_l = [20*mm, CW2-20*mm]
+            y_esq2 = tbl_header(y_at, cols_at, wids_at_l, x=LM)
+            fill = False
+            for hor, grp in df_at.groupby("horário", sort=False):
+                ids = ", ".join(grp["id_fmt"].tolist())
+                y_esq2 = tbl_row(y_esq2, [hor, ids], wids_at_l, fill, x=LM)
+                fill = not fill
+
+        # Coluna direita — Apoio
+        y_dir2 = y_at
+        if not df_ap.empty:
+            wids_at_r = [20*mm, CW2-20*mm]
+            x_dir2 = LM+CW2+GAP
+            y_dir2 = tbl_header(y_at, cols_at, wids_at_r, x=x_dir2)
+            fill = False
+            for hor, grp in df_ap.groupby("horário", sort=False):
+                ids = ", ".join(grp["id_fmt"].tolist())
+                y_dir2 = tbl_row(y_dir2, [hor, ids], wids_at_r, fill, x=x_dir2)
+                fill = not fill
+
+        y = min(y_esq2, y_dir2) - 2*mm
 
     # ---- PATRULHA OCORRÊNCIAS ----
     if not df_ocorr.empty:
@@ -978,11 +989,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         wids_ot = [18*mm, 35*mm, 42*mm, 22*mm, 22*mm, 51*mm]
         y = tbl_header(y, cols_ot, wids_ot)
         fill = False
-        for _, row in df_outros.iterrows():
-            ind = str(row.get("indicativo rádio", "")) if "indicativo rádio" in df_outros.columns else ""
-            rad = str(row.get("rádio", "")) if "rádio" in df_outros.columns else ""
-            vtr = str(row.get("viatura", "")) if "viatura" in df_outros.columns else ""
-            y = tbl_row(y, [row.get("horário",""), row["id_fmt"], row.get("serviço",""), ind, rad, vtr], wids_ot, fill)
+        for (hor, serv), grp in df_outros.groupby(["horário", "serviço"], sort=False):
+            ids = ", ".join(grp["id_fmt"].tolist())
+            ind = str(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
+            rad = str(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
+            vtr = str(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
         y -= 2*mm
@@ -997,27 +1009,40 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         for hor, grp in df_rem.groupby("horário", sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
-            # Observação sem truncar — quebrar em múltiplas linhas se necessário
+            if obs == 'nan': obs = ""
+            # Quebrar observação em linhas
             obs_lines = []
-            if obs and obs != 'nan':
+            if obs:
                 words = obs.split()
                 curr = ""
+                max_pts = (wids_rm[2] - 4*mm) * (72/25.4)
                 for word in words:
                     test = (curr + " " + word).strip()
-                    if c.stringWidth(test, "Helvetica", 8.5) < (wids_rm[2] - 4*mm) * 2.83465:
+                    if c.stringWidth(test, "Helvetica", 8.5) < max_pts:
                         curr = test
                     else:
-                        obs_lines.append(curr)
+                        if curr: obs_lines.append(curr)
                         curr = word
-                if curr:
-                    obs_lines.append(curr)
-            obs_str = obs_lines[0] if obs_lines else ""
-            row_h = max(5*mm, len(obs_lines) * 5*mm)
-            y = tbl_row(y, [hor, ids, obs_str], wids_rm, fill, h=row_h)
-            # Linhas adicionais da observação
-            for extra in obs_lines[1:]:
-                c.setFont("Helvetica", 8.5)
-                c.drawString(LM + wids_rm[0] + wids_rm[1] + 2*mm, y + (row_h - 5*mm) - 3.5*mm, extra)
+                if curr: obs_lines.append(curr)
+            row_h = max(5*mm, len(obs_lines if obs_lines else [""]) * 5*mm)
+            # Desenhar linha com altura certa
+            if fill:
+                c.setFillColor(FILL_ALT)
+                c.rect(LM, y-row_h, TW, row_h, fill=1, stroke=0)
+            c.setFillColor(black)
+            c.setFont("Helvetica", 8.5)
+            c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(hor))
+            c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-3.5*mm, ids[:30])
+            for li, obs_l in enumerate(obs_lines if obs_lines else [""]):
+                c.drawString(LM+wids_rm[0]+wids_rm[1]+2*mm, y-(li*5*mm)-3.5*mm, obs_l)
+            c.setStrokeColor(CINZA_LN)
+            c.rect(LM, y-row_h, TW, row_h, fill=0, stroke=1)
+            # Linhas verticais
+            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
+            c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)
+            y -= row_h
+            fill = not fill
+            if y < 20*mm: y = new_page()
             fill = not fill
             if y < 20*mm: y = new_page()
         y -= 2*mm
