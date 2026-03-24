@@ -716,6 +716,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         # latin-1 suporta caracteres portugueses (ç, ã, é, etc.) e é o encoding nativo do fpdf1
         return unicodedata.normalize('NFC', str(txt)).encode('latin-1', 'replace').decode('latin-1')
 
+    import fpdf as _fpdf_mod
+    st.caption(f"🔍 fpdf version: {getattr(_fpdf_mod, 'FPDF_VERSION', getattr(_fpdf_mod, '__version__', 'unknown'))} | c('Férias')={repr(c('Férias'))}")
+
     # ---- formatar id_disp para mostrar troca de forma legivel ----
     # id_disp pode ser "123 🔄 456" — converter para "123 (T:456)"
     def fmt_id(txt):
