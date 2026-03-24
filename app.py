@@ -617,7 +617,7 @@ def _pdf_base(orientation='P') -> FPDF:
     import os
     pdf = FPDF(orientation=orientation, unit='mm', format='A4')
     font_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf.add_font('DejaVu', style='', fname=os.path.join(font_dir, 'DejaVuSans.ttf'))
+    pdf.add_font('DejaVu', fname=os.path.join(font_dir, 'DejaVuSans.ttf'))
     pdf.add_font('DejaVu', style='B', fname=os.path.join(font_dir, 'DejaVuSans-Bold.ttf'))
     return pdf
 
@@ -644,7 +644,7 @@ def gerar_pdf_troca(dados: dict) -> bytes:
     pdf.set_font("DejaVu", "", 8)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
-    output = pdf.output(dest='S'); return output if isinstance(output, bytes) else output.encode('latin-1', 'replace')
+    return pdf.output()
 
 def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
     pdf = _pdf_base()
@@ -669,7 +669,7 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
     pdf.set_font("DejaVu", "", 8)
     pdf.set_text_color(100, 100, 100)
     pdf.cell(190, 10, f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'R')
-    output = pdf.output(dest='S'); return output if isinstance(output, bytes) else output.encode('latin-1', 'replace')
+    return pdf.output()
 
 
 def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
@@ -1133,7 +1133,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     pdf.cell(95, 4, c(f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}"), 0, 0, 'L')
     pdf.cell(95, 4, c("O COMANDANTE"), 0, 0, 'R')
 
-    output = pdf.output(dest='S'); return output if isinstance(output, bytes) else output.encode('latin-1', 'replace')
+    return pdf.output()
 
 # ============================================================
 # 6. HELPERS UI
