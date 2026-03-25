@@ -3681,6 +3681,8 @@ else:
                         if militar_de_ferias(mid, d_gerar, df_ferias_g, feriados_g):
                             ids_indisponiveis.add(mid)
 
+                    st.caption(f"🔍 ids_indisponiveis: {ids_indisponiveis}")
+
                     # ── Slots a preencher ──
                     # Verificar quais já estão preenchidos na aba
                     slots_preenchidos = {}  # (serv_norm, hor) → count já preenchidos
