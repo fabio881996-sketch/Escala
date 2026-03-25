@@ -3588,8 +3588,10 @@ else:
                 for i in range(ml):
                     nova_o.append([ordem_c[h][i] if i < len(ordem_c[h]) else '' for h in headers_c])
 
-                # Criar ordem_escala DD-MM com o nome do dia seguinte
-                nome_novo = f"ordem_escala {(d_gerar + timedelta(days=1)).strftime('%d-%m')}"
+                # Criar ordem_escala do dia seguinte
+                from datetime import datetime as _dt_c
+                d_gerar_c = _dt_c.strptime(f"{aba_c}-{_dt_c.now().year}", "%d-%m-%Y")
+                nome_novo = f"ordem_escala {(d_gerar_c + timedelta(days=1)).strftime('%d-%m')}"
                 try:
                     sh_c.worksheet(nome_novo).clear()
                     sh_c.worksheet(nome_novo).update('A1', nova_o)
