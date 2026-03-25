@@ -2628,12 +2628,18 @@ else:
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
         d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
-        df_dia = load_data(d_sel.strftime("%d-%m"))
+        aba_sel = d_sel.strftime("%d-%m")
 
-        if df_dia.empty:
-            st.info("Não existem dados para esta data.")
+        # Não-admins: só ver dias publicados
+        if not is_admin and aba_sel not in load_dias_publicados():
+            st.info("A escala para este dia ainda não foi publicada.")
         else:
-            df_at = df_dia.copy()
+            df_dia = load_data(aba_sel)
+
+            if df_dia.empty:
+                st.info("Não existem dados para esta data.")
+            else:
+                df_at = df_dia.copy()
             df_at['id_disp'] = df_at['id'].astype(str)
 
             # Aplicar trocas aprovadas (excluindo remunerados e matar remunerado)
