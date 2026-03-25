@@ -295,6 +295,19 @@ def load_ferias(ano: int) -> pd.DataFrame:
         return pd.DataFrame()
 
 @st.cache_data(ttl=86400)
+@st.cache_data(ttl=60)
+def load_dias_publicados() -> set:
+    """Carrega datas publicadas da aba 'escala_publicada' — formato DD-MM."""
+    try:
+        sh = get_sheet()
+        if sh is None:
+            return set()
+        ws = sh.worksheet("escala_publicada")
+        valores = ws.col_values(1)
+        return set(str(v).strip() for v in valores if str(v).strip() and str(v).strip() != 'data')
+    except Exception:
+        return set()
+
 def load_feriados(ano: int) -> list:
     """Carrega feriados de um ano da aba 'feriados' — cache 24h."""
     try:
@@ -1868,6 +1881,7 @@ else:
             else:
                 st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
                 hj = datetime.now()
+                dias_publicados = load_dias_publicados()
 
                 # Percorre dias a partir de hoje até não encontrar mais abas com dados
                 dias_sem_dados = 0
@@ -1877,7 +1891,14 @@ else:
                 while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
                     dt  = hj + timedelta(days=i)
                     d_s = dt.strftime('%d/%m/%Y')
+                    aba_dt = dt.strftime('%d-%m')
                     lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
+
+                    # Para não-admins: só mostrar dias publicados
+                    if not is_admin and aba_dt not in dias_publicados:
+                        i += 1
+                        if i > 60: break
+                        continue
 
                     # Verificar trocas aprovadas (excluindo matar remunerado)
                     if not df_trocas.empty:
@@ -3882,3 +3903,37 @@ else:
 
         if st.session_state.pop('escala_ok', False):
             st.success("✅ Escala escrita e ordem atualizada!")
+
+        # ── Publicar escala ──
+        st.markdown("---")
+        st.markdown("#### 📢 Publicar Escala")
+        dias_pub = load_dias_publicados()
+        d_pub = st.date_input("Data a publicar:", format="DD/MM/YYYY", key="d_pub")
+        aba_pub = d_pub.strftime("%d-%m")
+        ja_publicado = aba_pub in dias_pub
+        if ja_publicado:
+            st.info(f"✅ Escala de **{d_pub.strftime('%d/%m/%Y')}** já está publicada.")
+            if st.button("🔒 Despublicar", key="btn_despub", use_container_width=True):
+                try:
+                    sh_p = get_sheet()
+                    ws_p = sh_p.worksheet("escala_publicada")
+                    todos = ws_p.col_values(1)
+                    if aba_pub in todos:
+                        idx_p = todos.index(aba_pub) + 1
+                        ws_p.delete_rows(idx_p)
+                    load_dias_publicados.clear()
+                    st.success("✅ Escala despublicada!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+        else:
+            if st.button("📢 PUBLICAR ESCALA", key="btn_pub", use_container_width=True, type="primary"):
+                try:
+                    sh_p = get_sheet()
+                    ws_p = sh_p.worksheet("escala_publicada")
+                    ws_p.append_row([aba_pub])
+                    load_dias_publicados.clear()
+                    st.success(f"✅ Escala de **{d_pub.strftime('%d/%m/%Y')}** publicada!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
