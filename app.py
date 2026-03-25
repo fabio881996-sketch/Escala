@@ -1742,9 +1742,13 @@ else:
 
                 # Carregar todos os dias do mês
                 servicos_mes = {}
+                dias_publicados_cal = load_dias_publicados() if not is_admin else None
                 for d in range(1, n_dias + 1):
                     dt_cal = datetime(ano_sel, mes_sel, d)
                     aba = dt_cal.strftime("%d-%m")
+                    # Não-admins: só mostrar dias publicados
+                    if not is_admin and dias_publicados_cal is not None and aba not in dias_publicados_cal:
+                        continue
                     df_cal = load_data(aba)
                     if not df_cal.empty:
                         m_cal = df_cal[df_cal['id'].astype(str) == u_id]
@@ -3495,7 +3499,6 @@ else:
             try:
                 sh_c = get_sheet()
                 ws_dia_c = sh_c.worksheet(aba_c)
-                ws_ord_c = sh_c.worksheet("ordem_escala")
                 linhas_c = ws_dia_c.get_all_values()
                 hdrs = [h.strip().lower() for h in linhas_c[0]]
                 ix_id   = hdrs.index('id')      if 'id'      in hdrs else 0
