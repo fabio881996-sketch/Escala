@@ -3681,8 +3681,6 @@ else:
                         if militar_de_ferias(mid, d_gerar, df_ferias_g, feriados_g):
                             ids_indisponiveis.add(mid)
 
-                    st.caption(f"🔍 ids_indisponiveis: {ids_indisponiveis}")
-                    st.caption(f"🔍 df_dia_atual cols: {df_dia_atual.columns.tolist()} | linhas com id: {df_dia_atual[df_dia_atual['id'].astype(str).str.strip().str.len() > 0]['id'].tolist() if 'id' in df_dia_atual.columns else 'SEM COLUNA ID'}")
 
                     # ── Slots a preencher ──
                     # Verificar quais já estão preenchidos na aba
