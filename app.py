@@ -857,7 +857,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         c.line(box_x + 3*mm, box_y + 5*mm, box_x + box_w - 3*mm, box_y + 5*mm)
         c.setFillColor(CINZA_TXT)
         c.setFont("Helvetica", 6.5)
-        c.drawCentredString(box_x + box_w/2, box_y + 2.5*mm, "Assinatura e data")
+        c.drawCentredString(box_x + box_w/2, box_y + 3.5*mm, "Hugo Alexandre Ferreira do Carmo")
+        c.drawCentredString(box_x + box_w/2, box_y + 1*mm, "Sargento-Ajudante")
         c.setLineWidth(0.5)
 
         return y - max(14*mm, box_h) - 2*mm
