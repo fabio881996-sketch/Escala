@@ -2659,7 +2659,7 @@ else:
                     mime="application/pdf"
                 )
             with col_full:
-                if st.button("📋 Escala Completa (hoje→)", use_container_width=True):
+                if st.button("📥 Escala Completa", use_container_width=True):
                     with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
                         import tempfile, os, io as _io
                         try:
