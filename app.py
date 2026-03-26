@@ -821,16 +821,16 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         return H - 10*mm
 
     def draw_header(y):
-        # Cabeçalho principal (deixar espaço para caixa de assinatura à direita)
         box_w = 50*mm
         box_h = 20*mm
         header_w = TW - box_w - 2*mm
 
+        # Cabeçalho azul — só à esquerda
         c.setFillColor(AZUL_ESC)
-        c.rect(LM, y-14*mm, header_w, 14*mm, fill=1, stroke=0)
+        c.rect(LM, y-box_h, header_w, box_h, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 11)
-        c.drawCentredString(LM + header_w/2, y-7*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
+        c.drawCentredString(LM + header_w/2, y-8*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
         try:
             dt_obj   = _dt.strptime(data, "%d/%m/%Y")
             dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
@@ -841,9 +841,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         except:
             titulo = f"ESCALA DE SERVIÇO  |  {data}"
         c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(LM + header_w/2, y-12*mm, titulo)
+        c.drawCentredString(LM + header_w/2, y-15*mm, titulo)
 
-        # Caixa de assinatura — canto superior direito
+        # Caixa de assinatura — canto superior direito, mesma altura
         box_x = LM + header_w + 2*mm
         box_y = y - box_h
         c.setStrokeColor(AZUL_ESC)
@@ -858,7 +858,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         c.drawCentredString(box_x + box_w/2, box_y + 1*mm, "Sargento-Ajudante")
         c.setLineWidth(0.5)
 
-        return y - max(14*mm, box_h) - 2*mm
+        return y - box_h - 2*mm
 
     def sec_title(y, label, x=LM, w=TW):
         c.setFillColor(AZUL_ESC)
