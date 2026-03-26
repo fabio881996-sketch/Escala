@@ -925,12 +925,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         return y - 5*mm
 
     def rodape():
-        c.setStrokeColor(CINZA_LN)
-        c.line(LM, 15*mm, W-RM, 15*mm)
-        c.setFillColor(CINZA_TXT)
-        c.setFont("Helvetica-Oblique", 8)
-        c.drawString(LM, 11*mm, f"Gerado em: {_dt.now().strftime('%d/%m/%Y %H:%M')}")
-        c.drawRightString(W-RM, 11*mm, "O COMANDANTE")
+        pass  # rodapé removido
 
     # ======= INÍCIO =======
     y = H - 10*mm
