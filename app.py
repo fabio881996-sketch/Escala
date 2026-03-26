@@ -7,10 +7,54 @@ from fpdf import FPDF
 import io
 import re
 import unicodedata
+import hashlib
+import secrets
 
 def norm(t):
     """Normaliza texto para comparação — remove acentos e coloca em minúsculas."""
     return unicodedata.normalize('NFKD', str(t).lower()).encode('ascii', 'ignore').decode('ascii')
+
+def hash_pin(pin: str, salt: str = None):
+    """Gera hash+salt de um PIN. Retorna (hash, salt)."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    h = hashlib.sha256(f"{salt}{pin}".encode()).hexdigest()
+    return h, salt
+
+def verificar_pin(pin_input: str, pin_guardado: str) -> bool:
+    """Verifica PIN — suporta texto simples (migração) e hash:salt."""
+    pin_input = str(pin_input).strip().zfill(4)
+    pin_guardado = str(pin_guardado).strip()
+    # Formato hash: "hash:salt"
+    if ':' in pin_guardado and len(pin_guardado) > 10:
+        partes = pin_guardado.split(':', 1)
+        if len(partes) == 2:
+            h_guardado, salt = partes
+            h_input, _ = hash_pin(pin_input, salt)
+            return h_input == h_guardado
+    # Texto simples (antes da migração)
+    return pin_guardado.zfill(4) == pin_input
+
+def migrar_pin_para_hash(email: str, pin: str) -> bool:
+    """Migra o PIN de texto simples para hash no Sheets."""
+    try:
+        sh = get_sheet()
+        ws = sh.worksheet("utilizadores")
+        records = ws.get_all_records()
+        headers = [h.strip().lower() for h in ws.row_values(1)]
+        if 'pin' not in headers or 'email' not in headers:
+            return False
+        col_pin   = headers.index('pin') + 1
+        col_email = headers.index('email') + 1
+        for i, row in enumerate(records, start=2):
+            if str(row.get('email', '')).strip().lower() == email.strip().lower():
+                h, salt = hash_pin(pin)
+                ws.update_cell(i, col_pin, f"{h}:{salt}")
+                load_utilizadores.clear()
+                return True
+    except Exception:
+        pass
+    return False
 
 # ============================================================
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -777,11 +821,16 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         return H - 10*mm
 
     def draw_header(y):
+        # Cabeçalho principal (deixar espaço para caixa de assinatura à direita)
+        box_w = 50*mm
+        box_h = 20*mm
+        header_w = TW - box_w - 2*mm
+
         c.setFillColor(AZUL_ESC)
-        c.rect(LM, y-14*mm, TW, 14*mm, fill=1, stroke=0)
+        c.rect(LM, y-14*mm, header_w, 14*mm, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 11)
-        c.drawCentredString(W/2, y-7*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
+        c.drawCentredString(LM + header_w/2, y-7*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
         try:
             dt_obj   = _dt.strptime(data, "%d/%m/%Y")
             dias_pt  = ["Segunda-feira","Terça-feira","Quarta-feira","Quinta-feira",
@@ -792,8 +841,26 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         except:
             titulo = f"ESCALA DE SERVIÇO  |  {data}"
         c.setFont("Helvetica-Bold", 10)
-        c.drawCentredString(W/2, y-12*mm, titulo)
-        return y - 16*mm
+        c.drawCentredString(LM + header_w/2, y-12*mm, titulo)
+
+        # Caixa de assinatura — canto superior direito
+        box_x = LM + header_w + 2*mm
+        box_y = y - box_h
+        c.setStrokeColor(AZUL_ESC)
+        c.setLineWidth(1)
+        c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
+        c.setFillColor(AZUL_ESC)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawCentredString(box_x + box_w/2, box_y + box_h - 4*mm, "O COMANDANTE")
+        c.setLineWidth(0.5)
+        c.setStrokeColor(CINZA_LN)
+        c.line(box_x + 3*mm, box_y + 5*mm, box_x + box_w - 3*mm, box_y + 5*mm)
+        c.setFillColor(CINZA_TXT)
+        c.setFont("Helvetica", 6.5)
+        c.drawCentredString(box_x + box_w/2, box_y + 2.5*mm, "Assinatura e data")
+        c.setLineWidth(0.5)
+
+        return y - max(14*mm, box_h) - 2*mm
 
     def sec_title(y, label, x=LM, w=TW):
         c.setFillColor(AZUL_ESC)
@@ -1359,9 +1426,18 @@ if not st.session_state["logged_in"]:
                                 if len(new) == 4:
                                     df_u = load_utilizadores()
                                     if not df_u.empty and 'pin' in df_u.columns:
-                                        user = df_u[df_u['pin'].astype(str).str.strip().str.zfill(4) == new.zfill(4)]
-                                        if not user.empty:
-                                            fazer_login(user.iloc[0], user.iloc[0]['email'])
+                                        # Verificar PIN — suporta texto simples e hash
+                                        user = None
+                                        for _, row_u in df_u.iterrows():
+                                            if verificar_pin(new, str(row_u.get('pin', ''))):
+                                                user = row_u
+                                                break
+                                        if user is not None:
+                                            # Migrar PIN para hash se ainda for texto simples
+                                            pin_guardado = str(user.get('pin', '')).strip()
+                                            if ':' not in pin_guardado or len(pin_guardado) <= 10:
+                                                migrar_pin_para_hash(str(user.get('email', '')), new)
+                                            fazer_login(user, user['email'])
                                             st.rerun(scope="app")
                                         else:
                                             st.session_state["pin_tentativas"] += 1
@@ -1414,139 +1490,9 @@ if not st.session_state["logged_in"]:
         </style>
         """, unsafe_allow_html=True)
         _keypad_fragment()
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_a, col_b = st.columns(2)
-        if col_a.button("🔑 Entrar com email", use_container_width=True):
-            st.session_state["login_modo"] = "email"
-            st.rerun()
-        if col_b.button("📱 Registar PIN", use_container_width=True):
-            st.session_state["login_modo"] = "registar_pin"
-            st.rerun()
 
-    # ── MODO EMAIL/PASSWORD ──
-    elif modo == "email":
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        _, col2, _ = st.columns([1, 1.4, 1])
-        with col2:
-            st.markdown("""
-            <div class="login-box">
-                <div class="login-header">
-                    <span class="escudo">🚓</span>
-                    <h1>Portal de Escalas</h1>
-                    <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
-                    <p class="posto-name">Posto Territorial de Famalicão</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            with st.form("form_email", clear_on_submit=False):
-                st.markdown("<br>", unsafe_allow_html=True)
-                u = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
-                p = st.text_input("🔒 Password", type="password", placeholder="••••••••")
-                st.markdown("<br>", unsafe_allow_html=True)
-                entrar = st.form_submit_button("ENTRAR", use_container_width=True)
-                if entrar:
-                    if not u or not p:
-                        st.warning("Preenche o email e a password.")
-                    else:
-                        df_u = load_utilizadores()
-                        if df_u.empty or 'email' not in df_u.columns:
-                            st.error("❌ Erro ao carregar dados.")
-                        else:
-                            user = df_u[
-                                (df_u['email'].str.lower() == u) &
-                                (df_u['password'] == p)
-                            ]
-                            if not user.empty:
-                                fazer_login(user.iloc[0], u)
-                                st.rerun()
-                            else:
-                                st.error("❌ Email ou password incorretos.")
-            if st.button("← Voltar ao PIN", use_container_width=True):
-                st.session_state["login_modo"] = "pin"
-                st.rerun()
-
-    # ── MODO REGISTAR PIN ──
-    elif modo == "registar_pin":
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        _, col2, _ = st.columns([1, 1.4, 1])
-        with col2:
-            st.markdown("""
-            <div class="login-box">
-                <div class="login-header">
-                    <span class="escudo">🚓</span>
-                    <h1>Registar PIN</h1>
-                    <div class="org-line"><span class="org-name">Guarda Nacional Republicana</span></div>
-                    <p class="posto-name">Posto Territorial de Famalicão</p>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            st.markdown("<p style='text-align:center;color:#475569;font-size:0.88rem'>Autentica-te primeiro para criar o teu PIN</p>", unsafe_allow_html=True)
-            with st.form("form_reg_pin", clear_on_submit=False):
-                st.markdown("<br>", unsafe_allow_html=True)
-                u_r = st.text_input("📧 Email institucional", placeholder="utilizador@gnr.pt").strip().lower()
-                p_r = st.text_input("🔒 Password", type="password", placeholder="••••••••")
-                st.markdown("---")
-                pin1 = st.text_input("📱 Novo PIN (4 dígitos)", type="password",
-                                     placeholder="● ● ● ● ● ●", max_chars=6)
-                pin2 = st.text_input("📱 Confirmar PIN", type="password",
-                                     placeholder="● ● ● ● ● ●", max_chars=6)
-                st.markdown("<br>", unsafe_allow_html=True)
-                registar = st.form_submit_button("CRIAR PIN", use_container_width=True)
-                if registar:
-                    if not u_r or not p_r or not pin1 or not pin2:
-                        st.warning("Preenche todos os campos.")
-                    elif len(pin1) != 4 or not pin1.isdigit():
-                        st.warning("O PIN deve ter exatamente 4 dígitos numéricos.")
-                    elif pin1 != pin2:
-                        st.error("❌ Os PINs não coincidem.")
-                    else:
-                        df_u = load_utilizadores()
-                        if df_u.empty or 'email' not in df_u.columns:
-                            st.error("❌ Erro ao carregar dados.")
-                        else:
-                            user = df_u[
-                                (df_u['email'].str.lower() == u_r) &
-                                (df_u['password'] == p_r)
-                            ]
-                            if user.empty:
-                                st.error("❌ Email ou password incorretos.")
-                            else:
-                                if 'pin' in df_u.columns:
-                                    pin_existe = df_u[
-                                        (df_u['pin'].astype(str).str.strip().str.zfill(4) == pin1.zfill(4)) &
-                                        (df_u['email'].str.lower() != u_r)
-                                    ]
-                                    if not pin_existe.empty:
-                                        st.error("❌ Este PIN já está a ser usado. Escolhe outro.")
-                                        st.stop()
-                                try:
-                                    sh = get_sheet()
-                                    ws = sh.worksheet("utilizadores")
-                                    headers = ws.row_values(1)
-                                    headers_lower = [h.strip().lower() for h in headers]
-                                    if 'pin' not in headers_lower:
-                                        st.error("❌ Coluna 'pin' não existe na Sheet.")
-                                        st.stop()
-                                    col_pin = headers_lower.index('pin') + 1
-                                    ids_col = ws.col_values(headers_lower.index('email') + 1)
-                                    linha_user = None
-                                    for i, email_val in enumerate(ids_col):
-                                        if email_val.strip().lower() == u_r:
-                                            linha_user = i + 1
-                                            break
-                                    if linha_user:
-                                        ws.update_cell(linha_user, col_pin, pin1)
-                                        load_utilizadores.clear()
-                                        st.success("✅ PIN criado! Já podes entrar com o PIN.")
-                                        st.session_state["login_modo"] = "pin"
-                                        st.rerun()
-                                    else:
-                                        st.error("❌ Utilizador não encontrado.")
-                                except Exception as e:
-                                    st.error(f"❌ Erro ao guardar PIN: {e}")
-            if st.button("← Voltar ao PIN", use_container_width=True):
-                st.session_state["login_modo"] = "pin"
-                st.rerun()
+    # ── MODO EMAIL/PASSWORD ── (removido — login só por PIN)
+    # ── MODO REGISTAR PIN ── (removido — PINs criados pelos admins)
 
 
 
@@ -1609,7 +1555,7 @@ else:
             "🔄 Giros",
             "👥 Efetivo",
         ]
-        menu_admin = ["🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala"]
+        menu_admin = ["🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "👤 Gerir Utilizadores"]
 
         st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
 
@@ -1621,7 +1567,7 @@ else:
             "👥 Efetivo",
         ]
         if is_admin:
-            menu_opt += ["", "🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala"]
+            menu_opt += ["", "🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "👤 Gerir Utilizadores"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
@@ -3963,3 +3909,92 @@ else:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro: {e}")
+
+    # --- 👤 GERIR UTILIZADORES (ADMIN) ---
+    elif menu == "👤 Gerir Utilizadores":
+        st.title("👤 Gerir Utilizadores")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        df_u_admin = load_utilizadores()
+        if df_u_admin.empty:
+            st.info("Sem utilizadores.")
+        else:
+            militares_opts_u = {
+                f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})": r
+                for _, r in df_u_admin.iterrows()
+            }
+            sel_u = st.selectbox("Selecionar militar:", list(militares_opts_u.keys()))
+            row_u = militares_opts_u[sel_u]
+            email_u = str(row_u.get('email', '')).strip()
+            pin_atual = str(row_u.get('pin', '')).strip()
+            tem_pin = bool(pin_atual and pin_atual != 'nan')
+            estado_pin = "✅ PIN definido" if tem_pin else "❌ Sem PIN"
+            st.info(f"**Email:** {email_u}  |  **PIN:** {estado_pin}")
+
+            st.markdown("---")
+            st.markdown("#### 🔑 Definir / Alterar PIN")
+            with st.form("form_admin_pin"):
+                novo_pin = st.text_input("Novo PIN (4 dígitos)", type="password", max_chars=4)
+                conf_pin = st.text_input("Confirmar PIN", type="password", max_chars=4)
+                if st.form_submit_button("💾 GUARDAR PIN", use_container_width=True):
+                    if not novo_pin or not conf_pin:
+                        st.warning("Preenche os dois campos.")
+                    elif len(novo_pin) != 4 or not novo_pin.isdigit():
+                        st.warning("O PIN deve ter exatamente 4 dígitos numéricos.")
+                    elif novo_pin != conf_pin:
+                        st.error("❌ Os PINs não coincidem.")
+                    else:
+                        # Verificar duplicado
+                        pin_dup = False
+                        for _, r_check in df_u_admin.iterrows():
+                            if str(r_check.get('email', '')).strip().lower() == email_u.lower():
+                                continue
+                            if verificar_pin(novo_pin, str(r_check.get('pin', ''))):
+                                pin_dup = True
+                                break
+                        if pin_dup:
+                            st.error("❌ Este PIN já está a ser usado por outro militar.")
+                        else:
+                            try:
+                                sh_u = get_sheet()
+                                ws_u = sh_u.worksheet("utilizadores")
+                                headers_u = [h.strip().lower() for h in ws_u.row_values(1)]
+                                col_pin_u = headers_u.index('pin') + 1
+                                col_email_u = headers_u.index('email') + 1
+                                emails_col = ws_u.col_values(col_email_u)
+                                linha_u = None
+                                for i, ev in enumerate(emails_col):
+                                    if ev.strip().lower() == email_u.lower():
+                                        linha_u = i + 1
+                                        break
+                                if linha_u:
+                                    h_u, salt_u = hash_pin(novo_pin)
+                                    ws_u.update_cell(linha_u, col_pin_u, f"{h_u}:{salt_u}")
+                                    load_utilizadores.clear()
+                                    st.success(f"✅ PIN de **{row_u.get('nome','')}** atualizado!")
+                                else:
+                                    st.error("❌ Utilizador não encontrado na Sheet.")
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
+
+            if tem_pin:
+                st.markdown("---")
+                if st.button("🗑️ Remover PIN", use_container_width=True):
+                    try:
+                        sh_u = get_sheet()
+                        ws_u = sh_u.worksheet("utilizadores")
+                        headers_u = [h.strip().lower() for h in ws_u.row_values(1)]
+                        col_pin_u = headers_u.index('pin') + 1
+                        col_email_u = headers_u.index('email') + 1
+                        emails_col = ws_u.col_values(col_email_u)
+                        for i, ev in enumerate(emails_col):
+                            if ev.strip().lower() == email_u.lower():
+                                ws_u.update_cell(i + 1, col_pin_u, "")
+                                load_utilizadores.clear()
+                                st.success("✅ PIN removido.")
+                                st.rerun()
+                                break
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
