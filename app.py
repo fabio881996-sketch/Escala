@@ -2650,7 +2650,7 @@ else:
                         df_at = pd.concat([df_at, pd.DataFrame([nova_linha])], ignore_index=True)
 
             pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
-            col_pdf, col_full, _ = st.columns([1, 1.5, 3])
+            col_pdf, col_full, _ = st.columns([1, 1, 3])
             with col_pdf:
                 st.download_button(
                     "📥 Escala do Dia",
@@ -2659,7 +2659,7 @@ else:
                     mime="application/pdf"
                 )
             with col_full:
-                if st.button("📦 Gerar Escala Completa (hoje→)"):
+                if st.button("📋 Escala Completa (hoje→)", use_container_width=True):
                     with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
                         import tempfile, os, io as _io
                         try:
@@ -2730,13 +2730,14 @@ else:
                         if paginas > 0:
                             buf = _io.BytesIO()
                             writer.write(buf)
-                            st.download_button(
-                                f"⬇️ Descarregar ({paginas} dias)",
-                                data=buf.getvalue(),
-                                file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
-                                mime="application/pdf",
-                                key="dl_completa"
-                            )
+                            with col_full:
+                                st.download_button(
+                                    f"⬇️ Descarregar ({paginas} dias)",
+                                    data=buf.getvalue(),
+                                    file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
+                                    mime="application/pdf",
+                                    key="dl_completa"
+                                )
                         else:
                             st.info("Não há escalas disponíveis.")
 
