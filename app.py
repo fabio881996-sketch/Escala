@@ -816,20 +816,38 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
         c.line(x, y-5*mm, x+sum(widths), y-5*mm)
         return y - 5*mm
 
-    def tbl_row(y, vals, widths, fill=False, x=LM, h=5*mm):
+    def tbl_row(y, vals, widths, fill=False, x=LM, h=None):
+        # Calcular altura necessária com wrap
+        c.setFont("Helvetica", 8.5)
+        linhas_por_cel = []
+        for val, w in zip(vals, widths):
+            txt = str(val)
+            max_pts = w - 3*mm
+            words = txt.split(', ')
+            curr, linhas = '', []
+            for word in words:
+                test = (curr + ', ' + word).strip(', ') if curr else word
+                if c.stringWidth(test, "Helvetica", 8.5) < max_pts:
+                    curr = test
+                else:
+                    if curr: linhas.append(curr)
+                    curr = word
+            if curr: linhas.append(curr)
+            linhas_por_cel.append(linhas if linhas else [''])
+        row_h = h if h else max(5*mm, max(len(l) for l in linhas_por_cel) * 5*mm)
         if fill:
             c.setFillColor(FILL_ALT)
-            c.rect(x, y-h, sum(widths), h, fill=1, stroke=0)
+            c.rect(x, y-row_h, sum(widths), row_h, fill=1, stroke=0)
         c.setFillColor(black)
         c.setFont("Helvetica", 8.5)
         xi = x
-        for val, w in zip(vals, widths):
-            txt = str(val)[:28]
-            c.drawCentredString(xi + w/2, y-3.5*mm, txt)
+        for linhas, w in zip(linhas_por_cel, widths):
+            for li, ln in enumerate(linhas):
+                c.drawCentredString(xi + w/2, y-(li*5*mm)-3.5*mm, ln)
             xi += w
         c.setStrokeColor(CINZA_LN)
-        c.line(x, y-h, x+sum(widths), y-h)
-        return y - h
+        c.line(x, y-row_h, x+sum(widths), y-row_h)
+        return y - row_h
 
     def draw_ids_line(y, label, ids, x=LM, w=TW):
         c.setFont("Helvetica-Bold", 8.5)
