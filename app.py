@@ -841,23 +841,23 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         """Desenha barra lateral com IDs e iniciais, começando em y_top."""
         if y_top is None:
             y_top = H - SB_TM
-        # Fundo branco com borda escura
+        # Fundo branco sem borda
         c.setFillColor(white)
-        c.setStrokeColor(HexColor("#333333"))
-        c.setLineWidth(0.5)
-        c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=1)
-        # Título EFETIVO — fundo cinza escuro
-        c.setFillColor(HexColor("#333333"))
+        c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=0)
+        # Título EFETIVO — fundo branco, texto escuro (invertido)
+        c.setFillColor(white)
         c.rect(SB_X, y_top - 8*mm, SB_W, 8*mm, fill=1, stroke=0)
-        c.setFillColor(white)
+        c.setFillColor(HexColor("#333333"))
         c.setFont("Helvetica-Bold", 6.5)
         c.drawCentredString(SB_X + SB_W/2, y_top - 5*mm, "EFETIVO")
+        c.setStrokeColor(HexColor("#333333"))
+        c.setLineWidth(0.4)
+        c.line(SB_X, y_top - 8*mm, SB_X + SB_W, y_top - 8*mm)
         # IDs e iniciais — texto escuro sobre fundo branco
         linha_h = min(5*mm, (y_top - SB_TM - 10*mm) / max(len(todos_ids), 1))
         y_sb = y_top - 10*mm
         for idx_sb, mid in enumerate(todos_ids):
             ini = _iniciais(mid)
-            # Linhas alternadas cinza muito claro
             if idx_sb % 2 == 0:
                 c.setFillColor(HexColor("#f5f5f5"))
                 c.rect(SB_X, y_sb - linha_h + 1*mm, SB_W, linha_h, fill=1, stroke=0)
