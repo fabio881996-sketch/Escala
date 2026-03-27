@@ -2763,27 +2763,9 @@ else:
             df_remu, df_res = filtrar_secao(["remu", "grat"],                            df_res)
             df_folga,df_res = filtrar_secao(["folga"],                                   df_res)
             df_outros       = df_res
-            # Separar Patrulha Ocorrências das outras patrulhas
             df_pat_ocorr, df_pat_outras = filtrar_secao(["ocorr"], df_pat)
 
-            mostrar_secao("Comando e Administrativos", df_cmd)
-            mostrar_secao("Atendimento",               df_aten,       esconder_servico=True)
-            mostrar_secao("Apoio ao Atendimento",      df_apoi,       esconder_servico=True)
-            mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
-            mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
-            mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
-
-            # Remunerados
-            if not df_remu.empty:
-                st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
-                cols_grp_r = ['horário'] + [c for c in ['observações'] if c in df_remu.columns]
-                ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
-                              .apply(lambda x: ', '.join(x)).reset_index()
-                col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
-                ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares', 'horário': 'Horário', 'observações': 'Observações'})
-                st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
-
-            # Ausências e Folgas em duas colunas lado a lado
+            # 1. Ausências e ADM lado a lado no topo (igual ao PDF)
             col_aus, col_adm = st.columns(2)
             with col_aus:
                 grupos_aus = {}
@@ -2807,6 +2789,60 @@ else:
                 if grupos_adm:
                     st.markdown(_sec_header("Outras Situações / ADM"), unsafe_allow_html=True)
                     st.markdown(_render_ids_linha(grupos_adm), unsafe_allow_html=True)
+
+            # 2. Atendimento e Apoio
+            mostrar_secao("Atendimento",               df_aten,       esconder_servico=True)
+            mostrar_secao("Apoio ao Atendimento",      df_apoi,       esconder_servico=True)
+
+            # 3. Patrulhas
+            mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
+            mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
+
+            # 4. Outros Serviços
+            mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
+
+            # 5. Remunerados
+            if not df_remu.empty:
+                st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
+                cols_grp_r = ['horário'] + [c for c in ['observações'] if c in df_remu.columns]
+                ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
+                              .apply(lambda x: ', '.join(x)).reset_index()
+                col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
+                ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares', 'horário': 'Horário', 'observações': 'Observações'})
+                st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
+
+            # 6. Observações agrupadas (obs iguais não duplicadas)
+            obs_por_ind = {}
+            for df_sec_obs in [df_pat, df_aten, df_apoi, df_outros]:
+                if df_sec_obs.empty or 'observações' not in df_sec_obs.columns:
+                    continue
+                for _, row in df_sec_obs.iterrows():
+                    obs = str(row.get('observações', '')).strip()
+                    if not obs or obs == 'nan':
+                        continue
+                    ind = str(row.get('indicativo rádio', '')).strip() if 'indicativo rádio' in df_sec_obs.columns else ''
+                    serv = str(row.get('serviço', '')).strip()
+                    hor  = str(row.get('horário', '')).strip()
+                    label = ind if ind else serv
+                    if label not in obs_por_ind:
+                        obs_por_ind[label] = {}
+                    if obs not in obs_por_ind[label]:
+                        obs_por_ind[label][obs] = set()
+                    obs_por_ind[label][obs].add(hor)
+
+            obs_lista = []
+            for label, obs_map in obs_por_ind.items():
+                obs_com = {k: v for k, v in obs_map.items() if k}
+                obs_sem = {k: v for k, v in obs_map.items() if not k}
+                tem_multiplas = len(obs_com) > 1 or (obs_com and obs_sem)
+                for obs_txt, hors in obs_com.items():
+                    lbl = f"{label} ({', '.join(sorted(hors))})" if tem_multiplas else label
+                    obs_lista.append((lbl, obs_txt))
+
+            if obs_lista:
+                st.markdown(_sec_header("Observações"), unsafe_allow_html=True)
+                obs_df = pd.DataFrame(obs_lista, columns=['Indicativo / Serviço', 'Detalhe'])
+                st.markdown(_render_tabela(obs_df), unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
