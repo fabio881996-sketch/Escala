@@ -3455,6 +3455,7 @@ else:
             st.stop()
 
         # ── Processar confirmação (executar antes dos widgets) ──
+        st.write(f"DEBUG confirmar={st.session_state.get('confirmar_escala')} multi={'escala_gerada_multi' in st.session_state}")
         if st.session_state.get('confirmar_escala', False) and 'escala_gerada_multi' in st.session_state:
             st.session_state['confirmar_escala'] = False
             dados_multi_c = st.session_state['escala_gerada_multi']
