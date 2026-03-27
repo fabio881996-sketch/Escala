@@ -1261,73 +1261,81 @@ def _cel_expandivel(val: str, limite: int = 60) -> str:
     """Renderiza texto diretamente sem truncar."""
     return str(val).replace('\n', '<br>')
 
-def _render_tabela(df: pd.DataFrame, expandivel: bool = False) -> str:
-    """Tabela HTML com wrap. Se expandivel=True, texto longo fica colapsado com 'ver mais'."""
-    def _cel(val, limite=60):
-        txt = str(val).replace('\n', '<br>')
-        if not expandivel or len(str(val)) <= limite:
-            return txt
-        resumo = str(val)[:limite].rstrip() + "…"
-        resumo_esc = resumo.replace('"','&quot;').replace("'","&#39;")
-        txt_esc = str(val).replace('"','&quot;').replace("'","&#39;").replace('\n','<br>')
-        return (f"<details style='cursor:pointer'>"
-                f"<summary style='list-style:none;outline:none;color:#1E293B'>{resumo_esc}"
-                f"<span style='color:#1E3A8A;font-size:0.75rem;margin-left:4px'>ver mais</span></summary>"
-                f"<span style='color:#1E293B'>{txt_esc}</span></details>")
+AZUL = "#14285f"
+AZUL_MED = "#cdd7f2"
+AZUL_CLARO = "#ebf1ff"
 
-    th_s = "background:#1E3A8A;color:white;padding:7px 10px;text-align:left;font-size:0.8rem;white-space:nowrap;"
-    td_s = "padding:6px 10px;font-size:0.82rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #E2E8F0;word-break:break-word;"
-    td_a = td_s + "background:#F8FAFC;"
-    html = "<div style='overflow-x:auto'><table style='width:100%;border-collapse:collapse;'><thead><tr>"
+def _sec_header(titulo):
+    return f"""<div style='background:{AZUL};color:white;padding:5px 10px;
+        font-size:0.8rem;font-weight:700;letter-spacing:0.05em;
+        margin-top:10px;margin-bottom:0;border-radius:4px 4px 0 0'>
+        {titulo.upper()}</div>"""
+
+def _render_tabela(df: pd.DataFrame, expandivel: bool = False) -> str:
+    def _cel(val):
+        txt = str(val).replace('\n', '<br>')
+        return txt
+
+    th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;white-space:nowrap;border-bottom:2px solid {AZUL};"
+    td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:top;border-bottom:1px solid #dde6f7;word-break:break-word;"
+    td_a = td_s + f"background:{AZUL_CLARO};"
+    html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
+    html += "<table style='width:100%;border-collapse:collapse;'><thead><tr>"
     for col in df.columns:
-        extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
-        html += f"<th style='{th_s}{extra}'>{str(col).capitalize()}</th>"
+        html += f"<th style='{th_s}'>{str(col).capitalize()}</th>"
     html += "</tr></thead><tbody>"
     for i, (_, row) in enumerate(df.iterrows()):
         td = td_a if i % 2 == 0 else td_s
         html += "<tr>"
-        for col, val in zip(df.columns, row):
-            extra = " max-width:180px;" if 'observa' in str(col).lower() else ""
-            html += f"<td style='{td}{extra}'>{_cel(str(val))}</td>"
+        for val in row:
+            html += f"<td style='{td}'>{_cel(str(val))}</td>"
         html += "</tr>"
     html += "</tbody></table></div>"
     return html
 
+def _render_ids_linha(grupos: dict) -> str:
+    """Renderiza ausências/ADM em formato compacto: Tipo: id1, id2"""
+    html = f"<div style='border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;padding:6px 10px;margin-bottom:2px;background:white;font-size:0.8rem;'>"
+    for serv, ids in grupos.items():
+        html += f"<div style='margin-bottom:3px'><span style='color:{AZUL};font-weight:700'>{serv}:</span> <span style='color:#1E293B'>{', '.join(ids)}</span></div>"
+    html += "</div>"
+    return html
+
 def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = False, excluir_cols: list = [], esconder_servico: bool = False):
-    """Renderiza uma secção da escala num expander."""
+    """Renderiza uma secção da escala com estilo próximo do PDF."""
     if df_sec.empty:
         return
-    with st.expander(f"🔹 {titulo.upper()}", expanded=True):
-        if mostrar_extras:
-            cols_ag = ['serviço', 'horário']
-            for col in ['indicativo rádio', 'rádio', 'viatura', 'giro']:
-                if col in df_sec.columns and col not in excluir_cols:
-                    cols_ag.append(col)
-            agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
-            if 'observações' in df_sec.columns:
-                agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
-            ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
-            col_order = ['serviço', 'horário', 'id_disp']
-            for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
-                if col in ag.columns and col not in excluir_cols:
-                    col_order.append(col)
-            ag = ag[col_order]
-        else:
-            ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
-                       .apply(lambda x: ', '.join(x)).reset_index()
-        ag = ag.rename(columns={
-            'id_disp': 'Militares',
-            'serviço': 'Serviço',
-            'horário': 'Horário',
-            'indicativo rádio': 'Indicativo',
-            'rádio': 'Rádio',
-            'viatura': 'Viatura',
-            'giro': 'Giro',
-            'observações': 'Observações',
-        })
-        if esconder_servico and 'Serviço' in ag.columns:
-            ag = ag.drop(columns=['Serviço'])
-        st.markdown(_render_tabela(ag), unsafe_allow_html=True)
+    st.markdown(_sec_header(titulo), unsafe_allow_html=True)
+    if mostrar_extras:
+        cols_ag = ['serviço', 'horário']
+        for col in ['indicativo rádio', 'rádio', 'viatura', 'giro']:
+            if col in df_sec.columns and col not in excluir_cols:
+                cols_ag.append(col)
+        agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
+        if 'observações' in df_sec.columns:
+            agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
+        ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
+        col_order = ['serviço', 'horário', 'id_disp']
+        for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
+            if col in ag.columns and col not in excluir_cols:
+                col_order.append(col)
+        ag = ag[col_order]
+    else:
+        ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
+                   .apply(lambda x: ', '.join(x)).reset_index()
+    ag = ag.rename(columns={
+        'id_disp': 'Militares',
+        'serviço': 'Serviço',
+        'horário': 'Horário',
+        'indicativo rádio': 'Indicativo',
+        'rádio': 'Rádio',
+        'viatura': 'Viatura',
+        'giro': 'Giro',
+        'observações': 'Observações',
+    })
+    if esconder_servico and 'Serviço' in ag.columns:
+        ag = ag.drop(columns=['Serviço'])
+    st.markdown(_render_tabela(ag), unsafe_allow_html=True)
 
 # ============================================================
 # 7. LOGIN
@@ -2764,26 +2772,41 @@ else:
             mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
             mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
             mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
-            # Remunerados: horário | militares | observações (sem rádio/indicativo)
-            if not df_remu.empty:
-                with st.expander("🔹 REMUNERADOS", expanded=True):
-                    cols_grp_r = ['horário'] + [c for c in ['observações'] if c in df_remu.columns]
-                    ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
-                                  .apply(lambda x: ', '.join(x)).reset_index()
-                    col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
-                    ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares', 'horário': 'Horário', 'serviço': 'Serviço', 'observações': 'Observações'})
-                    st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
-            if not df_folga.empty:
-                with st.expander("🔹 FOLGA", expanded=True):
-                    ag_f = df_folga.groupby('serviço', sort=False)['id_disp'] \
-                                   .apply(lambda x: ', '.join(x)).reset_index()
-                    st.markdown(_render_tabela(ag_f.rename(columns={'id_disp': 'Militares', 'serviço': 'Serviço'})), unsafe_allow_html=True)
 
-            if not df_aus.empty:
-                with st.expander("🔹 AUSENTES", expanded=True):
-                    ag = df_aus.groupby('serviço', sort=False)['id_disp'] \
-                               .apply(lambda x: ', '.join(x)).reset_index()
-                    st.markdown(_render_tabela(ag.rename(columns={'id_disp': 'Militares', 'serviço': 'Serviço'})), unsafe_allow_html=True)
+            # Remunerados
+            if not df_remu.empty:
+                st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
+                cols_grp_r = ['horário'] + [c for c in ['observações'] if c in df_remu.columns]
+                ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
+                              .apply(lambda x: ', '.join(x)).reset_index()
+                col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
+                ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares', 'horário': 'Horário', 'observações': 'Observações'})
+                st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
+
+            # Ausências e Folgas em duas colunas lado a lado
+            col_aus, col_adm = st.columns(2)
+            with col_aus:
+                grupos_aus = {}
+                for _, row in df_aus.iterrows():
+                    serv = str(row.get('serviço', '')).strip()
+                    mid  = str(row.get('id_disp', row.get('id', ''))).strip()
+                    grupos_aus.setdefault(serv, []).append(mid)
+                for _, row in df_folga.iterrows():
+                    serv = str(row.get('serviço', '')).strip()
+                    mid  = str(row.get('id_disp', row.get('id', ''))).strip()
+                    grupos_aus.setdefault(serv, []).append(mid)
+                if grupos_aus:
+                    st.markdown(_sec_header("Ausências, Folgas e Licenças"), unsafe_allow_html=True)
+                    st.markdown(_render_ids_linha(grupos_aus), unsafe_allow_html=True)
+            with col_adm:
+                grupos_adm = {}
+                for _, row in df_cmd.iterrows():
+                    serv = str(row.get('serviço', '')).strip()
+                    mid  = str(row.get('id_disp', row.get('id', ''))).strip()
+                    grupos_adm.setdefault(serv, []).append(mid)
+                if grupos_adm:
+                    st.markdown(_sec_header("Outras Situações / ADM"), unsafe_allow_html=True)
+                    st.markdown(_render_ids_linha(grupos_adm), unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
