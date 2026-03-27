@@ -775,6 +775,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     if df_util is None:
         df_util = pd.DataFrame()
+
+    def fmt_id(txt):
         t = str(txt)
         if "\U0001f504" in t:
             parts = t.split("\U0001f504")
