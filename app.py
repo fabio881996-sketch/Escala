@@ -804,11 +804,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     df_ocorr = df_pat[df_pat["servico_col"].str.contains(r"ocorr", na=False)].copy()
     df_outras_pat = df_pat[~df_pat["servico_col"].str.contains(r"ocorr", na=False)].copy()
 
-    AZUL_ESC  = HexColor("#14285f")
-    AZUL_MED  = HexColor("#cdd7f2")
-    FILL_ALT  = HexColor("#ebf1ff")
-    CINZA_LN  = HexColor("#c0c0c0")
-    CINZA_TXT = HexColor("#787878")
+    AZUL_ESC  = HexColor("#222222")   # títulos — cinza muito escuro
+    AZUL_MED  = HexColor("#d8d8d8")   # cabeçalho tabela — cinza claro
+    FILL_ALT  = HexColor("#f2f2f2")   # linhas alternadas — cinza muito claro
+    CINZA_LN  = HexColor("#aaaaaa")   # linhas de separação
+    CINZA_TXT = HexColor("#555555")   # texto secundário
 
     W, H = A4
     buf = io.BytesIO()
@@ -841,13 +841,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         """Desenha barra lateral com IDs e iniciais, começando em y_top."""
         if y_top is None:
             y_top = H - SB_TM
-        c.setFillColor(AZUL_ESC)
+        CINZA_BARRA = HexColor("#333333")
+        c.setFillColor(CINZA_BARRA)
         c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=0)
         # Título EFETIVO no topo da barra
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 6.5)
         c.drawCentredString(SB_X + SB_W/2, y_top - 5*mm, "EFETIVO")
-        c.setStrokeColor(HexColor("#2a4080"))
+        c.setStrokeColor(HexColor("#666666"))
         c.setLineWidth(0.3)
         c.line(SB_X + 1*mm, y_top - 7*mm, SB_X + SB_W - 1*mm, y_top - 7*mm)
         # IDs e iniciais
@@ -860,7 +861,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.drawString(SB_X + 1.5*mm, y_sb, str(mid))
             c.setFont("Helvetica", 6)
             c.drawString(SB_X + 7*mm, y_sb, ini)
-            c.setStrokeColor(HexColor("#2a4080"))
+            c.setStrokeColor(HexColor("#666666"))
             c.setLineWidth(0.2)
             c.line(SB_X + 1*mm, y_sb - 1*mm, SB_X + SB_W - 1*mm, y_sb - 1*mm)
             y_sb -= linha_h
@@ -883,10 +884,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         box_h = 20*mm
         header_w = TW - box_w - 2*mm
 
-        # Cabeçalho azul — só à esquerda
-        c.setFillColor(AZUL_ESC)
-        c.rect(LM, y-box_h, header_w, box_h, fill=1, stroke=0)
-        c.setFillColor(white)
+        # Cabeçalho sem fundo — borda simples, texto a preto
+        c.setStrokeColor(black)
+        c.setLineWidth(0.8)
+        c.rect(LM, y-box_h, header_w, box_h, fill=0, stroke=1)
+        c.setFillColor(black)
         c.setFont("Helvetica-Bold", 11)
         c.drawCentredString(LM + header_w/2, y-8*mm, "POSTO TERRITORIAL DE VILA NOVA DE FAMALICÃO")
         try:
@@ -901,13 +903,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.setFont("Helvetica-Bold", 10)
         c.drawCentredString(LM + header_w/2, y-15*mm, titulo)
 
-        # Caixa de assinatura — canto superior direito, mesma altura
+        # Caixa de assinatura — canto superior direito
         box_x = LM + header_w + 2*mm
         box_y = y - box_h
-        c.setStrokeColor(AZUL_ESC)
-        c.setLineWidth(1)
+        c.setStrokeColor(black)
+        c.setLineWidth(0.8)
         c.rect(box_x, box_y, box_w, box_h, fill=0, stroke=1)
-        c.setFillColor(AZUL_ESC)
+        c.setFillColor(black)
         c.setFont("Helvetica-Bold", 7)
         c.drawCentredString(box_x + box_w/2, box_y + box_h - 4*mm, "O COMANDANTE")
         c.setFillColor(CINZA_TXT)
@@ -1230,10 +1232,15 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             i = j
 
         # Desenhar linhas
-        obs_desenhadas = set()  # índices onde a obs já foi desenhada
+        obs_desenhadas = set()
+        y_grupo = {}  # idx_inicio -> y no momento de desenhar a primeira linha
         for idx, r in enumerate(linhas_rem):
             row_h = alturas[idx]
             if y - row_h < 20*mm: y = new_page()
+
+            # Guardar y do início do grupo
+            if idx in obs_spans:
+                y_grupo[idx] = y
 
             # Fundo da linha (horário + militares)
             if fill:
@@ -1242,7 +1249,6 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
-
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
             c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(r['hor']))
             for li, id_l in enumerate(ids_lines):
@@ -1253,21 +1259,22 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
 
-            # Célula obs — desenhar só na primeira linha do grupo
+            # Célula obs — desenhar só na primeira linha do grupo, com y_inicio
             if idx in obs_spans and idx not in obs_desenhadas:
                 obs_txt, span_count, span_h = obs_spans[idx]
                 obs_desenhadas.add(idx)
+                y_ini = y_grupo[idx]
                 obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
-                # Fundo da célula obs para toda a altura do grupo
-                c.setFillColor(FILL_ALT if fill else white)
-                c.rect(LM+wids_rm[0]+wids_rm[1], y-span_h, wids_rm[2], span_h, fill=1, stroke=0)
+                # Fundo branco da célula obs para toda a altura do grupo
+                c.setFillColor(white)
+                c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
                 # Texto
                 c.setFillColor(black)
                 for li, obs_l in enumerate(obs_lines_span):
-                    c.drawString(x_obs_start, y-(li*5*mm)-3.5*mm, obs_l)
+                    c.drawString(x_obs_start, y_ini-(li*5*mm)-3.5*mm, obs_l)
                 # Borda da célula obs fundida
                 c.setStrokeColor(CINZA_LN)
-                c.rect(LM+wids_rm[0]+wids_rm[1], y-span_h, wids_rm[2], span_h, fill=0, stroke=1)
+                c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
 
             y -= row_h
             fill = not fill
