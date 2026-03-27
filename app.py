@@ -2801,30 +2801,21 @@ else:
             # 4. Outros Serviços
             mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
 
-            # 5. Remunerados — agrupar por observação igual
+            # 5. Remunerados — obs igual não duplicar, linhas por horário
             if not df_remu.empty:
                 st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
-                # Agrupar: obs igual → juntar horários e militares
-                obs_rem = {}  # obs -> {hors: [], ids: []}
-                for _, row in df_remu.iterrows():
-                    obs = str(row.get('observações', '')).strip() if 'observações' in df_remu.columns else ''
-                    if obs == 'nan': obs = ''
-                    hor = str(row.get('horário', '')).strip()
-                    mid = str(row.get('id_disp', row.get('id', ''))).strip()
-                    key = obs
-                    if key not in obs_rem:
-                        obs_rem[key] = {'hors': [], 'ids': []}
-                    if hor not in obs_rem[key]['hors']:
-                        obs_rem[key]['hors'].append(hor)
-                    if mid not in obs_rem[key]['ids']:
-                        obs_rem[key]['ids'].append(mid)
+                # Agrupar por horário primeiro
                 rows_rem = []
-                for obs, info in obs_rem.items():
-                    rows_rem.append({
-                        'Horário': ', '.join(info['hors']),
-                        'Militares': ', '.join(info['ids']),
-                        'Observação': obs,
-                    })
+                obs_vista = {}  # obs -> índice da primeira linha com essa obs
+                for hor, grp in df_remu.groupby('horário', sort=False):
+                    ids = ', '.join(grp['id_disp'].tolist())
+                    obs = str(grp['observações'].iloc[0]).strip() if 'observações' in grp.columns else ''
+                    if obs == 'nan': obs = ''
+                    # Se obs já apareceu, não repetir
+                    obs_mostrar = '' if obs in obs_vista else obs
+                    if obs and obs not in obs_vista:
+                        obs_vista[obs] = len(rows_rem)
+                    rows_rem.append({'Horário': hor, 'Militares': ids, 'Observação': obs_mostrar})
                 ag_r = pd.DataFrame(rows_rem)
                 st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
 
