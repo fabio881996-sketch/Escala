@@ -2801,23 +2801,45 @@ else:
             # 4. Outros Serviços
             mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
 
-            # 5. Remunerados — obs igual não duplicar, linhas por horário
+            # 5. Remunerados — obs igual com rowspan (células fundidas)
             if not df_remu.empty:
                 st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
-                # Agrupar por horário primeiro
+                # Preparar linhas por horário
                 rows_rem = []
-                obs_vista = {}  # obs -> índice da primeira linha com essa obs
                 for hor, grp in df_remu.groupby('horário', sort=False):
                     ids = ', '.join(grp['id_disp'].tolist())
                     obs = str(grp['observações'].iloc[0]).strip() if 'observações' in grp.columns else ''
                     if obs == 'nan': obs = ''
-                    # Se obs já apareceu, não repetir
-                    obs_mostrar = '' if obs in obs_vista else obs
-                    if obs and obs not in obs_vista:
-                        obs_vista[obs] = len(rows_rem)
-                    rows_rem.append({'Horário': hor, 'Militares': ids, 'Observação': obs_mostrar})
-                ag_r = pd.DataFrame(rows_rem)
-                st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
+                    rows_rem.append({'horário': hor, 'militares': ids, 'obs': obs})
+
+                # Calcular rowspans por obs
+                obs_spans = {}
+                for i, r in enumerate(rows_rem):
+                    obs = r['obs']
+                    if obs not in obs_spans:
+                        obs_spans[obs] = {'start': i, 'count': 0}
+                    obs_spans[obs]['count'] += 1
+                obs_first = {v['start']: (k, v['count']) for k, v in obs_spans.items()}
+
+                th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;border-bottom:2px solid {AZUL};"
+                td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-bottom:1px solid #dde6f7;"
+                td_a = td_s + f"background:{AZUL_CLARO};"
+
+                html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
+                html += "<table style='width:100%;border-collapse:collapse;'><thead><tr>"
+                html += f"<th style='{th_s}'>Horário</th><th style='{th_s}'>Militares</th><th style='{th_s}'>Observação</th>"
+                html += "</tr></thead><tbody>"
+                for i, r in enumerate(rows_rem):
+                    td = td_a if i % 2 == 0 else td_s
+                    html += "<tr>"
+                    html += f"<td style='{td}'>{r['horário']}</td>"
+                    html += f"<td style='{td}'>{r['militares']}</td>"
+                    if i in obs_first:
+                        obs_txt, span = obs_first[i]
+                        html += f"<td style='{td}border-left:2px solid {AZUL_MED};' rowspan='{span}'>{obs_txt}</td>"
+                    html += "</tr>"
+                html += "</tbody></table></div>"
+                st.markdown(html, unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
