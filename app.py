@@ -837,21 +837,22 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         if str(r).strip() and str(r).strip() != 'nan'
     ), key=lambda x: int(x) if x.isdigit() else 0)
 
-    def draw_sidebar():
-        """Desenha barra lateral com IDs e iniciais."""
+    def draw_sidebar(y_top=None):
+        """Desenha barra lateral com IDs e iniciais, começando em y_top."""
+        if y_top is None:
+            y_top = H - SB_TM
         c.setFillColor(AZUL_ESC)
-        c.rect(SB_X, SB_TM, SB_W, H - SB_TM*2, fill=1, stroke=0)
-        # Título EFETIVO no topo
+        c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=0)
+        # Título EFETIVO no topo da barra
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 6.5)
-        c.drawCentredString(SB_X + SB_W/2, H - SB_TM - 5*mm, "EFETIVO")
-        # Linha separadora
+        c.drawCentredString(SB_X + SB_W/2, y_top - 5*mm, "EFETIVO")
         c.setStrokeColor(HexColor("#2a4080"))
         c.setLineWidth(0.3)
-        c.line(SB_X + 1*mm, H - SB_TM - 7*mm, SB_X + SB_W - 1*mm, H - SB_TM - 7*mm)
+        c.line(SB_X + 1*mm, y_top - 7*mm, SB_X + SB_W - 1*mm, y_top - 7*mm)
         # IDs e iniciais
-        linha_h = min(5*mm, (H - SB_TM*2 - 10*mm) / max(len(todos_ids), 1))
-        y_sb = H - SB_TM - 10*mm
+        linha_h = min(5*mm, (y_top - SB_TM - 10*mm) / max(len(todos_ids), 1))
+        y_sb = y_top - 10*mm
         for mid in todos_ids:
             ini = _iniciais(mid)
             c.setFillColor(white)
@@ -872,9 +873,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     TW = W - LM - RM  # largura total
 
     def new_page():
-        draw_sidebar()
+        draw_sidebar(y_top=H - SB_TM)
         c.showPage()
-        draw_sidebar()
+        draw_sidebar(y_top=H - SB_TM)
         return H - 10*mm
 
     def draw_header(y):
@@ -986,9 +987,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # ======= INÍCIO =======
     y = H - 10*mm
-    draw_sidebar()
     y = draw_header(y)
     y -= 2*mm
+    draw_sidebar(y_top=y)  # barra lateral começa alinhada com as ausências
 
     # ---- AUSÊNCIAS e ADM lado a lado ----
     CW2 = TW/2 - 1*mm   # largura de cada coluna
@@ -1115,7 +1116,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_ocorr.empty:
         y = sec_title(y, "Patrulha Ocorrências")
         cols_oc = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
-        wids_oc = [18*mm, 35*mm, 42*mm, 22*mm, 22*mm, 51*mm]
+        wids_oc = [16*mm, 32*mm, 40*mm, 20*mm, 20*mm, TW-128*mm]
         y = tbl_header(y, cols_oc, wids_oc)
         fill = False
         for hor, grp in df_ocorr.groupby("horário", sort=False):
@@ -1133,7 +1134,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_outras_pat.empty:
         y = sec_title(y, "Patrulhas e Policiamento")
         cols_pp = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura", "Giro"]
-        wids_pp = [18*mm, 35*mm, 37*mm, 22*mm, 22*mm, 36*mm, 20*mm]
+        wids_pp = [16*mm, 32*mm, 34*mm, 20*mm, 20*mm, 36*mm, TW-158*mm]
         y = tbl_header(y, cols_pp, wids_pp)
         fill = False
         for hor, grp in df_outras_pat.groupby("horário", sort=False):
@@ -1152,7 +1153,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_outros.empty:
         y = sec_title(y, "Outros Serviços")
         cols_ot = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
-        wids_ot = [18*mm, 35*mm, 42*mm, 22*mm, 22*mm, 51*mm]
+        wids_ot = [16*mm, 32*mm, 40*mm, 20*mm, 20*mm, TW-128*mm]
         y = tbl_header(y, cols_ot, wids_ot)
         fill = False
         for (hor, serv), grp in df_outros.groupby(["horário", "serviço"], sort=False):
@@ -1221,42 +1222,45 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             i = j
 
         # Desenhar linhas
+        obs_desenhadas = set()  # índices onde a obs já foi desenhada
         for idx, r in enumerate(linhas_rem):
             row_h = alturas[idx]
             if y - row_h < 20*mm: y = new_page()
+
+            # Fundo da linha (horário + militares)
             if fill:
                 c.setFillColor(FILL_ALT)
-                c.rect(LM, y-row_h, TW, row_h, fill=1, stroke=0)
+                c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=1, stroke=0)
+
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
 
-            obs_lines = wrap_text(r['obs'], max_pts_rm) if r['obs'] else [""]
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
-
             c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(r['hor']))
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-(li*5*mm)-3.5*mm, id_l)
 
-            # Célula obs — só na primeira linha do grupo, com altura total do grupo
-            if idx in obs_spans:
-                obs_txt, span_count, span_h = obs_spans[idx]
-                obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
-                # Fundo para toda a célula obs fundida
-                c.setFillColor(FILL_ALT if fill else white)
-                # Texto centrado verticalmente na célula fundida
-                y_obs_centro = y - span_h/2 + 2*mm
-                for li, obs_l in enumerate(obs_lines_span):
-                    c.setFillColor(black)
-                    c.drawString(x_obs_start, y-(li*5*mm)-3.5*mm, obs_l)
-                # Borda direita da célula obs — linha vertical direita
-                c.setStrokeColor(CINZA_LN)
-                c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-span_h)
-                c.line(LM+TW, y, LM+TW, y-span_h)
-                c.line(LM+wids_rm[0]+wids_rm[1], y-span_h, LM+TW, y-span_h)
-
+            # Borda horário e militares
             c.setStrokeColor(CINZA_LN)
             c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
+
+            # Célula obs — desenhar só na primeira linha do grupo
+            if idx in obs_spans and idx not in obs_desenhadas:
+                obs_txt, span_count, span_h = obs_spans[idx]
+                obs_desenhadas.add(idx)
+                obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
+                # Fundo da célula obs para toda a altura do grupo
+                c.setFillColor(FILL_ALT if fill else white)
+                c.rect(LM+wids_rm[0]+wids_rm[1], y-span_h, wids_rm[2], span_h, fill=1, stroke=0)
+                # Texto
+                c.setFillColor(black)
+                for li, obs_l in enumerate(obs_lines_span):
+                    c.drawString(x_obs_start, y-(li*5*mm)-3.5*mm, obs_l)
+                # Borda da célula obs fundida
+                c.setStrokeColor(CINZA_LN)
+                c.rect(LM+wids_rm[0]+wids_rm[1], y-span_h, wids_rm[2], span_h, fill=0, stroke=1)
+
             y -= row_h
             fill = not fill
         y -= 2*mm
