@@ -3720,34 +3720,34 @@ else:
                 except Exception as e:
                     st.error(f"Erro ao gerar escala: {e}")
 
-            # ── Mostrar resultado multi-dia (fora do bloco gerar) ──
-            if 'escala_gerada_multi' in st.session_state:
-                dados_multi = st.session_state['escala_gerada_multi']
-                resultados = dados_multi['resultados']
-                ordem_headers = dados_multi['ordem_headers']
+        # ── Mostrar resultado multi-dia (fora do bloco gerar) ──
+        if 'escala_gerada_multi' in st.session_state:
+            dados_multi = st.session_state['escala_gerada_multi']
+            resultados = dados_multi['resultados']
+            ordem_headers = dados_multi['ordem_headers']
 
-                total_escalados = sum(len(r['escalados']) for r in resultados)
-                st.success(f"✅ {len(resultados)} dia(s) gerados — {total_escalados} militares escalados no total!")
-                st.markdown("---")
+            total_escalados = sum(len(r['escalados']) for r in resultados)
+            st.success(f"✅ {len(resultados)} dia(s) gerados — {total_escalados} militares escalados no total!")
+            st.markdown("---")
 
-                for res in resultados:
-                    data_str = res['data'].strftime('%d/%m/%Y')
-                    escalados_r = res['escalados']
-                    disponiveis_r = res['disponiveis']
-                    with st.expander(f"📅 {data_str} — {len(escalados_r)} escalados", expanded=len(resultados)==1):
-                        if escalados_r:
-                            df_res = pd.DataFrame(escalados_r, columns=['ID', 'Serviço', 'Horário'])
-                            df_res['Nome'] = df_res['ID'].apply(lambda x: get_nome_curto(df_util, x))
-                            st.dataframe(df_res[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
-                        if disponiveis_r:
-                            st.markdown("**👥 Militares de sobra:**")
-                            sobra = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in disponiveis_r]
-                            st.dataframe(pd.DataFrame(sobra), use_container_width=True, hide_index=True)
+            for res in resultados:
+                data_str = res['data'].strftime('%d/%m/%Y')
+                escalados_r = res['escalados']
+                disponiveis_r = res['disponiveis']
+                with st.expander(f"📅 {data_str} — {len(escalados_r)} escalados", expanded=len(resultados)==1):
+                    if escalados_r:
+                        df_res = pd.DataFrame(escalados_r, columns=['ID', 'Serviço', 'Horário'])
+                        df_res['Nome'] = df_res['ID'].apply(lambda x: get_nome_curto(df_util, x))
+                        st.dataframe(df_res[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
+                    if disponiveis_r:
+                        st.markdown("**👥 Militares de sobra:**")
+                        sobra = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in disponiveis_r]
+                        st.dataframe(pd.DataFrame(sobra), use_container_width=True, hide_index=True)
 
-                st.markdown("---")
-                if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
-                    st.session_state['confirmar_escala'] = True
-                    st.rerun()
+            st.markdown("---")
+            if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
+                st.session_state['confirmar_escala'] = True
+                st.rerun()
 
         if st.session_state.pop('escala_ok', False):
             st.success("✅ Escala escrita e ordem atualizada!")
