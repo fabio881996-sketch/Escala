@@ -2605,7 +2605,7 @@ else:
                 st.info("Não existem dados para esta data.")
             else:
                 df_at = df_dia.copy()
-            df_at['id_disp'] = df_at['id'].astype(str)
+                df_at['id_disp'] = df_at['id'].astype(str)
 
             # Aplicar trocas aprovadas (excluindo remunerados e matar remunerado)
             if not df_trocas.empty:
