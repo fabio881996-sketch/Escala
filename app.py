@@ -919,23 +919,27 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         return y - box_h - 2*mm
 
     def sec_title(y, label, x=LM, w=TW):
-        c.setFillColor(AZUL_ESC)
-        c.rect(x, y-5.5*mm, w, 5.5*mm, fill=1, stroke=0)
-        c.setFillColor(white)
-        c.setFont("Helvetica-Bold", 10)
+        # Borda simples com texto a negrito — sem fundo escuro (poupa toner)
+        c.setStrokeColor(black)
+        c.setLineWidth(0.8)
+        c.rect(x, y-5.5*mm, w, 5.5*mm, fill=0, stroke=1)
+        c.setFillColor(black)
+        c.setFont("Helvetica-Bold", 9)
         c.drawString(x+2*mm, y-4*mm, f"  {label.upper()}")
         return y - 6.5*mm
 
     def tbl_header(y, cols, widths, x=LM):
-        c.setFillColor(AZUL_MED)
+        # Fundo cinza claro com texto escuro
+        c.setFillColor(HexColor("#e0e0e0"))
         c.rect(x, y-5*mm, sum(widths), 5*mm, fill=1, stroke=0)
-        c.setFillColor(HexColor("#0f235a"))
+        c.setFillColor(black)
         c.setFont("Helvetica-Bold", 8.5)
         xi = x
         for col, w in zip(cols, widths):
             c.drawCentredString(xi + w/2, y-3.5*mm, col)
             xi += w
-        c.setStrokeColor(CINZA_LN)
+        c.setStrokeColor(black)
+        c.setLineWidth(0.5)
         c.line(x, y-5*mm, x+sum(widths), y-5*mm)
         return y - 5*mm
 
@@ -1116,7 +1120,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_ocorr.empty:
         y = sec_title(y, "Patrulha Ocorrências")
         cols_oc = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
-        wids_oc = [16*mm, 32*mm, 40*mm, 20*mm, 20*mm, TW-128*mm]
+        _w = TW - 16*mm - 32*mm - 40*mm
+        wids_oc = [16*mm, 32*mm, 40*mm, _w/3, _w/3, _w/3]
         y = tbl_header(y, cols_oc, wids_oc)
         fill = False
         for hor, grp in df_ocorr.groupby("horário", sort=False):
@@ -1134,7 +1139,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_outras_pat.empty:
         y = sec_title(y, "Patrulhas e Policiamento")
         cols_pp = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura", "Giro"]
-        wids_pp = [16*mm, 32*mm, 34*mm, 20*mm, 20*mm, 36*mm, TW-158*mm]
+        _wp = TW - 16*mm - 32*mm - 34*mm - 14*mm
+        wids_pp = [16*mm, 32*mm, 34*mm, _wp/3, _wp/3, _wp/3, 14*mm]
         y = tbl_header(y, cols_pp, wids_pp)
         fill = False
         for hor, grp in df_outras_pat.groupby("horário", sort=False):
@@ -1153,7 +1159,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_outros.empty:
         y = sec_title(y, "Outros Serviços")
         cols_ot = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
-        wids_ot = [16*mm, 32*mm, 40*mm, 20*mm, 20*mm, TW-128*mm]
+        _wo = TW - 16*mm - 32*mm - 40*mm
+        wids_ot = [16*mm, 32*mm, 40*mm, _wo/3, _wo/3, _wo/3]
         y = tbl_header(y, cols_ot, wids_ot)
         fill = False
         for (hor, serv), grp in df_outros.groupby(["horário", "serviço"], sort=False):
@@ -1209,13 +1216,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
             alturas.append(max(5*mm, max(len(obs_lines), len(ids_lines)) * 5*mm))
 
-        # Identificar spans de obs iguais
+        # Identificar spans de obs iguais CONSECUTIVAS
         obs_spans = {}  # idx_inicio -> (obs, count, altura_total)
         i = 0
         while i < len(linhas_rem):
             obs_atual = linhas_rem[i]['obs']
             j = i + 1
-            while j < len(linhas_rem) and linhas_rem[j]['obs'] == obs_atual:
+            # Só agrupas se consecutivas E obs não vazia
+            while j < len(linhas_rem) and linhas_rem[j]['obs'] == obs_atual and obs_atual:
                 j += 1
             altura_total = sum(alturas[i:j])
             obs_spans[i] = (obs_atual, j - i, altura_total)
