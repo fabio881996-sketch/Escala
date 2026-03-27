@@ -765,7 +765,7 @@ def gerar_pdf_fazer_remunerado(dados: dict) -> bytes:
     return buf.getvalue()
 
 
-def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
+def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame = None) -> bytes:
     """Gera PDF da escala diaria em A4 retrato usando reportlab - layout original."""
     from reportlab.pdfgen import canvas as rl_canvas
     from reportlab.lib.pagesizes import A4
@@ -773,7 +773,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     from reportlab.lib.colors import HexColor, white, black
     from datetime import datetime as _dt
 
-    def fmt_id(txt):
+    if df_util is None:
+        df_util = pd.DataFrame()
         t = str(txt)
         if "\U0001f504" in t:
             parts = t.split("\U0001f504")
@@ -811,13 +812,65 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
 
+    # ---- Barra lateral ----
+    SB_W = 14*mm   # largura da barra lateral
+    SB_X = 5*mm    # posição x da barra
+    SB_TM = 10*mm  # top margin da barra
+
+    # Recolher todos os militares únicos com iniciais
+    def _iniciais(mid):
+        row_u = df_util[df_util['id'].astype(str).str.strip() == str(mid).strip()] if not df_util.empty else pd.DataFrame()
+        if row_u.empty:
+            return str(mid)
+        nome = str(row_u.iloc[0].get('nome', '')).strip()
+        partes = nome.split()
+        if len(partes) >= 2:
+            return f"{partes[0][0]}.{partes[-1]}"
+        elif len(partes) == 1:
+            return partes[0]
+        return str(mid)
+
+    todos_ids = sorted(set(
+        str(r).strip() for r in df_raw['id']
+        if str(r).strip() and str(r).strip() != 'nan'
+    ), key=lambda x: int(x) if x.isdigit() else 0)
+
+    def draw_sidebar():
+        """Desenha barra lateral com IDs e iniciais."""
+        c.setFillColor(AZUL_ESC)
+        c.rect(SB_X, SB_TM, SB_W, H - SB_TM*2, fill=1, stroke=0)
+        # Título
+        c.saveState()
+        c.translate(SB_X + SB_W/2, H/2)
+        c.rotate(90)
+        c.setFillColor(white)
+        c.setFont("Helvetica-Bold", 6)
+        c.drawCentredString(0, 0, "EFETIVO")
+        c.restoreState()
+        # IDs e iniciais
+        linha_h = min(4.5*mm, (H - SB_TM*2 - 10*mm) / max(len(todos_ids), 1))
+        y_sb = H - SB_TM - 8*mm
+        c.setFont("Helvetica", 5.5)
+        for mid in todos_ids:
+            ini = _iniciais(mid)
+            c.setFillColor(white)
+            c.drawCentredString(SB_X + SB_W/2, y_sb, f"{mid} {ini}")
+            c.setStrokeColor(HexColor("#2a4080"))
+            c.setLineWidth(0.2)
+            c.line(SB_X + 1*mm, y_sb - 1*mm, SB_X + SB_W - 1*mm, y_sb - 1*mm)
+            y_sb -= linha_h
+            if y_sb < SB_TM + 3*mm:
+                break
+
     # ---- helpers ----
-    LM = 10*mm   # margem esquerda
+    LM = 10*mm + SB_W + 2*mm  # margem esquerda ajustada para a barra
     RM = 10*mm   # margem direita
     TW = W - LM - RM  # largura total
 
     def new_page():
+        draw_sidebar()
         c.showPage()
+        draw_sidebar()
         return H - 10*mm
 
     def draw_header(y):
@@ -929,6 +982,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame) -> bytes:
 
     # ======= INÍCIO =======
     y = H - 10*mm
+    draw_sidebar()
     y = draw_header(y)
     y -= 2*mm
 
@@ -2657,7 +2711,7 @@ else:
                         nova_linha['horário'] = ''
                         df_at = pd.concat([df_at, pd.DataFrame([nova_linha])], ignore_index=True)
 
-            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at)
+            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at, df_util)
             col_pdf, col_full, _ = st.columns([1, 1, 3])
             with col_pdf:
                 st.download_button(
@@ -2726,7 +2780,7 @@ else:
                                             nl2['serviço'] = 'Férias'
                                             nl2['horário'] = ''
                                             df_d2 = pd.concat([df_d2, pd.DataFrame([nl2])], ignore_index=True)
-                                pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2)
+                                pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2, df_util)
                                 reader = PdfReader(_io.BytesIO(pb2))
                                 for pg in reader.pages:
                                     writer.add_page(pg)
