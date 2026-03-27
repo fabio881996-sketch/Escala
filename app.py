@@ -2869,6 +2869,17 @@ else:
                     ]
                     ids_sem_remunerado.update(rem_apr['id_destino'].astype(str).tolist())
 
+                # Função auxiliar — remunerado não cedido é impedimento
+                def _tem_rem_nao_cedido(mid):
+                    mid = str(mid).strip()
+                    rows_rem = df_d[(df_d['id'].astype(str).str.strip() == mid) &
+                                    (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))]
+                    if rows_rem.empty:
+                        return False
+                    if mid in ids_sem_remunerado:
+                        return False
+                    return True
+
                 # ── Troca Simples ──
                 if tipo_troca == "🔄 Troca Simples":
                     if meu.empty:
@@ -2891,16 +2902,6 @@ else:
                         mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
                         mask_imp   = df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)
                         # Remunerados que NÃO foram cedidos — são impedimento
-                        def _tem_rem_nao_cedido(mid):
-                            mid = str(mid).strip()
-                            rows_rem = df_d[(df_d['id'].astype(str).str.strip() == mid) &
-                                            (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))]
-                            if rows_rem.empty:
-                                return False
-                            # Se está em ids_sem_remunerado, cedeu — não é impedimento
-                            if mid in ids_sem_remunerado:
-                                return False
-                            return True
                         mask_rem_nao_cedido = df_d['id'].astype(str).apply(_tem_rem_nao_cedido)
                         # Debug
                         cols_folga = df_d[base_mask & mask_folga]
