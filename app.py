@@ -2801,48 +2801,32 @@ else:
             # 4. Outros Serviços
             mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
 
-            # 5. Remunerados
+            # 5. Remunerados — agrupar por observação igual
             if not df_remu.empty:
                 st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
-                cols_grp_r = ['horário'] + [c for c in ['observações'] if c in df_remu.columns]
-                ag_r = df_remu.groupby(cols_grp_r, sort=False)['id_disp'] \
-                              .apply(lambda x: ', '.join(x)).reset_index()
-                col_order = ['horário', 'id_disp'] + [c for c in cols_grp_r if c != 'horário']
-                ag_r = ag_r[col_order].rename(columns={'id_disp': 'Militares', 'horário': 'Horário', 'observações': 'Observações'})
+                # Agrupar: obs igual → juntar horários e militares
+                obs_rem = {}  # obs -> {hors: [], ids: []}
+                for _, row in df_remu.iterrows():
+                    obs = str(row.get('observações', '')).strip() if 'observações' in df_remu.columns else ''
+                    if obs == 'nan': obs = ''
+                    hor = str(row.get('horário', '')).strip()
+                    mid = str(row.get('id_disp', row.get('id', ''))).strip()
+                    key = obs
+                    if key not in obs_rem:
+                        obs_rem[key] = {'hors': [], 'ids': []}
+                    if hor not in obs_rem[key]['hors']:
+                        obs_rem[key]['hors'].append(hor)
+                    if mid not in obs_rem[key]['ids']:
+                        obs_rem[key]['ids'].append(mid)
+                rows_rem = []
+                for obs, info in obs_rem.items():
+                    rows_rem.append({
+                        'Horário': ', '.join(info['hors']),
+                        'Militares': ', '.join(info['ids']),
+                        'Observação': obs,
+                    })
+                ag_r = pd.DataFrame(rows_rem)
                 st.markdown(_render_tabela(ag_r), unsafe_allow_html=True)
-
-            # 6. Observações agrupadas (obs iguais não duplicadas)
-            obs_por_ind = {}
-            for df_sec_obs in [df_pat, df_aten, df_apoi, df_outros]:
-                if df_sec_obs.empty or 'observações' not in df_sec_obs.columns:
-                    continue
-                for _, row in df_sec_obs.iterrows():
-                    obs = str(row.get('observações', '')).strip()
-                    if not obs or obs == 'nan':
-                        continue
-                    ind = str(row.get('indicativo rádio', '')).strip() if 'indicativo rádio' in df_sec_obs.columns else ''
-                    serv = str(row.get('serviço', '')).strip()
-                    hor  = str(row.get('horário', '')).strip()
-                    label = ind if ind else serv
-                    if label not in obs_por_ind:
-                        obs_por_ind[label] = {}
-                    if obs not in obs_por_ind[label]:
-                        obs_por_ind[label][obs] = set()
-                    obs_por_ind[label][obs].add(hor)
-
-            obs_lista = []
-            for label, obs_map in obs_por_ind.items():
-                obs_com = {k: v for k, v in obs_map.items() if k}
-                obs_sem = {k: v for k, v in obs_map.items() if not k}
-                tem_multiplas = len(obs_com) > 1 or (obs_com and obs_sem)
-                for obs_txt, hors in obs_com.items():
-                    lbl = f"{label} ({', '.join(sorted(hors))})" if tem_multiplas else label
-                    obs_lista.append((lbl, obs_txt))
-
-            if obs_lista:
-                st.markdown(_sec_header("Observações"), unsafe_allow_html=True)
-                obs_df = pd.DataFrame(obs_lista, columns=['Indicativo / Serviço', 'Detalhe'])
-                st.markdown(_render_tabela(obs_df), unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
