@@ -3791,7 +3791,10 @@ else:
 
                 st.markdown("---")
                 if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
-                    st.info(f"🔍 A escrever {len(resultados)} dia(s)...")
+                    st.session_state['confirmar_escala'] = True
+
+                if st.session_state.get('confirmar_escala', False):
+                    st.session_state['confirmar_escala'] = False
                     try:
                         sh2 = get_sheet()
                         from collections import defaultdict
@@ -3800,7 +3803,6 @@ else:
                             escalados_r = res['escalados']
                             ordem_r = res['ordem_atualizada']
                             data_r = res['data']
-                            st.info(f"🔍 Dia {aba_r}: {len(escalados_r)} escalados")
 
                             ws_dia_r = sh2.worksheet(aba_r)
                             todas_linhas_r = ws_dia_r.get_all_values()
