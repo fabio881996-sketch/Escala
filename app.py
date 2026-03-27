@@ -1282,11 +1282,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             # Fundo branco da célula obs
             c.setFillColor(white)
             c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
-            # Texto obs
+            # Centrar texto verticalmente na célula fundida
+            total_txt_h = len(obs_lines_span) * 5*mm
+            y_texto = y_ini - (span_h - total_txt_h) / 2 - 3.5*mm
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             for li, obs_l in enumerate(obs_lines_span):
-                c.drawString(x_obs_start, y_ini-(li*5*mm)-3.5*mm, obs_l)
+                c.drawString(x_obs_start, y_texto - (li * 5*mm), obs_l)
             # Borda da célula fundida
             c.setStrokeColor(CINZA_LN)
             c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
