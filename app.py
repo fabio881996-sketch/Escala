@@ -3454,13 +3454,73 @@ else:
             st.warning("Acesso restrito a administradores.")
             st.stop()
 
+        # ── Processar confirmação (executar antes dos widgets) ──
+        if st.session_state.get('confirmar_escala', False) and 'escala_gerada_multi' in st.session_state:
+            st.session_state['confirmar_escala'] = False
+            dados_multi_c = st.session_state['escala_gerada_multi']
+            resultados_c  = dados_multi_c['resultados']
+            ordem_headers_c = dados_multi_c['ordem_headers']
+            try:
+                sh2 = get_sheet()
+                from collections import defaultdict
+                for res in resultados_c:
+                    aba_r = res['aba']
+                    escalados_r = res['escalados']
+                    ordem_r = res['ordem_atualizada']
+                    data_r = res['data']
 
-        # ── Processar confirmação pendente ──
-        form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
-        if st.session_state.get(form_key) and 'escala_gerada' in st.session_state:
-            del st.session_state[form_key]
-            dados = st.session_state['escala_gerada']
-            escalados_c = dados['escalados']
+                    ws_dia_r = sh2.worksheet(aba_r)
+                    todas_linhas_r = ws_dia_r.get_all_values()
+                    hdrs_r = [h.strip().lower() for h in todas_linhas_r[0]]
+                    ix_id_r   = hdrs_r.index('id')      if 'id'      in hdrs_r else 0
+                    ix_serv_r = hdrs_r.index('serviço') if 'serviço' in hdrs_r else 1
+                    ix_hor_r  = hdrs_r.index('horário') if 'horário' in hdrs_r else 2
+
+                    agrupados_r = defaultdict(list)
+                    simples_r = []
+                    for mid, serv, hor in escalados_r:
+                        if serv == "Patrulha Ocorrências":
+                            agrupados_r[(serv, hor)].append(mid)
+                        else:
+                            simples_r.append((mid, serv, hor))
+                    emap_r = {}
+                    for (serv, hor), ids in agrupados_r.items():
+                        emap_r[(norm(serv), hor.strip())] = ';'.join(ids)
+                    for mid, serv, hor in simples_r:
+                        emap_r[(norm(serv), hor.strip())] = mid
+
+                    upds_r = []
+                    for i, row in enumerate(todas_linhas_r[1:], start=2):
+                        sc = norm(row[ix_serv_r].strip()) if ix_serv_r < len(row) else ''
+                        hc = str(row[ix_hor_r]).strip()  if ix_hor_r < len(row) else ''
+                        ic = str(row[ix_id_r]).strip()   if ix_id_r  < len(row) else ''
+                        ch = (sc, hc)
+                        if ch in emap_r and not ic:
+                            cl = chr(ord('A') + ix_id_r)
+                            upds_r.append({'range': f'{cl}{i}', 'values': [[emap_r[ch]]]})
+                            del emap_r[ch]
+                    if upds_r:
+                        ws_dia_r.batch_update(upds_r)
+
+                    # Criar ordem_escala do dia seguinte
+                    nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
+                    nova_o_r = [ordem_headers_c]
+                    ml_r = max(len(v) for v in ordem_r.values())
+                    for i in range(ml_r):
+                        nova_o_r.append([ordem_r[h][i] if i < len(ordem_r[h]) else '' for h in ordem_headers_c])
+                    try:
+                        sh2.worksheet(nome_prox).clear()
+                        sh2.worksheet(nome_prox).update('A1', nova_o_r)
+                    except:
+                        ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(ordem_headers_c))
+                        ws_prox.update('A1', nova_o_r)
+
+                load_data.clear()
+                del st.session_state['escala_gerada_multi']
+                st.session_state['escala_ok'] = True
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao escrever: {e}")
             ordem_c = dados['ordem_atualizada']
             headers_c = dados['ordem_headers']
             aba_c = dados['aba_dia']
@@ -3792,82 +3852,7 @@ else:
                 st.markdown("---")
                 if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
                     st.session_state['confirmar_escala'] = True
-
-                if st.session_state.get('confirmar_escala', False):
-                    st.session_state['confirmar_escala'] = False
-                    try:
-                        sh2 = get_sheet()
-                        from collections import defaultdict
-                        for res in resultados:
-                            aba_r = res['aba']
-                            escalados_r = res['escalados']
-                            ordem_r = res['ordem_atualizada']
-                            data_r = res['data']
-
-                            ws_dia_r = sh2.worksheet(aba_r)
-                            todas_linhas_r = ws_dia_r.get_all_values()
-                            hdrs_r = [h.strip().lower() for h in todas_linhas_r[0]]
-                            ix_id_r   = hdrs_r.index('id')      if 'id'      in hdrs_r else 0
-                            ix_serv_r = hdrs_r.index('serviço') if 'serviço' in hdrs_r else 1
-                            ix_hor_r  = hdrs_r.index('horário') if 'horário' in hdrs_r else 2
-
-                            agrupados_r = defaultdict(list)
-                            simples_r = []
-                            for mid, serv, hor in escalados_r:
-                                if serv == "Patrulha Ocorrências":
-                                    agrupados_r[(serv, hor)].append(mid)
-                                else:
-                                    simples_r.append((mid, serv, hor))
-                            emap_r = {}
-                            for (serv, hor), ids in agrupados_r.items():
-                                emap_r[(norm(serv), hor.strip())] = ';'.join(ids)
-                            for mid, serv, hor in simples_r:
-                                emap_r[(norm(serv), hor.strip())] = mid
-
-                            upds_r = []
-                            for i, row in enumerate(todas_linhas_r[1:], start=2):
-                                sc = norm(row[ix_serv_r].strip()) if ix_serv_r < len(row) else ''
-                                hc = str(row[ix_hor_r]).strip()  if ix_hor_r < len(row) else ''
-                                ic = str(row[ix_id_r]).strip()   if ix_id_r  < len(row) else ''
-                                ch = (sc, hc)
-                                if ch in emap_r and not ic:
-                                    cl = chr(ord('A') + ix_id_r)
-                                    upds_r.append({'range': f'{cl}{i}', 'values': [[emap_r[ch]]]})
-                                    del emap_r[ch]
-                            if upds_r:
-                                ws_dia_r.batch_update(upds_r)
-
-                            # Escrever disponíveis
-                            if res['disponiveis']:
-                                ids_disp_r = ';'.join(res['disponiveis'])
-                                for i, row in enumerate(todas_linhas_r[1:], start=2):
-                                    sc2 = norm(row[ix_serv_r].strip()) if ix_serv_r < len(row) else ''
-                                    ic2 = str(row[ix_id_r]).strip() if ix_id_r < len(row) else ''
-                                    if sc2 == 'disponiveis' and not ic2:
-                                        cl2 = chr(ord('A') + ix_id_r)
-                                        ws_dia_r.update(f'{cl2}{i}', [[ids_disp_r]])
-                                        break
-
-                            # Criar ordem_escala do dia seguinte
-                            from datetime import datetime as _dt_r
-                            nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
-                            nova_o_r = [ordem_headers]
-                            ml_r = max(len(v) for v in ordem_r.values())
-                            for i in range(ml_r):
-                                nova_o_r.append([ordem_r[h][i] if i < len(ordem_r[h]) else '' for h in ordem_headers])
-                            try:
-                                sh2.worksheet(nome_prox).clear()
-                                sh2.worksheet(nome_prox).update('A1', nova_o_r)
-                            except:
-                                ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(ordem_headers))
-                                ws_prox.update('A1', nova_o_r)
-
-                        load_data.clear()
-                        del st.session_state['escala_gerada_multi']
-                        st.session_state['escala_ok'] = True
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Erro ao escrever: {e}")
+                    st.rerun()
 
         if st.session_state.pop('escala_ok', False):
             st.success("✅ Escala escrita e ordem atualizada!")
