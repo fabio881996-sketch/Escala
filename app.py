@@ -2977,14 +2977,16 @@ else:
                             st.markdown(f"""
                             **Resumo da troca a 3:**
                             - **Tu** `{meu_serv_t3}` → ficas com o serviço do 1º
-                            - **{sel1}** `{serv1}` → vai para o teu serviço
-                            - **{sel2}** `{serv2}` → vai para o serviço do 1º
+                            - **{sel1}** `{serv1}` → fica com o serviço do 2º
+                            - **{sel2}** `{serv2}` → fica com o teu serviço
                             """)
                             if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
                                 data_str = dt_s.strftime('%d/%m/%Y')
                                 meu_serv_t3_completo = servico_override if servico_override else f"{meu_serv_t3} ({meu_hor_t3})"
+                                # Tu → 1º (tu dás o teu serviço ao 1º, recebes o serv1)
                                 linha1 = [data_str, u_id, meu_serv_t3_completo, id1, f"{serv1} ({hor1})", "Pendente_Militar", "", "", ""]
-                                linha2 = [data_str, id1, f"{serv1} ({hor1})", id2, f"{serv2} ({hor2})", "Pendente_Militar", "", "", ""]
+                                # 2º → 1º (2º dá o seu serviço ao 1º, 1º recebe serv2)
+                                linha2 = [data_str, id2, f"{serv2} ({hor2})", id1, meu_serv_t3_completo, "Pendente_Militar", "", "", ""]
                                 salvar_troca_gsheet(linha1)
                                 salvar_troca_gsheet(linha2)
                                 st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
@@ -3142,6 +3144,7 @@ else:
                             elif status in ("Pendente_Militar", "Pendente_Admin") and fui_origem:
                                 if st.button("🚫 Cancelar pedido", key=f"cancel_{idx}"):
                                     if atualizar_status_gsheet(idx, "Cancelada"):
+                                        invalidar_trocas()
                                         st.success("Pedido cancelado.")
                                         st.rerun()
 
@@ -3790,6 +3793,7 @@ else:
                 form_key = 'FormSubmitter:form_confirmar_escala-✅ CONFIRMAR E ESCREVER NA ESCALA'
                 if st.session_state.get(form_key, False):
                     del st.session_state[form_key]
+                    st.info(f"🔍 A escrever {len(resultados)} dia(s)...")
                     try:
                         sh2 = get_sheet()
                         from collections import defaultdict
@@ -3798,6 +3802,7 @@ else:
                             escalados_r = res['escalados']
                             ordem_r = res['ordem_atualizada']
                             data_r = res['data']
+                            st.info(f"🔍 Dia {aba_r}: {len(escalados_r)} escalados")
 
                             ws_dia_r = sh2.worksheet(aba_r)
                             todas_linhas_r = ws_dia_r.get_all_values()
