@@ -841,27 +841,32 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         """Desenha barra lateral com IDs e iniciais, começando em y_top."""
         if y_top is None:
             y_top = H - SB_TM
-        CINZA_BARRA = HexColor("#333333")
-        c.setFillColor(CINZA_BARRA)
-        c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=0)
-        # Título EFETIVO no topo da barra
+        # Fundo branco com borda escura
+        c.setFillColor(white)
+        c.setStrokeColor(HexColor("#333333"))
+        c.setLineWidth(0.5)
+        c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=1)
+        # Título EFETIVO — fundo cinza escuro
+        c.setFillColor(HexColor("#333333"))
+        c.rect(SB_X, y_top - 8*mm, SB_W, 8*mm, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont("Helvetica-Bold", 6.5)
         c.drawCentredString(SB_X + SB_W/2, y_top - 5*mm, "EFETIVO")
-        c.setStrokeColor(HexColor("#666666"))
-        c.setLineWidth(0.3)
-        c.line(SB_X + 1*mm, y_top - 7*mm, SB_X + SB_W - 1*mm, y_top - 7*mm)
-        # IDs e iniciais
+        # IDs e iniciais — texto escuro sobre fundo branco
         linha_h = min(5*mm, (y_top - SB_TM - 10*mm) / max(len(todos_ids), 1))
         y_sb = y_top - 10*mm
-        for mid in todos_ids:
+        for idx_sb, mid in enumerate(todos_ids):
             ini = _iniciais(mid)
-            c.setFillColor(white)
+            # Linhas alternadas cinza muito claro
+            if idx_sb % 2 == 0:
+                c.setFillColor(HexColor("#f5f5f5"))
+                c.rect(SB_X, y_sb - linha_h + 1*mm, SB_W, linha_h, fill=1, stroke=0)
+            c.setFillColor(black)
             c.setFont("Helvetica-Bold", 6)
             c.drawString(SB_X + 1.5*mm, y_sb, str(mid))
             c.setFont("Helvetica", 6)
             c.drawString(SB_X + 7*mm, y_sb, ini)
-            c.setStrokeColor(HexColor("#666666"))
+            c.setStrokeColor(HexColor("#cccccc"))
             c.setLineWidth(0.2)
             c.line(SB_X + 1*mm, y_sb - 1*mm, SB_X + SB_W - 1*mm, y_sb - 1*mm)
             y_sb -= linha_h
@@ -1203,11 +1208,17 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         x_obs_end   = LM + TW - 2*mm
         max_pts_rm  = x_obs_end - x_obs_start
 
-        # Agrupar linhas por obs para fundir célula
+        # Agrupar linhas por obs para fundir célula — preservar ordem original
         linhas_rem = []
-        for hor, grp in df_rem.groupby("horário", sort=False):
+        vistos = {}  # hor -> já processado
+        for _, row in df_rem.iterrows():
+            hor = str(row.get('horário', '')).strip()
+            if hor in vistos:
+                continue
+            vistos[hor] = True
+            grp = df_rem[df_rem['horário'] == hor]
             ids = ", ".join(grp["id_fmt"].tolist())
-            obs = str(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
+            obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
             if obs == 'nan': obs = ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs})
 
