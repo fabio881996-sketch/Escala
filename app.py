@@ -3539,11 +3539,14 @@ else:
                     for i in range(ml_r):
                         nova_o_r.append([ordem_r[h][i] if i < len(ordem_r[h]) else '' for h in ordem_headers_c])
                     try:
-                        sh2.worksheet(nome_prox).clear()
-                        sh2.worksheet(nome_prox).update('A1', nova_o_r)
+                        ws_prox_exist = sh2.worksheet(nome_prox)
+                        ws_prox_exist.clear()
+                        ws_prox_exist.update('A1', nova_o_r)
+                        ws_prox_exist.hide()
                     except:
                         ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(ordem_headers_c))
                         ws_prox.update('A1', nova_o_r)
+                        ws_prox.hide()
 
                 load_data.clear()
                 del st.session_state['escala_gerada_multi']
