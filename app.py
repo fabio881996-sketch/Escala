@@ -3455,7 +3455,6 @@ else:
             st.stop()
 
         # ── Processar confirmação (executar antes dos widgets) ──
-        st.write(f"DEBUG confirmar={st.session_state.get('confirmar_escala')} multi={'escala_gerada_multi' in st.session_state}")
         if st.session_state.get('confirmar_escala', False) and 'escala_gerada_multi' in st.session_state:
             st.session_state['confirmar_escala'] = False
             dados_multi_c = st.session_state['escala_gerada_multi']
@@ -3502,6 +3501,36 @@ else:
                             del emap_r[ch]
                     if upds_r:
                         ws_dia_r.batch_update(upds_r)
+
+                    # Contabilizar escalas manuais — mover para o fim da ordem
+                    _slots_map_r = {
+                        (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
+                        (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
+                        (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
+                        (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
+                        (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
+                        (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
+                        (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
+                        (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
+                    }
+                    ids_auto_r = set(m for m, _, _ in escalados_r)
+                    for row_m in todas_linhas_r[1:]:
+                        serv_m = norm(row_m[ix_serv_r].strip()) if ix_serv_r < len(row_m) else ''
+                        hor_m  = str(row_m[ix_hor_r]).strip()   if ix_hor_r  < len(row_m) else ''
+                        id_m   = str(row_m[ix_id_r]).strip()    if ix_id_r   < len(row_m) else ''
+                        if not id_m or id_m == 'nan':
+                            continue
+                        col_key_m = _slots_map_r.get((serv_m, hor_m))
+                        if not col_key_m or col_key_m not in ordem_r:
+                            continue
+                        for mid_m in re.split(r'[;,]', id_m):
+                            mid_m = mid_m.strip()
+                            if not mid_m or mid_m in ids_auto_r:
+                                continue
+                            # Manual — mover para o fim
+                            if mid_m in ordem_r[col_key_m]:
+                                ordem_r[col_key_m].remove(mid_m)
+                                ordem_r[col_key_m].append(mid_m)
 
                     # Criar ordem_escala do dia seguinte
                     nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
