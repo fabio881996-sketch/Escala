@@ -832,10 +832,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             return partes[0]
         return str(mid)
 
-    todos_ids = sorted(set(
-        str(r).strip() for r in df_raw['id']
-        if str(r).strip() and str(r).strip() != 'nan'
-    ), key=lambda x: int(x) if x.isdigit() else 0)
+    # Efetivo — ordem da aba utilizadores
+    if not df_util.empty and 'id' in df_util.columns:
+        todos_ids = [str(r).strip() for r in df_util['id'] if str(r).strip() and str(r).strip() != 'nan']
+    else:
+        todos_ids = sorted(set(
+            str(r).strip() for r in df_raw['id']
+            if str(r).strip() and str(r).strip() != 'nan'
+        ), key=lambda x: int(x) if x.isdigit() else 0)
 
     def draw_sidebar(y_top=None):
         """Desenha barra lateral com IDs e iniciais, começando em y_top."""
@@ -1242,53 +1246,50 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             obs_spans[i] = (obs_atual, j - i, altura_total)
             i = j
 
-        # Desenhar linhas
+        # Desenhar primeiro todas as linhas de horário+militares, registar posições y
+        y_posicoes = []  # y antes de cada linha
         obs_desenhadas = set()
-        y_grupo = {}  # idx_inicio -> y no momento de desenhar a primeira linha
+        y_grupo = {}
+
         for idx, r in enumerate(linhas_rem):
             row_h = alturas[idx]
             if y - row_h < 20*mm: y = new_page()
-
-            # Guardar y do início do grupo
             if idx in obs_spans:
                 y_grupo[idx] = y
+            y_posicoes.append((y, row_h))
 
-            # Fundo da linha (horário + militares)
-            if fill:
+            # Fundo linha horário + militares
+            if (idx % 2 == 0):
                 c.setFillColor(FILL_ALT)
                 c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=1, stroke=0)
-
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
             c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(r['hor']))
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-(li*5*mm)-3.5*mm, id_l)
-
-            # Borda horário e militares
             c.setStrokeColor(CINZA_LN)
             c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
-
-            # Célula obs — desenhar só na primeira linha do grupo, com y_inicio
-            if idx in obs_spans and idx not in obs_desenhadas:
-                obs_txt, span_count, span_h = obs_spans[idx]
-                obs_desenhadas.add(idx)
-                y_ini = y_grupo[idx]
-                obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
-                # Fundo branco da célula obs para toda a altura do grupo
-                c.setFillColor(white)
-                c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
-                # Texto
-                c.setFillColor(black)
-                for li, obs_l in enumerate(obs_lines_span):
-                    c.drawString(x_obs_start, y_ini-(li*5*mm)-3.5*mm, obs_l)
-                # Borda da célula obs fundida
-                c.setStrokeColor(CINZA_LN)
-                c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
-
             y -= row_h
-            fill = not fill
+
+        # Agora desenhar as células de observação fundidas por cima
+        for idx, (obs_txt, span_count, span_h) in obs_spans.items():
+            if idx not in y_grupo:
+                continue
+            y_ini = y_grupo[idx]
+            obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
+            # Fundo branco da célula obs
+            c.setFillColor(white)
+            c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
+            # Texto obs
+            c.setFillColor(black)
+            c.setFont("Helvetica", 8.5)
+            for li, obs_l in enumerate(obs_lines_span):
+                c.drawString(x_obs_start, y_ini-(li*5*mm)-3.5*mm, obs_l)
+            # Borda da célula fundida
+            c.setStrokeColor(CINZA_LN)
+            c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
