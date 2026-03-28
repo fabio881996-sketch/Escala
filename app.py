@@ -804,20 +804,20 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     df_ocorr = df_pat[df_pat["servico_col"].str.contains(r"ocorr", na=False)].copy()
     df_outras_pat = df_pat[~df_pat["servico_col"].str.contains(r"ocorr", na=False)].copy()
 
-    AZUL_ESC  = HexColor("#222222")   # títulos — cinza muito escuro
-    AZUL_MED  = HexColor("#d8d8d8")   # cabeçalho tabela — cinza claro
-    FILL_ALT  = HexColor("#f2f2f2")   # linhas alternadas — cinza muito claro
-    CINZA_LN  = HexColor("#aaaaaa")   # linhas de separação
-    CINZA_TXT = HexColor("#555555")   # texto secundário
+    AZUL_ESC  = HexColor("#1a1a1a")
+    AZUL_MED  = HexColor("#c8c8c8")
+    FILL_ALT  = HexColor("#f0f0f0")
+    CINZA_LN  = HexColor("#999999")
+    CINZA_TXT = HexColor("#444444")
 
     W, H = A4
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=A4)
 
     # ---- Barra lateral ----
-    SB_W = 20*mm   # largura da barra lateral (mais larga)
-    SB_X = 3*mm    # posição x da barra (encostada à margem)
-    SB_TM = 8*mm   # top margin da barra
+    SB_W = 24*mm
+    SB_X = 3*mm
+    SB_TM = 8*mm
 
     # Recolher todos os militares únicos com iniciais
     def _iniciais(mid):
@@ -842,40 +842,41 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         ), key=lambda x: int(x) if x.isdigit() else 0)
 
     def draw_sidebar(y_top=None):
-        """Desenha barra lateral com IDs e iniciais, começando em y_top."""
+        """Desenha barra lateral com IDs e iniciais."""
         if y_top is None:
             y_top = H - SB_TM
-        # Fundo branco sem borda
+        # Fundo branco
         c.setFillColor(white)
         c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=0)
-        # Título EFETIVO — fundo branco, texto escuro (invertido)
-        c.setFillColor(white)
+        # Cabeçalho EFETIVO — fundo escuro, letra branca
+        c.setFillColor(HexColor("#1a1a1a"))
         c.rect(SB_X, y_top - 8*mm, SB_W, 8*mm, fill=1, stroke=0)
-        c.setFillColor(HexColor("#333333"))
-        c.setFont("Helvetica-Bold", 6.5)
-        c.drawCentredString(SB_X + SB_W/2, y_top - 5*mm, "EFETIVO")
-        c.setStrokeColor(HexColor("#333333"))
-        c.setLineWidth(0.4)
-        c.line(SB_X, y_top - 8*mm, SB_X + SB_W, y_top - 8*mm)
-        # IDs e iniciais — texto escuro sobre fundo branco
-        linha_h = min(5*mm, (y_top - SB_TM - 10*mm) / max(len(todos_ids), 1))
+        c.setFillColor(white)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawCentredString(SB_X + SB_W/2, y_top - 5.5*mm, "EFETIVO")
+        # IDs e iniciais
+        linha_h = min(5.5*mm, (y_top - SB_TM - 10*mm) / max(len(todos_ids), 1))
         y_sb = y_top - 10*mm
         for idx_sb, mid in enumerate(todos_ids):
             ini = _iniciais(mid)
             if idx_sb % 2 == 0:
-                c.setFillColor(HexColor("#f5f5f5"))
-                c.rect(SB_X, y_sb - linha_h + 1*mm, SB_W, linha_h, fill=1, stroke=0)
-            c.setFillColor(black)
-            c.setFont("Helvetica-Bold", 6)
+                c.setFillColor(HexColor("#efefef"))
+                c.rect(SB_X, y_sb - linha_h + 1.5*mm, SB_W, linha_h, fill=1, stroke=0)
+            c.setFillColor(HexColor("#1a1a1a"))
+            c.setFont("Helvetica-Bold", 7)
             c.drawString(SB_X + 1.5*mm, y_sb, str(mid))
-            c.setFont("Helvetica", 6)
-            c.drawString(SB_X + 7*mm, y_sb, ini)
+            c.setFont("Helvetica", 7)
+            c.drawString(SB_X + 9*mm, y_sb, ini)
             c.setStrokeColor(HexColor("#cccccc"))
             c.setLineWidth(0.2)
-            c.line(SB_X + 1*mm, y_sb - 1*mm, SB_X + SB_W - 1*mm, y_sb - 1*mm)
+            c.line(SB_X, y_sb - 1*mm, SB_X + SB_W, y_sb - 1*mm)
             y_sb -= linha_h
             if y_sb < SB_TM + 3*mm:
                 break
+        # Borda direita subtil
+        c.setStrokeColor(HexColor("#999999"))
+        c.setLineWidth(0.5)
+        c.line(SB_X + SB_W, SB_TM, SB_X + SB_W, y_top)
 
     # ---- helpers ----
     LM = SB_X + SB_W + 1*mm  # margem esquerda colada à barra
