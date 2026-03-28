@@ -855,8 +855,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.setFont("Helvetica-Bold", 7)
         c.drawCentredString(SB_X + SB_W/2, y_top - 5.5*mm, "EFETIVO")
         # IDs e iniciais
-        linha_h = min(5.5*mm, (y_top - SB_TM - 10*mm) / max(len(todos_ids), 1))
-        y_sb = y_top - 10*mm
+        linha_h = min(5.5*mm, (y_top - SB_TM - 12*mm) / max(len(todos_ids), 1))
+        y_sb = y_top - 12*mm
         for idx_sb, mid in enumerate(todos_ids):
             ini = _iniciais(mid)
             if idx_sb % 2 == 0:
