@@ -816,8 +816,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # ---- Barra lateral ----
     SB_W = 24*mm
-    SB_X = 3*mm
-    SB_TM = 8*mm
+    SB_X = 5*mm    # mais afastado da margem esquerda
+    SB_TM = 10*mm  # mais afastado do topo
 
     # Recolher todos os militares únicos com iniciais
     def _iniciais(mid):
@@ -1002,7 +1002,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         pass  # rodapé removido
 
     # ======= INÍCIO =======
-    y = H - 10*mm
+    y = H - 15*mm
     y = draw_header(y)
     y -= 2*mm
     draw_sidebar(y_top=y)  # barra lateral começa alinhada com as ausências
