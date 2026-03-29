@@ -879,9 +879,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.line(SB_X + SB_W, SB_TM, SB_X + SB_W, y_top)
 
     # ---- helpers ----
-    LM = SB_X + SB_W + 1*mm  # margem esquerda colada à barra
-    RM = 8*mm
-    TW = W - LM - RM  # largura total
+    LM = SB_X + SB_W + 3*mm  # margem esquerda com folga
+    RM = 12*mm                 # margem direita maior
+    TW = W - LM - RM          # largura total
 
     def new_page():
         draw_sidebar(y_top=H - SB_TM)
@@ -3692,6 +3692,18 @@ else:
                             del emap_r[ch]
                     if upds_r:
                         ws_dia_r.batch_update(upds_r)
+
+                    # Escrever disponíveis na linha "Disponíveis" da aba
+                    disp_r = res.get('disponiveis', [])
+                    if disp_r:
+                        ids_disp_str = ';'.join(disp_r)
+                        for i, row in enumerate(todas_linhas_r[1:], start=2):
+                            sc_d = norm(row[ix_serv_r].strip()) if ix_serv_r < len(row) else ''
+                            ic_d = str(row[ix_id_r]).strip() if ix_id_r < len(row) else ''
+                            if sc_d == norm('Disponíveis') or sc_d == norm('Disponiveis'):
+                                cl_d = chr(ord('A') + ix_id_r)
+                                ws_dia_r.update(f'{cl_d}{i}', [[ids_disp_str]])
+                                break
 
                     # Contabilizar escalas manuais — mover para o fim da ordem
                     _slots_map_r = {
