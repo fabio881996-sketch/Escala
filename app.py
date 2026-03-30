@@ -2762,239 +2762,239 @@ else:
                 df_at = df_dia.copy()
                 df_at['id_disp'] = df_at['id'].astype(str)
 
-            # Aplicar trocas aprovadas (excluindo remunerados e matar remunerado)
-            if not df_trocas.empty:
-                tr_v = df_trocas[
-                    (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
-                    (df_trocas['status'] == 'Aprovada') &
-                    (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
-                ]
-                mask_rem = df_at['serviço'].str.lower().str.contains('remu|grat', na=False)
-                for _, t in tr_v.iterrows():
-                    m_o = (df_at['id'].astype(str) == str(t['id_origem'])) & ~mask_rem
-                    if m_o.any():
-                        df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
-                    m_d = (df_at['id'].astype(str) == str(t['id_destino'])) & ~mask_rem
-                    if m_d.any():
-                        df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+                # Aplicar trocas aprovadas (excluindo remunerados e matar remunerado)
+                if not df_trocas.empty:
+                    tr_v = df_trocas[
+                        (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
+                        (df_trocas['status'] == 'Aprovada') &
+                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+                    ]
+                    mask_rem = df_at['serviço'].str.lower().str.contains('remu|grat', na=False)
+                    for _, t in tr_v.iterrows():
+                        m_o = (df_at['id'].astype(str) == str(t['id_origem'])) & ~mask_rem
+                        if m_o.any():
+                            df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
+                        m_d = (df_at['id'].astype(str) == str(t['id_destino'])) & ~mask_rem
+                        if m_d.any():
+                            df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
-                # Aplicar matar remunerado — mesmo formato que trocas normais
-                matar_apr = df_trocas[
-                    (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
-                    (df_trocas['status'] == 'Aprovada') &
-                    (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
-                ]
-                for _, mt in matar_apr.iterrows():
-                    serv_r = mt['servico_destino'].rsplit('(', 1)[0].strip()
-                    hor_r  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
-                    mask_linha = (
-                        df_at['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()
-                    ) & (df_at['horário'].astype(str).str.strip() == hor_r.strip())
-                    # Linha do cedente — substitui pelo novo titular
-                    m_cedente = mask_linha & (df_at['id'].astype(str) == str(mt['id_destino']))
-                    if m_cedente.any():
-                        df_at.loc[m_cedente, 'id_disp'] = f"{mt['id_origem']} 🔄 {mt['id_destino']}"
+                    # Aplicar matar remunerado — mesmo formato que trocas normais
+                    matar_apr = df_trocas[
+                        (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
+                        (df_trocas['status'] == 'Aprovada') &
+                        (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
+                    ]
+                    for _, mt in matar_apr.iterrows():
+                        serv_r = mt['servico_destino'].rsplit('(', 1)[0].strip()
+                        hor_r  = mt['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt['servico_destino'] else ''
+                        mask_linha = (
+                            df_at['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()
+                        ) & (df_at['horário'].astype(str).str.strip() == hor_r.strip())
+                        # Linha do cedente — substitui pelo novo titular
+                        m_cedente = mask_linha & (df_at['id'].astype(str) == str(mt['id_destino']))
+                        if m_cedente.any():
+                            df_at.loc[m_cedente, 'id_disp'] = f"{mt['id_origem']} 🔄 {mt['id_destino']}"
 
-            # Adicionar militares de férias que não estão na escala diária
-            if not df_ferias.empty and not df_util.empty:
-                ids_na_escala = set(df_at['id'].astype(str).str.strip().tolist())
-                cols_f = df_ferias.columns.tolist()
-                id_col_f = 'id' if 'id' in cols_f else cols_f[0]
-                for _, row_f in df_ferias.iterrows():
-                    mid_f = str(row_f.get(id_col_f, '')).strip()
-                    if not mid_f or mid_f in ids_na_escala:
-                        continue
-                    if militar_de_ferias(mid_f, d_sel, df_ferias, feriados):
-                        nova_linha = {c: '' for c in df_at.columns}
-                        nova_linha['id'] = mid_f
-                        nova_linha['id_disp'] = mid_f
-                        nova_linha['serviço'] = 'Férias'
-                        nova_linha['horário'] = ''
-                        df_at = pd.concat([df_at, pd.DataFrame([nova_linha])], ignore_index=True)
+                # Adicionar militares de férias que não estão na escala diária
+                if not df_ferias.empty and not df_util.empty:
+                    ids_na_escala = set(df_at['id'].astype(str).str.strip().tolist())
+                    cols_f = df_ferias.columns.tolist()
+                    id_col_f = 'id' if 'id' in cols_f else cols_f[0]
+                    for _, row_f in df_ferias.iterrows():
+                        mid_f = str(row_f.get(id_col_f, '')).strip()
+                        if not mid_f or mid_f in ids_na_escala:
+                            continue
+                        if militar_de_ferias(mid_f, d_sel, df_ferias, feriados):
+                            nova_linha = {c: '' for c in df_at.columns}
+                            nova_linha['id'] = mid_f
+                            nova_linha['id_disp'] = mid_f
+                            nova_linha['serviço'] = 'Férias'
+                            nova_linha['horário'] = ''
+                            df_at = pd.concat([df_at, pd.DataFrame([nova_linha])], ignore_index=True)
 
-            pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at, df_util)
-            col_pdf, col_full, _ = st.columns([1, 1, 3])
-            with col_pdf:
-                st.download_button(
-                    "📥 Escala do Dia",
-                    pdf_bytes,
-                    file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
-                    mime="application/pdf"
-                )
-            with col_full:
-                if st.button("📥 Escala Completa", use_container_width=True):
-                    with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
-                        import tempfile, os, io as _io
-                        try:
-                            from pypdf import PdfWriter, PdfReader
-                        except ImportError:
-                            from PyPDF2 import PdfWriter, PdfReader
-                        writer = PdfWriter()
-                        hj2 = datetime.now()
-                        dias_sem2 = 0
-                        j2 = 0
-                        paginas = 0
-                        while dias_sem2 < 5:
-                            dt2 = hj2 + timedelta(days=j2)
-                            df_d2 = load_data(dt2.strftime("%d-%m"))
-                            if not df_d2.empty:
-                                df_d2['id_disp'] = df_d2['id'].astype(str)
-                                if not df_trocas.empty:
-                                    tr2 = df_trocas[
-                                        (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
-                                        (df_trocas['status'] == 'Aprovada') &
-                                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
-                                    ]
-                                    mask_rem2 = df_d2['serviço'].str.lower().str.contains('remu|grat', na=False)
-                                    for _, t2 in tr2.iterrows():
-                                        m_o2 = (df_d2['id'].astype(str) == str(t2['id_origem'])) & ~mask_rem2
-                                        if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
-                                        m_d2 = (df_d2['id'].astype(str) == str(t2['id_destino'])) & ~mask_rem2
-                                        if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
-                                    # Matar remunerado
-                                    matar2 = df_trocas[
-                                        (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
-                                        (df_trocas['status'] == 'Aprovada') &
-                                        (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
-                                    ]
-                                    for _, mt2 in matar2.iterrows():
-                                        serv_r2 = mt2['servico_destino'].rsplit('(', 1)[0].strip()
-                                        hor_r2  = mt2['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt2['servico_destino'] else ''
-                                        m_ced2 = (
-                                            (df_d2['serviço'].astype(str).str.strip().str.lower() == serv_r2.lower()) &
-                                            (df_d2['horário'].astype(str).str.strip() == hor_r2.strip()) &
-                                            (df_d2['id'].astype(str) == str(mt2['id_destino']))
-                                        )
-                                        if m_ced2.any(): df_d2.loc[m_ced2, 'id_disp'] = f"{mt2['id_origem']} 🔄 {mt2['id_destino']}"
-                                # Adicionar militares de férias
-                                if not df_ferias.empty and not df_util.empty:
-                                    ids_esc2 = set(df_d2['id'].astype(str).str.strip().tolist())
-                                    cols_f2 = df_ferias.columns.tolist()
-                                    id_col_f2 = 'id' if 'id' in cols_f2 else cols_f2[0]
-                                    for _, row_f2 in df_ferias.iterrows():
-                                        mid_f2 = str(row_f2.get(id_col_f2, '')).strip()
-                                        if not mid_f2 or mid_f2 in ids_esc2: continue
-                                        if militar_de_ferias(mid_f2, dt2.date(), df_ferias, feriados):
-                                            nl2 = {c: '' for c in df_d2.columns}
-                                            nl2['id'] = mid_f2
-                                            nl2['id_disp'] = mid_f2
-                                            nl2['serviço'] = 'Férias'
-                                            nl2['horário'] = ''
-                                            df_d2 = pd.concat([df_d2, pd.DataFrame([nl2])], ignore_index=True)
-                                pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2, df_util)
-                                reader = PdfReader(_io.BytesIO(pb2))
-                                for pg in reader.pages:
-                                    writer.add_page(pg)
-                                paginas += 1
-                                dias_sem2 = 0
+                pdf_bytes = gerar_pdf_escala_dia(d_sel.strftime("%d/%m/%Y"), df_at, df_util)
+                col_pdf, col_full, _ = st.columns([1, 1, 3])
+                with col_pdf:
+                    st.download_button(
+                        "📥 Escala do Dia",
+                        pdf_bytes,
+                        file_name=f"Escala_{d_sel.strftime('%d_%m')}.pdf",
+                        mime="application/pdf"
+                    )
+                with col_full:
+                    if st.button("📥 Escala Completa", use_container_width=True):
+                        with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
+                            import tempfile, os, io as _io
+                            try:
+                                from pypdf import PdfWriter, PdfReader
+                            except ImportError:
+                                from PyPDF2 import PdfWriter, PdfReader
+                            writer = PdfWriter()
+                            hj2 = datetime.now()
+                            dias_sem2 = 0
+                            j2 = 0
+                            paginas = 0
+                            while dias_sem2 < 5:
+                                dt2 = hj2 + timedelta(days=j2)
+                                df_d2 = load_data(dt2.strftime("%d-%m"))
+                                if not df_d2.empty:
+                                    df_d2['id_disp'] = df_d2['id'].astype(str)
+                                    if not df_trocas.empty:
+                                        tr2 = df_trocas[
+                                            (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
+                                            (df_trocas['status'] == 'Aprovada') &
+                                            (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+                                        ]
+                                        mask_rem2 = df_d2['serviço'].str.lower().str.contains('remu|grat', na=False)
+                                        for _, t2 in tr2.iterrows():
+                                            m_o2 = (df_d2['id'].astype(str) == str(t2['id_origem'])) & ~mask_rem2
+                                            if m_o2.any(): df_d2.loc[m_o2, 'id_disp'] = f"{t2['id_destino']} 🔄 {t2['id_origem']}"
+                                            m_d2 = (df_d2['id'].astype(str) == str(t2['id_destino'])) & ~mask_rem2
+                                            if m_d2.any(): df_d2.loc[m_d2, 'id_disp'] = f"{t2['id_origem']} 🔄 {t2['id_destino']}"
+                                        # Matar remunerado
+                                        matar2 = df_trocas[
+                                            (df_trocas['data'] == dt2.strftime('%d/%m/%Y')) &
+                                            (df_trocas['status'] == 'Aprovada') &
+                                            (df_trocas['servico_origem'] == 'MATAR_REMUNERADO')
+                                        ]
+                                        for _, mt2 in matar2.iterrows():
+                                            serv_r2 = mt2['servico_destino'].rsplit('(', 1)[0].strip()
+                                            hor_r2  = mt2['servico_destino'].rsplit('(', 1)[1].rstrip(')') if '(' in mt2['servico_destino'] else ''
+                                            m_ced2 = (
+                                                (df_d2['serviço'].astype(str).str.strip().str.lower() == serv_r2.lower()) &
+                                                (df_d2['horário'].astype(str).str.strip() == hor_r2.strip()) &
+                                                (df_d2['id'].astype(str) == str(mt2['id_destino']))
+                                            )
+                                            if m_ced2.any(): df_d2.loc[m_ced2, 'id_disp'] = f"{mt2['id_origem']} 🔄 {mt2['id_destino']}"
+                                    # Adicionar militares de férias
+                                    if not df_ferias.empty and not df_util.empty:
+                                        ids_esc2 = set(df_d2['id'].astype(str).str.strip().tolist())
+                                        cols_f2 = df_ferias.columns.tolist()
+                                        id_col_f2 = 'id' if 'id' in cols_f2 else cols_f2[0]
+                                        for _, row_f2 in df_ferias.iterrows():
+                                            mid_f2 = str(row_f2.get(id_col_f2, '')).strip()
+                                            if not mid_f2 or mid_f2 in ids_esc2: continue
+                                            if militar_de_ferias(mid_f2, dt2.date(), df_ferias, feriados):
+                                                nl2 = {c: '' for c in df_d2.columns}
+                                                nl2['id'] = mid_f2
+                                                nl2['id_disp'] = mid_f2
+                                                nl2['serviço'] = 'Férias'
+                                                nl2['horário'] = ''
+                                                df_d2 = pd.concat([df_d2, pd.DataFrame([nl2])], ignore_index=True)
+                                    pb2 = gerar_pdf_escala_dia(dt2.strftime("%d/%m/%Y"), df_d2, df_util)
+                                    reader = PdfReader(_io.BytesIO(pb2))
+                                    for pg in reader.pages:
+                                        writer.add_page(pg)
+                                    paginas += 1
+                                    dias_sem2 = 0
+                                else:
+                                    dias_sem2 += 1
+                                j2 += 1
+                            if paginas > 0:
+                                buf = _io.BytesIO()
+                                writer.write(buf)
+                                with col_full:
+                                    st.download_button(
+                                        f"⬇️ Descarregar ({paginas} dias)",
+                                        data=buf.getvalue(),
+                                        file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
+                                        mime="application/pdf",
+                                        key="dl_completa"
+                                    )
                             else:
-                                dias_sem2 += 1
-                            j2 += 1
-                        if paginas > 0:
-                            buf = _io.BytesIO()
-                            writer.write(buf)
-                            with col_full:
-                                st.download_button(
-                                    f"⬇️ Descarregar ({paginas} dias)",
-                                    data=buf.getvalue(),
-                                    file_name=f"Escala_Completa_{datetime.now().strftime('%d_%m_%Y')}.pdf",
-                                    mime="application/pdf",
-                                    key="dl_completa"
-                                )
-                        else:
-                            st.info("Não há escalas disponíveis.")
+                                st.info("Não há escalas disponíveis.")
 
-            # Remover linhas sem militar para a visualização na escala geral
-            df_at = _limpar_sem_militar(df_at)
+                # Remover linhas sem militar para a visualização na escala geral
+                df_at = _limpar_sem_militar(df_at)
 
-            # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
-            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "baixa"], df_at)
+                # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
+                df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "baixa"], df_at)
 
-            # Extrair cada grupo do df_res por ordem
-            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito", "diligência"],    df_res)
-            df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
-            df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
-            df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr", "giro"], df_res)
-            df_remu, df_res = filtrar_secao(["remu", "grat"],                            df_res)
-            df_folga,df_res = filtrar_secao(["folga"],                                   df_res)
-            df_outros       = df_res
-            df_pat_ocorr, df_pat_outras = filtrar_secao(["ocorr"], df_pat)
+                # Extrair cada grupo do df_res por ordem
+                df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito", "diligência"],    df_res)
+                df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
+                df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
+                df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr", "giro"], df_res)
+                df_remu, df_res = filtrar_secao(["remu", "grat"],                            df_res)
+                df_folga,df_res = filtrar_secao(["folga"],                                   df_res)
+                df_outros       = df_res
+                df_pat_ocorr, df_pat_outras = filtrar_secao(["ocorr"], df_pat)
 
-            # 1. Ausências e ADM lado a lado no topo (igual ao PDF)
-            col_aus, col_adm = st.columns(2)
-            with col_aus:
-                grupos_aus = {}
-                for _, row in df_aus.iterrows():
-                    serv = str(row.get('serviço', '')).strip()
-                    mid  = str(row.get('id_disp', row.get('id', ''))).strip()
-                    grupos_aus.setdefault(serv, []).append(mid)
-                for _, row in df_folga.iterrows():
-                    serv = str(row.get('serviço', '')).strip()
-                    mid  = str(row.get('id_disp', row.get('id', ''))).strip()
-                    grupos_aus.setdefault(serv, []).append(mid)
-                if grupos_aus:
-                    st.markdown(_sec_header("Ausências, Folgas e Licenças"), unsafe_allow_html=True)
-                    st.markdown(_render_ids_linha(grupos_aus), unsafe_allow_html=True)
-            with col_adm:
-                grupos_adm = {}
-                for _, row in df_cmd.iterrows():
-                    serv = str(row.get('serviço', '')).strip()
-                    mid  = str(row.get('id_disp', row.get('id', ''))).strip()
-                    grupos_adm.setdefault(serv, []).append(mid)
-                if grupos_adm:
-                    st.markdown(_sec_header("Outras Situações / ADM"), unsafe_allow_html=True)
-                    st.markdown(_render_ids_linha(grupos_adm), unsafe_allow_html=True)
+                # 1. Ausências e ADM lado a lado no topo (igual ao PDF)
+                col_aus, col_adm = st.columns(2)
+                with col_aus:
+                    grupos_aus = {}
+                    for _, row in df_aus.iterrows():
+                        serv = str(row.get('serviço', '')).strip()
+                        mid  = str(row.get('id_disp', row.get('id', ''))).strip()
+                        grupos_aus.setdefault(serv, []).append(mid)
+                    for _, row in df_folga.iterrows():
+                        serv = str(row.get('serviço', '')).strip()
+                        mid  = str(row.get('id_disp', row.get('id', ''))).strip()
+                        grupos_aus.setdefault(serv, []).append(mid)
+                    if grupos_aus:
+                        st.markdown(_sec_header("Ausências, Folgas e Licenças"), unsafe_allow_html=True)
+                        st.markdown(_render_ids_linha(grupos_aus), unsafe_allow_html=True)
+                with col_adm:
+                    grupos_adm = {}
+                    for _, row in df_cmd.iterrows():
+                        serv = str(row.get('serviço', '')).strip()
+                        mid  = str(row.get('id_disp', row.get('id', ''))).strip()
+                        grupos_adm.setdefault(serv, []).append(mid)
+                    if grupos_adm:
+                        st.markdown(_sec_header("Outras Situações / ADM"), unsafe_allow_html=True)
+                        st.markdown(_render_ids_linha(grupos_adm), unsafe_allow_html=True)
 
-            # 2. Atendimento e Apoio
-            mostrar_secao("Atendimento",               df_aten,       esconder_servico=True)
-            mostrar_secao("Apoio ao Atendimento",      df_apoi,       esconder_servico=True)
+                # 2. Atendimento e Apoio
+                mostrar_secao("Atendimento",               df_aten,       esconder_servico=True)
+                mostrar_secao("Apoio ao Atendimento",      df_apoi,       esconder_servico=True)
 
-            # 3. Patrulhas
-            mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
-            mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
+                # 3. Patrulhas
+                mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
+                mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
 
-            # 4. Outros Serviços
-            mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
+                # 4. Outros Serviços
+                mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
 
-            # 5. Remunerados — obs igual com rowspan (células fundidas)
-            if not df_remu.empty:
-                st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
-                # Preparar linhas por horário
-                rows_rem = []
-                for hor, grp in df_remu.groupby('horário', sort=False):
-                    ids = ', '.join(grp['id_disp'].tolist())
-                    obs = str(grp['observações'].iloc[0]).strip() if 'observações' in grp.columns else ''
-                    if obs == 'nan': obs = ''
-                    rows_rem.append({'horário': hor, 'militares': ids, 'obs': obs})
+                # 5. Remunerados — obs igual com rowspan (células fundidas)
+                if not df_remu.empty:
+                    st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
+                    # Preparar linhas por horário
+                    rows_rem = []
+                    for hor, grp in df_remu.groupby('horário', sort=False):
+                        ids = ', '.join(grp['id_disp'].tolist())
+                        obs = str(grp['observações'].iloc[0]).strip() if 'observações' in grp.columns else ''
+                        if obs == 'nan': obs = ''
+                        rows_rem.append({'horário': hor, 'militares': ids, 'obs': obs})
 
-                # Calcular rowspans por obs
-                obs_spans = {}
-                for i, r in enumerate(rows_rem):
-                    obs = r['obs']
-                    if obs not in obs_spans:
-                        obs_spans[obs] = {'start': i, 'count': 0}
-                    obs_spans[obs]['count'] += 1
-                obs_first = {v['start']: (k, v['count']) for k, v in obs_spans.items()}
+                    # Calcular rowspans por obs
+                    obs_spans = {}
+                    for i, r in enumerate(rows_rem):
+                        obs = r['obs']
+                        if obs not in obs_spans:
+                            obs_spans[obs] = {'start': i, 'count': 0}
+                        obs_spans[obs]['count'] += 1
+                    obs_first = {v['start']: (k, v['count']) for k, v in obs_spans.items()}
 
-                th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;border-bottom:2px solid {AZUL};"
-                td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-bottom:1px solid #dde6f7;"
-                td_a = td_s + f"background:{AZUL_CLARO};"
+                    th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;border-bottom:2px solid {AZUL};"
+                    td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-bottom:1px solid #dde6f7;"
+                    td_a = td_s + f"background:{AZUL_CLARO};"
 
-                html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
-                html += "<table style='width:100%;border-collapse:collapse;'><thead><tr>"
-                html += f"<th style='{th_s}'>Horário</th><th style='{th_s}'>Militares</th><th style='{th_s}'>Observação</th>"
-                html += "</tr></thead><tbody>"
-                for i, r in enumerate(rows_rem):
-                    td = td_a if i % 2 == 0 else td_s
-                    html += "<tr>"
-                    html += f"<td style='{td}'>{r['horário']}</td>"
-                    html += f"<td style='{td}'>{r['militares']}</td>"
-                    if i in obs_first:
-                        obs_txt, span = obs_first[i]
-                        html += f"<td style='{td}border-left:2px solid {AZUL_MED};' rowspan='{span}'>{obs_txt}</td>"
-                    html += "</tr>"
-                html += "</tbody></table></div>"
-                st.markdown(html, unsafe_allow_html=True)
+                    html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
+                    html += "<table style='width:100%;border-collapse:collapse;'><thead><tr>"
+                    html += f"<th style='{th_s}'>Horário</th><th style='{th_s}'>Militares</th><th style='{th_s}'>Observação</th>"
+                    html += "</tr></thead><tbody>"
+                    for i, r in enumerate(rows_rem):
+                        td = td_a if i % 2 == 0 else td_s
+                        html += "<tr>"
+                        html += f"<td style='{td}'>{r['horário']}</td>"
+                        html += f"<td style='{td}'>{r['militares']}</td>"
+                        if i in obs_first:
+                            obs_txt, span = obs_first[i]
+                            html += f"<td style='{td}border-left:2px solid {AZUL_MED};' rowspan='{span}'>{obs_txt}</td>"
+                        html += "</tr>"
+                    html += "</tbody></table></div>"
+                    st.markdown(html, unsafe_allow_html=True)
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
