@@ -1053,10 +1053,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 curr_line, curr_w = [w_id], tw
         if curr_line: linhas_ids.append(", ".join(curr_line))
         row_h = len(linhas_ids) * 5*mm
-        # Fundo alternado
+        # Fundo alternado cobre toda a largura da coluna
         if idx_aus % 2 == 0:
             c.setFillColor(FILL_ALT)
-            c.rect(LM, y_esq-row_h, CW2, row_h, fill=1, stroke=0)
+            c.rect(LM, y_esq-row_h, CW_ESQ, row_h, fill=1, stroke=0)
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(AZUL_ESC)
         c.drawString(LM+2*mm, y_esq-3.5*mm, f"  {serv}:")
