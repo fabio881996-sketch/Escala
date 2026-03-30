@@ -1280,10 +1280,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
+            total_ids_h = len(ids_lines) * 5*mm
             # Horário centrado verticalmente
             c.drawCentredString(LM+wids_rm[0]/2, y - row_h/2 + 1.5*mm, str(r['hor']))
+            # Militares centrados verticalmente
+            y_ids_start = y - (row_h - total_ids_h) / 2 - 3.5*mm
             for li, id_l in enumerate(ids_lines):
-                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-(li*5*mm)-3.5*mm, id_l)
+                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y_ids_start - (li*5*mm), id_l)
             c.setStrokeColor(CINZA_LN)
             c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
