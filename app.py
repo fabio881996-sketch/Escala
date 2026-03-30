@@ -1008,7 +1008,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     draw_sidebar(y_top=y)  # barra lateral começa alinhada com as ausências
 
     # ---- AUSÊNCIAS e ADM lado a lado ----
-    CW2 = TW/2 - 1*mm   # largura de cada coluna
+    CW_ESQ = TW * 0.60 - 1*mm   # ausências — 60%
+    CW_DIR = TW * 0.40 - 1*mm   # ADM — 40%
+    CW2 = TW/2 - 1*mm           # atendimento/apoio — 50/50
     GAP = 2*mm
 
     # Recolher grupos
@@ -1026,14 +1028,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # Títulos das duas colunas
     y_col = y
-    sec_title(y_col, "Ausências, Folgas e Licenças", x=LM, w=CW2)
+    sec_title(y_col, "Ausências, Folgas e Licenças", x=LM, w=CW_ESQ)
     if grupos_adm:
-        sec_title(y_col, "Outras Situações / ADM", x=LM+CW2+GAP, w=CW2)
+        sec_title(y_col, "Outras Situações / ADM", x=LM+CW_ESQ+GAP, w=CW_DIR)
     y_col -= 6.5*mm
 
     # Linhas esquerda
     y_esq = y_col
-    max_pts_esq = CW2 - 37*mm
+    max_pts_esq = CW_ESQ - 37*mm
     label_w_esq = 35*mm
     idx_aus = 0
     for serv, ids in grupos_aus.items():
@@ -1068,8 +1070,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # Linhas direita
     y_dir = y_col
-    x_dir = LM + CW2 + GAP
-    max_pts_dir = CW2 - 37*mm
+    x_dir = LM + CW_ESQ + GAP
+    max_pts_dir = CW_DIR - 37*mm
     idx_adm = 0
     for serv, ids in grupos_adm.items():
         ids_txt = ", ".join(ids)
@@ -1088,7 +1090,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         row_h = len(linhas_ids) * 5*mm
         if idx_adm % 2 == 0:
             c.setFillColor(FILL_ALT)
-            c.rect(x_dir, y_dir-row_h, CW2, row_h, fill=1, stroke=0)
+            c.rect(x_dir, y_dir-row_h, CW_DIR, row_h, fill=1, stroke=0)
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(AZUL_ESC)
         c.drawString(x_dir+2*mm, y_dir-3.5*mm, f"  {serv}:")
