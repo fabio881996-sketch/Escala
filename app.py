@@ -792,7 +792,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         mask = df["servico_col"].str.contains(pat, na=False)
         return df[mask].copy(), df[~mask].copy()
 
-    df_aus,  df_rest = filtrar(r"ferias|licen|doente|folga", df_raw_com)
+    df_aus,  df_rest = filtrar(r"ferias|licen|doente|folga|baixa", df_raw_com)
     df_adm,  df_rest = filtrar(r"pronto|secretaria|inquer|comando|dilig", df_rest)
     df_ap,   df_rest = filtrar(r"apoio", df_rest)
     df_at,   df_rest = filtrar(r"atendimento", df_rest)
@@ -2900,10 +2900,10 @@ else:
             df_at = _limpar_sem_militar(df_at)
 
             # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
-            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "diligência"], df_at)
+            df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "baixa"], df_at)
 
             # Extrair cada grupo do df_res por ordem
-            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito"],    df_res)
+            df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito", "diligência"],    df_res)
             df_apoi, df_res = filtrar_secao(["apoio"],                                 df_res)
             df_aten, df_res = filtrar_secao(["atendimento"],                           df_res)
             df_pat,  df_res = filtrar_secao(["po", "patrulha", "ronda", "vtr", "giro"], df_res)
