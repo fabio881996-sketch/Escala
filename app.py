@@ -1033,16 +1033,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # Linhas esquerda
     y_esq = y_col
-    max_pts_esq = CW2 - 37*mm  # já em pontos
+    max_pts_esq = CW2 - 37*mm
     label_w_esq = 35*mm
+    idx_aus = 0
     for serv, ids in grupos_aus.items():
         ids_txt = ", ".join(ids)
-        c.setFont("Helvetica-Bold", 8.5)
-        c.setFillColor(AZUL_ESC)
-        c.drawString(LM+2*mm, y_esq-3.5*mm, f"  {serv}:")
-        c.setFont("Helvetica", 8.5)
-        c.setFillColor(black)
-        # Wrap IDs em múltiplas linhas
         words = ids_txt.split(", ")
         curr_line, curr_w = [], 0
         linhas_ids = []
@@ -1055,22 +1050,29 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 if curr_line: linhas_ids.append(", ".join(curr_line))
                 curr_line, curr_w = [w_id], tw
         if curr_line: linhas_ids.append(", ".join(curr_line))
+        row_h = len(linhas_ids) * 5*mm
+        # Fundo alternado
+        if idx_aus % 2 == 0:
+            c.setFillColor(FILL_ALT)
+            c.rect(LM, y_esq-row_h, CW2, row_h, fill=1, stroke=0)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(AZUL_ESC)
+        c.drawString(LM+2*mm, y_esq-3.5*mm, f"  {serv}:")
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(black)
         for li, ln in enumerate(linhas_ids):
             indent = LM+label_w_esq if li == 0 else LM+5*mm
             c.drawString(indent, y_esq-3.5*mm, ln)
             y_esq -= 5*mm
+        idx_aus += 1
 
     # Linhas direita
     y_dir = y_col
     x_dir = LM + CW2 + GAP
     max_pts_dir = CW2 - 37*mm
+    idx_adm = 0
     for serv, ids in grupos_adm.items():
         ids_txt = ", ".join(ids)
-        c.setFont("Helvetica-Bold", 8.5)
-        c.setFillColor(AZUL_ESC)
-        c.drawString(x_dir+2*mm, y_dir-3.5*mm, f"  {serv}:")
-        c.setFont("Helvetica", 8.5)
-        c.setFillColor(black)
         words = ids_txt.split(", ")
         curr_line, curr_w = [], 0
         linhas_ids = []
@@ -1083,10 +1085,20 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 if curr_line: linhas_ids.append(", ".join(curr_line))
                 curr_line, curr_w = [w_id], tw
         if curr_line: linhas_ids.append(", ".join(curr_line))
+        row_h = len(linhas_ids) * 5*mm
+        if idx_adm % 2 == 0:
+            c.setFillColor(FILL_ALT)
+            c.rect(x_dir, y_dir-row_h, CW2, row_h, fill=1, stroke=0)
+        c.setFont("Helvetica-Bold", 8.5)
+        c.setFillColor(AZUL_ESC)
+        c.drawString(x_dir+2*mm, y_dir-3.5*mm, f"  {serv}:")
+        c.setFont("Helvetica", 8.5)
+        c.setFillColor(black)
         for li, ln in enumerate(linhas_ids):
             indent = x_dir+label_w_esq if li == 0 else x_dir+5*mm
             c.drawString(indent, y_dir-3.5*mm, ln)
             y_dir -= 5*mm
+        idx_adm += 1
 
     # Avançar y para o máximo das duas colunas
     y = min(y_esq, y_dir) - 2*mm
