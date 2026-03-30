@@ -1218,7 +1218,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     # ---- REMUNERADOS ----
     if not df_rem.empty:
         y = sec_title(y, "Serviços Remunerados / Gratificados")
-        wids_rm = [15*mm, 25*mm, TW-40*mm]
+        wids_rm = [15*mm, 35*mm, TW-50*mm]  # militares mais largos
         cols_rm = ["Horário", "Militares", "Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
@@ -1280,7 +1280,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
-            c.drawCentredString(LM+wids_rm[0]/2, y-3.5*mm, str(r['hor']))
+            # Horário centrado verticalmente
+            c.drawCentredString(LM+wids_rm[0]/2, y - row_h/2 + 1.5*mm, str(r['hor']))
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y-(li*5*mm)-3.5*mm, id_l)
             c.setStrokeColor(CINZA_LN)
