@@ -1227,6 +1227,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         x_obs_start = LM + wids_rm[0] + wids_rm[1] + _vtr_w + 2*mm
         x_obs_end   = LM + TW - 2*mm
         max_pts_rm  = x_obs_end - x_obs_start
+        x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w  # início da coluna obs
 
         # Agrupar linhas por obs para fundir célula — preservar ordem original
         linhas_rem = []
@@ -1240,10 +1241,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
             if obs == 'nan': obs = ""
-            # Viatura — pegar primeiro valor não vazio
+            # Viatura — procurar coluna independentemente de maiúsculas/minúsculas
             vtr = ""
-            if "viatura" in df_rem.columns:
-                vtr_vals = grp["viatura"].dropna().astype(str)
+            col_vtr = next((c for c in df_rem.columns if norm(c) == 'viatura'), None)
+            if col_vtr:
+                vtr_vals = grp[col_vtr].dropna().astype(str)
                 vtr_vals = vtr_vals[vtr_vals.str.strip().str.len() > 0]
                 vtr = vtr_vals.iloc[0].strip() if not vtr_vals.empty else ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
@@ -1314,7 +1316,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
             # Fundo branco da célula obs
             c.setFillColor(white)
-            c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
+            c.rect(x_obs_col, y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
             # Centrar texto verticalmente na célula fundida
             total_txt_h = len(obs_lines_span) * 5*mm
             y_texto = y_ini - (span_h - total_txt_h) / 2 - 3.5*mm
@@ -1324,7 +1326,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 c.drawString(x_obs_start, y_texto - (li * 5*mm), obs_l)
             # Borda da célula fundida
             c.setStrokeColor(CINZA_LN)
-            c.rect(LM+wids_rm[0]+wids_rm[1], y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
+            c.rect(x_obs_col, y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
