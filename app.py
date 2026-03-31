@@ -1218,12 +1218,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     # ---- REMUNERADOS ----
     if not df_rem.empty:
         y = sec_title(y, "Serviços Remunerados / Gratificados")
-        wids_rm = [15*mm, 35*mm, TW-50*mm]  # militares mais largos
-        cols_rm = ["Horário", "Militares", "Observação"]
+        _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
+        wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
+        cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
 
-        x_obs_start = LM + wids_rm[0] + wids_rm[1] + 2*mm
+        x_obs_start = LM + wids_rm[0] + wids_rm[1] + _vtr_w + 2*mm
         x_obs_end   = LM + TW - 2*mm
         max_pts_rm  = x_obs_end - x_obs_start
 
@@ -1239,7 +1240,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
             if obs == 'nan': obs = ""
-            linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs})
+            vtr = str(grp["viatura"].iloc[0]) if "viatura" in df_rem.columns else ""
+            if vtr == 'nan': vtr = ""
+            linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
 
         # Calcular alturas e grupos de obs
         alturas = []
@@ -1289,9 +1292,14 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y_ids_start = y - (row_h_real - total_ids_h) / 2 - 3.5*mm
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y_ids_start - (li*5*mm), id_l)
+            # Viatura centrada verticalmente
+            if _vtr_w:
+                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_vtr_w/2, y_centro, r.get('vtr', ''))
             c.setStrokeColor(CINZA_LN)
-            c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=0, stroke=1)
+            c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_vtr_w, row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
+            if _vtr_w:
+                c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)
             y -= row_h
 
         # Agora desenhar as células de observação fundidas por cima
@@ -2965,7 +2973,9 @@ else:
                         ids = ', '.join(grp['id_disp'].tolist())
                         obs = str(grp['observações'].iloc[0]).strip() if 'observações' in grp.columns else ''
                         if obs == 'nan': obs = ''
-                        rows_rem.append({'horário': hor, 'militares': ids, 'obs': obs})
+                        vtr = str(grp['viatura'].iloc[0]).strip() if 'viatura' in grp.columns else ''
+                        if vtr == 'nan': vtr = ''
+                        rows_rem.append({'horário': hor, 'militares': ids, 'vtr': vtr, 'obs': obs})
 
                     # Calcular rowspans por obs
                     obs_spans = {}
@@ -2982,13 +2992,14 @@ else:
 
                     html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
                     html += "<table style='width:100%;border-collapse:collapse;'><thead><tr>"
-                    html += f"<th style='{th_s}'>Horário</th><th style='{th_s}'>Militares</th><th style='{th_s}'>Observação</th>"
+                    html += f"<th style='{th_s}'>Horário</th><th style='{th_s}'>Militares</th><th style='{th_s}'>Viatura</th><th style='{th_s}'>Observação</th>"
                     html += "</tr></thead><tbody>"
                     for i, r in enumerate(rows_rem):
                         td = td_a if i % 2 == 0 else td_s
                         html += "<tr>"
                         html += f"<td style='{td}'>{r['horário']}</td>"
                         html += f"<td style='{td}'>{r['militares']}</td>"
+                        html += f"<td style='{td}'>{r.get('vtr', '')}</td>"
                         if i in obs_first:
                             obs_txt, span = obs_first[i]
                             html += f"<td style='{td}border-left:2px solid {AZUL_MED};' rowspan='{span}'>{obs_txt}</td>"
