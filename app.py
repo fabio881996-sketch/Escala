@@ -1220,6 +1220,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         y = sec_title(y, "Serviços Remunerados / Gratificados")
         _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
         wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
+        _obs_w = wids_rm[3]  # largura real da coluna obs
         cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
@@ -1227,7 +1228,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         x_obs_start = LM + wids_rm[0] + wids_rm[1] + _vtr_w + 2*mm
         x_obs_end   = LM + TW - 2*mm
         max_pts_rm  = x_obs_end - x_obs_start
-        x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w  # início da coluna obs
+        x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w
 
         # Agrupar linhas por obs para fundir célula — preservar ordem original
         linhas_rem = []
@@ -1316,7 +1317,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
             # Fundo branco da célula obs
             c.setFillColor(white)
-            c.rect(x_obs_col, y_ini-span_h, wids_rm[2], span_h, fill=1, stroke=0)
+            c.rect(x_obs_col, y_ini-span_h, _obs_w, span_h, fill=1, stroke=0)
             # Centrar texto verticalmente na célula fundida
             total_txt_h = len(obs_lines_span) * 5*mm
             y_texto = y_ini - (span_h - total_txt_h) / 2 - 3.5*mm
@@ -1326,7 +1327,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 c.drawString(x_obs_start, y_texto - (li * 5*mm), obs_l)
             # Borda da célula fundida
             c.setStrokeColor(CINZA_LN)
-            c.rect(x_obs_col, y_ini-span_h, wids_rm[2], span_h, fill=0, stroke=1)
+            c.rect(x_obs_col, y_ini-span_h, _obs_w, span_h, fill=0, stroke=1)
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
