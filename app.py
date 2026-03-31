@@ -1240,8 +1240,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
             if obs == 'nan': obs = ""
-            vtr = str(grp["viatura"].iloc[0]) if "viatura" in df_rem.columns else ""
-            if vtr == 'nan': vtr = ""
+            # Viatura — pegar primeiro valor não vazio
+            vtr = ""
+            if "viatura" in df_rem.columns:
+                vtr_vals = grp["viatura"].dropna().astype(str)
+                vtr_vals = vtr_vals[vtr_vals.str.strip().str.len() > 0]
+                vtr = vtr_vals.iloc[0].strip() if not vtr_vals.empty else ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
 
         # Calcular alturas e grupos de obs
