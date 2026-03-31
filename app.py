@@ -861,15 +861,15 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ini = _iniciais(mid)
             if idx_sb % 2 == 0:
                 c.setFillColor(HexColor("#efefef"))
-                c.rect(SB_X, y_sb - linha_h + 1.5*mm, SB_W, linha_h, fill=1, stroke=0)
+                c.rect(SB_X, y_sb - linha_h, SB_W, linha_h, fill=1, stroke=0)
             c.setFillColor(HexColor("#1a1a1a"))
             c.setFont("Helvetica-Bold", 7)
-            c.drawString(SB_X + 1.5*mm, y_sb, str(mid))
+            c.drawString(SB_X + 1.5*mm, y_sb - linha_h/2 - 1.5*mm, str(mid))
             c.setFont("Helvetica", 7)
-            c.drawString(SB_X + 9*mm, y_sb, ini)
+            c.drawString(SB_X + 9*mm, y_sb - linha_h/2 - 1.5*mm, ini)
             c.setStrokeColor(HexColor("#cccccc"))
             c.setLineWidth(0.2)
-            c.line(SB_X, y_sb - 1*mm, SB_X + SB_W, y_sb - 1*mm)
+            c.line(SB_X, y_sb - linha_h, SB_X + SB_W, y_sb - linha_h)
             y_sb -= linha_h
             if y_sb < SB_TM + 3*mm:
                 break
@@ -1283,10 +1283,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 y_grupo[idx] = y
             y_posicoes.append((y, row_h))
 
-            # Fundo linha horário + militares
-            if (idx % 2 == 0):
+            # Fundo linha horário + militares — primeira branca, depois alterna
+            if idx > 0 and idx % 2 == 1:
                 c.setFillColor(FILL_ALT)
-                c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1], row_h, fill=1, stroke=0)
+                c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_vtr_w, row_h, fill=1, stroke=0)
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
