@@ -3302,6 +3302,14 @@ else:
         # --- 📥 PEDIDOS RECEBIDOS ---
         with tab_ped:
             st.title("📥 Pedidos de Troca Recebidos")
+
+            # Processar ação pendente ANTES de renderizar
+            acao_ped = st.session_state.pop('pedido_acao', None)
+            if acao_ped:
+                atualizar_status_gsheet(acao_ped['idx'], acao_ped['status'])
+                invalidar_trocas()
+                st.rerun()
+
             if df_trocas.empty:
                 st.info("Sem dados de trocas.")
             else:
@@ -3343,12 +3351,10 @@ else:
                             )
                         c1, c2 = st.columns(2)
                         if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
-                            atualizar_status_gsheet(idx, "Pendente_Admin")
-                            invalidar_trocas()
+                            st.session_state['pedido_acao'] = {'idx': idx, 'status': 'Pendente_Admin'}
                             st.rerun()
                         if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
-                            atualizar_status_gsheet(idx, "Recusada")
-                            invalidar_trocas()
+                            st.session_state['pedido_acao'] = {'idx': idx, 'status': 'Recusada'}
                             st.rerun()
 
         # --- ⚖️ VALIDAR TROCAS (ADMIN) ---
@@ -3409,6 +3415,14 @@ else:
 
     elif menu == "⚖️ Validar Trocas":
         st.title("⚖️ Validação Superior de Trocas")
+
+        # Processar ação pendente ANTES de renderizar os botões
+        acao_val = st.session_state.pop('validar_acao', None)
+        if acao_val:
+            atualizar_status_gsheet(acao_val['idx'], acao_val['status'], u_nome)
+            invalidar_trocas()
+            st.rerun()
+
         if df_trocas.empty:
             st.info("Sem dados.")
         else:
@@ -3455,12 +3469,10 @@ else:
                                 st.success(f"**{n_d}**\n\n`{r['servico_destino']}`")
                         c1, c2 = st.columns(2)
                         if c1.button("✔️ VALIDAR",  key=f"ok_{idx}", use_container_width=True):
-                            atualizar_status_gsheet(idx, "Aprovada",  u_nome)
-                            invalidar_trocas()
+                            st.session_state['validar_acao'] = {'idx': idx, 'status': 'Aprovada'}
                             st.rerun()
                         if c2.button("🚫 REJEITAR", key=f"no_{idx}", use_container_width=True):
-                            atualizar_status_gsheet(idx, "Rejeitada", u_nome)
-                            invalidar_trocas()
+                            st.session_state['validar_acao'] = {'idx': idx, 'status': 'Rejeitada'}
                             st.rerun()
 
     # --- 📜 HISTÓRICO DE TROCAS ---
