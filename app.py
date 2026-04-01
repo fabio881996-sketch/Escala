@@ -285,7 +285,7 @@ def _df_from_records(records) -> pd.DataFrame:
         df = df[df['id'] != ''].reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=180)
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega dados de uma aba da Google Sheet com cache de 2 minutos."""
     import time
@@ -316,9 +316,22 @@ def load_utilizadores() -> pd.DataFrame:
                 time.sleep(1)
     return pd.DataFrame()
 
+@st.cache_data(ttl=30)
+def load_trocas() -> pd.DataFrame:
+    """Carrega registos_trocas com cache curto de 30s."""
+    for tentativa in range(3):
+        try:
+            sh = get_sheet()
+            if sh is None:
+                return pd.DataFrame()
+            return _df_from_records(sh.worksheet("registos_trocas").get_all_records())
+        except Exception:
+            if tentativa == 2:
+                return pd.DataFrame()
+
 def invalidar_trocas():
     """Limpa cache de trocas."""
-    load_data.clear()
+    load_trocas.clear()
 
 @st.cache_data(ttl=3600)
 def load_ferias(ano: int) -> pd.DataFrame:
@@ -339,7 +352,7 @@ def load_ferias(ano: int) -> pd.DataFrame:
         return pd.DataFrame()
 
 @st.cache_data(ttl=86400)
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def load_dias_publicados() -> set:
     """Carrega datas publicadas da aba 'escala_publicada' — formato DD-MM."""
     try:
@@ -1672,7 +1685,7 @@ if not st.session_state["logged_in"]:
 # ============================================================
 else:
     # Carregar dados globais uma vez por sessão de render
-    df_trocas = load_data("registos_trocas")
+    df_trocas = load_trocas()
     df_util   = load_utilizadores()
     ano_atual = datetime.now().year
     df_ferias  = load_ferias(ano_atual)
@@ -1681,6 +1694,9 @@ else:
     u_id      = str(st.session_state['user_id'])
     u_nome    = st.session_state['user_nome']
     is_admin  = st.session_state.get("is_admin", False)
+
+    # Carregar dias publicados uma vez (não-admins precisam disto em vários menus)
+    _dias_pub_global = load_dias_publicados() if not is_admin else set()
 
     # --- Sidebar ---
     with st.sidebar:
@@ -1877,7 +1893,7 @@ else:
 
                 # Carregar todos os dias do mês
                 servicos_mes = {}
-                dias_publicados_cal = load_dias_publicados() if not is_admin else None
+                dias_publicados_cal = _dias_pub_global if not is_admin else set()
                 for d in range(1, n_dias + 1):
                     dt_cal = datetime(ano_sel, mes_sel, d)
                     aba = dt_cal.strftime("%d-%m")
@@ -2020,7 +2036,7 @@ else:
             else:
                 st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
                 hj = datetime.now()
-                dias_publicados = load_dias_publicados()
+                dias_publicados = _dias_pub_global
 
                 # Percorre dias a partir de hoje até não encontrar mais abas com dados
                 dias_sem_dados = 0
@@ -2766,7 +2782,7 @@ else:
         aba_sel = d_sel.strftime("%d-%m")
 
         # Não-admins: só ver dias publicados
-        if not is_admin and aba_sel not in load_dias_publicados():
+        if not is_admin and aba_sel not in _dias_pub_global:
             st.info("A escala para este dia ainda não foi publicada.")
         else:
             df_dia = load_data(aba_sel)
@@ -3183,15 +3199,27 @@ else:
                             meu_serv_t3 = meu.iloc[0]['serviço']
                             meu_hor_t3  = meu.iloc[0]['horário']
                         st.info(f"📋 O teu serviço: **{meu_serv_t3} ({meu_hor_t3})**")
+
+                        # Exceções para troca a 3 — só estas situações impedem
+                        _imp_t3 = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|pronto'
+
                         outros_t3 = df_d[
                             (df_d['id'].astype(str).str.strip() != u_id) &
                             (df_d['id'].astype(str).str.strip() != '') &
                             (df_d['id'].astype(str).str.strip() != 'nan') &
                             (~df_d['id'].astype(str).str.strip().isin(ids_com_troca))
                         ]
-                        outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)]
+                        # Excluir apenas as situações que impedem a troca a 3
+                        outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().apply(norm).str.contains(_imp_t3, na=False)]
+                        # Excluir militares de férias
+                        outros_t3 = outros_t3[~outros_t3['id'].astype(str).apply(
+                            lambda mid: militar_de_ferias(mid, dt_s, df_ferias, feriados)
+                        )]
                         outros_t3 = outros_t3[~outros_t3['id'].astype(str).apply(_tem_rem_nao_cedido)]
-                        opcoes_t3 = {f"{r['id']} {get_nome_curto(df_util, str(r['id']))} — {r['serviço']} ({r['horário']})": r['id'] for _, r in outros_t3.iterrows() if str(r['id']).strip()}
+                        opcoes_t3 = {
+                            f"{r['id']} {get_nome_curto(df_util, str(r['id']))} — {r['serviço']} ({r['horário']})": r['id']
+                            for _, r in outros_t3.iterrows() if str(r['id']).strip()
+                        }
                         if len(opcoes_t3) < 2:
                             st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
                         else:
@@ -3316,9 +3344,11 @@ else:
                         c1, c2 = st.columns(2)
                         if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
                             atualizar_status_gsheet(idx, "Pendente_Admin")
+                            invalidar_trocas()
                             st.rerun()
                         if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
                             atualizar_status_gsheet(idx, "Recusada")
+                            invalidar_trocas()
                             st.rerun()
 
         # --- ⚖️ VALIDAR TROCAS (ADMIN) ---
@@ -3426,9 +3456,11 @@ else:
                         c1, c2 = st.columns(2)
                         if c1.button("✔️ VALIDAR",  key=f"ok_{idx}", use_container_width=True):
                             atualizar_status_gsheet(idx, "Aprovada",  u_nome)
+                            invalidar_trocas()
                             st.rerun()
                         if c2.button("🚫 REJEITAR", key=f"no_{idx}", use_container_width=True):
                             atualizar_status_gsheet(idx, "Rejeitada", u_nome)
+                            invalidar_trocas()
                             st.rerun()
 
     # --- 📜 HISTÓRICO DE TROCAS ---
