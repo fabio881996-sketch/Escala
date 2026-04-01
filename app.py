@@ -1874,6 +1874,94 @@ else:
                         """, unsafe_allow_html=True)
 
             vista = st.radio("Vista:", ["📋 Próximos Serviços", "📅 Calendário Mensal"], horizontal=True, label_visibility="collapsed")
+
+            # ── Exportar para Calendário ──
+            with st.expander("📆 Exportar para Calendário", expanded=False):
+                st.caption("Gera um ficheiro .ics com os teus próximos serviços para importar no iPhone, Android ou Outlook.")
+                col_exp1, col_exp2 = st.columns(2)
+                with col_exp1:
+                    dias_exp = st.slider("Dias a incluir:", 7, 90, 30)
+                if st.button("📥 Gerar ficheiro .ics", use_container_width=True):
+                    ics_lines = [
+                        "BEGIN:VCALENDAR",
+                        "VERSION:2.0",
+                        "PRODID:-//GNR Famalicão//Escala//PT",
+                        "CALSCALE:GREGORIAN",
+                        "METHOD:PUBLISH",
+                        "X-WR-CALNAME:Escala GNR Famalicão",
+                        "X-WR-TIMEZONE:Europe/Lisbon",
+                    ]
+                    hj_exp = datetime.now()
+                    dias_sem_exp = 0
+                    i_exp = 0
+                    eventos = 0
+                    while dias_sem_exp < 5 and i_exp <= dias_exp:
+                        dt_exp = hj_exp + timedelta(days=i_exp)
+                        aba_exp = dt_exp.strftime("%d-%m")
+                        df_exp = load_data(aba_exp)
+                        if not df_exp.empty:
+                            meu_exp = df_exp[df_exp['id'].astype(str).str.strip() == u_id]
+                            if not meu_exp.empty:
+                                for _, row_exp in meu_exp.iterrows():
+                                    serv_exp = str(row_exp.get('serviço', '')).strip()
+                                    hor_exp  = str(row_exp.get('horário', '')).strip()
+                                    obs_exp  = str(row_exp.get('observações', '')).strip()
+                                    if not serv_exp:
+                                        continue
+                                    # Calcular horas início/fim
+                                    dt_inicio = dt_exp
+                                    dt_fim    = dt_exp
+                                    if hor_exp and '-' in hor_exp:
+                                        try:
+                                            h_ini, h_fim = hor_exp.split('-')
+                                            hi = int(h_ini.strip().replace('H','').replace('h',''))
+                                            hf = int(h_fim.strip().replace('H','').replace('h',''))
+                                            dt_inicio = dt_exp.replace(hour=hi, minute=0, second=0)
+                                            if hf <= hi:  # passa da meia-noite
+                                                dt_fim = (dt_exp + timedelta(days=1)).replace(hour=hf, minute=0, second=0)
+                                            else:
+                                                dt_fim = dt_exp.replace(hour=hf, minute=0, second=0)
+                                        except:
+                                            dt_fim = dt_exp.replace(hour=23, minute=59, second=0)
+                                    else:
+                                        dt_inicio = dt_exp.replace(hour=0, minute=0, second=0)
+                                        dt_fim    = dt_exp.replace(hour=23, minute=59, second=0)
+
+                                    uid_evt = f"{dt_exp.strftime('%Y%m%d')}-{u_id}-{serv_exp[:10].replace(' ','')}"
+                                    summary = f"{serv_exp} ({hor_exp})" if hor_exp else serv_exp
+                                    desc = obs_exp if obs_exp and obs_exp != 'nan' else ""
+
+                                    ics_lines += [
+                                        "BEGIN:VEVENT",
+                                        f"UID:{uid_evt}@gnr.famalicao",
+                                        f"DTSTAMP:{datetime.now().strftime('%Y%m%dT%H%M%SZ')}",
+                                        f"DTSTART:{dt_inicio.strftime('%Y%m%dT%H%M%S')}",
+                                        f"DTEND:{dt_fim.strftime('%Y%m%dT%H%M%S')}",
+                                        f"SUMMARY:{summary}",
+                                        f"DESCRIPTION:{desc}",
+                                        "LOCATION:Posto Territorial de Vila Nova de Famalicão",
+                                        "END:VEVENT",
+                                    ]
+                                    eventos += 1
+                            dias_sem_exp = 0
+                        else:
+                            dias_sem_exp += 1
+                        i_exp += 1
+
+                    ics_lines.append("END:VCALENDAR")
+                    ics_content = "\r\n".join(ics_lines)
+
+                    if eventos > 0:
+                        st.download_button(
+                            f"⬇️ Descarregar ({eventos} serviços)",
+                            data=ics_content.encode('utf-8'),
+                            file_name=f"escala_gnr_{u_id}.ics",
+                            mime="text/calendar",
+                            use_container_width=True,
+                        )
+                    else:
+                        st.info("Não encontrei serviços para os próximos dias.")
+
             st.markdown("---")
 
             # ── CALENDÁRIO MENSAL ──
