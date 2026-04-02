@@ -1893,14 +1893,14 @@ else:
                     ]
                     hj_exp = datetime.now()
                     eventos = 0
-                    dias_pub_exp = _dias_pub_global if not is_admin else None
+                    dias_pub_exp = load_dias_publicados()
 
                     for i_exp in range(dias_exp):
                         dt_exp = hj_exp + timedelta(days=i_exp)
                         aba_exp = dt_exp.strftime("%d-%m")
 
-                        # Não-admins: só dias publicados
-                        if dias_pub_exp is not None and aba_exp not in dias_pub_exp:
+                        # Só dias publicados para todos
+                        if aba_exp not in dias_pub_exp:
                             continue
 
                         df_exp = load_data(aba_exp)
@@ -3955,7 +3955,10 @@ else:
                 st.error(f"Erro ao escrever: {e}")
 
         # ── Selecionar data(s) ──
-        modo = st.radio("Modo:", ["📅 Dia único", "📆 Intervalo de dias"], horizontal=True)
+        tab_auto, tab_rem = st.tabs(["⚙️ Escala Automática", "💶 Nomear para Remunerado"])
+
+        with tab_auto:
+            modo = st.radio("Modo:", ["📅 Dia único", "📆 Intervalo de dias"], horizontal=True)
         if modo == "📅 Dia único":
             d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
             datas_gerar = [d_gerar]
@@ -4182,6 +4185,261 @@ else:
 
         if st.session_state.pop('escala_ok', False):
             st.success("✅ Escala escrita e ordem atualizada!")
+
+        with tab_rem:
+            st.markdown("#### 💶 Nomear para Remunerado")
+
+            # Carregar ordem_remunerados
+            try:
+                sh_rem = get_sheet()
+                ws_ord_rem = sh_rem.worksheet("ordem_remunerados")
+                df_ord_rem = pd.DataFrame(ws_ord_rem.get_all_records())
+                df_ord_rem.columns = [c.strip().lower() for c in df_ord_rem.columns]
+            except Exception as e:
+                st.error(f"Aba 'ordem_remunerados' não encontrada: {e}")
+                st.stop()
+
+            if df_ord_rem.empty:
+                st.info("Sem dados na aba 'ordem_remunerados'.")
+            else:
+                col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                with col_r1:
+                    d_rem = st.date_input("Data:", format="DD/MM/YYYY", key="d_rem")
+                with col_r2:
+                    tab_rem_sel = st.selectbox("Tabela:", ["A", "B"], key="tab_rem_sel")
+                with col_r3:
+                    hor_rem = st.text_input("Horário:", placeholder="ex: 09-13", key="hor_rem")
+                with col_r4:
+                    n_rem = st.number_input("Nº militares:", min_value=1, max_value=10, value=2, key="n_rem")
+
+                obs_rem = st.text_input("Observação do remunerado:", placeholder="ex: Reg. Trânsito - Rua X", key="obs_rem")
+
+                if st.button("🔍 Calcular Nomeação", use_container_width=True, key="btn_calc_rem"):
+                    aba_rem = d_rem.strftime("%d-%m")
+                    df_dia_rem = load_data(aba_rem)
+                    data_str_rem = d_rem.strftime("%d/%m/%Y")
+
+                    # Colunas da tabela selecionada
+                    col_ultima = f"ultima_vez_{tab_rem_sel.lower()}"
+                    col_total  = f"total_ano_{tab_rem_sel.lower()}"
+
+                    # Garantir colunas existem
+                    for col in [col_ultima, col_total, 'voluntario', 'prescinde_descanso']:
+                        if col not in df_ord_rem.columns:
+                            df_ord_rem[col] = ''
+
+                    # Converter tipos
+                    df_ord_rem['voluntario']         = df_ord_rem['voluntario'].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
+                    df_ord_rem['prescinde_descanso'] = df_ord_rem['prescinde_descanso'].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
+                    df_ord_rem[col_total] = pd.to_numeric(df_ord_rem[col_total], errors='coerce').fillna(0)
+                    df_ord_rem[col_ultima] = pd.to_datetime(df_ord_rem[col_ultima], dayfirst=True, errors='coerce')
+
+                    # Horário do remunerado a nomear
+                    hi_rem, hf_rem = None, None
+                    if hor_rem and '-' in hor_rem:
+                        try:
+                            hi_rem = int(hor_rem.split('-')[0].strip())
+                            hf_rem = int(hor_rem.split('-')[1].strip())
+                        except:
+                            pass
+
+                    def _sobreposicao(h1_ini, h1_fim, h2_ini, h2_fim):
+                        """Verifica sobreposição parcial entre dois horários."""
+                        if None in (h1_ini, h1_fim, h2_ini, h2_fim):
+                            return False
+                        # Converter para minutos desde meia-noite (considerar passagem de dia)
+                        def to_min(h, base=0):
+                            return h * 60 + (1440 if h < base else 0)
+                        s1 = to_min(h1_ini); e1 = to_min(h1_fim, h1_ini)
+                        s2 = to_min(h2_ini); e2 = to_min(h2_fim, h2_ini)
+                        return s1 < e2 and s2 < e1
+
+                    def _verif_descanso(hi_serv, hf_serv, hi_novo, hf_novo):
+                        """Verifica 8h de descanso antes e depois."""
+                        if None in (hi_serv, hf_serv, hi_novo, hf_novo):
+                            return True
+                        # Converter tudo para minutos
+                        def to_min(h, base=0):
+                            return h * 60 + (1440 if h < base else 0)
+                        fim_serv = to_min(hf_serv, hi_serv)
+                        ini_novo = to_min(hi_novo)
+                        ini_serv = to_min(hi_serv)
+                        fim_novo = to_min(hf_novo, hi_novo)
+                        descanso_antes = abs(ini_novo - fim_serv) >= 480
+                        descanso_depois = abs(ini_serv - fim_novo) >= 480
+                        return descanso_antes and descanso_depois
+
+                    # Serviços do dia por militar
+                    servicos_dia = {}
+                    if not df_dia_rem.empty:
+                        df_serv_dia = df_dia_rem[~df_dia_rem['serviço'].apply(norm).str.contains('remu|grat', na=False)]
+                        for _, row_sd in df_serv_dia.iterrows():
+                            mid_sd = str(row_sd['id']).strip()
+                            if not mid_sd:
+                                continue
+                            hor_sd = str(row_sd.get('horário', '')).strip()
+                            hi_sd, hf_sd = None, None
+                            if '-' in hor_sd:
+                                try:
+                                    hi_sd = int(hor_sd.split('-')[0].strip())
+                                    hf_sd = int(hor_sd.split('-')[1].strip())
+                                except:
+                                    pass
+                            servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
+
+                    # Ausentes no dia
+                    ausentes_dia = set()
+                    if not df_dia_rem.empty:
+                        aus_mask = df_dia_rem['serviço'].apply(norm).str.contains('ferias|licen|doente|baixa|dilig|tribunal', na=False)
+                        for mid_a in df_dia_rem[aus_mask]['id'].astype(str).str.strip().tolist():
+                            if mid_a:
+                                ausentes_dia.add(mid_a)
+                    # Verificar férias
+                    for _, row_u in df_ord_rem.iterrows():
+                        mid_u = str(row_u.get('id', '')).strip()
+                        if mid_u and militar_de_ferias(mid_u, d_rem, df_ferias, feriados):
+                            ausentes_dia.add(mid_u)
+
+                    # Ordenar por ultima_vez (mais antigo primeiro), desempate total_ano
+                    df_ord_rem_sorted = df_ord_rem.sort_values(
+                        [col_ultima, col_total],
+                        ascending=[True, True],
+                        na_position='first'
+                    )
+
+                    nomeados = []
+                    avisos   = []
+                    skipped  = []
+
+                    # 1ª passagem: voluntários
+                    # 2ª passagem: não voluntários (se não chegou)
+                    for fase in ['voluntarios', 'nao_voluntarios']:
+                        if len(nomeados) >= n_rem:
+                            break
+                        for _, row_r in df_ord_rem_sorted.iterrows():
+                            if len(nomeados) >= n_rem:
+                                break
+                            mid_r = str(row_r.get('id', '')).strip()
+                            if not mid_r or mid_r in [n['id'] for n in nomeados]:
+                                continue
+                            is_vol = bool(row_r['voluntario'])
+                            if fase == 'voluntarios' and not is_vol:
+                                continue
+                            if fase == 'nao_voluntarios' and is_vol:
+                                continue
+
+                            # Verificar ausente
+                            if mid_r in ausentes_dia:
+                                skipped.append(f"{mid_r} — ausente")
+                                continue
+
+                            # Verificar sobreposição
+                            sobreposto = False
+                            for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
+                                if _sobreposicao(hi_rem, hf_rem, hi_s, hf_s):
+                                    skipped.append(f"{mid_r} — sobreposição com {serv_s} ({hi_s}-{hf_s})")
+                                    sobreposto = True
+                                    break
+                            if sobreposto:
+                                continue
+
+                            # Verificar descanso (só quem não prescinde)
+                            if not bool(row_r['prescinde_descanso']):
+                                descanso_ok = True
+                                for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
+                                    if not _verif_descanso(hi_s, hf_s, hi_rem, hf_rem):
+                                        skipped.append(f"{mid_r} — menos de 8h descanso com {serv_s}")
+                                        descanso_ok = False
+                                        break
+                                if not descanso_ok:
+                                    continue
+
+                            # ✅ Nomear
+                            if fase == 'nao_voluntarios':
+                                avisos.append(f"⚠️ **{get_nome_curto(df_util, mid_r)} ({mid_r})** nomeado fora da lista de voluntários")
+                            nomeados.append({
+                                'id': mid_r,
+                                'nome': get_nome_curto(df_util, mid_r),
+                                'voluntario': is_vol,
+                                'prescinde': bool(row_r['prescinde_descanso']),
+                                'ultima_vez': row_r[col_ultima],
+                                'total': int(row_r[col_total]),
+                            })
+
+                    # Mostrar resultado
+                    if nomeados:
+                        st.success(f"✅ {len(nomeados)} militar(es) nomeado(s) para Tabela {tab_rem_sel} — {hor_rem}:")
+                        for n in nomeados:
+                            ul = n['ultima_vez'].strftime('%d/%m/%Y') if pd.notna(n['ultima_vez']) else "Nunca"
+                            st.markdown(f"- **{n['nome']} ({n['id']})** — último: {ul} | total ano: {n['total']}")
+                        for av in avisos:
+                            st.warning(av)
+                        if skipped:
+                            with st.expander(f"ℹ️ {len(skipped)} militar(es) ignorado(s)"):
+                                for s in skipped:
+                                    st.caption(s)
+
+                        # Guardar em session_state para confirmar
+                        st.session_state['rem_nomeados'] = {
+                            'nomeados': nomeados,
+                            'data': data_str_rem,
+                            'aba': aba_rem,
+                            'horario': hor_rem,
+                            'tabela': tab_rem_sel,
+                            'observacao': obs_rem,
+                            'col_ultima': col_ultima,
+                            'col_total': col_total,
+                        }
+                    else:
+                        st.warning("Não foi possível nomear militares suficientes.")
+                        if skipped:
+                            with st.expander("ℹ️ Militares ignorados"):
+                                for s in skipped:
+                                    st.caption(s)
+
+                # Confirmar nomeação
+                if 'rem_nomeados' in st.session_state:
+                    dados_rem = st.session_state['rem_nomeados']
+                    if st.button("✅ CONFIRMAR NOMEAÇÃO E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_conf_rem"):
+                        try:
+                            sh_conf = get_sheet()
+                            ws_dia_rem = sh_conf.worksheet(dados_rem['aba'])
+                            ids_nomeados = [n['id'] for n in dados_rem['nomeados']]
+                            ids_str = ", ".join(ids_nomeados)
+                            # Escrever linha na aba do dia
+                            ws_dia_rem.append_row([
+                                ids_str,
+                                f"Svç Remunerado - Tabela {dados_rem['tabela']}",
+                                dados_rem['horario'],
+                                "", "", "",  # indicativo, radio, viatura
+                                dados_rem['observacao'],
+                            ])
+                            # Atualizar ordem_remunerados
+                            ws_ord = sh_conf.worksheet("ordem_remunerados")
+                            todos_vals = ws_ord.get_all_values()
+                            hdrs_ord = [h.strip().lower() for h in todos_vals[0]]
+                            col_id_idx    = hdrs_ord.index('id') if 'id' in hdrs_ord else 0
+                            col_ul_idx    = hdrs_ord.index(dados_rem['col_ultima']) if dados_rem['col_ultima'] in hdrs_ord else None
+                            col_tot_idx   = hdrs_ord.index(dados_rem['col_total'])  if dados_rem['col_total']  in hdrs_ord else None
+                            upds_ord = []
+                            for i, row_o in enumerate(todos_vals[1:], start=2):
+                                mid_o = str(row_o[col_id_idx]).strip() if col_id_idx < len(row_o) else ''
+                                if mid_o in ids_nomeados:
+                                    if col_ul_idx is not None:
+                                        cl = chr(ord('A') + col_ul_idx)
+                                        upds_ord.append({'range': f'{cl}{i}', 'values': [[dados_rem['data']]]})
+                                    if col_tot_idx is not None:
+                                        total_atual = int(str(row_o[col_tot_idx]).strip() or 0) if col_tot_idx < len(row_o) else 0
+                                        cl2 = chr(ord('A') + col_tot_idx)
+                                        upds_ord.append({'range': f'{cl2}{i}', 'values': [[total_atual + 1]]})
+                            if upds_ord:
+                                ws_ord.batch_update(upds_ord)
+                            load_data.clear()
+                            del st.session_state['rem_nomeados']
+                            st.success("✅ Nomeação confirmada e escala atualizada!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro: {e}")
 
         # ── Publicar escala ──
         st.markdown("---")
