@@ -3959,232 +3959,232 @@ else:
 
         with tab_auto:
             modo = st.radio("Modo:", ["📅 Dia único", "📆 Intervalo de dias"], horizontal=True)
-        if modo == "📅 Dia único":
-            d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
-            datas_gerar = [d_gerar]
-        else:
-            col_ini, col_fim = st.columns(2)
-            with col_ini:
-                d_ini = st.date_input("Data início:", format="DD/MM/YYYY")
-            with col_fim:
-                d_fim = st.date_input("Data fim:", format="DD/MM/YYYY")
-            datas_gerar = []
-            d_cur = d_ini
-            while d_cur <= d_fim:
-                datas_gerar.append(d_cur)
-                d_cur += timedelta(days=1)
-            st.caption(f"{len(datas_gerar)} dias selecionados")
+            if modo == "📅 Dia único":
+                d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
+                datas_gerar = [d_gerar]
+            else:
+                col_ini, col_fim = st.columns(2)
+                with col_ini:
+                    d_ini = st.date_input("Data início:", format="DD/MM/YYYY")
+                with col_fim:
+                    d_fim = st.date_input("Data fim:", format="DD/MM/YYYY")
+                datas_gerar = []
+                d_cur = d_ini
+                while d_cur <= d_fim:
+                    datas_gerar.append(d_cur)
+                    d_cur += timedelta(days=1)
+                st.caption(f"{len(datas_gerar)} dias selecionados")
 
-        aba_dia = datas_gerar[0].strftime("%d-%m") if datas_gerar else ""
+            aba_dia = datas_gerar[0].strftime("%d-%m") if datas_gerar else ""
 
-        if st.button("⚙️ GERAR ESCALA", use_container_width=True, type="primary"):
-            with st.spinner("A gerar escala..."):
-                try:
-                    sh = get_sheet()
-
-                    # ── Carregar serviços (uma vez) ──
-                    ws_serv = sh.worksheet("serviços")
-                    serv_vals = ws_serv.get_all_values()
-                    serv_headers = [str(h).strip() for h in serv_vals[0]]
-                    df_serv = pd.DataFrame(serv_vals[1:], columns=serv_headers)
-                    militares_servicos = {}
-                    for col in serv_headers:
-                        ids_col = [str(v).strip() for v in df_serv[col] if str(v).strip()]
-                        for mid in ids_col:
-                            if mid not in militares_servicos:
-                                militares_servicos[mid] = []
-                            militares_servicos[mid].append(col)
-
-                    df_ferias_g = load_ferias(datas_gerar[0].year)
-                    feriados_g  = load_feriados(datas_gerar[0].year)
-
-                    # Ordem inicial — do primeiro dia
-                    aba_primeiro = datas_gerar[0].strftime("%d-%m")
-                    aba_ordem_dia = f"ordem_escala {aba_primeiro}"
-                    aba_ordem_ant = f"ordem_escala {(datas_gerar[0] - timedelta(days=1)).strftime('%d-%m')}"
+            if st.button("⚙️ GERAR ESCALA", use_container_width=True, type="primary"):
+                with st.spinner("A gerar escala..."):
                     try:
-                        ws_ordem = sh.worksheet(aba_ordem_dia)
-                    except:
+                        sh = get_sheet()
+
+                        # ── Carregar serviços (uma vez) ──
+                        ws_serv = sh.worksheet("serviços")
+                        serv_vals = ws_serv.get_all_values()
+                        serv_headers = [str(h).strip() for h in serv_vals[0]]
+                        df_serv = pd.DataFrame(serv_vals[1:], columns=serv_headers)
+                        militares_servicos = {}
+                        for col in serv_headers:
+                            ids_col = [str(v).strip() for v in df_serv[col] if str(v).strip()]
+                            for mid in ids_col:
+                                if mid not in militares_servicos:
+                                    militares_servicos[mid] = []
+                                militares_servicos[mid].append(col)
+
+                        df_ferias_g = load_ferias(datas_gerar[0].year)
+                        feriados_g  = load_feriados(datas_gerar[0].year)
+
+                        # Ordem inicial — do primeiro dia
+                        aba_primeiro = datas_gerar[0].strftime("%d-%m")
+                        aba_ordem_dia = f"ordem_escala {aba_primeiro}"
+                        aba_ordem_ant = f"ordem_escala {(datas_gerar[0] - timedelta(days=1)).strftime('%d-%m')}"
                         try:
-                            ws_ordem = sh.worksheet(aba_ordem_ant)
+                            ws_ordem = sh.worksheet(aba_ordem_dia)
                         except:
-                            st.error("Não foi encontrado nenhum snapshot de ordem_escala.")
-                            st.stop()
-                    ordem_vals = ws_ordem.get_all_values()
-                    ordem_headers = [str(h).strip() for h in ordem_vals[0]]
-                    ordem_atual = {h: [] for h in ordem_headers}
-                    for row in ordem_vals[1:]:
-                        for i, h in enumerate(ordem_headers):
-                            val = str(row[i]).strip() if i < len(row) else ''
-                            if val:
-                                ordem_atual[h].append(val)
+                            try:
+                                ws_ordem = sh.worksheet(aba_ordem_ant)
+                            except:
+                                st.error("Não foi encontrado nenhum snapshot de ordem_escala.")
+                                st.stop()
+                        ordem_vals = ws_ordem.get_all_values()
+                        ordem_headers = [str(h).strip() for h in ordem_vals[0]]
+                        ordem_atual = {h: [] for h in ordem_headers}
+                        for row in ordem_vals[1:]:
+                            for i, h in enumerate(ordem_headers):
+                                val = str(row[i]).strip() if i < len(row) else ''
+                                if val:
+                                    ordem_atual[h].append(val)
 
-                    resultados_dias = []  # lista de dicts por dia
+                        resultados_dias = []  # lista de dicts por dia
 
-                    for d_gerar in datas_gerar:
-                        aba_dia_loop = d_gerar.strftime("%d-%m")
+                        for d_gerar in datas_gerar:
+                            aba_dia_loop = d_gerar.strftime("%d-%m")
 
-                        # Aba do dia
-                        try:
-                            ws_dia_loop = sh.worksheet(aba_dia_loop)
-                            dia_vals_loop = ws_dia_loop.get_all_values()
-                            dia_headers_loop = [str(h).strip().lower() for h in dia_vals_loop[0]]
-                            df_dia_loop = pd.DataFrame(dia_vals_loop[1:], columns=dia_headers_loop)
-                            df_dia_loop = df_dia_loop[df_dia_loop.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-                        except:
-                            # Aba não existe — saltar dia
-                            continue
-
-                        # Indisponíveis
-                        ids_indisponiveis = set()
-                        if not df_dia_loop.empty and 'id' in df_dia_loop.columns:
-                            for _, row in df_dia_loop.iterrows():
-                                mid = str(row.get('id', '')).strip()
-                                if mid and mid != 'nan':
-                                    for m in re.split(r'[;,]', mid):
-                                        m = m.strip()
-                                        if m: ids_indisponiveis.add(m)
-                        todos_ids = list(militares_servicos.keys())
-                        for mid in todos_ids:
-                            if militar_de_ferias(mid, d_gerar, df_ferias_g, feriados_g):
-                                ids_indisponiveis.add(mid)
-
-                        # Slots preenchidos
-                        slots_preenchidos = {}
-                        if not df_dia_loop.empty and 'id' in df_dia_loop.columns and 'serviço' in df_dia_loop.columns:
-                            for _, row in df_dia_loop.iterrows():
-                                mid_r = str(row.get('id', '')).strip()
-                                serv_r = norm(str(row.get('serviço', '')).strip())
-                                hor_r  = str(row.get('horário', '')).strip()
-                                if mid_r and mid_r != 'nan' and serv_r and hor_r:
-                                    chave_r = (serv_r, hor_r)
-                                    slots_preenchidos[chave_r] = slots_preenchidos.get(chave_r, 0) + len([x for x in re.split(r'[;,]', mid_r) if x.strip()])
-
-                        SLOTS = [
-                            ("Atendimento",          "00-08", 1),
-                            ("Atendimento",          "08-16", 1),
-                            ("Atendimento",          "16-24", 1),
-                            ("Patrulha Ocorrências",  "00-08", 2),
-                            ("Patrulha Ocorrências",  "08-16", 2),
-                            ("Patrulha Ocorrências",  "16-24", 2),
-                            ("Apoio Atendimento",     "08-16", 1),
-                            ("Apoio Atendimento",     "16-24", 1),
-                        ]
-                        SLOTS_AJUSTADOS = []
-                        for servico_s, horario_s, num_s in SLOTS:
-                            chave_s = (norm(servico_s), horario_s)
-                            ja = slots_preenchidos.get(chave_s, 0)
-                            vagas = max(0, num_s - ja)
-                            if vagas > 0:
-                                SLOTS_AJUSTADOS.append((servico_s, horario_s, vagas))
-
-                        escalados = []
-                        ids_escalados = set()
-                        ordem_atualizada = {h: list(v) for h, v in ordem_atual.items()}
-                        df_ant_g = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
-                        _servicos_escalaveis = ['atendimento', 'patrulha ocorrencias', 'apoio atendimento', 'patrulha ocorrências']
-
-                        for servico, horario, num in SLOTS_AJUSTADOS:
-                            col_key = f"{servico} {horario}"
-                            if col_key not in ordem_atualizada:
+                            # Aba do dia
+                            try:
+                                ws_dia_loop = sh.worksheet(aba_dia_loop)
+                                dia_vals_loop = ws_dia_loop.get_all_values()
+                                dia_headers_loop = [str(h).strip().lower() for h in dia_vals_loop[0]]
+                                df_dia_loop = pd.DataFrame(dia_vals_loop[1:], columns=dia_headers_loop)
+                                df_dia_loop = df_dia_loop[df_dia_loop.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+                            except:
+                                # Aba não existe — saltar dia
                                 continue
-                            lista = ordem_atualizada[col_key]
-                            colocados = []
-                            for mid in lista:
-                                if len(colocados) >= num: break
-                                if mid in ids_indisponiveis or mid in ids_escalados: continue
-                                if servico not in militares_servicos.get(mid, []): continue
-                                ini_novo_g, _ = _parse_horario(horario)
-                                if ini_novo_g is not None and ini_novo_g < 480:
-                                    d_ant = d_gerar - timedelta(days=1)
-                                    if militar_de_ferias(mid, d_ant, df_ferias_g, feriados_g): continue
-                                    cols_f = df_ferias_g.columns.tolist()
-                                    id_col_f = 'id' if 'id' in cols_f else cols_f[0]
-                                    mil_f2 = df_ferias_g[df_ferias_g[id_col_f].astype(str).str.strip() == str(mid).strip()]
-                                    fim_hoje = False
-                                    for _, row_f2 in mil_f2.iterrows():
-                                        for fc in [c for c in cols_f if 'fim' in c.lower()]:
-                                            fs = str(row_f2.get(fc, '')).strip()
-                                            if not fs or fs == 'nan': continue
-                                            fd = _parse_data_ferias(fs, d_gerar.year)
-                                            if not fd: continue
-                                            fr = _fim_ferias_real(fd, feriados_g)
-                                            if fr == d_gerar: fim_hoje = True; break
-                                        if fim_hoje: break
-                                    if fim_hoje: continue
-                                if not df_ant_g.empty:
-                                    rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
-                                    ini_novo_g2, _ = _parse_horario(horario)
-                                    descanso_ok = True
-                                    for _, r_ant in rows_ant.iterrows():
-                                        hor_ant = str(r_ant.get('horário', '')).strip()
-                                        if not hor_ant: continue
-                                        _, fim_ant_g = _parse_horario(hor_ant)
-                                        if fim_ant_g is None or ini_novo_g2 is None: continue
-                                        if (1440 - fim_ant_g) + ini_novo_g2 < 480:
-                                            descanso_ok = False; break
-                                    if not descanso_ok: continue
-                                colocados.append(mid)
-                                ids_escalados.add(mid)
-                                escalados.append((mid, servico, horario))
-                            for mid in colocados:
-                                ordem_atualizada[col_key].remove(mid)
-                                ordem_atualizada[col_key].append(mid)
 
-                        todos_disponiveis = [mid for mid in todos_ids
-                                            if mid not in ids_indisponiveis and mid not in ids_escalados]
+                            # Indisponíveis
+                            ids_indisponiveis = set()
+                            if not df_dia_loop.empty and 'id' in df_dia_loop.columns:
+                                for _, row in df_dia_loop.iterrows():
+                                    mid = str(row.get('id', '')).strip()
+                                    if mid and mid != 'nan':
+                                        for m in re.split(r'[;,]', mid):
+                                            m = m.strip()
+                                            if m: ids_indisponiveis.add(m)
+                            todos_ids = list(militares_servicos.keys())
+                            for mid in todos_ids:
+                                if militar_de_ferias(mid, d_gerar, df_ferias_g, feriados_g):
+                                    ids_indisponiveis.add(mid)
 
-                        resultados_dias.append({
-                            'data': d_gerar,
-                            'aba': aba_dia_loop,
-                            'escalados': escalados,
-                            'disponiveis': todos_disponiveis,
-                            'ordem_atualizada': ordem_atualizada,
-                        })
+                            # Slots preenchidos
+                            slots_preenchidos = {}
+                            if not df_dia_loop.empty and 'id' in df_dia_loop.columns and 'serviço' in df_dia_loop.columns:
+                                for _, row in df_dia_loop.iterrows():
+                                    mid_r = str(row.get('id', '')).strip()
+                                    serv_r = norm(str(row.get('serviço', '')).strip())
+                                    hor_r  = str(row.get('horário', '')).strip()
+                                    if mid_r and mid_r != 'nan' and serv_r and hor_r:
+                                        chave_r = (serv_r, hor_r)
+                                        slots_preenchidos[chave_r] = slots_preenchidos.get(chave_r, 0) + len([x for x in re.split(r'[;,]', mid_r) if x.strip()])
 
-                        # Atualizar ordem para o próximo dia
-                        ordem_atual = ordem_atualizada
+                            SLOTS = [
+                                ("Atendimento",          "00-08", 1),
+                                ("Atendimento",          "08-16", 1),
+                                ("Atendimento",          "16-24", 1),
+                                ("Patrulha Ocorrências",  "00-08", 2),
+                                ("Patrulha Ocorrências",  "08-16", 2),
+                                ("Patrulha Ocorrências",  "16-24", 2),
+                                ("Apoio Atendimento",     "08-16", 1),
+                                ("Apoio Atendimento",     "16-24", 1),
+                            ]
+                            SLOTS_AJUSTADOS = []
+                            for servico_s, horario_s, num_s in SLOTS:
+                                chave_s = (norm(servico_s), horario_s)
+                                ja = slots_preenchidos.get(chave_s, 0)
+                                vagas = max(0, num_s - ja)
+                                if vagas > 0:
+                                    SLOTS_AJUSTADOS.append((servico_s, horario_s, vagas))
 
-                    st.session_state['escala_gerada_multi'] = {
-                        'resultados': resultados_dias,
-                        'ordem_headers': ordem_headers,
-                    }
+                            escalados = []
+                            ids_escalados = set()
+                            ordem_atualizada = {h: list(v) for h, v in ordem_atual.items()}
+                            df_ant_g = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
+                            _servicos_escalaveis = ['atendimento', 'patrulha ocorrencias', 'apoio atendimento', 'patrulha ocorrências']
+
+                            for servico, horario, num in SLOTS_AJUSTADOS:
+                                col_key = f"{servico} {horario}"
+                                if col_key not in ordem_atualizada:
+                                    continue
+                                lista = ordem_atualizada[col_key]
+                                colocados = []
+                                for mid in lista:
+                                    if len(colocados) >= num: break
+                                    if mid in ids_indisponiveis or mid in ids_escalados: continue
+                                    if servico not in militares_servicos.get(mid, []): continue
+                                    ini_novo_g, _ = _parse_horario(horario)
+                                    if ini_novo_g is not None and ini_novo_g < 480:
+                                        d_ant = d_gerar - timedelta(days=1)
+                                        if militar_de_ferias(mid, d_ant, df_ferias_g, feriados_g): continue
+                                        cols_f = df_ferias_g.columns.tolist()
+                                        id_col_f = 'id' if 'id' in cols_f else cols_f[0]
+                                        mil_f2 = df_ferias_g[df_ferias_g[id_col_f].astype(str).str.strip() == str(mid).strip()]
+                                        fim_hoje = False
+                                        for _, row_f2 in mil_f2.iterrows():
+                                            for fc in [c for c in cols_f if 'fim' in c.lower()]:
+                                                fs = str(row_f2.get(fc, '')).strip()
+                                                if not fs or fs == 'nan': continue
+                                                fd = _parse_data_ferias(fs, d_gerar.year)
+                                                if not fd: continue
+                                                fr = _fim_ferias_real(fd, feriados_g)
+                                                if fr == d_gerar: fim_hoje = True; break
+                                            if fim_hoje: break
+                                        if fim_hoje: continue
+                                    if not df_ant_g.empty:
+                                        rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
+                                        ini_novo_g2, _ = _parse_horario(horario)
+                                        descanso_ok = True
+                                        for _, r_ant in rows_ant.iterrows():
+                                            hor_ant = str(r_ant.get('horário', '')).strip()
+                                            if not hor_ant: continue
+                                            _, fim_ant_g = _parse_horario(hor_ant)
+                                            if fim_ant_g is None or ini_novo_g2 is None: continue
+                                            if (1440 - fim_ant_g) + ini_novo_g2 < 480:
+                                                descanso_ok = False; break
+                                        if not descanso_ok: continue
+                                    colocados.append(mid)
+                                    ids_escalados.add(mid)
+                                    escalados.append((mid, servico, horario))
+                                for mid in colocados:
+                                    ordem_atualizada[col_key].remove(mid)
+                                    ordem_atualizada[col_key].append(mid)
+
+                            todos_disponiveis = [mid for mid in todos_ids
+                                                if mid not in ids_indisponiveis and mid not in ids_escalados]
+
+                            resultados_dias.append({
+                                'data': d_gerar,
+                                'aba': aba_dia_loop,
+                                'escalados': escalados,
+                                'disponiveis': todos_disponiveis,
+                                'ordem_atualizada': ordem_atualizada,
+                            })
+
+                            # Atualizar ordem para o próximo dia
+                            ordem_atual = ordem_atualizada
+
+                        st.session_state['escala_gerada_multi'] = {
+                            'resultados': resultados_dias,
+                            'ordem_headers': ordem_headers,
+                        }
 
 
-                except Exception as e:
-                    st.error(f"Erro ao gerar escala: {e}")
+                    except Exception as e:
+                        st.error(f"Erro ao gerar escala: {e}")
 
-        # ── Mostrar resultado multi-dia (fora do bloco gerar) ──
-        if 'escala_gerada_multi' in st.session_state:
-            dados_multi = st.session_state['escala_gerada_multi']
-            resultados = dados_multi['resultados']
-            ordem_headers = dados_multi['ordem_headers']
+            # ── Mostrar resultado multi-dia (fora do bloco gerar) ──
+            if 'escala_gerada_multi' in st.session_state:
+                dados_multi = st.session_state['escala_gerada_multi']
+                resultados = dados_multi['resultados']
+                ordem_headers = dados_multi['ordem_headers']
 
-            total_escalados = sum(len(r['escalados']) for r in resultados)
-            st.success(f"✅ {len(resultados)} dia(s) gerados — {total_escalados} militares escalados no total!")
-            st.markdown("---")
+                total_escalados = sum(len(r['escalados']) for r in resultados)
+                st.success(f"✅ {len(resultados)} dia(s) gerados — {total_escalados} militares escalados no total!")
+                st.markdown("---")
 
-            for res in resultados:
-                data_str = res['data'].strftime('%d/%m/%Y')
-                escalados_r = res['escalados']
-                disponiveis_r = res['disponiveis']
-                with st.expander(f"📅 {data_str} — {len(escalados_r)} escalados", expanded=len(resultados)==1):
-                    if escalados_r:
-                        df_res = pd.DataFrame(escalados_r, columns=['ID', 'Serviço', 'Horário'])
-                        df_res['Nome'] = df_res['ID'].apply(lambda x: get_nome_curto(df_util, x))
-                        st.dataframe(df_res[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
-                    if disponiveis_r:
-                        st.markdown("**👥 Militares de sobra:**")
-                        sobra = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in disponiveis_r]
-                        st.dataframe(pd.DataFrame(sobra), use_container_width=True, hide_index=True)
+                for res in resultados:
+                    data_str = res['data'].strftime('%d/%m/%Y')
+                    escalados_r = res['escalados']
+                    disponiveis_r = res['disponiveis']
+                    with st.expander(f"📅 {data_str} — {len(escalados_r)} escalados", expanded=len(resultados)==1):
+                        if escalados_r:
+                            df_res = pd.DataFrame(escalados_r, columns=['ID', 'Serviço', 'Horário'])
+                            df_res['Nome'] = df_res['ID'].apply(lambda x: get_nome_curto(df_util, x))
+                            st.dataframe(df_res[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
+                        if disponiveis_r:
+                            st.markdown("**👥 Militares de sobra:**")
+                            sobra = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in disponiveis_r]
+                            st.dataframe(pd.DataFrame(sobra), use_container_width=True, hide_index=True)
 
-            st.markdown("---")
-            if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
-                st.session_state['confirmar_escala'] = True
-                st.rerun()
+                st.markdown("---")
+                if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
+                    st.session_state['confirmar_escala'] = True
+                    st.rerun()
 
-        if st.session_state.pop('escala_ok', False):
-            st.success("✅ Escala escrita e ordem atualizada!")
+            if st.session_state.pop('escala_ok', False):
+                st.success("✅ Escala escrita e ordem atualizada!")
 
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
