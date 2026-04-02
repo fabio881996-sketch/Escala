@@ -3337,8 +3337,8 @@ else:
                         if len(opcoes_t3) < 2:
                             st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
                         else:
-                            sel1 = st.selectbox("1º militar (vai para o teu serviço):", list(opcoes_t3.keys()), key="t3_sel1")
-                            sel2 = st.selectbox("2º militar (vai para o serviço do 1º):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
+                            sel1 = st.selectbox("1º militar (tu ficas com o serviço dele):", list(opcoes_t3.keys()), key="t3_sel1")
+                            sel2 = st.selectbox("2º militar (o 1º fica com o serviço dele):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
                             id1   = str(opcoes_t3[sel1])
                             id2   = str(opcoes_t3[sel2])
                             row1  = df_d[df_d['id'].astype(str) == id1].iloc[0]
@@ -3347,9 +3347,9 @@ else:
                             serv2 = row2['serviço']; hor2 = row2['horário']
                             st.markdown(f"""
                             **Resumo da troca a 3:**
-                            - **Tu** `{meu_serv_t3}` → ficas com o serviço do 1º
-                            - **{sel1}** `{serv1}` → fica com o serviço do 2º
-                            - **{sel2}** `{serv2}` → fica com o teu serviço
+                            - **Tu** `{meu_serv_t3} ({meu_hor_t3})` → ficas com o serviço do **1º**
+                            - **{sel1}** `{serv1} ({hor1})` → fica com o serviço do **2º**
+                            - **{sel2}** `{serv2} ({hor2})` → fica com o **teu** serviço
                             """)
                             if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
                                 data_str = dt_s.strftime('%d/%m/%Y')
