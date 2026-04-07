@@ -3182,9 +3182,15 @@ else:
                     with col_sh1:
                         serv_sel_h = st.selectbox("Serviço:", servicos_disponiveis, key="serv_sel_hist")
                     with col_sh2:
-                        mil_opts_h = {f"{r['id_militar']} — {r['nome']}": r['id_militar']
-                                      for _, r in df_util.iterrows()
-                                      if str(r.get('id_militar', r.get('id',''))).strip()}
+                        # Coluna id pode ser 'id' ou 'id_militar'
+                        col_id_u = 'id_militar' if 'id_militar' in df_util.columns else 'id'
+                        col_nome_u = 'nome' if 'nome' in df_util.columns else col_id_u
+                        mil_opts_h = {}
+                        for _, r in df_util.iterrows():
+                            mid = str(r.get(col_id_u, '')).strip()
+                            nome = str(r.get(col_nome_u, '')).strip()
+                            if mid and mid != 'nan':
+                                mil_opts_h[f"{mid} — {nome}"] = mid
                         mil_sel_h = st.selectbox("Militar:", list(mil_opts_h.keys()), key="mil_sel_hist")
 
                     if st.button("🔍 Pesquisar", key="btn_hist_serv", use_container_width=True):
