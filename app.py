@@ -2900,8 +2900,16 @@ else:
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
         st.title("🔍 Escala Geral")
-        d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
-        aba_sel = d_sel.strftime("%d-%m")
+
+        if is_admin:
+            tab_eg, tab_hist_serv = st.tabs(["📅 Escala do Dia", "🔎 Historial por Serviço"])
+        else:
+            tab_eg = st.container()
+            tab_hist_serv = None
+
+        with tab_eg:
+            d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
+            aba_sel = d_sel.strftime("%d-%m")
 
         # Não-admins: só ver dias publicados
         if not is_admin and aba_sel not in _dias_pub_global:
@@ -3151,6 +3159,71 @@ else:
                         html += "</tr>"
                     html += "</tbody></table></div>"
                     st.markdown(html, unsafe_allow_html=True)
+
+        # ── Tab Historial por Serviço (só admins) ──
+        if is_admin and tab_hist_serv is not None:
+            with tab_hist_serv:
+                st.markdown("#### 🔎 Historial por Serviço")
+                st.caption("Seleciona um serviço e um militar para ver quando fez esse serviço.")
+
+                # Recolher todos os serviços únicos de todas as abas em cache
+                # Usar os serviços da aba "serviços"
+                try:
+                    ws_serv_h = get_sheet().worksheet("serviços")
+                    serv_vals_h = ws_serv_h.get_all_values()
+                    servicos_disponiveis = [str(h).strip() for h in serv_vals_h[0] if str(h).strip()]
+                except:
+                    servicos_disponiveis = []
+
+                if not servicos_disponiveis:
+                    st.info("Não foi possível carregar a lista de serviços.")
+                else:
+                    col_sh1, col_sh2 = st.columns(2)
+                    with col_sh1:
+                        serv_sel_h = st.selectbox("Serviço:", servicos_disponiveis, key="serv_sel_hist")
+                    with col_sh2:
+                        mil_opts_h = {f"{r['id_militar']} — {r['nome']}": r['id_militar']
+                                      for _, r in df_util.iterrows()
+                                      if str(r.get('id_militar', r.get('id',''))).strip()}
+                        mil_sel_h = st.selectbox("Militar:", list(mil_opts_h.keys()), key="mil_sel_hist")
+
+                    if st.button("🔍 Pesquisar", key="btn_hist_serv", use_container_width=True):
+                        mid_h = str(mil_opts_h[mil_sel_h]).strip()
+                        with st.spinner("A pesquisar..."):
+                            # Percorrer todas as abas DD-MM
+                            sh_h = get_sheet()
+                            abas_h = [ws.title for ws in sh_h.worksheets()
+                                      if re.match(r'^\d{2}-\d{2}$', ws.title)]
+                            resultados_h = []
+                            for aba_h in sorted(abas_h):
+                                df_h = load_data(aba_h)
+                                if df_h.empty:
+                                    continue
+                                # Filtrar pelo militar e serviço
+                                mask_mil = df_h['id'].astype(str).str.strip() == mid_h
+                                mask_serv = df_h['serviço'].astype(str).str.strip().str.lower() == serv_sel_h.lower()
+                                linhas = df_h[mask_mil & mask_serv]
+                                if not linhas.empty:
+                                    for _, row_h in linhas.iterrows():
+                                        try:
+                                            dt_h = datetime.strptime(f"{aba_h}-{datetime.now().year}", "%d-%m-%Y")
+                                            data_fmt_h = dt_h.strftime("%d/%m/%Y")
+                                            dia_sem_h = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"][dt_h.weekday()]
+                                        except:
+                                            data_fmt_h = aba_h
+                                            dia_sem_h = ""
+                                        resultados_h.append({
+                                            'Data': f"{data_fmt_h} ({dia_sem_h})",
+                                            'Horário': str(row_h.get('horário', '')),
+                                            'Observações': str(row_h.get('observações', '') or ''),
+                                        })
+
+                        if resultados_h:
+                            st.success(f"✅ {len(resultados_h)} ocorrência(s) encontrada(s)")
+                            df_res_h = pd.DataFrame(resultados_h)
+                            st.dataframe(df_res_h, use_container_width=True, hide_index=True)
+                        else:
+                            st.info(f"Nenhum registo de **{serv_sel_h}** para este militar.")
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
