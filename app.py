@@ -3178,7 +3178,7 @@ else:
                 if not servicos_disponiveis:
                     st.info("Não foi possível carregar a lista de serviços.")
                 else:
-                    col_sh1, col_sh2 = st.columns(2)
+                    col_sh1, col_sh2, col_sh3 = st.columns(3)
                     with col_sh1:
                         serv_sel_h = st.selectbox("Serviço:", servicos_disponiveis, key="serv_sel_hist")
                     with col_sh2:
@@ -3192,44 +3192,60 @@ else:
                             if mid and mid != 'nan':
                                 mil_opts_h[f"{mid} — {nome}"] = mid
                         mil_sel_h = st.selectbox("Militar:", list(mil_opts_h.keys()), key="mil_sel_hist")
+                    with col_sh3:
+                        hor_sel_h = st.text_input("Horário:", placeholder="ex: 00-08", key="hor_sel_hist")
 
-                    if st.button("🔍 Pesquisar", key="btn_hist_serv", use_container_width=True):
+                    if st.button("🔍 Pesquisar último", key="btn_hist_serv", use_container_width=True):
                         mid_h = str(mil_opts_h[mil_sel_h]).strip()
                         with st.spinner("A pesquisar..."):
-                            # Percorrer todas as abas DD-MM
                             sh_h = get_sheet()
-                            abas_h = [ws.title for ws in sh_h.worksheets()
-                                      if re.match(r'^\d{2}-\d{2}$', ws.title)]
-                            resultados_h = []
-                            for aba_h in sorted(abas_h):
+                            # Ordenar abas do mais recente para o mais antigo
+                            abas_h = sorted(
+                                [ws.title for ws in sh_h.worksheets() if re.match(r'^\d{2}-\d{2}$', ws.title)],
+                                reverse=True
+                            )
+                            resultado_h = None
+                            for aba_h in abas_h:
                                 df_h = load_data(aba_h)
                                 if df_h.empty:
                                     continue
-                                # Filtrar pelo militar e serviço
-                                mask_mil = df_h['id'].astype(str).str.strip() == mid_h
+                                mask_mil  = df_h['id'].astype(str).str.strip() == mid_h
                                 mask_serv = df_h['serviço'].astype(str).str.strip().str.lower() == serv_sel_h.lower()
-                                linhas = df_h[mask_mil & mask_serv]
+                                mask_hor  = df_h['horário'].astype(str).str.strip() == hor_sel_h.strip() if hor_sel_h.strip() else pd.Series([True]*len(df_h), index=df_h.index)
+                                linhas = df_h[mask_mil & mask_serv & mask_hor]
                                 if not linhas.empty:
-                                    for _, row_h in linhas.iterrows():
-                                        try:
-                                            dt_h = datetime.strptime(f"{aba_h}-{datetime.now().year}", "%d-%m-%Y")
-                                            data_fmt_h = dt_h.strftime("%d/%m/%Y")
-                                            dia_sem_h = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"][dt_h.weekday()]
-                                        except:
-                                            data_fmt_h = aba_h
-                                            dia_sem_h = ""
-                                        resultados_h.append({
-                                            'Data': f"{data_fmt_h} ({dia_sem_h})",
-                                            'Horário': str(row_h.get('horário', '')),
-                                            'Observações': str(row_h.get('observações', '') or ''),
-                                        })
+                                    row_h = linhas.iloc[0]
+                                    try:
+                                        ano_h = datetime.now().year
+                                        dt_h  = datetime.strptime(f"{aba_h}-{ano_h}", "%d-%m-%Y")
+                                        # Se data futura, tentar ano anterior
+                                        if dt_h.date() > datetime.now().date():
+                                            dt_h = datetime.strptime(f"{aba_h}-{ano_h-1}", "%d-%m-%Y")
+                                        dia_sem_h = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"][dt_h.weekday()]
+                                        data_fmt_h = f"{dt_h.strftime('%d/%m/%Y')} ({dia_sem_h})"
+                                    except:
+                                        data_fmt_h = aba_h
+                                    resultado_h = {
+                                        'data': data_fmt_h,
+                                        'horario': str(row_h.get('horário', '')),
+                                        'obs': str(row_h.get('observações', '') or ''),
+                                    }
+                                    break  # parar ao primeiro encontrado
 
-                        if resultados_h:
-                            st.success(f"✅ {len(resultados_h)} ocorrência(s) encontrada(s)")
-                            df_res_h = pd.DataFrame(resultados_h)
-                            st.dataframe(df_res_h, use_container_width=True, hide_index=True)
+                        if resultado_h:
+                            nome_mil = mil_sel_h.split('—')[1].strip() if '—' in mil_sel_h else mil_sel_h
+                            st.success(f"✅ Último serviço encontrado:")
+                            st.markdown(f"""
+                            | Campo | Valor |
+                            |-------|-------|
+                            | **Militar** | {nome_mil} |
+                            | **Serviço** | {serv_sel_h} |
+                            | **Data** | {resultado_h['data']} |
+                            | **Horário** | {resultado_h['horario']} |
+                            | **Observações** | {resultado_h['obs']} |
+                            """)
                         else:
-                            st.info(f"Nenhum registo de **{serv_sel_h}** para este militar.")
+                            st.info(f"Nenhum registo encontrado para **{serv_sel_h}** com este militar.")
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
