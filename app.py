@@ -3850,21 +3850,33 @@ else:
             st.stop()
 
         hoje_a = datetime.now()
-        # Verificar os próximos 30 dias
-        alertas_trocas   = []
-        alertas_duplos   = []
-        alertas_descanso = []
+        alertas_trocas     = []
+        alertas_duplos     = []
+        alertas_descanso   = []
         alertas_esquecidos = []
 
-        # IDs de todos os militares ativos
         ids_ativos = set(df_util['id'].astype(str).str.strip().tolist()) if not df_util.empty else set()
 
+        # Pré-calcular set de férias para todos os militares nos próximos 30 dias
+        # em vez de chamar militar_de_ferias() por cada militar por cada dia
+        def _mid_de_ferias_set(dias_range):
+            """Devolve dict {data_str: set(ids em férias)} para o range dado."""
+            resultado = {}
+            for dt in dias_range:
+                em_ferias = set()
+                for mid in ids_ativos:
+                    if militar_de_ferias(mid, dt.date(), df_ferias, feriados):
+                        em_ferias.add(mid)
+                resultado[dt.strftime('%d/%m/%Y')] = em_ferias
+            return resultado
+
         with st.spinner("A verificar escalas..."):
+            # Recolher dias com escala (máx 30 dias)
+            dias_com_escala = []
             dias_sem = 0
             j = 0
-            while dias_sem < 5 and j < 60:
+            while dias_sem < 5 and j < 30:
                 dt_a = hoje_a + timedelta(days=j)
-                d_s_a = dt_a.strftime('%d/%m/%Y')
                 aba_a = dt_a.strftime('%d-%m')
                 df_a = load_data(aba_a)
                 j += 1
@@ -3872,6 +3884,16 @@ else:
                     dias_sem += 1
                     continue
                 dias_sem = 0
+                dias_com_escala.append((dt_a, df_a))
+
+            # Pré-calcular férias só para os dias encontrados
+            ferias_por_dia = _mid_de_ferias_set([dt for dt, _ in dias_com_escala])
+
+            df_ant_cache = {}  # cache local do dia anterior
+
+            for dt_a, df_a in dias_com_escala:
+                d_s_a = dt_a.strftime('%d/%m/%Y')
+                aba_a = dt_a.strftime('%d-%m')
 
                 # ── Alerta 1: Trocas validadas com escala alterada ──
                 if not df_trocas.empty:
@@ -3881,7 +3903,6 @@ else:
                         (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
                     ]
                     for _, t in tr_val.iterrows():
-                        # Verificar se o servico_origem ainda existe para id_origem
                         serv_o = t['servico_origem'].rsplit('(', 1)[0].strip().lower()
                         hor_o  = t['servico_origem'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_origem'] else ''
                         existe = df_a[
@@ -3892,9 +3913,9 @@ else:
                         if existe.empty:
                             n_o = get_nome_militar(df_util, t['id_origem'])
                             n_d = get_nome_militar(df_util, t['id_destino'])
-                            alertas_trocas.append(f"**{d_s_a}** — Troca {n_o} ↔ {n_d}: serviço `{t['servico_origem']}` já não existe na escala")
+                            alertas_trocas.append(f"**{d_s_a}** — Troca {n_o} ↔ {n_d}: `{t['servico_origem']}` já não existe")
 
-                # ── Alerta 2: Militar escalado em 2 serviços no mesmo dia ──
+                # ── Alerta 2: Militar escalado em 2 serviços ──
                 df_a_serv = df_a[~df_a['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                 contagem = df_a_serv[df_a_serv['id'].astype(str).str.strip() != ''].groupby('id').size()
                 for mid, count in contagem.items():
@@ -3904,44 +3925,39 @@ else:
                         servs_str = ' / '.join([f"{s} ({h})" for s, h in servs])
                         alertas_duplos.append(f"**{d_s_a}** — {n}: {servs_str}")
 
-                # ── Alerta 3: Menos de 8h de descanso entre dias consecutivos ──
-                dt_ant = dt_a - timedelta(days=1)
-                df_ant_a = load_data(dt_ant.strftime('%d-%m'))
+                # ── Alerta 3: Menos de 8h de descanso ──
+                aba_ant = (dt_a - timedelta(days=1)).strftime('%d-%m')
+                if aba_ant not in df_ant_cache:
+                    df_ant_cache[aba_ant] = load_data(aba_ant)
+                df_ant_a = df_ant_cache[aba_ant]
+
                 if not df_ant_a.empty:
                     ids_hoje = df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).unique()
+                    # Pré-filtrar dia anterior uma vez
+                    df_ant_serv = df_ant_a[~df_ant_a['serviço'].apply(norm).str.contains('remu|grat|folga|ferias|licen|doente', na=False)]
                     for mid in ids_hoje:
-                        rows_hoje = df_a[
-                            (df_a['id'].astype(str) == mid) &
-                            (~df_a['serviço'].apply(norm).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
-                        ]
-                        rows_ant = df_ant_a[
-                            (df_ant_a['id'].astype(str) == mid) &
-                            (~df_ant_a['serviço'].apply(norm).str.contains('remu|grat|folga|ferias|licen|doente', na=False))
-                        ]
+                        rows_hoje = df_a_serv[df_a_serv['id'].astype(str) == mid]
+                        rows_ant  = df_ant_serv[df_ant_serv['id'].astype(str) == mid]
+                        if rows_ant.empty: continue
                         for _, rh in rows_hoje.iterrows():
-                            ini_h, fim_h = _parse_horario(rh['horário'])
-                            if ini_h is None: continue
-                            if _e_atendimento(rh['serviço']): continue
+                            ini_h, _ = _parse_horario(rh['horário'])
+                            if ini_h is None or _e_atendimento(rh['serviço']): continue
                             for _, ra in rows_ant.iterrows():
-                                ini_a, fim_a = _parse_horario(ra['horário'])
-                                if ini_a is None: continue
-                                if _e_atendimento(ra['serviço']): continue
-                                # fim do dia anterior → início de hoje
+                                _, fim_a = _parse_horario(ra['horário'])
+                                if fim_a is None or _e_atendimento(ra['serviço']): continue
                                 descanso = (ini_h + 1440) - fim_a
                                 if 0 <= descanso < 480:
                                     n = get_nome_militar(df_util, mid)
                                     h2, m2 = descanso // 60, descanso % 60
-                                    alertas_descanso.append(f"**{d_s_a}** — {n}: apenas {h2}h{m2:02d}m entre `{ra['serviço']} ({ra['horário']})` ({dt_ant.strftime('%d/%m')}) e `{rh['serviço']} ({rh['horário']})`")
+                                    alertas_descanso.append(f"**{d_s_a}** — {n}: {h2}h{m2:02d}m entre `{ra['serviço']} ({ra['horário']})` e `{rh['serviço']} ({rh['horário']})`")
 
-                # ── Alerta 4: Militar não escalado no dia ──
-                ids_na_escala = set(df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).str.strip().tolist())
-                esquecidos = ids_ativos - ids_na_escala
+                # ── Alerta 4: Militar não escalado ──
+                ids_na_escala = set(df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).str.strip())
+                em_ferias_hoje = ferias_por_dia.get(d_s_a, set())
+                esquecidos = ids_ativos - ids_na_escala - em_ferias_hoje
                 for mid in sorted(esquecidos):
-                    # Excluir militares de férias
-                    if militar_de_ferias(mid, dt_a.date(), df_ferias, feriados):
-                        continue
                     n = get_nome_militar(df_util, mid)
-                    alertas_esquecidos.append(f"**{d_s_a}** — {n} (ID: {mid}) não está escalado")
+                    alertas_esquecidos.append(f"**{d_s_a}** — {n} ({mid}) não está escalado")
         with st.expander(f"🔍 Militares não escalados ({len(alertas_esquecidos)})", expanded=len(alertas_esquecidos) > 0):
             if alertas_esquecidos:
                 for a in alertas_esquecidos:
