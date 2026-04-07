@@ -4060,19 +4060,36 @@ else:
                                     ordem_atual[h].append(val)
 
                         resultados_dias = []  # lista de dicts por dia
+                        import time as _tg
 
-                        for d_gerar in datas_gerar:
+                        for idx_g, d_gerar in enumerate(datas_gerar):
+                            # Pausa entre dias para evitar quota
+                            if idx_g > 0:
+                                _tg.sleep(8)
                             aba_dia_loop = d_gerar.strftime("%d-%m")
 
-                            # Aba do dia
+                            # Aba do dia — com retry em caso de quota
+                            dia_vals_loop = None
+                            for _tentativa_g in range(3):
+                                try:
+                                    ws_dia_loop = sh.worksheet(aba_dia_loop)
+                                    dia_vals_loop = ws_dia_loop.get_all_values()
+                                    break
+                                except Exception as _eg:
+                                    if '429' in str(_eg) and _tentativa_g < 2:
+                                        _tg.sleep(20)
+                                    elif '404' in str(_eg) or 'not found' in str(_eg).lower():
+                                        break  # aba não existe
+                                    else:
+                                        break
+                            if not dia_vals_loop:
+                                continue
+
                             try:
-                                ws_dia_loop = sh.worksheet(aba_dia_loop)
-                                dia_vals_loop = ws_dia_loop.get_all_values()
                                 dia_headers_loop = [str(h).strip().lower() for h in dia_vals_loop[0]]
                                 df_dia_loop = pd.DataFrame(dia_vals_loop[1:], columns=dia_headers_loop)
                                 df_dia_loop = df_dia_loop[df_dia_loop.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
                             except:
-                                # Aba não existe — saltar dia
                                 continue
 
                             # Indisponíveis
