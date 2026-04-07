@@ -287,18 +287,18 @@ def _df_from_records(records) -> pd.DataFrame:
 
 @st.cache_data(ttl=180)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 2 minutos."""
+    """Carrega dados de uma aba da Google Sheet com cache de 3 minutos."""
     import time
-    for tentativa in range(3):
+    for tentativa in range(4):
         try:
             sh = get_sheet()
             if sh is None:
                 return pd.DataFrame()
             return _df_from_records(sh.worksheet(aba_nome).get_all_records())
-        except Exception:
-            if tentativa < 2:
-                get_sheet.clear()
-                time.sleep(1)
+        except Exception as e:
+            if tentativa < 3:
+                wait = 15 * (tentativa + 1)  # 15s, 30s, 45s
+                time.sleep(wait)
     return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -3874,16 +3874,25 @@ else:
                 sh2 = get_sheet()
                 from collections import defaultdict
                 for idx_res, res in enumerate(resultados_c):
-                    # Pausa a cada 3 dias para evitar quota
-                    if idx_res > 0 and idx_res % 3 == 0:
+                    # Pausa entre dias para evitar quota
+                    if idx_res > 0:
                         import time as _time
-                        _time.sleep(10)
+                        _time.sleep(8)
                     aba_r = res['aba']
                     escalados_r = res['escalados']
                     ordem_r = res['ordem_atualizada']
                     data_r = res['data']
 
-                    ws_dia_r = sh2.worksheet(aba_r)
+                    # Retry em caso de quota
+                    for _t in range(3):
+                        try:
+                            ws_dia_r = sh2.worksheet(aba_r)
+                            break
+                        except Exception as _e:
+                            if _t < 2:
+                                import time as _time2; _time2.sleep(20)
+                            else:
+                                raise _e
                     todas_linhas_r = ws_dia_r.get_all_values()
                     hdrs_r = [h.strip().lower() for h in todas_linhas_r[0]]
                     ix_id_r   = hdrs_r.index('id')      if 'id'      in hdrs_r else 0
