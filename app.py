@@ -4056,6 +4056,17 @@ else:
                     nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
                     abas_existentes = [ws.title for ws in sh2.worksheets()]
 
+                    _slots_map_r = {
+                        (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
+                        (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
+                        (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
+                        (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
+                        (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
+                        (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
+                        (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
+                        (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
+                    }
+
                     # Usar ordem_r que já vem do dia anterior com os escalados movidos
                     ordem_base = {h: list(v) for h, v in ordem_r.items()}
                     hdrs_prox  = ordem_headers_c
