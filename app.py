@@ -297,8 +297,21 @@ def load_data(aba_nome: str) -> pd.DataFrame:
             return _df_from_records(sh.worksheet(aba_nome).get_all_records())
         except Exception as e:
             if tentativa < 3:
-                wait = 15 * (tentativa + 1)  # 15s, 30s, 45s
+                wait = 15 * (tentativa + 1)
                 time.sleep(wait)
+    return pd.DataFrame()
+
+def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
+    """Lê aba diretamente do Sheets SEM cache — para uso na geração de escala."""
+    import time
+    for tentativa in range(3):
+        try:
+            return _df_from_records(sh.worksheet(aba_nome).get_all_records())
+        except Exception as e:
+            if '429' in str(e) and tentativa < 2:
+                time.sleep(20)
+            else:
+                return pd.DataFrame()
     return pd.DataFrame()
 
 @st.cache_data(ttl=300)
@@ -4141,17 +4154,14 @@ else:
                                 if val:
                                     ordem_atual[h].append(val)
 
-                        resultados_dias = []  # lista de dicts por dia
-                        import time as _tg
+                        resultados_dias = []
 
                         for idx_g, d_gerar in enumerate(datas_gerar):
-                            # Pausa entre dias para evitar quota
-                            if idx_g > 0:
-                                _tg.sleep(8)
                             aba_dia_loop = d_gerar.strftime("%d-%m")
 
-                            # Aba do dia — com retry em caso de quota
+                            # Ler aba do dia diretamente sem cache
                             dia_vals_loop = None
+                            import time as _tg
                             for _tentativa_g in range(3):
                                 try:
                                     ws_dia_loop = sh.worksheet(aba_dia_loop)
@@ -4160,8 +4170,6 @@ else:
                                 except Exception as _eg:
                                     if '429' in str(_eg) and _tentativa_g < 2:
                                         _tg.sleep(20)
-                                    elif '404' in str(_eg) or 'not found' in str(_eg).lower():
-                                        break  # aba não existe
                                     else:
                                         break
                             if not dia_vals_loop:
@@ -4220,7 +4228,7 @@ else:
                             escalados = []
                             ids_escalados = set()
                             ordem_atualizada = {h: list(v) for h, v in ordem_atual.items()}
-                            df_ant_g = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
+                            df_ant_g = load_data_direto(sh, (d_gerar - timedelta(days=1)).strftime("%d-%m"))
                             _servicos_escalaveis = ['atendimento', 'patrulha ocorrencias', 'apoio atendimento', 'patrulha ocorrências']
 
                             for servico, horario, num in SLOTS_AJUSTADOS:
