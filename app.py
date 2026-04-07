@@ -3515,10 +3515,15 @@ else:
                         if rem_dia.empty:
                             st.info("Não há serviços remunerados escalados neste dia.")
                         else:
-                            # Verificar sobreposição de horário com o meu serviço
+                            # Verificar sobreposição — usar horário real após trocas aprovadas
                             meu_ini, meu_fim = (None, None)
-                            if not meu.empty and meu.iloc[0]['horário']:
-                                meu_ini, meu_fim = _parse_horario(meu.iloc[0]['horário'])
+                            meu_hor_real = None
+                            if servico_override and '(' in servico_override:
+                                meu_hor_real = servico_override.rsplit('(', 1)[1].rstrip(')')
+                            elif not meu.empty and meu.iloc[0]['horário']:
+                                meu_hor_real = meu.iloc[0]['horário']
+                            if meu_hor_real:
+                                meu_ini, meu_fim = _parse_horario(meu_hor_real)
 
                             opts_rem = []
                             for _, r in rem_dia.iterrows():
