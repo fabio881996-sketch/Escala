@@ -3857,25 +3857,42 @@ else:
 
         ids_ativos = set(df_util['id'].astype(str).str.strip().tolist()) if not df_util.empty else set()
 
-        # Pré-calcular set de férias para todos os militares nos próximos 30 dias
-        # em vez de chamar militar_de_ferias() por cada militar por cada dia
-        def _mid_de_ferias_set(dias_range):
-            """Devolve dict {data_str: set(ids em férias)} para o range dado."""
-            resultado = {}
-            for dt in dias_range:
-                em_ferias = set()
-                for mid in ids_ativos:
-                    if militar_de_ferias(mid, dt.date(), df_ferias, feriados):
+        # Pré-calcular IDs de férias a partir do df_ferias (sem chamar militar_de_ferias por dia)
+        def _ids_de_ferias_no_dia(dt):
+            """Devolve set de IDs em férias numa data, sem iterar por militar."""
+            em_ferias = set()
+            if df_ferias.empty:
+                return em_ferias
+            cols = df_ferias.columns.tolist()
+            ini_cols = [c for c in cols if 'ini' in c.lower()]
+            fim_cols  = [c for c in cols if 'fim' in c.lower()]
+            id_col = 'id' if 'id' in cols else cols[0]
+            data = dt.date() if hasattr(dt, 'date') else dt
+            for _, row in df_ferias.iterrows():
+                mid = str(row.get(id_col, '')).strip()
+                if not mid or mid == 'nan':
+                    continue
+                for ini_c, fim_c in zip(ini_cols, fim_cols):
+                    ini_s = str(row.get(ini_c, '')).strip()
+                    fim_s = str(row.get(fim_c, '')).strip()
+                    if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan':
+                        continue
+                    ini_d = _parse_data_ferias(ini_s, data.year)
+                    fim_d = _parse_data_ferias(fim_s, data.year)
+                    if not ini_d or not fim_d:
+                        continue
+                    fim_real = _fim_ferias_real(fim_d, feriados)
+                    if ini_d <= data <= fim_real:
                         em_ferias.add(mid)
-                resultado[dt.strftime('%d/%m/%Y')] = em_ferias
-            return resultado
+                        break
+            return em_ferias
 
         with st.spinner("A verificar escalas..."):
-            # Recolher dias com escala (máx 30 dias)
-            dias_com_escala = []
             dias_sem = 0
             j = 0
-            while dias_sem < 5 and j < 30:
+            df_ant_cache = {}
+
+            while dias_sem < 3 and j < 20:
                 dt_a = hoje_a + timedelta(days=j)
                 aba_a = dt_a.strftime('%d-%m')
                 df_a = load_data(aba_a)
@@ -3884,18 +3901,9 @@ else:
                     dias_sem += 1
                     continue
                 dias_sem = 0
-                dias_com_escala.append((dt_a, df_a))
-
-            # Pré-calcular férias só para os dias encontrados
-            ferias_por_dia = _mid_de_ferias_set([dt for dt, _ in dias_com_escala])
-
-            df_ant_cache = {}  # cache local do dia anterior
-
-            for dt_a, df_a in dias_com_escala:
                 d_s_a = dt_a.strftime('%d/%m/%Y')
-                aba_a = dt_a.strftime('%d-%m')
 
-                # ── Alerta 1: Trocas validadas com escala alterada ──
+                # ── Alerta 1: Trocas com escala alterada ──
                 if not df_trocas.empty:
                     tr_val = df_trocas[
                         (df_trocas['data'] == d_s_a) &
@@ -3907,57 +3915,53 @@ else:
                         hor_o  = t['servico_origem'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_origem'] else ''
                         existe = df_a[
                             (df_a['id'].astype(str) == str(t['id_origem'])) &
-                            (df_a['serviço'].astype(str).str.strip().str.lower() == serv_o) &
-                            (df_a['horário'].astype(str).str.strip() == hor_o.strip())
+                            (df_a['serviço'].str.strip().str.lower() == serv_o) &
+                            (df_a['horário'].str.strip() == hor_o.strip())
                         ]
                         if existe.empty:
                             n_o = get_nome_militar(df_util, t['id_origem'])
                             n_d = get_nome_militar(df_util, t['id_destino'])
-                            alertas_trocas.append(f"**{d_s_a}** — Troca {n_o} ↔ {n_d}: `{t['servico_origem']}` já não existe")
+                            alertas_trocas.append(f"**{d_s_a}** — {n_o} ↔ {n_d}: `{t['servico_origem']}` já não existe")
 
-                # ── Alerta 2: Militar escalado em 2 serviços ──
+                # ── Alerta 2: Militar em 2 serviços ──
                 df_a_serv = df_a[~df_a['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                 contagem = df_a_serv[df_a_serv['id'].astype(str).str.strip() != ''].groupby('id').size()
                 for mid, count in contagem.items():
                     if count > 1:
                         n = get_nome_militar(df_util, mid)
                         servs = df_a_serv[df_a_serv['id'].astype(str) == str(mid)][['serviço','horário']].values.tolist()
-                        servs_str = ' / '.join([f"{s} ({h})" for s, h in servs])
-                        alertas_duplos.append(f"**{d_s_a}** — {n}: {servs_str}")
+                        alertas_duplos.append(f"**{d_s_a}** — {n}: {' / '.join([f'{s} ({h})' for s,h in servs])}")
 
-                # ── Alerta 3: Menos de 8h de descanso ──
+                # ── Alerta 3: Menos de 8h descanso ──
                 aba_ant = (dt_a - timedelta(days=1)).strftime('%d-%m')
                 if aba_ant not in df_ant_cache:
                     df_ant_cache[aba_ant] = load_data(aba_ant)
                 df_ant_a = df_ant_cache[aba_ant]
-
                 if not df_ant_a.empty:
-                    ids_hoje = df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).unique()
-                    # Pré-filtrar dia anterior uma vez
                     df_ant_serv = df_ant_a[~df_ant_a['serviço'].apply(norm).str.contains('remu|grat|folga|ferias|licen|doente', na=False)]
-                    for mid in ids_hoje:
-                        rows_hoje = df_a_serv[df_a_serv['id'].astype(str) == mid]
-                        rows_ant  = df_ant_serv[df_ant_serv['id'].astype(str) == mid]
-                        if rows_ant.empty: continue
-                        for _, rh in rows_hoje.iterrows():
+                    ids_hoje = set(df_a_serv[df_a_serv['id'].astype(str).str.strip() != '']['id'].astype(str))
+                    ids_ant  = set(df_ant_serv[df_ant_serv['id'].astype(str).str.strip() != '']['id'].astype(str))
+                    for mid in ids_hoje & ids_ant:  # só militares em ambos os dias
+                        rows_h = df_a_serv[df_a_serv['id'].astype(str) == mid]
+                        rows_a = df_ant_serv[df_ant_serv['id'].astype(str) == mid]
+                        for _, rh in rows_h.iterrows():
                             ini_h, _ = _parse_horario(rh['horário'])
                             if ini_h is None or _e_atendimento(rh['serviço']): continue
-                            for _, ra in rows_ant.iterrows():
+                            for _, ra in rows_a.iterrows():
                                 _, fim_a = _parse_horario(ra['horário'])
                                 if fim_a is None or _e_atendimento(ra['serviço']): continue
                                 descanso = (ini_h + 1440) - fim_a
                                 if 0 <= descanso < 480:
                                     n = get_nome_militar(df_util, mid)
-                                    h2, m2 = descanso // 60, descanso % 60
+                                    h2, m2 = descanso//60, descanso%60
                                     alertas_descanso.append(f"**{d_s_a}** — {n}: {h2}h{m2:02d}m entre `{ra['serviço']} ({ra['horário']})` e `{rh['serviço']} ({rh['horário']})`")
 
-                # ── Alerta 4: Militar não escalado ──
+                # ── Alerta 4: Não escalado ──
                 ids_na_escala = set(df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).str.strip())
-                em_ferias_hoje = ferias_por_dia.get(d_s_a, set())
-                esquecidos = ids_ativos - ids_na_escala - em_ferias_hoje
-                for mid in sorted(esquecidos):
+                em_ferias_hoje = _ids_de_ferias_no_dia(dt_a)
+                for mid in sorted(ids_ativos - ids_na_escala - em_ferias_hoje):
                     n = get_nome_militar(df_util, mid)
-                    alertas_esquecidos.append(f"**{d_s_a}** — {n} ({mid}) não está escalado")
+                    alertas_esquecidos.append(f"**{d_s_a}** — {n} ({mid})")
         with st.expander(f"🔍 Militares não escalados ({len(alertas_esquecidos)})", expanded=len(alertas_esquecidos) > 0):
             if alertas_esquecidos:
                 for a in alertas_esquecidos:
