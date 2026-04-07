@@ -3957,15 +3957,17 @@ else:
                     # Criar ordem_escala do dia seguinte
                     nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
                     nova_o_r = [ordem_headers_c]
-                    ml_r = max(len(v) for v in ordem_r.values())
+                    ml_r = max(len(v) for v in ordem_r.values()) if ordem_r else 1
                     for i in range(ml_r):
                         nova_o_r.append([ordem_r[h][i] if i < len(ordem_r[h]) else '' for h in ordem_headers_c])
-                    try:
+                    # Verificar se aba já existe
+                    abas_existentes = [ws.title for ws in sh2.worksheets()]
+                    if nome_prox in abas_existentes:
                         ws_prox_exist = sh2.worksheet(nome_prox)
                         ws_prox_exist.clear()
                         ws_prox_exist.update('A1', nova_o_r)
                         ws_prox_exist.hide()
-                    except:
+                    else:
                         ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(ordem_headers_c))
                         ws_prox.update('A1', nova_o_r)
                         ws_prox.hide()
