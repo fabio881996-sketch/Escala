@@ -4050,18 +4050,25 @@ else:
                                 ws_dia_r.update(f'{cl_d}{i}', [[ids_disp_str]])
                                 break
 
-                    # Contabilizar escalas manuais — mover para o fim da ordem
-                    _slots_map_r = {
-                        (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
-                        (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
-                        (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
-                        (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
-                        (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
-                        (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
-                        (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
-                        (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
-                    }
+                    # ── Atualizar ordem_escala do dia seguinte ──
+                    # Sempre parte do ordem_escala do dia atual (que vem da geração)
+                    # ignorando qualquer ordem_escala existente para o dia seguinte
+                    nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
+                    abas_existentes = [ws.title for ws in sh2.worksheets()]
+
+                    # Usar ordem_r que já vem do dia anterior com os escalados movidos
+                    ordem_base = {h: list(v) for h, v in ordem_r.items()}
+                    hdrs_prox  = ordem_headers_c
+
+                    # Mover militares escalados automaticamente para o fim
                     ids_auto_r = set(m for m, _, _ in escalados_r)
+                    for col_key_p, lista_p in ordem_base.items():
+                        for mid_p in list(ids_auto_r):
+                            if mid_p in lista_p:
+                                lista_p.remove(mid_p)
+                                lista_p.append(mid_p)
+
+                    # Mover militares manuais para o fim também
                     for row_m in todas_linhas_r[1:]:
                         serv_m = norm(row_m[ix_serv_r].strip()) if ix_serv_r < len(row_m) else ''
                         hor_m  = str(row_m[ix_hor_r]).strip()   if ix_hor_r  < len(row_m) else ''
@@ -4069,32 +4076,29 @@ else:
                         if not id_m or id_m == 'nan':
                             continue
                         col_key_m = _slots_map_r.get((serv_m, hor_m))
-                        if not col_key_m or col_key_m not in ordem_r:
+                        if not col_key_m or col_key_m not in ordem_base:
                             continue
                         for mid_m in re.split(r'[;,]', id_m):
                             mid_m = mid_m.strip()
                             if not mid_m or mid_m in ids_auto_r:
                                 continue
-                            # Manual — mover para o fim
-                            if mid_m in ordem_r[col_key_m]:
-                                ordem_r[col_key_m].remove(mid_m)
-                                ordem_r[col_key_m].append(mid_m)
+                            if mid_m in ordem_base[col_key_m]:
+                                ordem_base[col_key_m].remove(mid_m)
+                                ordem_base[col_key_m].append(mid_m)
 
-                    # Criar ordem_escala do dia seguinte
-                    nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
-                    nova_o_r = [ordem_headers_c]
-                    ml_r = max(len(v) for v in ordem_r.values()) if ordem_r else 1
+                    # Escrever ordem — substituir sempre
+                    nova_o_r = [hdrs_prox]
+                    ml_r = max((len(v) for v in ordem_base.values()), default=1)
                     for i in range(ml_r):
-                        nova_o_r.append([ordem_r[h][i] if i < len(ordem_r[h]) else '' for h in ordem_headers_c])
-                    # Verificar se aba já existe
-                    abas_existentes = [ws.title for ws in sh2.worksheets()]
+                        nova_o_r.append([ordem_base[h][i] if i < len(ordem_base[h]) else '' for h in hdrs_prox])
+
                     if nome_prox in abas_existentes:
                         ws_prox_exist = sh2.worksheet(nome_prox)
                         ws_prox_exist.clear()
                         ws_prox_exist.update('A1', nova_o_r)
                         ws_prox_exist.hide()
                     else:
-                        ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(ordem_headers_c))
+                        ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(hdrs_prox))
                         ws_prox.update('A1', nova_o_r)
                         ws_prox.hide()
 
