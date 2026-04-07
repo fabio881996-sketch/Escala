@@ -4006,9 +4006,12 @@ else:
                     try:
                         sh = get_sheet()
 
-                        # ── Carregar serviços (uma vez) ──
-                        ws_serv = sh.worksheet("serviços")
-                        serv_vals = ws_serv.get_all_values()
+                        # ── Carregar serviços (cached) ──
+                        @st.cache_data(ttl=300)
+                        def _load_servicos_gerar():
+                            ws = get_sheet().worksheet("serviços")
+                            return ws.get_all_values()
+                        serv_vals = _load_servicos_gerar()
                         serv_headers = [str(h).strip() for h in serv_vals[0]]
                         df_serv = pd.DataFrame(serv_vals[1:], columns=serv_headers)
                         militares_servicos = {}
