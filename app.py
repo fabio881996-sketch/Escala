@@ -3996,24 +3996,8 @@ else:
         tab_auto, tab_rem = st.tabs(["⚙️ Escala Automática", "💶 Nomear para Remunerado"])
 
         with tab_auto:
-            modo = st.radio("Modo:", ["📅 Dia único", "📆 Intervalo de dias"], horizontal=True)
-            if modo == "📅 Dia único":
-                d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
-                datas_gerar = [d_gerar]
-            else:
-                col_ini, col_fim = st.columns(2)
-                with col_ini:
-                    d_ini = st.date_input("Data início:", format="DD/MM/YYYY")
-                with col_fim:
-                    d_fim = st.date_input("Data fim:", format="DD/MM/YYYY")
-                datas_gerar = []
-                d_cur = d_ini
-                while d_cur <= d_fim:
-                    datas_gerar.append(d_cur)
-                    d_cur += timedelta(days=1)
-                st.caption(f"{len(datas_gerar)} dias selecionados")
-                if len(datas_gerar) > 7:
-                    st.warning("⚠️ Recomendado máximo 7 dias por vez para evitar erros de quota.")
+            d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
+            datas_gerar = [d_gerar]
 
             aba_dia = datas_gerar[0].strftime("%d-%m") if datas_gerar else ""
 
