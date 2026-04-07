@@ -3873,7 +3873,11 @@ else:
             try:
                 sh2 = get_sheet()
                 from collections import defaultdict
-                for res in resultados_c:
+                for idx_res, res in enumerate(resultados_c):
+                    # Pausa a cada 3 dias para evitar quota
+                    if idx_res > 0 and idx_res % 3 == 0:
+                        import time as _time
+                        _time.sleep(10)
                     aba_r = res['aba']
                     escalados_r = res['escalados']
                     ordem_r = res['ordem_atualizada']
@@ -3999,6 +4003,8 @@ else:
                     datas_gerar.append(d_cur)
                     d_cur += timedelta(days=1)
                 st.caption(f"{len(datas_gerar)} dias selecionados")
+                if len(datas_gerar) > 7:
+                    st.warning("⚠️ Recomendado máximo 7 dias por vez para evitar erros de quota.")
 
             aba_dia = datas_gerar[0].strftime("%d-%m") if datas_gerar else ""
 
