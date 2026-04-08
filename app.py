@@ -4564,92 +4564,94 @@ else:
                 dados_editar = st.session_state['editar_escala']
                 abas_lista = list(dados_editar.items())
 
+                def _guardar_sheets(editados_dict):
+                    sh_gc = get_sheet()
+                    for aba_g, df_g in editados_dict.items():
+                        ws_g = sh_gc.worksheet(aba_g)
+                        todas_g = ws_g.get_all_values()
+                        hdrs_g = [h.strip().lower() for h in todas_g[0]]
+                        ix_id_g = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
+                        ix_sv_g = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
+                        ix_hr_g = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
+                        ix_in_g = hdrs_g.index('indicativo rádio') if 'indicativo rádio' in hdrs_g else (hdrs_g.index('indicativo') if 'indicativo' in hdrs_g else None)
+                        ix_ra_g = hdrs_g.index('rádio') if 'rádio' in hdrs_g else None
+                        ix_gi_g = hdrs_g.index('giro') if 'giro' in hdrs_g else None
+                        ix_ob_g = hdrs_g.index('observações') if 'observações' in hdrs_g else None
+                        mapa_g = {str(r['id']).strip(): r for _, r in df_g.iterrows()}
+                        upds_g = []
+                        for i, row_g in enumerate(todas_g[1:], start=2):
+                            mid_g = str(row_g[ix_id_g]).strip() if ix_id_g < len(row_g) else ''
+                            if not mid_g or mid_g == 'nan': continue
+                            for mid_p in re.split(r'[;,]+', mid_g):
+                                mid_p = mid_p.strip()
+                                if not mid_p or mid_p not in mapa_g: continue
+                                r_g = mapa_g[mid_p]
+                                for ix_g, campo_g in [(ix_sv_g,'serviço'),(ix_hr_g,'horário'),(ix_in_g,'indicativo'),(ix_ra_g,'rádio'),(ix_gi_g,'giro'),(ix_ob_g,'observações')]:
+                                    if ix_g is not None:
+                                        upds_g.append({'range': f'{chr(ord("A")+ix_g)}{i}', 'values': [[str(r_g.get(campo_g,'') or '').strip()]]})
+                                break
+                        if upds_g:
+                            ws_g.batch_update(upds_g)
+                    load_data.clear()
+
+                dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
+
                 if len(abas_lista) == 2:
-                    # Tabela unificada com os 2 dias
                     aba_1, info_1 = abas_lista[0]
                     aba_2, info_2 = abas_lista[1]
-                    d1 = info_1['data']
-                    d2 = info_2['data']
-                    dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
-                    label_1 = f"Serviço {d1.strftime('%d/%m')} {dias_pt[d1.weekday()]}"
+                    d1, d2 = info_1['data'], info_2['data']
+                    label_1  = f"Serviço {d1.strftime('%d/%m')} {dias_pt[d1.weekday()]}"
                     label_h1 = f"Horário {d1.strftime('%d/%m')}"
-                    label_2 = f"Serviço {d2.strftime('%d/%m')} {dias_pt[d2.weekday()]}"
+                    label_2  = f"Serviço {d2.strftime('%d/%m')} {dias_pt[d2.weekday()]}"
                     label_h2 = f"Horário {d2.strftime('%d/%m')}"
-
                     mapa_1 = {r['id']: r for r in info_1['linhas']}
                     mapa_2 = {r['id']: r for r in info_2['linhas']}
-
                     linhas_uni = []
                     for mid in [r['id'] for r in info_1['linhas']]:
                         r1 = mapa_1.get(mid, {})
                         r2 = mapa_2.get(mid, {})
-                        linhas_uni.append({
-                            'id':   mid,
-                            'nome': r1.get('nome', ''),
-                            label_1: r1.get('serviço', ''),
-                            label_h1: r1.get('horário', ''),
-                            label_2: r2.get('serviço', ''),
-                            label_h2: r2.get('horário', ''),
-                        })
-
+                        linhas_uni.append({'id': mid, 'nome': r1.get('nome',''), label_1: r1.get('serviço',''), label_h1: r1.get('horário',''), label_2: r2.get('serviço',''), label_h2: r2.get('horário','')})
                     df_uni = pd.DataFrame(linhas_uni)
-                    col_config_uni = {
-                        'id':      st.column_config.TextColumn('ID', disabled=True, width='small'),
-                        'nome':    st.column_config.TextColumn('Nome', disabled=True, width='small'),
-                        label_1:   st.column_config.SelectboxColumn(label_1, options=todos_servicos_e, width='medium'),
-                        label_h1:  st.column_config.TextColumn(label_h1, width='small'),
-                        label_2:   st.column_config.SelectboxColumn(label_2, options=todos_servicos_e, width='medium'),
-                        label_h2:  st.column_config.TextColumn(label_h2, width='small'),
-                    }
-                    st.data_editor(
+                    df_editado_uni = st.data_editor(
                         df_uni,
-                        column_config=col_config_uni,
-                        hide_index=True,
-                        use_container_width=True,
-                        key="editor_unificado",
-                        num_rows="fixed",
+                        column_config={
+                            'id':     st.column_config.TextColumn('ID', disabled=True, width='small'),
+                            'nome':   st.column_config.TextColumn('Nome', disabled=True, width='small'),
+                            label_1:  st.column_config.SelectboxColumn(label_1, options=todos_servicos_e, width='medium'),
+                            label_h1: st.column_config.TextColumn(label_h1, width='small'),
+                            label_2:  st.column_config.SelectboxColumn(label_2, options=todos_servicos_e, width='medium'),
+                            label_h2: st.column_config.TextColumn(label_h2, width='small'),
+                        },
+                        hide_index=True, use_container_width=True,
+                        key="editor_unificado", num_rows="fixed",
                     )
-
-                    # Reconstruir df com edições do session_state
-                    editor_state_uni = st.session_state.get("editor_unificado", {})
-                    edited_rows_uni  = editor_state_uni.get('edited_rows', {})
-                    df_editado_uni = df_uni.copy()
-                    for row_idx_str, changes in edited_rows_uni.items():
-                        row_idx = int(row_idx_str)
-                        for col, val in changes.items():
-                            df_editado_uni.at[row_idx, col] = val
-
-                    # Separar de volta em editados_e por aba
-                    editados_e = {}
-                    rows_1, rows_2 = [], []
-                    for _, row_u in df_editado_uni.iterrows():
-                        mid = str(row_u['id'])
-                        r1_orig = dict(mapa_1.get(mid, {'id': mid, 'nome': '', 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}))
-                        r2_orig = dict(mapa_2.get(mid, {'id': mid, 'nome': '', 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}))
-                        r1_orig['id'] = mid
-                        r2_orig['id'] = mid
-                        # Usar label exacto da coluna do data_editor
-                        if label_1 in row_u.index:
-                            r1_orig['serviço'] = str(row_u[label_1] or '')
-                        if label_h1 in row_u.index:
-                            r1_orig['horário'] = str(row_u[label_h1] or '')
-                        if label_2 in row_u.index:
-                            r2_orig['serviço'] = str(row_u[label_2] or '')
-                        if label_h2 in row_u.index:
-                            r2_orig['horário'] = str(row_u[label_h2] or '')
-                        rows_1.append(r1_orig)
-                        rows_2.append(r2_orig)
-                    editados_e[aba_1] = pd.DataFrame(rows_1)
-                    editados_e[aba_2] = pd.DataFrame(rows_2)
+                    if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
+                        with st.spinner("A guardar..."):
+                            try:
+                                rows_1, rows_2 = [], []
+                                for _, row_u in df_editado_uni.iterrows():
+                                    mid = str(row_u['id'])
+                                    r1o = dict(mapa_1.get(mid, {'id':mid,'nome':'','serviço':'','horário':'','indicativo':'','rádio':'','giro':'','observações':''}))
+                                    r2o = dict(mapa_2.get(mid, {'id':mid,'nome':'','serviço':'','horário':'','indicativo':'','rádio':'','giro':'','observações':''}))
+                                    r1o['id'] = mid; r2o['id'] = mid
+                                    r1o['serviço'] = str(row_u.get(label_1) or '')
+                                    r1o['horário'] = str(row_u.get(label_h1) or '')
+                                    r2o['serviço'] = str(row_u.get(label_2) or '')
+                                    r2o['horário'] = str(row_u.get(label_h2) or '')
+                                    rows_1.append(r1o); rows_2.append(r2o)
+                                _guardar_sheets({aba_1: pd.DataFrame(rows_1), aba_2: pd.DataFrame(rows_2)})
+                                del st.session_state['editar_escala']
+                                st.success("✅ Guardado!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
 
                 else:
-                    # Um só dia — mostrar todas as colunas
                     aba_e, info_e = abas_lista[0]
                     d_e = info_e['data']
-                    dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {dias_pt[d_e.weekday()]}**")
                     df_s = pd.DataFrame(info_e['linhas'])
-                    st.data_editor(
+                    df_editado_s = st.data_editor(
                         df_s,
                         column_config={
                             'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
@@ -4661,72 +4663,18 @@ else:
                             'giro':        st.column_config.TextColumn('Giro', width='small'),
                             'observações': st.column_config.TextColumn('Observações', width='medium'),
                         },
-                        hide_index=True,
-                        use_container_width=True,
-                        key=f"editor_{aba_e}",
-                        num_rows="fixed",
+                        hide_index=True, use_container_width=True,
+                        key=f"editor_{aba_e}", num_rows="fixed",
                     )
-                    # Reconstruir df com edições do session_state
-                    editor_state = st.session_state.get(f"editor_{aba_e}", {})
-                    edited_rows = editor_state.get('edited_rows', {})
-                    df_final = df_s.copy()
-                    for row_idx_str, changes in edited_rows.items():
-                        row_idx = int(row_idx_str)
-                        for col, val in changes.items():
-                            df_final.at[row_idx, col] = val
-                    editados_e = {aba_e: df_final}
-
-                # Processar guardar ANTES de renderizar botão
-                if st.session_state.get('guardar_editar_acao'):
-                    dados_guardar = st.session_state.pop('guardar_editar_acao')
-                    with st.spinner("A guardar..."):
-                        try:
-                            sh_gc = get_sheet()
-                            for aba_g, linhas_g in dados_guardar.items():
-                                ws_g = sh_gc.worksheet(aba_g)
-                                todas_g = ws_g.get_all_values()
-                                hdrs_g = [h.strip().lower() for h in todas_g[0]]
-                                ix_id_g  = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
-                                ix_sv_g  = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
-                                ix_hr_g  = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
-                                ix_in_g  = hdrs_g.index('indicativo rádio') if 'indicativo rádio' in hdrs_g else (hdrs_g.index('indicativo') if 'indicativo' in hdrs_g else None)
-                                ix_ra_g  = hdrs_g.index('rádio') if 'rádio' in hdrs_g else None
-                                ix_gi_g  = hdrs_g.index('giro') if 'giro' in hdrs_g else None
-                                ix_ob_g  = hdrs_g.index('observações') if 'observações' in hdrs_g else None
-                                mapa_g = {str(r['id']).strip(): r for r in linhas_g}
-                                upds_g = []
-                                for i, row_g in enumerate(todas_g[1:], start=2):
-                                    mid_g = str(row_g[ix_id_g]).strip() if ix_id_g < len(row_g) else ''
-                                    if not mid_g or mid_g == 'nan': continue
-                                    for mid_p in re.split(r'[;,]+', mid_g):
-                                        mid_p = mid_p.strip()
-                                        if not mid_p or mid_p not in mapa_g: continue
-                                        r_g = mapa_g[mid_p]
-                                        def _ug(ix, val):
-                                            if ix is not None:
-                                                upds_g.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [[str(val or '').strip()]]})
-                                        _ug(ix_sv_g, r_g.get('serviço',''))
-                                        _ug(ix_hr_g, r_g.get('horário',''))
-                                        if r_g.get('indicativo'): _ug(ix_in_g, r_g['indicativo'])
-                                        if r_g.get('rádio'):      _ug(ix_ra_g, r_g['rádio'])
-                                        if r_g.get('giro'):       _ug(ix_gi_g, r_g['giro'])
-                                        if r_g.get('observações'):_ug(ix_ob_g, r_g['observações'])
-                                        break
-                                if upds_g:
-                                    ws_g.batch_update(upds_g)
-                            load_data.clear()
-                            del st.session_state['editar_escala']
-                            st.session_state.pop('editar_escala_original', None)
-                            st.success("✅ Guardado!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro: {e}")
-
-                if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
-                    st.session_state['guardar_editar_acao'] = {
-                        aba: df_g.to_dict('records') for aba, df_g in editados_e.items()
-                    }
-                    st.rerun()
+                    if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
+                        with st.spinner("A guardar..."):
+                            try:
+                                _guardar_sheets({aba_e: df_editado_s})
+                                del st.session_state['editar_escala']
+                                st.success("✅ Guardado!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
 
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
