@@ -4514,6 +4514,7 @@ else:
             opts_vtr_e = _listas.get('Viatura', [''])
             opts_gir_e = _listas.get('Giro', [''])
             opts_sv_e  = _listas.get('Serviço', todos_servicos_e) or todos_servicos_e
+            st.caption(f"DEBUG listas: hor={opts_hor_e[:3]} rad={opts_rad_e[:3]} ind={opts_ind_e[:3]}")
 
             def _adicionar_lista(campo, valor):
                 """Adiciona valor novo à aba listas se não existir."""
