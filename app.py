@@ -4522,6 +4522,7 @@ else:
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
                     em_ferias_e = ferias_cache_e[d_e]
+                    st.write(f"DEBUG {aba_e}: {len(mapa_e)} militares no mapa. Exemplo: {list(mapa_e.items())[:3]}")
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
                         mid = str(row_u.get('id', '')).strip()
