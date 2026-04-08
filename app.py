@@ -4554,6 +4554,8 @@ else:
 
             # ── Mostrar tabelas por dia ──
             if 'editar_escala' in st.session_state:
+                if 'debug_upds' in st.session_state:
+                    st.info(st.session_state.pop('debug_upds'))
                 dados_editar = st.session_state['editar_escala']
                 abas_lista = list(dados_editar.items())
 
@@ -4690,10 +4692,10 @@ else:
                                         _u(ix_ob_e, r_e.get('observações'))
                                         break  # só atualizar pela primeira ocorrência do militar
                                 if upds_e:
-                                    st.write(f"DEBUG {aba_e}: {len(upds_e)} updates — ex: {upds_e[:3]}")
+                                    st.session_state['debug_upds'] = f"{aba_e}: {len(upds_e)} updates — ex: {upds_e[:3]}"
                                     ws_e.batch_update(upds_e)
                                 else:
-                                    st.warning(f"DEBUG {aba_e}: nenhum update gerado. edit_map_e keys: {list(edit_map_e.keys())[:5]}")
+                                    st.session_state['debug_upds'] = f"{aba_e}: ZERO updates. edit_map keys: {list(edit_map_e.keys())[:5]}"
 
                             load_data.clear()
                             del st.session_state['editar_escala']
