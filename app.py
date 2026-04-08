@@ -1812,7 +1812,7 @@ else:
             "👥 Efetivo",
         ]
         if is_admin:
-            menu_opt += ["", "🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "👤 Gerir Utilizadores"]
+            menu_opt += ["", "🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "📢 Publicar Escala", "👤 Gerir Utilizadores"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
@@ -4182,34 +4182,41 @@ else:
                         ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_pad))
                         ws_nova.update('A1', [hdrs_pad])
 
-                df_existente = load_data_direto(sh_tab, aba_dia)
-
-                # Construir mapa id -> dados da escala existente
-                # load_data_direto já explode IDs múltiplos (cada ID em linha separada)
+                # Ler aba do dia diretamente para apanhar IDs múltiplos
                 mapa_existente = {}
-                if not df_existente.empty:
-                    for _, row_ex in df_existente.iterrows():
-                        mid = str(row_ex.get('id', '')).strip()
-                        if not mid or mid == 'nan':
-                            continue
-                        serv = str(row_ex.get('serviço', '')).strip()
-                        hor  = str(row_ex.get('horário', '')).strip()
-                        ind  = str(row_ex.get('indicativo rádio', '') or row_ex.get('indicativo', '')).strip()
-                        rad  = str(row_ex.get('rádio', '') or row_ex.get('radio', '')).strip()
-                        giro = str(row_ex.get('giro', '')).strip()
-                        obs  = str(row_ex.get('observações', '')).strip()
-                        for v in ['nan']:
-                            serv = '' if serv == v else serv
-                            hor  = '' if hor  == v else hor
-                            ind  = '' if ind  == v else ind
-                            rad  = '' if rad  == v else rad
-                            giro = '' if giro == v else giro
-                            obs  = '' if obs  == v else obs
-                        mapa_existente[mid] = {
-                            'serviço': serv, 'horário': hor,
-                            'indicativo': ind, 'rádio': rad,
-                            'giro': giro, 'observações': obs,
-                        }
+                try:
+                    ws_dia_tab = sh_tab.worksheet(aba_dia)
+                    vals_tab = ws_dia_tab.get_all_values()
+                    if vals_tab and len(vals_tab) > 1:
+                        hdrs_tab = [h.strip().lower() for h in vals_tab[0]]
+                        ix_id_t  = hdrs_tab.index('id')      if 'id'      in hdrs_tab else 0
+                        ix_sv_t  = hdrs_tab.index('serviço') if 'serviço' in hdrs_tab else 1
+                        ix_hr_t  = hdrs_tab.index('horário') if 'horário' in hdrs_tab else 2
+                        ix_in_t  = hdrs_tab.index('indicativo rádio') if 'indicativo rádio' in hdrs_tab else (hdrs_tab.index('indicativo') if 'indicativo' in hdrs_tab else None)
+                        ix_ra_t  = hdrs_tab.index('rádio') if 'rádio' in hdrs_tab else None
+                        ix_gi_t  = hdrs_tab.index('giro') if 'giro' in hdrs_tab else None
+                        ix_ob_t  = hdrs_tab.index('observações') if 'observações' in hdrs_tab else None
+                        ix_vt_t  = hdrs_tab.index('viatura') if 'viatura' in hdrs_tab else None
+                        def _gt(row, ix):
+                            return str(row[ix]).strip().replace('nan','') if ix is not None and ix < len(row) else ''
+                        for row_t in vals_tab[1:]:
+                            id_raw = _gt(row_t, ix_id_t)
+                            if not id_raw: continue
+                            dados_t = {
+                                'serviço':    _gt(row_t, ix_sv_t),
+                                'horário':    _gt(row_t, ix_hr_t),
+                                'indicativo': _gt(row_t, ix_in_t),
+                                'rádio':      _gt(row_t, ix_ra_t),
+                                'giro':       _gt(row_t, ix_gi_t),
+                                'viatura':    _gt(row_t, ix_vt_t),
+                                'observações':_gt(row_t, ix_ob_t),
+                            }
+                            for mid in re.split(r'[;,\n]+', id_raw):
+                                mid = mid.strip()
+                                if mid:
+                                    mapa_existente[mid] = dados_t
+                except:
+                    pass
 
                 linhas = []
                 for _, row_u in df_util.iterrows():
@@ -4218,14 +4225,14 @@ else:
                         continue
                     nome  = str(row_u.get('nome', '')).strip()
                     posto = str(row_u.get('posto', '')).strip()
-
-                    # Dados existentes ou férias automáticas
+                    # Filtrar militares de férias (não mostrar na tabela)
+                    if militar_de_ferias(mid, d_gerar, df_ferias, feriados):
+                        continue
+                    # Dados existentes ou vazio
                     if mid in mapa_existente:
                         dados = mapa_existente[mid]
-                    elif militar_de_ferias(mid, d_gerar, df_ferias, feriados):
-                        dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
                     else:
-                        dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
+                        dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
 
                     linhas.append({
                         'id': mid,
@@ -4514,7 +4521,9 @@ else:
             opts_vtr_e = _listas.get('Viatura', [''])
             opts_gir_e = _listas.get('Giro', [''])
             opts_sv_e  = _listas.get('Serviço', todos_servicos_e) or todos_servicos_e
-            st.caption(f"DEBUG listas: hor={opts_hor_e[:3]} rad={opts_rad_e[:3]} ind={opts_ind_e[:3]}")
+            # Garantir que horário tem sempre as opções base
+            if len(opts_hor_e) <= 1:
+                opts_hor_e = ['', '00-08', '08-16', '16-24']
 
             def _adicionar_lista(campo, valor):
                 """Adiciona valor novo à aba listas se não existir."""
@@ -5224,11 +5233,14 @@ else:
                         except Exception as e:
                             st.error(f"Erro: {e}")
 
-        # ── Publicar escala ──
-        st.markdown("---")
-        st.markdown("#### 📢 Publicar Escala")
+    # --- 📢 PUBLICAR ESCALA (ADMIN) ---
+    elif menu == "📢 Publicar Escala":
+        st.title("📢 Publicar Escala")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
         dias_pub = load_dias_publicados()
-        d_pub = st.date_input("Data a publicar:", format="DD/MM/YYYY", key="d_pub")
+        d_pub = st.date_input("Data:", format="DD/MM/YYYY", key="d_pub")
         aba_pub = d_pub.strftime("%d-%m")
         ja_publicado = aba_pub in dias_pub
         if ja_publicado:
@@ -5239,10 +5251,9 @@ else:
                     ws_p = sh_p.worksheet("escala_publicada")
                     todos = ws_p.col_values(1)
                     if aba_pub in todos:
-                        idx_p = todos.index(aba_pub) + 1
-                        ws_p.delete_rows(idx_p)
+                        ws_p.delete_rows(todos.index(aba_pub) + 1)
                     load_dias_publicados.clear()
-                    st.success("✅ Escala despublicada!")
+                    st.success("✅ Despublicado!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro: {e}")
