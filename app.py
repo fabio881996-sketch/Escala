@@ -4519,8 +4519,8 @@ else:
                                     'giro':        _get(row_r, ix_gi_r),
                                     'observações': _get(row_r, ix_ob_r),
                                 }
-                                # Expandir múltiplos IDs na mesma célula
-                                for mid in re.split(r'[;,]', id_raw):
+                                # Expandir múltiplos IDs na mesma célula (separadores: ; , \n espaço)
+                                for mid in re.split(r'[;,\n]+', id_raw):
                                     mid = mid.strip()
                                     if mid:
                                         mapa_e[mid] = dados_r
@@ -4662,20 +4662,21 @@ else:
                                 for i, row_s in enumerate(todas_e[1:], start=2):
                                     mid_s = str(row_s[ix_id_e]).strip() if ix_id_e < len(row_s) else ''
                                     if not mid_s or mid_s == 'nan': continue
-                                    for mid_part in re.split(r'[;,]', mid_s):
+                                    for mid_part in re.split(r'[;,\s]+', mid_s):
                                         mid_part = mid_part.strip()
-                                        if mid_part not in edit_map_e: continue
+                                        if not mid_part or mid_part not in edit_map_e: continue
                                         r_e = edit_map_e[mid_part]
                                         def _u(ix, val):
-                                            if ix is not None:
+                                            if ix is not None and val is not None and str(val).strip() not in ('', 'nan', 'None'):
                                                 cl = chr(ord('A') + ix)
-                                                upds_e.append({'range': f'{cl}{i}', 'values': [[str(val or '').strip()]]})
-                                        _u(ix_sv_e, r_e['serviço'])
-                                        _u(ix_hr_e, r_e['horário'])
-                                        _u(ix_in_e, r_e['indicativo'])
-                                        _u(ix_ra_e, r_e['rádio'])
-                                        _u(ix_gi_e, r_e['giro'])
-                                        _u(ix_ob_e, r_e['observações'])
+                                                upds_e.append({'range': f'{cl}{i}', 'values': [[str(val).strip()]]})
+                                        _u(ix_sv_e, r_e.get('serviço'))
+                                        _u(ix_hr_e, r_e.get('horário'))
+                                        _u(ix_in_e, r_e.get('indicativo'))
+                                        _u(ix_ra_e, r_e.get('rádio'))
+                                        _u(ix_gi_e, r_e.get('giro'))
+                                        _u(ix_ob_e, r_e.get('observações'))
+                                        break  # só atualizar pela primeira ocorrência do militar
                                 if upds_e:
                                     ws_e.batch_update(upds_e)
 
