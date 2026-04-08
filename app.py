@@ -4677,6 +4677,15 @@ else:
                                 ix_ob_e   = hdrs_e.index('observações') if 'observações' in hdrs_e else None
 
                                 original_map_e = st.session_state.get('editar_escala_original', {}).get(aba_e, {})
+                                edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
+                                # Debug — ver um militar específico
+                                exemplo_mid = list(edit_map_e.keys())[0] if edit_map_e else None
+                                if exemplo_mid:
+                                    st.session_state['debug_upds'] = (
+                                        f"edit_map[{exemplo_mid}]={dict(edit_map_e[exemplo_mid])}\n"
+                                        f"original[{exemplo_mid}]={original_map_e.get(exemplo_mid, 'NAO ENCONTRADO')}\n"
+                                        f"ix_sv={ix_sv_e} ix_hr={ix_hr_e}"
+                                    )
 
                                 edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
                                 upds_e = []
