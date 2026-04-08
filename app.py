@@ -4451,14 +4451,19 @@ else:
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Erro ao guardar: {e}")
-                st.success("✅ Escala escrita e ordem atualizada!")
 
         with tab_editar:
             st.markdown("#### ✏️ Editar Escala")
             st.caption("Seleciona até 3 dias para ver e editar em simultâneo.")
 
-            # ── Carregar serviços (reutilizar do tab_auto) ──
-            todos_servicos_e = [''] + sorted(set(serv_headers)) if 'serv_headers' in dir() else ['']
+            # ── Carregar serviços ──
+            @st.cache_data(ttl=300)
+            def _load_servicos_editar():
+                ws = get_sheet().worksheet("serviços")
+                return ws.get_all_values()
+            _sv_e = _load_servicos_editar()
+            _hdrs_e = [str(h).strip() for h in _sv_e[0]]
+            todos_servicos_e = [''] + sorted(set(_hdrs_e))
 
             col_e1, col_e2, col_e3 = st.columns(3)
             with col_e1:
