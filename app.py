@@ -4466,7 +4466,8 @@ else:
             # Incluir serviços extra que podem aparecer na escala mas não estão na aba serviços
             _extras_e = ['Férias', 'Folga Semanal', 'Folga Complementar', 'Outras Licenças',
                          'Doente', 'Baixa', 'Diligência', 'Inquéritos', 'Secretaria',
-                         'Pronto', 'Tribunal', 'Disponível']
+                         'Pronto', 'Tribunal', 'Disponível',
+                         'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Baixa']
             todos_servicos_e = [''] + sorted(set(_hdrs_e + _extras_e))
 
             col_e1, col_e2 = st.columns(2)
@@ -4525,6 +4526,11 @@ else:
                                         mapa_e[mid] = dados_r
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
+                    # Adicionar serviços encontrados na aba ao dropdown
+                    for dados_mid in mapa_e.values():
+                        sv = dados_mid.get('serviço', '')
+                        if sv and sv not in todos_servicos_e:
+                            todos_servicos_e.append(sv)
                     em_ferias_e = ferias_cache_e[d_e]
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
