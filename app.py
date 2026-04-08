@@ -4676,67 +4676,57 @@ else:
                             df_final.at[row_idx, col] = val
                     editados_e = {aba_e: df_final}
 
-                if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
+                # Processar guardar ANTES de renderizar botão
+                if st.session_state.get('guardar_editar_acao'):
+                    dados_guardar = st.session_state.pop('guardar_editar_acao')
                     with st.spinner("A guardar..."):
                         try:
                             sh_gc = get_sheet()
-                            erros_e = []
-                            for aba_e, df_ge in editados_e.items():
-                                ws_e = sh_gc.worksheet(aba_e)
-                                todas_e = ws_e.get_all_values()
-                                hdrs_e = [h.strip().lower() for h in todas_e[0]]
-                                ix_id_e   = hdrs_e.index('id')      if 'id'      in hdrs_e else 0
-                                ix_sv_e   = hdrs_e.index('serviço') if 'serviço' in hdrs_e else 1
-                                ix_hr_e   = hdrs_e.index('horário') if 'horário' in hdrs_e else 2
-                                ix_in_e   = hdrs_e.index('indicativo rádio') if 'indicativo rádio' in hdrs_e else (hdrs_e.index('indicativo') if 'indicativo' in hdrs_e else None)
-                                ix_ra_e   = hdrs_e.index('rádio') if 'rádio' in hdrs_e else None
-                                ix_gi_e   = hdrs_e.index('giro') if 'giro' in hdrs_e else None
-                                ix_ob_e   = hdrs_e.index('observações') if 'observações' in hdrs_e else None
-
-                                original_map_e = st.session_state.get('editar_escala_original', {}).get(aba_e, {})
-                                edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
-                                # Debug — ver um militar específico
-                                exemplo_mid = list(edit_map_e.keys())[0] if edit_map_e else None
-                                if exemplo_mid:
-                                    st.session_state['debug_upds'] = (
-                                        f"edit_map[{exemplo_mid}]={dict(edit_map_e[exemplo_mid])}\n"
-                                        f"original[{exemplo_mid}]={original_map_e.get(exemplo_mid, 'NAO ENCONTRADO')}\n"
-                                        f"ix_sv={ix_sv_e} ix_hr={ix_hr_e}"
-                                    )
-
-                                edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
-                                upds_e = []
-                                for i, row_s in enumerate(todas_e[1:], start=2):
-                                    mid_s = str(row_s[ix_id_e]).strip() if ix_id_e < len(row_s) else ''
-                                    if not mid_s or mid_s == 'nan': continue
-                                    for mid_part in re.split(r'[;,]+', mid_s):
-                                        mid_part = mid_part.strip()
-                                        if not mid_part or mid_part not in edit_map_e: continue
-                                        r_e = edit_map_e[mid_part]
-                                        r_o = original_map_e.get(mid_part, {})
-                                        def _u(ix, campo):
-                                            val_novo = str(r_e.get(campo, '') or '').strip()
-                                            val_orig = str(r_o.get(campo, '') or '').strip()
-                                            if ix is not None and val_novo != val_orig and val_novo not in ('nan', 'None'):
-                                                cl = chr(ord('A') + ix)
-                                                upds_e.append({'range': f'{cl}{i}', 'values': [[val_novo]]})
-                                        _u(ix_sv_e, 'serviço')
-                                        _u(ix_hr_e, 'horário')
-                                        _u(ix_in_e, 'indicativo')
-                                        _u(ix_ra_e, 'rádio')
-                                        _u(ix_gi_e, 'giro')
-                                        _u(ix_ob_e, 'observações')
+                            for aba_g, linhas_g in dados_guardar.items():
+                                ws_g = sh_gc.worksheet(aba_g)
+                                todas_g = ws_g.get_all_values()
+                                hdrs_g = [h.strip().lower() for h in todas_g[0]]
+                                ix_id_g  = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
+                                ix_sv_g  = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
+                                ix_hr_g  = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
+                                ix_in_g  = hdrs_g.index('indicativo rádio') if 'indicativo rádio' in hdrs_g else (hdrs_g.index('indicativo') if 'indicativo' in hdrs_g else None)
+                                ix_ra_g  = hdrs_g.index('rádio') if 'rádio' in hdrs_g else None
+                                ix_gi_g  = hdrs_g.index('giro') if 'giro' in hdrs_g else None
+                                ix_ob_g  = hdrs_g.index('observações') if 'observações' in hdrs_g else None
+                                mapa_g = {str(r['id']).strip(): r for r in linhas_g}
+                                upds_g = []
+                                for i, row_g in enumerate(todas_g[1:], start=2):
+                                    mid_g = str(row_g[ix_id_g]).strip() if ix_id_g < len(row_g) else ''
+                                    if not mid_g or mid_g == 'nan': continue
+                                    for mid_p in re.split(r'[;,]+', mid_g):
+                                        mid_p = mid_p.strip()
+                                        if not mid_p or mid_p not in mapa_g: continue
+                                        r_g = mapa_g[mid_p]
+                                        def _ug(ix, val):
+                                            if ix is not None:
+                                                upds_g.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [[str(val or '').strip()]]})
+                                        _ug(ix_sv_g, r_g.get('serviço',''))
+                                        _ug(ix_hr_g, r_g.get('horário',''))
+                                        if r_g.get('indicativo'): _ug(ix_in_g, r_g['indicativo'])
+                                        if r_g.get('rádio'):      _ug(ix_ra_g, r_g['rádio'])
+                                        if r_g.get('giro'):       _ug(ix_gi_g, r_g['giro'])
+                                        if r_g.get('observações'):_ug(ix_ob_g, r_g['observações'])
                                         break
-                                if upds_e:
-                                    ws_e.batch_update(upds_e)
-
+                                if upds_g:
+                                    ws_g.batch_update(upds_g)
                             load_data.clear()
-                            st.success(f"✅ {sum(len(u) for u in [upds_e])} células atualizadas!")
-                            # Recarregar tabela com dados frescos
                             del st.session_state['editar_escala']
+                            st.session_state.pop('editar_escala_original', None)
+                            st.success("✅ Guardado!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro: {e}")
+
+                if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
+                    st.session_state['guardar_editar_acao'] = {
+                        aba: df_g.to_dict('records') for aba, df_g in editados_e.items()
+                    }
+                    st.rerun()
 
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
