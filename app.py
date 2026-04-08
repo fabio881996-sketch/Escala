@@ -4461,14 +4461,56 @@ else:
             def _load_servicos_editar():
                 ws = get_sheet().worksheet("serviços")
                 return ws.get_all_values()
+
+            @st.cache_data(ttl=300)
+            def _load_listas():
+                try:
+                    ws = get_sheet().worksheet("listas")
+                    vals = ws.get_all_values()
+                    if not vals: return {}
+                    hdrs = [h.strip() for h in vals[0]]
+                    result = {}
+                    for h in hdrs:
+                        idx = hdrs.index(h)
+                        result[h] = [''] + [str(row[idx]).strip() for row in vals[1:] if idx < len(row) and str(row[idx]).strip()]
+                    return result
+                except:
+                    return {}
+
             _sv_e = _load_servicos_editar()
             _hdrs_e = [str(h).strip() for h in _sv_e[0]]
-            # Incluir serviços extra que podem aparecer na escala mas não estão na aba serviços
             _extras_e = ['Férias', 'Folga Semanal', 'Folga Complementar', 'Outras Licenças',
                          'Doente', 'Baixa', 'Diligência', 'Inquéritos', 'Secretaria',
                          'Pronto', 'Tribunal', 'Disponível',
                          'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Tiro']
             todos_servicos_e = [''] + sorted(set(_hdrs_e + _extras_e))
+            _listas = _load_listas()
+            opts_hor_e = _listas.get('Horário', ['', '00-08', '08-16', '16-24'])
+            opts_rad_e = _listas.get('Rádio', [''])
+            opts_ind_e = _listas.get('Indicativo', [''])
+            opts_vtr_e = _listas.get('Viatura', [''])
+            opts_gir_e = _listas.get('Giro', [''])
+            opts_sv_e  = _listas.get('Serviço', todos_servicos_e) or todos_servicos_e
+
+            def _adicionar_lista(campo, valor):
+                """Adiciona valor novo à aba listas se não existir."""
+                try:
+                    sh_l = get_sheet()
+                    ws_l = sh_l.worksheet("listas")
+                    vals_l = ws_l.get_all_values()
+                    if not vals_l: return
+                    hdrs_l = [h.strip() for h in vals_l[0]]
+                    if campo not in hdrs_l: return
+                    col_idx = hdrs_l.index(campo)
+                    col_vals = [str(row[col_idx]).strip() for row in vals_l[1:] if col_idx < len(row)]
+                    if valor not in col_vals:
+                        # Encontrar próxima linha vazia nesta coluna
+                        next_row = len([v for v in col_vals if v]) + 2  # +2 para header
+                        cl = chr(ord('A') + col_idx)
+                        ws_l.update(f'{cl}{next_row}', [[valor]])
+                        _load_listas.clear()
+                except:
+                    pass
 
             col_e1, col_e2 = st.columns(2)
             with col_e1:
@@ -4499,16 +4541,33 @@ else:
                         vals_e_raw = ws_e_raw.get_all_values()
                         if vals_e_raw and len(vals_e_raw) > 1:
                             hdrs_e_raw = [h.strip().lower() for h in vals_e_raw[0]]
-                            ix_id_r   = hdrs_e_raw.index('id')      if 'id'      in hdrs_e_raw else 0
-                            ix_sv_r   = hdrs_e_raw.index('serviço') if 'serviço' in hdrs_e_raw else 1
-                            ix_hr_r   = hdrs_e_raw.index('horário') if 'horário' in hdrs_e_raw else 2
-                            ix_in_r   = hdrs_e_raw.index('indicativo rádio') if 'indicativo rádio' in hdrs_e_raw else (hdrs_e_raw.index('indicativo') if 'indicativo' in hdrs_e_raw else None)
-                            ix_ra_r   = hdrs_e_raw.index('rádio') if 'rádio' in hdrs_e_raw else None
-                            ix_gi_r   = hdrs_e_raw.index('giro') if 'giro' in hdrs_e_raw else None
-                            ix_ob_r   = hdrs_e_raw.index('observações') if 'observações' in hdrs_e_raw else None
+                            ix_id_r  = hdrs_e_raw.index('id')      if 'id'      in hdrs_e_raw else 0
+                            ix_sv_r  = hdrs_e_raw.index('serviço') if 'serviço' in hdrs_e_raw else 1
+                            ix_hr_r  = hdrs_e_raw.index('horário') if 'horário' in hdrs_e_raw else 2
+                            ix_in_r  = hdrs_e_raw.index('indicativo rádio') if 'indicativo rádio' in hdrs_e_raw else (hdrs_e_raw.index('indicativo') if 'indicativo' in hdrs_e_raw else None)
+                            ix_ra_r  = hdrs_e_raw.index('rádio') if 'rádio' in hdrs_e_raw else None
+                            ix_gi_r  = hdrs_e_raw.index('giro') if 'giro' in hdrs_e_raw else None
+                            ix_vt_r  = hdrs_e_raw.index('viatura') if 'viatura' in hdrs_e_raw else None
+                            ix_ob_r  = hdrs_e_raw.index('observações') if 'observações' in hdrs_e_raw else None
                             def _get(row, ix):
                                 return str(row[ix]).strip().replace('nan','') if ix is not None and ix < len(row) else ''
+                            # Recolher opções de TODAS as linhas (não só as com ID)
+                            opts_hor_e = set(['', '00-08', '08-16', '16-24'])
+                            opts_ind_e = set([''])
+                            opts_rad_e = set([''])
+                            opts_gir_e = set([''])
+                            opts_vtr_e = set([''])
                             for row_r in vals_e_raw[1:]:
+                                v_hr = _get(row_r, ix_hr_r)
+                                v_in = _get(row_r, ix_in_r)
+                                v_ra = _get(row_r, ix_ra_r)
+                                v_gi = _get(row_r, ix_gi_r)
+                                v_vt = _get(row_r, ix_vt_r)
+                                if v_hr: opts_hor_e.add(v_hr)
+                                if v_in: opts_ind_e.add(v_in)
+                                if v_ra: opts_rad_e.add(v_ra)
+                                if v_gi: opts_gir_e.add(v_gi)
+                                if v_vt: opts_vtr_e.add(v_vt)
                                 id_raw = _get(row_r, ix_id_r)
                                 if not id_raw: continue
                                 dados_r = {
@@ -4517,32 +4576,20 @@ else:
                                     'indicativo':  _get(row_r, ix_in_r),
                                     'rádio':       _get(row_r, ix_ra_r),
                                     'giro':        _get(row_r, ix_gi_r),
+                                    'viatura':     _get(row_r, ix_vt_r),
                                     'observações': _get(row_r, ix_ob_r),
                                 }
-                                # Expandir múltiplos IDs na mesma célula (separadores: ; , \n espaço)
                                 for mid in re.split(r'[;,\n]+', id_raw):
                                     mid = mid.strip()
                                     if mid:
                                         mapa_e[mid] = dados_r
+                            st.session_state['opts_hor_e'] = sorted(opts_hor_e)
+                            st.session_state['opts_ind_e'] = sorted(opts_ind_e)
+                            st.session_state['opts_rad_e'] = sorted(opts_rad_e)
+                            st.session_state['opts_gir_e'] = sorted(opts_gir_e)
+                            st.session_state['opts_vtr_e'] = sorted(opts_vtr_e)
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
-                    # Adicionar serviços encontrados na aba ao dropdown
-                    opts_hor_e = set(['', '00-08', '08-16', '16-24'])
-                    opts_ind_e = set([''])
-                    opts_rad_e = set([''])
-                    opts_gir_e = set([''])
-                    for dados_mid in mapa_e.values():
-                        sv = dados_mid.get('serviço', '')
-                        if sv and sv not in todos_servicos_e:
-                            todos_servicos_e.append(sv)
-                        if dados_mid.get('horário'):     opts_hor_e.add(dados_mid['horário'])
-                        if dados_mid.get('indicativo'):  opts_ind_e.add(dados_mid['indicativo'])
-                        if dados_mid.get('rádio'):       opts_rad_e.add(dados_mid['rádio'])
-                        if dados_mid.get('giro'):        opts_gir_e.add(dados_mid['giro'])
-                    st.session_state['opts_hor_e'] = sorted(opts_hor_e)
-                    st.session_state['opts_ind_e'] = sorted(opts_ind_e)
-                    st.session_state['opts_rad_e'] = sorted(opts_rad_e)
-                    st.session_state['opts_gir_e'] = sorted(opts_gir_e)
                     em_ferias_e = ferias_cache_e[d_e]
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
@@ -4556,10 +4603,14 @@ else:
                         if mid in mapa_e:
                             dados = mapa_e[mid]
                         elif mid in em_ferias_e:
-                            dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
+                            dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
-                        linhas_e.append({'id': mid, 'nome': f"{posto} {nome_curto}".strip(), **dados})
+                            dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                        linhas_e.append({'id': mid, 'nome': f"{posto} {nome_curto}".strip(),
+                                         'serviço': dados.get('serviço',''), 'horário': dados.get('horário',''),
+                                         'indicativo': dados.get('indicativo',''), 'rádio': dados.get('rádio',''),
+                                         'giro': dados.get('giro',''), 'viatura': dados.get('viatura',''),
+                                         'observações': dados.get('observações','')})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
                 st.session_state['editar_escala'] = dados_editar
                 st.session_state['editar_escala_original'] = {
@@ -4601,6 +4652,7 @@ else:
                                     'indicativo':  str(r.get('indicativo','') or '').strip(),
                                     'rádio':       str(r.get('rádio','') or '').strip(),
                                     'giro':        str(r.get('giro','') or '').strip(),
+                                    'viatura':     str(r.get('viatura','') or '').strip(),
                                     'observações': str(r.get('observações','') or '').strip(),
                                 }
 
@@ -4733,10 +4785,11 @@ else:
                             'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
                             'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
                             'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
-                            'horário':     st.column_config.SelectboxColumn('Horário', options=st.session_state.get('opts_hor_e', ['','00-08','08-16','16-24']), width='small'),
-                            'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=st.session_state.get('opts_ind_e', ['']), width='small'),
-                            'rádio':       st.column_config.SelectboxColumn('Rádio', options=st.session_state.get('opts_rad_e', ['']), width='small'),
-                            'giro':        st.column_config.SelectboxColumn('Giro', options=st.session_state.get('opts_gir_e', ['']), width='small'),
+                            'horário':     st.column_config.SelectboxColumn('Horário', options=opts_hor_e, width='small'),
+                            'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=opts_ind_e, width='small'),
+                            'rádio':       st.column_config.SelectboxColumn('Rádio', options=opts_rad_e, width='small'),
+                            'giro':        st.column_config.SelectboxColumn('Giro', options=opts_gir_e, width='small'),
+                            'viatura':     st.column_config.SelectboxColumn('Viatura', options=opts_vtr_e, width='small'),
                             'observações': st.column_config.TextColumn('Observações', width='medium'),
                         },
                         hide_index=True, use_container_width=True,
@@ -4745,6 +4798,14 @@ else:
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
                             try:
+                                # Adicionar novos valores às listas
+                                for _, row_e in df_editado_s.iterrows():
+                                    for campo, col in [('Horário','horário'),('Indicativo','indicativo'),('Rádio','rádio'),('Giro','giro'),('Viatura','viatura')]:
+                                        val = str(row_e.get(col, '') or '').strip()
+                                        if val:
+                                            opts = {'Horário': opts_hor_e, 'Indicativo': opts_ind_e, 'Rádio': opts_rad_e, 'Giro': opts_gir_e, 'Viatura': opts_vtr_e}[campo]
+                                            if val not in opts:
+                                                _adicionar_lista(campo, val)
                                 _guardar_sheets({aba_e: df_editado_s})
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
