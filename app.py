@@ -4597,18 +4597,15 @@ else:
                                 mid_p = mid_p.strip()
                                 if not mid_p or mid_p not in mapa_g: continue
                                 v = mapa_g[mid_p]
-                                if ix_sv_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_sv_g)}{i}', 'values': [[v['serviço']]]})
-                                if ix_hr_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_hr_g)}{i}', 'values': [[v['horário']]]})
-                                if ix_in_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_in_g)}{i}', 'values': [[v['indicativo']]]})
-                                if ix_ra_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_ra_g)}{i}', 'values': [[v['rádio']]]})
-                                if ix_gi_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_gi_g)}{i}', 'values': [[v['giro']]]})
-                                if ix_ob_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_ob_g)}{i}', 'values': [[v['observações']]]})
+                                if ix_sv_g is not None and v['serviço']: upds_g.append({'range': f'{chr(ord("A")+ix_sv_g)}{i}', 'values': [[v['serviço']]]})
+                                if ix_hr_g is not None and v['horário']: upds_g.append({'range': f'{chr(ord("A")+ix_hr_g)}{i}', 'values': [[v['horário']]]})
+                                if ix_in_g is not None and v['indicativo']: upds_g.append({'range': f'{chr(ord("A")+ix_in_g)}{i}', 'values': [[v['indicativo']]]})
+                                if ix_ra_g is not None and v['rádio']: upds_g.append({'range': f'{chr(ord("A")+ix_ra_g)}{i}', 'values': [[v['rádio']]]})
+                                if ix_gi_g is not None and v['giro']: upds_g.append({'range': f'{chr(ord("A")+ix_gi_g)}{i}', 'values': [[v['giro']]]})
+                                if ix_ob_g is not None and v['observações']: upds_g.append({'range': f'{chr(ord("A")+ix_ob_g)}{i}', 'values': [[v['observações']]]})
                                 break
                         if upds_g:
-                            st.write(f"A enviar {len(upds_g)} updates para {aba_g}: {upds_g[:3]}")
                             ws_g.batch_update(upds_g)
-                        else:
-                            st.warning(f"ZERO updates para {aba_g}. mapa_g keys: {list(mapa_g.keys())[:5]}, todas_g IDs ex: {[r[ix_id_g] for r in todas_g[1:4]]}")
                     load_data.clear()
 
                 dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
@@ -4695,7 +4692,7 @@ else:
                                 _guardar_sheets({aba_e: df_editado_s})
                                 del st.session_state['editar_escala']
                                 st.success("✅ Guardado!")
-                                # st.rerun()  # temporariamente desligado para ver debug
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Erro: {e}")
 
