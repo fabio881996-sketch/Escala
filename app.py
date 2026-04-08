@@ -4605,7 +4605,10 @@ else:
                                 if ix_ob_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_ob_g)}{i}', 'values': [[v['observações']]]})
                                 break
                         if upds_g:
+                            st.write(f"A enviar {len(upds_g)} updates para {aba_g}: {upds_g[:3]}")
                             ws_g.batch_update(upds_g)
+                        else:
+                            st.warning(f"ZERO updates para {aba_g}. mapa_g keys: {list(mapa_g.keys())[:5]}, todas_g IDs ex: {[r[ix_id_g] for r in todas_g[1:4]]}")
                     load_data.clear()
 
                 dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
