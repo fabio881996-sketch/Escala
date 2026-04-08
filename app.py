@@ -4221,7 +4221,7 @@ else:
                     'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
                     'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
                     'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos, width='large'),
-                    'horário':     st.column_config.TextColumn('Horário', width='small'),
+                    'horário':     st.column_config.SelectboxColumn('Horário', options=['','00-08','08-16','16-24'], width='small'),
                     'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
                     'rádio':       st.column_config.TextColumn('Rádio', width='small'),
                     'giro':        st.column_config.TextColumn('Giro', width='small'),
@@ -4527,10 +4527,22 @@ else:
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
                     # Adicionar serviços encontrados na aba ao dropdown
+                    opts_hor_e = set(['', '00-08', '08-16', '16-24'])
+                    opts_ind_e = set([''])
+                    opts_rad_e = set([''])
+                    opts_gir_e = set([''])
                     for dados_mid in mapa_e.values():
                         sv = dados_mid.get('serviço', '')
                         if sv and sv not in todos_servicos_e:
                             todos_servicos_e.append(sv)
+                        if dados_mid.get('horário'):     opts_hor_e.add(dados_mid['horário'])
+                        if dados_mid.get('indicativo'):  opts_ind_e.add(dados_mid['indicativo'])
+                        if dados_mid.get('rádio'):       opts_rad_e.add(dados_mid['rádio'])
+                        if dados_mid.get('giro'):        opts_gir_e.add(dados_mid['giro'])
+                    st.session_state['opts_hor_e'] = sorted(opts_hor_e)
+                    st.session_state['opts_ind_e'] = sorted(opts_ind_e)
+                    st.session_state['opts_rad_e'] = sorted(opts_rad_e)
+                    st.session_state['opts_gir_e'] = sorted(opts_gir_e)
                     em_ferias_e = ferias_cache_e[d_e]
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
@@ -4721,21 +4733,15 @@ else:
                             'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
                             'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
                             'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
-                            'horário':     st.column_config.TextColumn('Horário', width='small'),
-                            'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
-                            'rádio':       st.column_config.TextColumn('Rádio', width='small'),
-                            'giro':        st.column_config.TextColumn('Giro', width='small'),
+                            'horário':     st.column_config.SelectboxColumn('Horário', options=st.session_state.get('opts_hor_e', ['','00-08','08-16','16-24']), width='small'),
+                            'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=st.session_state.get('opts_ind_e', ['']), width='small'),
+                            'rádio':       st.column_config.SelectboxColumn('Rádio', options=st.session_state.get('opts_rad_e', ['']), width='small'),
+                            'giro':        st.column_config.SelectboxColumn('Giro', options=st.session_state.get('opts_gir_e', ['']), width='small'),
                             'observações': st.column_config.TextColumn('Observações', width='medium'),
                         },
                         hide_index=True, use_container_width=True,
                         key=f"editor_{aba_e}", num_rows="fixed",
                     )
-                    # DEBUG — mostrar diferenças entre original e editado
-                    diffs = df_editado_s.compare(df_s, result_names=('editado','original')) if not df_editado_s.equals(df_s) else None
-                    if diffs is not None:
-                        st.success(f"✅ Detetadas alterações: {diffs.shape[0]} linhas")
-                    else:
-                        st.caption("Sem alterações detetadas no df_editado_s")
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
                             try:
