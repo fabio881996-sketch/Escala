@@ -4467,7 +4467,7 @@ else:
             _extras_e = ['Férias', 'Folga Semanal', 'Folga Complementar', 'Outras Licenças',
                          'Doente', 'Baixa', 'Diligência', 'Inquéritos', 'Secretaria',
                          'Pronto', 'Tribunal', 'Disponível',
-                         'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Baixa']
+                         'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Tiro']
             todos_servicos_e = [''] + sorted(set(_hdrs_e + _extras_e))
 
             col_e1, col_e2 = st.columns(2)
@@ -4608,37 +4608,49 @@ else:
                     rows_1, rows_2 = [], []
                     for _, row_u in df_editado_uni.iterrows():
                         mid = str(row_u['id'])
-                        r1_orig = dict(mapa_1.get(mid, {}))
-                        r2_orig = dict(mapa_2.get(mid, {}))
-                        # Sobrepor serviço e horário editados
-                        r1_orig['serviço'] = str(row_u.get(label_1, r1_orig.get('serviço', '')) or '')
-                        r1_orig['horário'] = str(row_u.get(label_h1, r1_orig.get('horário', '')) or '')
-                        r2_orig['serviço'] = str(row_u.get(label_2, r2_orig.get('serviço', '')) or '')
-                        r2_orig['horário'] = str(row_u.get(label_h2, r2_orig.get('horário', '')) or '')
+                        r1_orig = dict(mapa_1.get(mid, {'id': mid, 'nome': '', 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}))
+                        r2_orig = dict(mapa_2.get(mid, {'id': mid, 'nome': '', 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}))
                         r1_orig['id'] = mid
                         r2_orig['id'] = mid
+                        # Usar label exacto da coluna do data_editor
+                        if label_1 in row_u.index:
+                            r1_orig['serviço'] = str(row_u[label_1] or '')
+                        if label_h1 in row_u.index:
+                            r1_orig['horário'] = str(row_u[label_h1] or '')
+                        if label_2 in row_u.index:
+                            r2_orig['serviço'] = str(row_u[label_2] or '')
+                        if label_h2 in row_u.index:
+                            r2_orig['horário'] = str(row_u[label_h2] or '')
                         rows_1.append(r1_orig)
                         rows_2.append(r2_orig)
                     editados_e[aba_1] = pd.DataFrame(rows_1)
                     editados_e[aba_2] = pd.DataFrame(rows_2)
 
                 else:
-                    # Um só dia
+                    # Um só dia — mostrar todas as colunas
                     aba_e, info_e = abas_lista[0]
                     d_e = info_e['data']
                     dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {dias_pt[d_e.weekday()]}**")
-                    col_config_s = {
-                        'id':      st.column_config.TextColumn('ID', disabled=True, width='small'),
-                        'nome':    st.column_config.TextColumn('Nome', disabled=True, width='small'),
-                        'serviço': st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
-                        'horário': st.column_config.TextColumn('Horário', width='small'),
-                    }
-                    df_s = pd.DataFrame(info_e['linhas'])[['id','nome','serviço','horário']]
-                    df_editado_s = st.data_editor(df_s, column_config=col_config_s, hide_index=True, use_container_width=True, key=f"editor_{aba_e}", num_rows="fixed")
-                    df_completo_s = pd.DataFrame(info_e['linhas'])
-                    df_completo_s.update(df_editado_s)
-                    editados_e = {aba_e: df_completo_s}
+                    df_s = pd.DataFrame(info_e['linhas'])
+                    df_editado_s = st.data_editor(
+                        df_s,
+                        column_config={
+                            'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
+                            'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
+                            'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
+                            'horário':     st.column_config.TextColumn('Horário', width='small'),
+                            'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
+                            'rádio':       st.column_config.TextColumn('Rádio', width='small'),
+                            'giro':        st.column_config.TextColumn('Giro', width='small'),
+                            'observações': st.column_config.TextColumn('Observações', width='medium'),
+                        },
+                        hide_index=True,
+                        use_container_width=True,
+                        key=f"editor_{aba_e}",
+                        num_rows="fixed",
+                    )
+                    editados_e = {aba_e: df_editado_s}
 
                 if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                     with st.spinner("A guardar..."):
