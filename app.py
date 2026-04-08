@@ -4519,8 +4519,8 @@ else:
                                     mid = mid.strip()
                                     if mid:
                                         mapa_e[mid] = dados_r
-                    except:
-                        pass
+                    except Exception as _err_e:
+                        st.warning(f"Erro ao ler {aba_e}: {_err_e}")
                     em_ferias_e = ferias_cache_e[d_e]
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
