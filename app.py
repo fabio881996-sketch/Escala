@@ -4584,12 +4584,12 @@ else:
                             def _get(row, ix):
                                 return str(row[ix]).strip().replace('nan','') if ix is not None and ix < len(row) else ''
                             # Recolher opções de TODAS as linhas (não só as com ID)
-                            opts_hor_e = set(['', '00-08', '08-16', '16-24'])
-                            opts_ind_e = set([''])
-                            opts_rad_e = set([''])
-                            opts_gir_e = set([''])
-                            opts_vtr_e = set([''])
-                            opts_sv_dia = set(opts_sv_e)  # começar com as listas
+                            opts_hor_e  = set(opts_hor_e)   # já vem das listas
+                            opts_ind_e  = set(opts_ind_e)   # já vem das listas
+                            opts_rad_e  = set(opts_rad_e)   # já vem das listas
+                            opts_gir_e  = set(opts_gir_e)   # já vem das listas
+                            opts_vtr_e  = set(opts_vtr_e)   # já vem das listas
+                            opts_sv_dia = set(opts_sv_e)    # começar com as listas
                             for row_r in vals_e_raw[1:]:
                                 v_sv = _get(row_r, ix_sv_r)
                                 v_hr = _get(row_r, ix_hr_r)
@@ -4628,11 +4628,12 @@ else:
                                     mid = mid.strip()
                                     if mid:
                                         mapa_e[mid] = dados_r
-                            st.session_state['opts_hor_e'] = sorted(opts_hor_e)
-                            st.session_state['opts_ind_e'] = sorted(opts_ind_e)
-                            st.session_state['opts_rad_e'] = sorted(opts_rad_e)
-                            st.session_state['opts_gir_e'] = sorted(opts_gir_e)
-                            st.session_state['opts_vtr_e'] = sorted(opts_vtr_e)
+                            # Combinar com opts base das listas (garantir que ficam sempre disponíveis)
+                            st.session_state['opts_hor_e'] = [''] + sorted(opts_hor_e - {''})
+                            st.session_state['opts_ind_e'] = [''] + sorted(opts_ind_e - {''})
+                            st.session_state['opts_rad_e'] = [''] + sorted(opts_rad_e - {''})
+                            st.session_state['opts_gir_e'] = [''] + sorted(opts_gir_e - {''})
+                            st.session_state['opts_vtr_e'] = [''] + sorted(opts_vtr_e - {''})
                             st.session_state['opts_sv_e']  = [''] + sorted(opts_sv_dia - {''})
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
