@@ -4555,32 +4555,41 @@ else:
             # ── Mostrar tabelas por dia ──
             if 'editar_escala' in st.session_state:
                 dados_editar = st.session_state['editar_escala']
-                col_config_e = {
-                    'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
-                    'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
-                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
-                    'horário':     st.column_config.TextColumn('Horário', width='small'),
-                    'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
-                    'rádio':       st.column_config.TextColumn('Rádio', width='small'),
-                    'giro':        st.column_config.TextColumn('Giro', width='small'),
-                    'observações': st.column_config.TextColumn('Observações', width='medium'),
+
+                col_config_compacto = {
+                    'id':      st.column_config.TextColumn('ID', disabled=True, width='small'),
+                    'nome':    st.column_config.TextColumn('Nome', disabled=True, width='small'),
+                    'serviço': st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
+                    'horário': st.column_config.TextColumn('Horário', width='small'),
                 }
 
                 editados_e = {}
-                for aba_e, info_e in dados_editar.items():
+                abas_lista = list(dados_editar.items())
+
+                # Mostrar lado a lado se 2 dias, senão um por um
+                if len(abas_lista) == 2:
+                    cols_dias = st.columns(2)
+                else:
+                    cols_dias = [st.container()]
+
+                for i, (aba_e, info_e) in enumerate(abas_lista):
                     d_e = info_e['data']
-                    st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'][d_e.weekday()]}**")
-                    df_e_edit = pd.DataFrame(info_e['linhas'])
-                    df_editado_e = st.data_editor(
-                        df_e_edit,
-                        column_config=col_config_e,
-                        hide_index=True,
-                        use_container_width=True,
-                        key=f"editor_{aba_e}",
-                        num_rows="fixed",
-                    )
-                    editados_e[aba_e] = df_editado_e
-                    st.markdown("---")
+                    col_ctx = cols_dias[i] if len(abas_lista) == 2 else cols_dias[0]
+                    with col_ctx:
+                        st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'][d_e.weekday()]}**")
+                        df_e_edit = pd.DataFrame(info_e['linhas'])[['id','nome','serviço','horário']]
+                        df_editado_e = st.data_editor(
+                            df_e_edit,
+                            column_config=col_config_compacto,
+                            hide_index=True,
+                            use_container_width=True,
+                            key=f"editor_{aba_e}",
+                            num_rows="fixed",
+                        )
+                        # Juntar colunas extra (indicativo, rádio, etc.) que não estão no editor
+                        df_completo_e = pd.DataFrame(info_e['linhas'])
+                        df_completo_e.update(df_editado_e)
+                        editados_e[aba_e] = df_completo_e
 
                 if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                     with st.spinner("A guardar..."):
