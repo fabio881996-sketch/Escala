@@ -4695,7 +4695,7 @@ else:
                                 _guardar_sheets({aba_e: df_editado_s})
                                 del st.session_state['editar_escala']
                                 st.success("✅ Guardado!")
-                                st.rerun()
+                                # st.rerun()  # temporariamente desligado para ver debug
                             except Exception as e:
                                 st.error(f"Erro: {e}")
 
