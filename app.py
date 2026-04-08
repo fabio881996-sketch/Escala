@@ -378,6 +378,43 @@ def load_dias_publicados() -> set:
     except Exception:
         return set()
 
+@st.cache_data(ttl=300)
+def load_servicos() -> dict:
+    """Carrega aba serviços — dict {militar_id: [servicos]}."""
+    try:
+        sh = get_sheet()
+        if sh is None: return {}
+        vals = sh.worksheet("serviços").get_all_values()
+        headers = [str(h).strip() for h in vals[0]]
+        result = {}
+        for col in headers:
+            idx = headers.index(col)
+            for row in vals[1:]:
+                mid = str(row[idx]).strip() if idx < len(row) else ''
+                if mid and mid != 'nan':
+                    if mid not in result: result[mid] = []
+                    result[mid].append(col)
+        return result
+    except:
+        return {}
+
+@st.cache_data(ttl=300)
+def load_listas() -> dict:
+    """Carrega aba listas — dict {coluna: [valores]}."""
+    try:
+        sh = get_sheet()
+        if sh is None: return {}
+        vals = sh.worksheet("listas").get_all_values()
+        if not vals: return {}
+        hdrs = [h.strip() for h in vals[0]]
+        result = {}
+        for h in hdrs:
+            idx = hdrs.index(h)
+            result[h] = [''] + [str(row[idx]).strip() for row in vals[1:] if idx < len(row) and str(row[idx]).strip()]
+        return result
+    except:
+        return {}
+
 def load_feriados(ano: int) -> list:
     """Carrega feriados de um ano da aba 'feriados' — cache 24h."""
     try:
@@ -4118,23 +4155,8 @@ else:
             aba_dia = d_gerar.strftime("%d-%m")
 
             # ── Carregar serviços por militar ──
-            @st.cache_data(ttl=300)
-            def _load_servicos_gerar():
-                ws = get_sheet().worksheet("serviços")
-                return ws.get_all_values()
-
-            serv_vals = _load_servicos_gerar()
-            serv_headers = [str(h).strip() for h in serv_vals[0]]
-            militares_servicos = {}
-            for col in serv_headers:
-                idx_col = serv_headers.index(col)
-                for row in serv_vals[1:]:
-                    mid = str(row[idx_col]).strip() if idx_col < len(row) else ''
-                    if mid and mid != 'nan':
-                        if mid not in militares_servicos:
-                            militares_servicos[mid] = []
-                        militares_servicos[mid].append(col)
-
+            militares_servicos = load_servicos()
+            serv_headers = list(set(s for servs in militares_servicos.values() for s in servs))
             todos_servicos = [''] + sorted(set(serv_headers))
 
             # ── Botão para carregar/resetar tabela ──
@@ -4456,35 +4478,15 @@ else:
             st.markdown("#### ✏️ Editar Escala")
             st.caption("Seleciona até 3 dias para ver e editar em simultâneo.")
 
-            # ── Carregar serviços ──
-            @st.cache_data(ttl=300)
-            def _load_servicos_editar():
-                ws = get_sheet().worksheet("serviços")
-                return ws.get_all_values()
-
-            @st.cache_data(ttl=300)
-            def _load_listas():
-                try:
-                    ws = get_sheet().worksheet("listas")
-                    vals = ws.get_all_values()
-                    if not vals: return {}
-                    hdrs = [h.strip() for h in vals[0]]
-                    result = {}
-                    for h in hdrs:
-                        idx = hdrs.index(h)
-                        result[h] = [''] + [str(row[idx]).strip() for row in vals[1:] if idx < len(row) and str(row[idx]).strip()]
-                    return result
-                except:
-                    return {}
-
-            _sv_e = _load_servicos_editar()
-            _hdrs_e = [str(h).strip() for h in _sv_e[0]]
+            # ── Carregar serviços e listas ──
+            _listas = load_listas()
+            _mil_servicos = load_servicos()
             _extras_e = ['Férias', 'Folga Semanal', 'Folga Complementar', 'Outras Licenças',
                          'Doente', 'Baixa', 'Diligência', 'Inquéritos', 'Secretaria',
                          'Pronto', 'Tribunal', 'Disponível',
                          'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Tiro']
+            _hdrs_e = list(set(s for servs in _mil_servicos.values() for s in servs))
             todos_servicos_e = [''] + sorted(set(_hdrs_e + _extras_e))
-            _listas = _load_listas()
             opts_hor_e = _listas.get('Horário', ['', '00-08', '08-16', '16-24'])
             opts_rad_e = _listas.get('Rádio', [''])
             opts_ind_e = _listas.get('Indicativo', [''])
@@ -4508,7 +4510,7 @@ else:
                         next_row = len([v for v in col_vals if v]) + 2  # +2 para header
                         cl = chr(ord('A') + col_idx)
                         ws_l.update(f'{cl}{next_row}', [[valor]])
-                        _load_listas.clear()
+                        load_listas.clear()
                 except:
                     pass
 
