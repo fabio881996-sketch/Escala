@@ -4487,20 +4487,40 @@ else:
                 dados_editar = {}
                 for d_e in dias_editar:
                     aba_e = d_e.strftime("%d-%m")
-                    df_e = load_data_direto(sh_e, aba_e)
+                    # Ler aba diretamente sem explodir IDs
                     mapa_e = {}
-                    if not df_e.empty:
-                        for _, row_e in df_e.iterrows():
-                            mid = str(row_e.get('id', '')).strip()
-                            if not mid or mid == 'nan': continue
-                            mapa_e[mid] = {
-                                'serviço':     str(row_e.get('serviço', '')).strip().replace('nan',''),
-                                'horário':     str(row_e.get('horário', '')).strip().replace('nan',''),
-                                'indicativo':  str(row_e.get('indicativo rádio', '') or row_e.get('indicativo', '')).strip().replace('nan',''),
-                                'rádio':       str(row_e.get('rádio', '') or row_e.get('radio', '')).strip().replace('nan',''),
-                                'giro':        str(row_e.get('giro', '')).strip().replace('nan',''),
-                                'observações': str(row_e.get('observações', '')).strip().replace('nan',''),
-                            }
+                    try:
+                        ws_e_raw = sh_e.worksheet(aba_e)
+                        vals_e_raw = ws_e_raw.get_all_values()
+                        if vals_e_raw and len(vals_e_raw) > 1:
+                            hdrs_e_raw = [h.strip().lower() for h in vals_e_raw[0]]
+                            ix_id_r   = hdrs_e_raw.index('id')      if 'id'      in hdrs_e_raw else 0
+                            ix_sv_r   = hdrs_e_raw.index('serviço') if 'serviço' in hdrs_e_raw else 1
+                            ix_hr_r   = hdrs_e_raw.index('horário') if 'horário' in hdrs_e_raw else 2
+                            ix_in_r   = hdrs_e_raw.index('indicativo rádio') if 'indicativo rádio' in hdrs_e_raw else (hdrs_e_raw.index('indicativo') if 'indicativo' in hdrs_e_raw else None)
+                            ix_ra_r   = hdrs_e_raw.index('rádio') if 'rádio' in hdrs_e_raw else None
+                            ix_gi_r   = hdrs_e_raw.index('giro') if 'giro' in hdrs_e_raw else None
+                            ix_ob_r   = hdrs_e_raw.index('observações') if 'observações' in hdrs_e_raw else None
+                            def _get(row, ix):
+                                return str(row[ix]).strip().replace('nan','') if ix is not None and ix < len(row) else ''
+                            for row_r in vals_e_raw[1:]:
+                                id_raw = _get(row_r, ix_id_r)
+                                if not id_raw: continue
+                                dados_r = {
+                                    'serviço':     _get(row_r, ix_sv_r),
+                                    'horário':     _get(row_r, ix_hr_r),
+                                    'indicativo':  _get(row_r, ix_in_r),
+                                    'rádio':       _get(row_r, ix_ra_r),
+                                    'giro':        _get(row_r, ix_gi_r),
+                                    'observações': _get(row_r, ix_ob_r),
+                                }
+                                # Expandir múltiplos IDs na mesma célula
+                                for mid in re.split(r'[;,]', id_raw):
+                                    mid = mid.strip()
+                                    if mid:
+                                        mapa_e[mid] = dados_r
+                    except:
+                        pass
                     em_ferias_e = ferias_cache_e[d_e]
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
@@ -4527,13 +4547,13 @@ else:
                 dados_editar = st.session_state['editar_escala']
                 col_config_e = {
                     'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
-                    'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
-                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='large'),
+                    'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
+                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
                     'horário':     st.column_config.TextColumn('Horário', width='small'),
                     'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
                     'rádio':       st.column_config.TextColumn('Rádio', width='small'),
                     'giro':        st.column_config.TextColumn('Giro', width='small'),
-                    'observações': st.column_config.TextColumn('Observações', width='large'),
+                    'observações': st.column_config.TextColumn('Observações', width='medium'),
                 }
 
                 editados_e = {}
