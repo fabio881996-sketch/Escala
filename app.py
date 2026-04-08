@@ -4690,7 +4690,10 @@ else:
                                         _u(ix_ob_e, r_e.get('observações'))
                                         break  # só atualizar pela primeira ocorrência do militar
                                 if upds_e:
+                                    st.write(f"DEBUG {aba_e}: {len(upds_e)} updates — ex: {upds_e[:3]}")
                                     ws_e.batch_update(upds_e)
+                                else:
+                                    st.warning(f"DEBUG {aba_e}: nenhum update gerado. edit_map_e keys: {list(edit_map_e.keys())[:5]}")
 
                             load_data.clear()
                             del st.session_state['editar_escala']
