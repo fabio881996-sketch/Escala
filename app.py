@@ -4376,6 +4376,8 @@ else:
                                     for mid in colocados:
                                         novas_linhas[mid]['serviço'] = servico
                                         novas_linhas[mid]['horário'] = horario
+                                        if servico == 'Patrulha Ocorrências':
+                                            novas_linhas[mid]['indicativo'] = '031.6A'
                                         # Rodar na ordem
                                         ordem_g[col_key].remove(mid)
                                         ordem_g[col_key].append(mid)
