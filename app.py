@@ -4605,7 +4605,7 @@ else:
                         elif mid in em_ferias_e:
                             dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                            dados = {'serviço': 'Disponível', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         linhas_e.append({'id': mid, 'nome': f"{posto} {nome_curto}".strip(),
                                          'serviço': dados.get('serviço',''), 'horário': dados.get('horário',''),
                                          'indicativo': dados.get('indicativo',''), 'rádio': dados.get('rádio',''),
