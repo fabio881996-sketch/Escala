@@ -4550,6 +4550,10 @@ else:
                         linhas_e.append({'id': mid, 'nome': f"{posto} {nome_curto}".strip(), **dados})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
                 st.session_state['editar_escala'] = dados_editar
+                st.session_state['editar_escala_original'] = {
+                    aba: {mid: dict(r) for r in info['linhas'] for mid in [str(r['id']).strip()]}
+                    for aba, info in dados_editar.items()
+                }
                 st.rerun()
 
             if 'debug_upds' in st.session_state:
@@ -4672,11 +4676,7 @@ else:
                                 ix_gi_e   = hdrs_e.index('giro') if 'giro' in hdrs_e else None
                                 ix_ob_e   = hdrs_e.index('observações') if 'observações' in hdrs_e else None
 
-                                # Mapa original para comparar
-                                original_map_e = {}
-                                if aba_e in st.session_state.get('editar_escala', {}):
-                                    for r_orig in st.session_state['editar_escala'][aba_e]['linhas']:
-                                        original_map_e[str(r_orig['id']).strip()] = r_orig
+                                original_map_e = st.session_state.get('editar_escala_original', {}).get(aba_e, {})
 
                                 edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
                                 upds_e = []
