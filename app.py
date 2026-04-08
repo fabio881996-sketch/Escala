@@ -4465,15 +4465,13 @@ else:
             _hdrs_e = [str(h).strip() for h in _sv_e[0]]
             todos_servicos_e = [''] + sorted(set(_hdrs_e))
 
-            col_e1, col_e2, col_e3 = st.columns(3)
+            col_e1, col_e2 = st.columns(2)
             with col_e1:
                 d_e1 = st.date_input("Dia 1:", format="DD/MM/YYYY", key="d_edit1")
             with col_e2:
                 d_e2 = st.date_input("Dia 2:", format="DD/MM/YYYY", key="d_edit2", value=None)
-            with col_e3:
-                d_e3 = st.date_input("Dia 3:", format="DD/MM/YYYY", key="d_edit3", value=None)
 
-            dias_editar = [d for d in [d_e1, d_e2, d_e3] if d is not None]
+            dias_editar = [d for d in [d_e1, d_e2] if d is not None]
 
             if st.button("📋 Carregar dias", key="btn_carregar_editar", use_container_width=True):
                 sh_e = get_sheet()
@@ -4510,13 +4508,16 @@ else:
                         if not mid or mid == 'nan': continue
                         nome  = str(row_u.get('nome', '')).strip()
                         posto = str(row_u.get('posto', '')).strip()
+                        # Abreviar nome: inicial + apelido
+                        partes_nome = nome.split()
+                        nome_curto = f"{partes_nome[0][0]}.{partes_nome[-1]}" if len(partes_nome) >= 2 else nome
                         if mid in mapa_e:
                             dados = mapa_e[mid]
                         elif mid in em_ferias_e:
                             dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
                         else:
                             dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
-                        linhas_e.append({'id': mid, 'nome': f"{posto} {nome}".strip(), **dados})
+                        linhas_e.append({'id': mid, 'nome': f"{posto} {nome_curto}".strip(), **dados})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
                 st.session_state['editar_escala'] = dados_editar
                 st.rerun()
