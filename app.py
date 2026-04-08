@@ -4267,14 +4267,23 @@ else:
                     opcoes_servico[mid] = [''] + servs_mil
 
                 # Usar st.data_editor
+                _listas_auto = load_listas()
+                _hor_auto = _listas_auto.get('Horário', ['', '00-08', '08-16', '16-24'])
+                _ind_auto = _listas_auto.get('Indicativo', [''])
+                _rad_auto = _listas_auto.get('Rádio', [''])
+                _vtr_auto = _listas_auto.get('Viatura', [''])
+                _gir_auto = _listas_auto.get('Giro', [''])
+                _sv_auto  = _listas_auto.get('Serviço', todos_servicos) or todos_servicos
+                if len(_hor_auto) <= 1: _hor_auto = ['', '00-08', '08-16', '16-24']
                 col_config = {
                     'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
                     'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
-                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos, width='large'),
-                    'horário':     st.column_config.SelectboxColumn('Horário', options=['','00-08','08-16','16-24'], width='small'),
-                    'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
-                    'rádio':       st.column_config.TextColumn('Rádio', width='small'),
-                    'giro':        st.column_config.TextColumn('Giro', width='small'),
+                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=_sv_auto, width='large'),
+                    'horário':     st.column_config.SelectboxColumn('Horário', options=_hor_auto, width='small'),
+                    'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=_ind_auto, width='small'),
+                    'rádio':       st.column_config.SelectboxColumn('Rádio', options=_rad_auto, width='small'),
+                    'giro':        st.column_config.SelectboxColumn('Giro', options=_gir_auto, width='small'),
+                    'viatura':     st.column_config.SelectboxColumn('Viatura', options=_vtr_auto, width='small'),
                     'observações': st.column_config.TextColumn('Observações', width='large'),
                 }
 
