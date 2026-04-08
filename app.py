@@ -3903,26 +3903,6 @@ else:
                 dias_sem = 0
                 d_s_a = dt_a.strftime('%d/%m/%Y')
 
-                # ── Alerta 1: Trocas com escala alterada ──
-                if not df_trocas.empty:
-                    tr_val = df_trocas[
-                        (df_trocas['data'] == d_s_a) &
-                        (df_trocas['status'] == 'Aprovada') &
-                        (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
-                    ]
-                    for _, t in tr_val.iterrows():
-                        serv_o = t['servico_origem'].rsplit('(', 1)[0].strip().lower()
-                        hor_o  = t['servico_origem'].rsplit('(', 1)[1].rstrip(')') if '(' in t['servico_origem'] else ''
-                        existe = df_a[
-                            (df_a['id'].astype(str) == str(t['id_origem'])) &
-                            (df_a['serviço'].str.strip().str.lower() == serv_o) &
-                            (df_a['horário'].str.strip() == hor_o.strip())
-                        ]
-                        if existe.empty:
-                            n_o = get_nome_militar(df_util, t['id_origem'])
-                            n_d = get_nome_militar(df_util, t['id_destino'])
-                            alertas_trocas.append(f"**{d_s_a}** — {n_o} ↔ {n_d}: `{t['servico_origem']}` já não existe")
-
                 # ── Alerta 2: Militar em 2 serviços ──
                 df_a_serv = df_a[~df_a['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                 contagem = df_a_serv[df_a_serv['id'].astype(str).str.strip() != ''].groupby('id').size()
@@ -3962,31 +3942,21 @@ else:
                 for mid in sorted(ids_ativos - ids_na_escala - em_ferias_hoje):
                     n = get_nome_militar(df_util, mid)
                     alertas_esquecidos.append(f"**{d_s_a}** — {n} ({mid})")
-        with st.expander(f"🔍 Militares não escalados ({len(alertas_esquecidos)})", expanded=len(alertas_esquecidos) > 0):
-            if alertas_esquecidos:
-                for a in alertas_esquecidos:
-                    st.warning(a)
-            else:
-                st.success("✅ Sem alertas")
-
-        with st.expander(f"⚠️ Trocas com escala alterada ({len(alertas_trocas)})", expanded=len(alertas_trocas) > 0):
-            if alertas_trocas:
-                for a in alertas_trocas:
-                    st.warning(a)
-            else:
-                st.success("✅ Sem alertas")
-
-        with st.expander(f"👥 Militar escalado em 2 serviços ({len(alertas_duplos)})", expanded=len(alertas_duplos) > 0):
+        with st.expander(f"👥 Militar escalado 2x ({len(alertas_duplos)})", expanded=len(alertas_duplos) > 0):
             if alertas_duplos:
-                for a in alertas_duplos:
-                    st.warning(a)
+                for a in alertas_duplos: st.warning(a)
             else:
                 st.success("✅ Sem alertas")
 
-        with st.expander(f"😴 Menos de 8h de descanso ({len(alertas_descanso)})", expanded=len(alertas_descanso) > 0):
+        with st.expander(f"😴 Menos de 8h descanso ({len(alertas_descanso)})", expanded=len(alertas_descanso) > 0):
             if alertas_descanso:
-                for a in alertas_descanso:
-                    st.warning(a)
+                for a in alertas_descanso: st.warning(a)
+            else:
+                st.success("✅ Sem alertas")
+
+        with st.expander(f"🔍 Não escalados ({len(alertas_esquecidos)})", expanded=len(alertas_esquecidos) > 0):
+            if alertas_esquecidos:
+                for a in alertas_esquecidos: st.warning(a)
             else:
                 st.success("✅ Sem alertas")
 
@@ -4141,237 +4111,486 @@ else:
                 st.error(f"Erro ao escrever: {e}")
 
         # ── Selecionar data(s) ──
-        tab_auto, tab_rem = st.tabs(["⚙️ Escala Automática", "💶 Nomear para Remunerado"])
+        tab_auto, tab_editar, tab_rem = st.tabs(["⚙️ Escala Automática", "✏️ Editar Escala", "💶 Nomear para Remunerado"])
 
         with tab_auto:
-            d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY")
-            datas_gerar = [d_gerar]
+            d_gerar = st.date_input("Data a escalar:", format="DD/MM/YYYY", key="d_gerar_input")
+            aba_dia = d_gerar.strftime("%d-%m")
 
-            aba_dia = datas_gerar[0].strftime("%d-%m") if datas_gerar else ""
+            # ── Carregar serviços por militar ──
+            @st.cache_data(ttl=300)
+            def _load_servicos_gerar():
+                ws = get_sheet().worksheet("serviços")
+                return ws.get_all_values()
 
-            if st.button("⚙️ GERAR ESCALA", use_container_width=True, type="primary"):
-                with st.spinner("A gerar escala..."):
-                    try:
-                        sh = get_sheet()
+            serv_vals = _load_servicos_gerar()
+            serv_headers = [str(h).strip() for h in serv_vals[0]]
+            militares_servicos = {}
+            for col in serv_headers:
+                idx_col = serv_headers.index(col)
+                for row in serv_vals[1:]:
+                    mid = str(row[idx_col]).strip() if idx_col < len(row) else ''
+                    if mid and mid != 'nan':
+                        if mid not in militares_servicos:
+                            militares_servicos[mid] = []
+                        militares_servicos[mid].append(col)
 
-                        # ── Carregar serviços (cached) ──
-                        @st.cache_data(ttl=300)
-                        def _load_servicos_gerar():
-                            ws = get_sheet().worksheet("serviços")
-                            return ws.get_all_values()
-                        serv_vals = _load_servicos_gerar()
-                        serv_headers = [str(h).strip() for h in serv_vals[0]]
-                        df_serv = pd.DataFrame(serv_vals[1:], columns=serv_headers)
-                        militares_servicos = {}
-                        for col in serv_headers:
-                            ids_col = [str(v).strip() for v in df_serv[col] if str(v).strip()]
-                            for mid in ids_col:
-                                if mid not in militares_servicos:
-                                    militares_servicos[mid] = []
-                                militares_servicos[mid].append(col)
+            todos_servicos = [''] + sorted(set(serv_headers))
 
-                        df_ferias_g = load_ferias(datas_gerar[0].year)
-                        feriados_g  = load_feriados(datas_gerar[0].year)
+            # ── Botão para carregar/resetar tabela ──
+            if st.button("📋 Carregar tabela do dia", key="btn_carregar_tabela", use_container_width=True):
+                df_existente = load_data_direto(get_sheet(), aba_dia)
 
-                        # Ordem inicial — do primeiro dia
-                        aba_primeiro = datas_gerar[0].strftime("%d-%m")
-                        aba_ordem_dia = f"ordem_escala {aba_primeiro}"
-                        aba_ordem_ant = f"ordem_escala {(datas_gerar[0] - timedelta(days=1)).strftime('%d-%m')}"
-                        try:
-                            ws_ordem = sh.worksheet(aba_ordem_dia)
-                        except:
-                            try:
-                                ws_ordem = sh.worksheet(aba_ordem_ant)
-                            except:
-                                st.error("Não foi encontrado nenhum snapshot de ordem_escala.")
-                                st.stop()
-                        ordem_vals = ws_ordem.get_all_values()
-                        ordem_headers = [str(h).strip() for h in ordem_vals[0]]
-                        ordem_atual = {h: [] for h in ordem_headers}
-                        for row in ordem_vals[1:]:
-                            for i, h in enumerate(ordem_headers):
-                                val = str(row[i]).strip() if i < len(row) else ''
-                                if val:
-                                    ordem_atual[h].append(val)
-
-                        resultados_dias = []
-
-                        for idx_g, d_gerar in enumerate(datas_gerar):
-                            aba_dia_loop = d_gerar.strftime("%d-%m")
-
-                            # Ler aba do dia diretamente sem cache
-                            dia_vals_loop = None
-                            import time as _tg
-                            for _tentativa_g in range(3):
-                                try:
-                                    ws_dia_loop = sh.worksheet(aba_dia_loop)
-                                    dia_vals_loop = ws_dia_loop.get_all_values()
-                                    break
-                                except Exception as _eg:
-                                    if '429' in str(_eg) and _tentativa_g < 2:
-                                        _tg.sleep(20)
-                                    else:
-                                        break
-                            if not dia_vals_loop:
-                                continue
-
-                            try:
-                                dia_headers_loop = [str(h).strip().lower() for h in dia_vals_loop[0]]
-                                df_dia_loop = pd.DataFrame(dia_vals_loop[1:], columns=dia_headers_loop)
-                                df_dia_loop = df_dia_loop[df_dia_loop.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-                            except:
-                                continue
-
-                            # Indisponíveis
-                            ids_indisponiveis = set()
-                            if not df_dia_loop.empty and 'id' in df_dia_loop.columns:
-                                for _, row in df_dia_loop.iterrows():
-                                    mid = str(row.get('id', '')).strip()
-                                    if mid and mid != 'nan':
-                                        for m in re.split(r'[;,]', mid):
-                                            m = m.strip()
-                                            if m: ids_indisponiveis.add(m)
-                            todos_ids = list(militares_servicos.keys())
-                            for mid in todos_ids:
-                                if militar_de_ferias(mid, d_gerar, df_ferias_g, feriados_g):
-                                    ids_indisponiveis.add(mid)
-
-                            # Slots preenchidos
-                            slots_preenchidos = {}
-                            if not df_dia_loop.empty and 'id' in df_dia_loop.columns and 'serviço' in df_dia_loop.columns:
-                                for _, row in df_dia_loop.iterrows():
-                                    mid_r = str(row.get('id', '')).strip()
-                                    serv_r = norm(str(row.get('serviço', '')).strip())
-                                    hor_r  = str(row.get('horário', '')).strip()
-                                    if mid_r and mid_r != 'nan' and serv_r and hor_r:
-                                        chave_r = (serv_r, hor_r)
-                                        slots_preenchidos[chave_r] = slots_preenchidos.get(chave_r, 0) + len([x for x in re.split(r'[;,]', mid_r) if x.strip()])
-
-                            SLOTS = [
-                                ("Atendimento",          "00-08", 1),
-                                ("Atendimento",          "08-16", 1),
-                                ("Atendimento",          "16-24", 1),
-                                ("Patrulha Ocorrências",  "00-08", 2),
-                                ("Patrulha Ocorrências",  "08-16", 2),
-                                ("Patrulha Ocorrências",  "16-24", 2),
-                                ("Apoio Atendimento",     "08-16", 1),
-                                ("Apoio Atendimento",     "16-24", 1),
-                            ]
-                            SLOTS_AJUSTADOS = []
-                            for servico_s, horario_s, num_s in SLOTS:
-                                chave_s = (norm(servico_s), horario_s)
-                                ja = slots_preenchidos.get(chave_s, 0)
-                                vagas = max(0, num_s - ja)
-                                if vagas > 0:
-                                    SLOTS_AJUSTADOS.append((servico_s, horario_s, vagas))
-
-                            escalados = []
-                            ids_escalados = set()
-                            ordem_atualizada = {h: list(v) for h, v in ordem_atual.items()}
-                            df_ant_g = load_data_direto(sh, (d_gerar - timedelta(days=1)).strftime("%d-%m"))
-                            _servicos_escalaveis = ['atendimento', 'patrulha ocorrencias', 'apoio atendimento', 'patrulha ocorrências']
-
-                            for servico, horario, num in SLOTS_AJUSTADOS:
-                                col_key = f"{servico} {horario}"
-                                if col_key not in ordem_atualizada:
-                                    continue
-                                lista = ordem_atualizada[col_key]
-                                colocados = []
-                                for mid in lista:
-                                    if len(colocados) >= num: break
-                                    if mid in ids_indisponiveis or mid in ids_escalados: continue
-                                    if servico not in militares_servicos.get(mid, []): continue
-                                    ini_novo_g, _ = _parse_horario(horario)
-                                    if ini_novo_g is not None and ini_novo_g < 480:
-                                        d_ant = d_gerar - timedelta(days=1)
-                                        if militar_de_ferias(mid, d_ant, df_ferias_g, feriados_g): continue
-                                        cols_f = df_ferias_g.columns.tolist()
-                                        id_col_f = 'id' if 'id' in cols_f else cols_f[0]
-                                        mil_f2 = df_ferias_g[df_ferias_g[id_col_f].astype(str).str.strip() == str(mid).strip()]
-                                        fim_hoje = False
-                                        for _, row_f2 in mil_f2.iterrows():
-                                            for fc in [c for c in cols_f if 'fim' in c.lower()]:
-                                                fs = str(row_f2.get(fc, '')).strip()
-                                                if not fs or fs == 'nan': continue
-                                                fd = _parse_data_ferias(fs, d_gerar.year)
-                                                if not fd: continue
-                                                fr = _fim_ferias_real(fd, feriados_g)
-                                                if fr == d_gerar: fim_hoje = True; break
-                                            if fim_hoje: break
-                                        if fim_hoje: continue
-                                    if not df_ant_g.empty:
-                                        rows_ant = df_ant_g[df_ant_g['id'].astype(str).str.strip() == mid]
-                                        ini_novo_g2, _ = _parse_horario(horario)
-                                        descanso_ok = True
-                                        for _, r_ant in rows_ant.iterrows():
-                                            hor_ant = str(r_ant.get('horário', '')).strip()
-                                            if not hor_ant: continue
-                                            _, fim_ant_g = _parse_horario(hor_ant)
-                                            if fim_ant_g is None or ini_novo_g2 is None: continue
-                                            if (1440 - fim_ant_g) + ini_novo_g2 < 480:
-                                                descanso_ok = False; break
-                                        if not descanso_ok: continue
-                                    colocados.append(mid)
-                                    ids_escalados.add(mid)
-                                    escalados.append((mid, servico, horario))
-                                for mid in colocados:
-                                    ordem_atualizada[col_key].remove(mid)
-                                    ordem_atualizada[col_key].append(mid)
-
-                            todos_disponiveis = [mid for mid in todos_ids
-                                                if mid not in ids_indisponiveis and mid not in ids_escalados]
-
-                            resultados_dias.append({
-                                'data': d_gerar,
-                                'aba': aba_dia_loop,
-                                'escalados': escalados,
-                                'disponiveis': todos_disponiveis,
-                                'ordem_atualizada': ordem_atualizada,
-                            })
-
-                            # Atualizar ordem para o próximo dia
-                            ordem_atual = ordem_atualizada
-
-                        st.session_state['escala_gerada_multi'] = {
-                            'resultados': resultados_dias,
-                            'ordem_headers': ordem_headers,
+                # Construir mapa id -> dados da escala existente
+                # load_data_direto já explode IDs múltiplos (cada ID em linha separada)
+                mapa_existente = {}
+                if not df_existente.empty:
+                    for _, row_ex in df_existente.iterrows():
+                        mid = str(row_ex.get('id', '')).strip()
+                        if not mid or mid == 'nan':
+                            continue
+                        serv = str(row_ex.get('serviço', '')).strip()
+                        hor  = str(row_ex.get('horário', '')).strip()
+                        ind  = str(row_ex.get('indicativo rádio', '') or row_ex.get('indicativo', '')).strip()
+                        rad  = str(row_ex.get('rádio', '') or row_ex.get('radio', '')).strip()
+                        giro = str(row_ex.get('giro', '')).strip()
+                        obs  = str(row_ex.get('observações', '')).strip()
+                        for v in ['nan']:
+                            serv = '' if serv == v else serv
+                            hor  = '' if hor  == v else hor
+                            ind  = '' if ind  == v else ind
+                            rad  = '' if rad  == v else rad
+                            giro = '' if giro == v else giro
+                            obs  = '' if obs  == v else obs
+                        mapa_existente[mid] = {
+                            'serviço': serv, 'horário': hor,
+                            'indicativo': ind, 'rádio': rad,
+                            'giro': giro, 'observações': obs,
                         }
 
+                linhas = []
+                for _, row_u in df_util.iterrows():
+                    mid = str(row_u.get('id', '')).strip()
+                    if not mid or mid == 'nan':
+                        continue
+                    nome  = str(row_u.get('nome', '')).strip()
+                    posto = str(row_u.get('posto', '')).strip()
 
-                    except Exception as e:
-                        st.error(f"Erro ao gerar escala: {e}")
+                    # Dados existentes ou férias automáticas
+                    if mid in mapa_existente:
+                        dados = mapa_existente[mid]
+                    elif militar_de_ferias(mid, d_gerar, df_ferias, feriados):
+                        dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
+                    else:
+                        dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
 
-            # ── Mostrar resultado multi-dia (fora do bloco gerar) ──
-            if 'escala_gerada_multi' in st.session_state:
-                dados_multi = st.session_state['escala_gerada_multi']
-                resultados = dados_multi['resultados']
-                ordem_headers = dados_multi['ordem_headers']
+                    linhas.append({
+                        'id': mid,
+                        'nome': f"{posto} {nome}".strip(),
+                        'serviço':     dados['serviço'],
+                        'horário':     dados['horário'],
+                        'indicativo':  dados['indicativo'],
+                        'rádio':       dados['rádio'],
+                        'giro':        dados['giro'],
+                        'observações': dados['observações'],
+                    })
 
-                total_escalados = sum(len(r['escalados']) for r in resultados)
-                st.success(f"✅ {len(resultados)} dia(s) gerados — {total_escalados} militares escalados no total!")
-                st.markdown("---")
+                st.session_state['tabela_escala'] = linhas
+                st.session_state['tabela_dia'] = aba_dia
+                st.rerun()
 
-                for res in resultados:
-                    data_str = res['data'].strftime('%d/%m/%Y')
-                    escalados_r = res['escalados']
-                    disponiveis_r = res['disponiveis']
-                    with st.expander(f"📅 {data_str} — {len(escalados_r)} escalados", expanded=len(resultados)==1):
-                        if escalados_r:
-                            df_res = pd.DataFrame(escalados_r, columns=['ID', 'Serviço', 'Horário'])
-                            df_res['Nome'] = df_res['ID'].apply(lambda x: get_nome_curto(df_util, x))
-                            st.dataframe(df_res[['ID', 'Nome', 'Serviço', 'Horário']], use_container_width=True, hide_index=True)
-                        if disponiveis_r:
-                            st.markdown("**👥 Militares de sobra:**")
-                            sobra = [{'ID': mid, 'Nome': get_nome_curto(df_util, mid)} for mid in disponiveis_r]
-                            st.dataframe(pd.DataFrame(sobra), use_container_width=True, hide_index=True)
+            # ── Mostrar tabela editável ──
+            if 'tabela_escala' in st.session_state and st.session_state.get('tabela_dia') == aba_dia:
+                linhas = st.session_state['tabela_escala']
 
-                st.markdown("---")
-                if st.button("✅ CONFIRMAR E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_confirmar_escala"):
-                    st.session_state['confirmar_escala'] = True
-                    st.rerun()
+                st.markdown(f"**{len(linhas)} militares — {d_gerar.strftime('%d/%m/%Y')}**")
+                st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
-            if st.session_state.pop('escala_ok', False):
+                # Construir df editável
+                df_edit = pd.DataFrame(linhas)
+
+                # Serviços disponíveis por militar para dropdown
+                opcoes_servico = {}
+                for row in df_edit.itertuples():
+                    mid = str(row.id)
+                    servs_mil = militares_servicos.get(mid, [])
+                    opcoes_servico[mid] = [''] + servs_mil
+
+                # Usar st.data_editor
+                col_config = {
+                    'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
+                    'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
+                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos, width='large'),
+                    'horário':     st.column_config.TextColumn('Horário', width='small'),
+                    'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
+                    'rádio':       st.column_config.TextColumn('Rádio', width='small'),
+                    'giro':        st.column_config.TextColumn('Giro', width='small'),
+                    'observações': st.column_config.TextColumn('Observações', width='large'),
+                }
+
+                df_editado = st.data_editor(
+                    df_edit,
+                    column_config=col_config,
+                    hide_index=True,
+                    use_container_width=True,
+                    key="editor_escala",
+                    num_rows="fixed",
+                )
+
+                col_g1, col_g2 = st.columns(2)
+
+                # ── Botão Gerar Escala Automática ──
+                with col_g1:
+                    if st.button("⚙️ Gerar escala automática", use_container_width=True, key="btn_gerar_auto"):
+                        with st.spinner("A gerar..."):
+                            try:
+                                sh_g = get_sheet()
+
+                                # Indisponíveis = quem já tem serviço preenchido
+                                ids_indisponiveis = set()
+                                for _, row_e in df_editado.iterrows():
+                                    mid = str(row_e['id']).strip()
+                                    serv = str(row_e['serviço']).strip()
+                                    if serv and serv != 'nan':
+                                        ids_indisponiveis.add(mid)
+
+                                # Carregar ordem_escala
+                                aba_ordem = f"ordem_escala {aba_dia}"
+                                aba_ordem_ant = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
+                                try:
+                                    ws_ordem_g = sh_g.worksheet(aba_ordem)
+                                except:
+                                    try:
+                                        ws_ordem_g = sh_g.worksheet(aba_ordem_ant)
+                                    except:
+                                        st.error("Não encontrei ordem_escala.")
+                                        st.stop()
+
+                                ordem_vals_g = ws_ordem_g.get_all_values()
+                                ordem_headers_g = [str(h).strip() for h in ordem_vals_g[0]]
+                                ordem_g = {h: [] for h in ordem_headers_g}
+                                for row_o in ordem_vals_g[1:]:
+                                    for i, h in enumerate(ordem_headers_g):
+                                        val = str(row_o[i]).strip() if i < len(row_o) else ''
+                                        if val:
+                                            ordem_g[h].append(val)
+
+                                df_ant_g2 = load_data_direto(sh_g, (d_gerar - timedelta(days=1)).strftime("%d-%m"))
+
+                                SLOTS = [
+                                    ("Atendimento",         "00-08", 1),
+                                    ("Atendimento",         "08-16", 1),
+                                    ("Atendimento",         "16-24", 1),
+                                    ("Patrulha Ocorrências","00-08", 2),
+                                    ("Patrulha Ocorrências","08-16", 2),
+                                    ("Patrulha Ocorrências","16-24", 2),
+                                    ("Apoio Atendimento",   "08-16", 1),
+                                    ("Apoio Atendimento",   "16-24", 1),
+                                ]
+
+                                ids_escalados_g = set()
+                                novas_linhas = {str(row_e['id']): dict(row_e) for _, row_e in df_editado.iterrows()}
+
+                                for servico, horario, num in SLOTS:
+                                    col_key = f"{servico} {horario}"
+                                    if col_key not in ordem_g:
+                                        continue
+                                    colocados = []
+                                    for mid in ordem_g[col_key]:
+                                        if len(colocados) >= num: break
+                                        if mid in ids_indisponiveis or mid in ids_escalados_g: continue
+                                        if servico not in militares_servicos.get(mid, []): continue
+                                        # Verificar descanso
+                                        if not df_ant_g2.empty:
+                                            rows_ant = df_ant_g2[df_ant_g2['id'].astype(str).str.strip() == mid]
+                                            ini_novo, _ = _parse_horario(horario)
+                                            ok = True
+                                            for _, r_ant in rows_ant.iterrows():
+                                                _, fim_ant = _parse_horario(str(r_ant.get('horário','')))
+                                                if fim_ant and ini_novo is not None:
+                                                    if (1440 - fim_ant) + ini_novo < 480:
+                                                        ok = False; break
+                                            if not ok: continue
+                                        colocados.append(mid)
+                                        ids_escalados_g.add(mid)
+
+                                    for mid in colocados:
+                                        novas_linhas[mid]['serviço'] = servico
+                                        novas_linhas[mid]['horário'] = horario
+                                        # Rodar na ordem
+                                        ordem_g[col_key].remove(mid)
+                                        ordem_g[col_key].append(mid)
+
+                                st.session_state['tabela_escala'] = list(novas_linhas.values())
+                                st.session_state['ordem_gerada'] = ordem_g
+                                st.session_state['ordem_headers_gerada'] = ordem_headers_g
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao gerar: {e}")
+
+                # ── Botão Confirmar ──
+                with col_g2:
+                    if st.button("✅ CONFIRMAR E GUARDAR", use_container_width=True, type="primary", key="btn_confirmar_tabela"):
+                        with st.spinner("A guardar..."):
+                            try:
+                                sh_c = get_sheet()
+                                ws_dia_c = sh_c.worksheet(aba_dia)
+                                todas_linhas_c = ws_dia_c.get_all_values()
+                                hdrs_c = [h.strip().lower() for h in todas_linhas_c[0]]
+                                ix_id_c   = hdrs_c.index('id')      if 'id'      in hdrs_c else 0
+                                ix_serv_c = hdrs_c.index('serviço') if 'serviço' in hdrs_c else 1
+                                ix_hor_c  = hdrs_c.index('horário') if 'horário' in hdrs_c else 2
+                                ix_ind_c  = hdrs_c.index('indicativo rádio') if 'indicativo rádio' in hdrs_c else (hdrs_c.index('indicativo') if 'indicativo' in hdrs_c else None)
+                                ix_rad_c  = hdrs_c.index('rádio') if 'rádio' in hdrs_c else (hdrs_c.index('radio') if 'radio' in hdrs_c else None)
+                                ix_giro_c = hdrs_c.index('giro') if 'giro' in hdrs_c else None
+                                ix_obs_c  = hdrs_c.index('observações') if 'observações' in hdrs_c else (hdrs_c.index('observacoes') if 'observacoes' in hdrs_c else None)
+
+                                # Construir mapa de edições
+                                edit_map = {str(row_e['id']).strip(): row_e for _, row_e in df_editado.iterrows()}
+
+                                upds_c = []
+                                for i, row_c in enumerate(todas_linhas_c[1:], start=2):
+                                    mid_c = str(row_c[ix_id_c]).strip() if ix_id_c < len(row_c) else ''
+                                    if not mid_c or mid_c == 'nan':
+                                        continue
+                                    # Expandir IDs separados por ; ou ,
+                                    for mid_s in re.split(r'[;,]', mid_c):
+                                        mid_s = mid_s.strip()
+                                        if mid_s not in edit_map:
+                                            continue
+                                        row_e = edit_map[mid_s]
+                                        def _upd(ix, val):
+                                            if ix is not None and str(val).strip() and str(val).strip() != 'nan':
+                                                cl = chr(ord('A') + ix)
+                                                upds_c.append({'range': f'{cl}{i}', 'values': [[str(val).strip()]]})
+                                        _upd(ix_serv_c, row_e['serviço'])
+                                        _upd(ix_hor_c,  row_e['horário'])
+                                        _upd(ix_ind_c,  row_e['indicativo'])
+                                        _upd(ix_rad_c,  row_e['rádio'])
+                                        _upd(ix_giro_c, row_e['giro'])
+                                        _upd(ix_obs_c,  row_e['observações'])
+
+                                if upds_c:
+                                    ws_dia_c.batch_update(upds_c)
+
+                                # Atualizar ordem_escala do dia seguinte
+                                # Sempre partir do ordem_escala atual do dia e mover escalados para o fim
+                                aba_ord_atual = f"ordem_escala {aba_dia}"
+                                aba_ord_ant_c = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
+                                abas_c = [ws.title for ws in sh_c.worksheets()]
+
+                                # Ler ordem base — preferir do dia atual, senão do anterior
+                                ws_ord_base = None
+                                for nome_ord in [aba_ord_atual, aba_ord_ant_c]:
+                                    if nome_ord in abas_c:
+                                        ws_ord_base = sh_c.worksheet(nome_ord)
+                                        break
+
+                                if ws_ord_base:
+                                    vals_ord = ws_ord_base.get_all_values()
+                                    hdrs_ord = [str(h).strip() for h in vals_ord[0]]
+                                    ordem_base_c = {h: [] for h in hdrs_ord}
+                                    for row_o in vals_ord[1:]:
+                                        for i, h in enumerate(hdrs_ord):
+                                            val = str(row_o[i]).strip() if i < len(row_o) else ''
+                                            if val:
+                                                ordem_base_c[h].append(val)
+
+                                    # Identificar militares escalados nos slots principais
+                                    _slots_c = {
+                                        (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
+                                        (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
+                                        (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
+                                        (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
+                                        (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
+                                        (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
+                                        (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
+                                        (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
+                                    }
+                                    # Reler o dia gravado para saber quem ficou escalado
+                                    todas_c2 = ws_dia_c.get_all_values()
+                                    hdrs_c2  = [h.strip().lower() for h in todas_c2[0]]
+                                    ix_id_c2  = hdrs_c2.index('id')      if 'id'      in hdrs_c2 else 0
+                                    ix_sv_c2  = hdrs_c2.index('serviço') if 'serviço' in hdrs_c2 else 1
+                                    ix_hr_c2  = hdrs_c2.index('horário') if 'horário' in hdrs_c2 else 2
+
+                                    for row_c2 in todas_c2[1:]:
+                                        sv = norm(str(row_c2[ix_sv_c2]).strip()) if ix_sv_c2 < len(row_c2) else ''
+                                        hr = str(row_c2[ix_hr_c2]).strip()       if ix_hr_c2 < len(row_c2) else ''
+                                        id_c2 = str(row_c2[ix_id_c2]).strip()    if ix_id_c2 < len(row_c2) else ''
+                                        col_key_c = _slots_c.get((sv, hr))
+                                        if not col_key_c or not id_c2 or id_c2 == 'nan':
+                                            continue
+                                        for mid_c2 in re.split(r'[;,]', id_c2):
+                                            mid_c2 = mid_c2.strip()
+                                            if mid_c2 and col_key_c in ordem_base_c and mid_c2 in ordem_base_c[col_key_c]:
+                                                ordem_base_c[col_key_c].remove(mid_c2)
+                                                ordem_base_c[col_key_c].append(mid_c2)
+
+                                    # Gravar ordem do dia seguinte
+                                    nome_prox_c = f"ordem_escala {(d_gerar + timedelta(days=1)).strftime('%d-%m')}"
+                                    nova_o_c = [hdrs_ord]
+                                    ml_c = max((len(v) for v in ordem_base_c.values()), default=1)
+                                    for i in range(ml_c):
+                                        nova_o_c.append([ordem_base_c[h][i] if i < len(ordem_base_c[h]) else '' for h in hdrs_ord])
+                                    if nome_prox_c in abas_c:
+                                        ws_pc = sh_c.worksheet(nome_prox_c)
+                                        ws_pc.clear()
+                                        ws_pc.update('A1', nova_o_c)
+                                        ws_pc.hide()
+                                    else:
+                                        ws_pc = sh_c.add_worksheet(title=nome_prox_c, rows=100, cols=len(hdrs_ord))
+                                        ws_pc.update('A1', nova_o_c)
+                                        ws_pc.hide()
+
+                                load_data.clear()
+                                del st.session_state['tabela_escala']
+                                st.session_state.pop('ordem_gerada', None)
+                                st.session_state.pop('tabela_dia', None)
+                                st.success("✅ Escala guardada!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao guardar: {e}")
                 st.success("✅ Escala escrita e ordem atualizada!")
+
+        with tab_editar:
+            st.markdown("#### ✏️ Editar Escala")
+            st.caption("Seleciona até 3 dias para ver e editar em simultâneo.")
+
+            # ── Carregar serviços (reutilizar do tab_auto) ──
+            todos_servicos_e = [''] + sorted(set(serv_headers)) if 'serv_headers' in dir() else ['']
+
+            col_e1, col_e2, col_e3 = st.columns(3)
+            with col_e1:
+                d_e1 = st.date_input("Dia 1:", format="DD/MM/YYYY", key="d_edit1")
+            with col_e2:
+                d_e2 = st.date_input("Dia 2:", format="DD/MM/YYYY", key="d_edit2", value=None)
+            with col_e3:
+                d_e3 = st.date_input("Dia 3:", format="DD/MM/YYYY", key="d_edit3", value=None)
+
+            dias_editar = [d for d in [d_e1, d_e2, d_e3] if d is not None]
+
+            if st.button("📋 Carregar dias", key="btn_carregar_editar", use_container_width=True):
+                sh_e = get_sheet()
+                # Pré-calcular férias uma vez para todos os dias/militares
+                ferias_cache_e = {}
+                for d_e in dias_editar:
+                    em_ferias = set()
+                    for mid in df_util['id'].astype(str).str.strip():
+                        if militar_de_ferias(mid, d_e, df_ferias, feriados):
+                            em_ferias.add(mid)
+                    ferias_cache_e[d_e] = em_ferias
+
+                dados_editar = {}
+                for d_e in dias_editar:
+                    aba_e = d_e.strftime("%d-%m")
+                    df_e = load_data_direto(sh_e, aba_e)
+                    mapa_e = {}
+                    if not df_e.empty:
+                        for _, row_e in df_e.iterrows():
+                            mid = str(row_e.get('id', '')).strip()
+                            if not mid or mid == 'nan': continue
+                            mapa_e[mid] = {
+                                'serviço':     str(row_e.get('serviço', '')).strip().replace('nan',''),
+                                'horário':     str(row_e.get('horário', '')).strip().replace('nan',''),
+                                'indicativo':  str(row_e.get('indicativo rádio', '') or row_e.get('indicativo', '')).strip().replace('nan',''),
+                                'rádio':       str(row_e.get('rádio', '') or row_e.get('radio', '')).strip().replace('nan',''),
+                                'giro':        str(row_e.get('giro', '')).strip().replace('nan',''),
+                                'observações': str(row_e.get('observações', '')).strip().replace('nan',''),
+                            }
+                    em_ferias_e = ferias_cache_e[d_e]
+                    linhas_e = []
+                    for _, row_u in df_util.iterrows():
+                        mid = str(row_u.get('id', '')).strip()
+                        if not mid or mid == 'nan': continue
+                        nome  = str(row_u.get('nome', '')).strip()
+                        posto = str(row_u.get('posto', '')).strip()
+                        if mid in mapa_e:
+                            dados = mapa_e[mid]
+                        elif mid in em_ferias_e:
+                            dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
+                        else:
+                            dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'observações': ''}
+                        linhas_e.append({'id': mid, 'nome': f"{posto} {nome}".strip(), **dados})
+                    dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
+                st.session_state['editar_escala'] = dados_editar
+                st.rerun()
+
+            # ── Mostrar tabelas por dia ──
+            if 'editar_escala' in st.session_state:
+                dados_editar = st.session_state['editar_escala']
+                col_config_e = {
+                    'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
+                    'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
+                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='large'),
+                    'horário':     st.column_config.TextColumn('Horário', width='small'),
+                    'indicativo':  st.column_config.TextColumn('Indicativo', width='small'),
+                    'rádio':       st.column_config.TextColumn('Rádio', width='small'),
+                    'giro':        st.column_config.TextColumn('Giro', width='small'),
+                    'observações': st.column_config.TextColumn('Observações', width='large'),
+                }
+
+                editados_e = {}
+                for aba_e, info_e in dados_editar.items():
+                    d_e = info_e['data']
+                    st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {['Segunda','Terça','Quarta','Quinta','Sexta','Sábado','Domingo'][d_e.weekday()]}**")
+                    df_e_edit = pd.DataFrame(info_e['linhas'])
+                    df_editado_e = st.data_editor(
+                        df_e_edit,
+                        column_config=col_config_e,
+                        hide_index=True,
+                        use_container_width=True,
+                        key=f"editor_{aba_e}",
+                        num_rows="fixed",
+                    )
+                    editados_e[aba_e] = df_editado_e
+                    st.markdown("---")
+
+                if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
+                    with st.spinner("A guardar..."):
+                        try:
+                            sh_gc = get_sheet()
+                            erros_e = []
+                            for aba_e, df_ge in editados_e.items():
+                                ws_e = sh_gc.worksheet(aba_e)
+                                todas_e = ws_e.get_all_values()
+                                hdrs_e = [h.strip().lower() for h in todas_e[0]]
+                                ix_id_e   = hdrs_e.index('id')      if 'id'      in hdrs_e else 0
+                                ix_sv_e   = hdrs_e.index('serviço') if 'serviço' in hdrs_e else 1
+                                ix_hr_e   = hdrs_e.index('horário') if 'horário' in hdrs_e else 2
+                                ix_in_e   = hdrs_e.index('indicativo rádio') if 'indicativo rádio' in hdrs_e else (hdrs_e.index('indicativo') if 'indicativo' in hdrs_e else None)
+                                ix_ra_e   = hdrs_e.index('rádio') if 'rádio' in hdrs_e else None
+                                ix_gi_e   = hdrs_e.index('giro') if 'giro' in hdrs_e else None
+                                ix_ob_e   = hdrs_e.index('observações') if 'observações' in hdrs_e else None
+
+                                edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
+                                upds_e = []
+                                for i, row_s in enumerate(todas_e[1:], start=2):
+                                    mid_s = str(row_s[ix_id_e]).strip() if ix_id_e < len(row_s) else ''
+                                    if not mid_s or mid_s == 'nan': continue
+                                    for mid_part in re.split(r'[;,]', mid_s):
+                                        mid_part = mid_part.strip()
+                                        if mid_part not in edit_map_e: continue
+                                        r_e = edit_map_e[mid_part]
+                                        def _u(ix, val):
+                                            if ix is not None:
+                                                cl = chr(ord('A') + ix)
+                                                upds_e.append({'range': f'{cl}{i}', 'values': [[str(val or '').strip()]]})
+                                        _u(ix_sv_e, r_e['serviço'])
+                                        _u(ix_hr_e, r_e['horário'])
+                                        _u(ix_in_e, r_e['indicativo'])
+                                        _u(ix_ra_e, r_e['rádio'])
+                                        _u(ix_gi_e, r_e['giro'])
+                                        _u(ix_ob_e, r_e['observações'])
+                                if upds_e:
+                                    ws_e.batch_update(upds_e)
+
+                            load_data.clear()
+                            del st.session_state['editar_escala']
+                            st.success("✅ Alterações guardadas!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro: {e}")
 
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
