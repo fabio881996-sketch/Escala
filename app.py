@@ -4689,12 +4689,25 @@ else:
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
                             try:
-                                _guardar_sheets({aba_e: df_editado_s})
-                                del st.session_state['editar_escala']
-                                st.success("✅ Guardado!")
-                                st.rerun()
+                                sh_gc = get_sheet()
+                                ws_dbg = sh_gc.worksheet(aba_e)
+                                todas_dbg = ws_dbg.get_all_values()
+                                hdrs_dbg = [h.strip().lower() for h in todas_dbg[0]]
+                                ix_id_dbg = hdrs_dbg.index('id') if 'id' in hdrs_dbg else 0
+                                # Mostrar primeiras 5 linhas com ID
+                                linhas_com_id = [(i+2, row[ix_id_dbg], row[1] if len(row)>1 else '') 
+                                                 for i, row in enumerate(todas_dbg[1:]) 
+                                                 if str(row[ix_id_dbg]).strip()][:8]
+                                st.write("Estrutura Sheets (linha, ID, serviço):", linhas_com_id)
+                                # Ver onde está o militar editado
+                                diff = df_editado_s.compare(df_s)
+                                if not diff.empty:
+                                    idx_editados = diff.index.tolist()
+                                    st.write("Linhas editadas (idx):", idx_editados)
+                                    for idx in idx_editados:
+                                        st.write(f"  idx={idx} id={df_editado_s.at[idx,'id']} serviço={df_editado_s.at[idx,'serviço']} horário={df_editado_s.at[idx,'horário']}")
                             except Exception as e:
-                                st.error(f"Erro: {e}")
+                                st.error(f"Erro debug: {e}")
 
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
