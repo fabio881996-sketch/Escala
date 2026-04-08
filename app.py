@@ -4463,7 +4463,11 @@ else:
                 return ws.get_all_values()
             _sv_e = _load_servicos_editar()
             _hdrs_e = [str(h).strip() for h in _sv_e[0]]
-            todos_servicos_e = [''] + sorted(set(_hdrs_e))
+            # Incluir serviços extra que podem aparecer na escala mas não estão na aba serviços
+            _extras_e = ['Férias', 'Folga Semanal', 'Folga Complementar', 'Outras Licenças',
+                         'Doente', 'Baixa', 'Diligência', 'Inquéritos', 'Secretaria',
+                         'Pronto', 'Tribunal', 'Disponível']
+            todos_servicos_e = [''] + sorted(set(_hdrs_e + _extras_e))
 
             col_e1, col_e2 = st.columns(2)
             with col_e1:
@@ -4522,7 +4526,6 @@ else:
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
                     em_ferias_e = ferias_cache_e[d_e]
-                    st.session_state[f'debug_{aba_e}'] = f"{aba_e}: {len(mapa_e)} militares. Exemplo: {list(mapa_e.items())[:3]}"
                     linhas_e = []
                     for _, row_u in df_util.iterrows():
                         mid = str(row_u.get('id', '')).strip()
@@ -4545,10 +4548,6 @@ else:
 
             # ── Mostrar tabelas por dia ──
             if 'editar_escala' in st.session_state:
-                # Mostrar debug
-                for k, v in st.session_state.items():
-                    if k.startswith('debug_'):
-                        st.info(v)
                 dados_editar = st.session_state['editar_escala']
                 col_config_e = {
                     'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
@@ -5000,4 +4999,3 @@ else:
                                 break
                     except Exception as e:
                         st.error(f"Erro: {e}")
-                        
