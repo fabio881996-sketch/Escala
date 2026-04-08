@@ -4666,6 +4666,12 @@ else:
                         hide_index=True, use_container_width=True,
                         key=f"editor_{aba_e}", num_rows="fixed",
                     )
+                    # DEBUG — mostrar diferenças entre original e editado
+                    diffs = df_editado_s.compare(df_s, result_names=('editado','original')) if not df_editado_s.equals(df_s) else None
+                    if diffs is not None:
+                        st.success(f"✅ Detetadas alterações: {diffs.shape[0]} linhas")
+                    else:
+                        st.caption("Sem alterações detetadas no df_editado_s")
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
                             try:
