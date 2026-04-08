@@ -4601,7 +4601,7 @@ else:
                         label_2:   st.column_config.SelectboxColumn(label_2, options=todos_servicos_e, width='medium'),
                         label_h2:  st.column_config.TextColumn(label_h2, width='small'),
                     }
-                    df_editado_uni = st.data_editor(
+                    st.data_editor(
                         df_uni,
                         column_config=col_config_uni,
                         hide_index=True,
@@ -4609,6 +4609,15 @@ else:
                         key="editor_unificado",
                         num_rows="fixed",
                     )
+
+                    # Reconstruir df com edições do session_state
+                    editor_state_uni = st.session_state.get("editor_unificado", {})
+                    edited_rows_uni  = editor_state_uni.get('edited_rows', {})
+                    df_editado_uni = df_uni.copy()
+                    for row_idx_str, changes in edited_rows_uni.items():
+                        row_idx = int(row_idx_str)
+                        for col, val in changes.items():
+                            df_editado_uni.at[row_idx, col] = val
 
                     # Separar de volta em editados_e por aba
                     editados_e = {}
@@ -4640,7 +4649,7 @@ else:
                     dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {dias_pt[d_e.weekday()]}**")
                     df_s = pd.DataFrame(info_e['linhas'])
-                    df_editado_s = st.data_editor(
+                    st.data_editor(
                         df_s,
                         column_config={
                             'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
@@ -4657,7 +4666,15 @@ else:
                         key=f"editor_{aba_e}",
                         num_rows="fixed",
                     )
-                    editados_e = {aba_e: df_editado_s}
+                    # Reconstruir df com edições do session_state
+                    editor_state = st.session_state.get(f"editor_{aba_e}", {})
+                    edited_rows = editor_state.get('edited_rows', {})
+                    df_final = df_s.copy()
+                    for row_idx_str, changes in edited_rows.items():
+                        row_idx = int(row_idx_str)
+                        for col, val in changes.items():
+                            df_final.at[row_idx, col] = val
+                    editados_e = {aba_e: df_final}
 
                 if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                     with st.spinner("A guardar..."):
