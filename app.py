@@ -4672,35 +4672,42 @@ else:
                                 ix_gi_e   = hdrs_e.index('giro') if 'giro' in hdrs_e else None
                                 ix_ob_e   = hdrs_e.index('observações') if 'observações' in hdrs_e else None
 
+                                # Mapa original para comparar
+                                original_map_e = {}
+                                if aba_e in st.session_state.get('editar_escala', {}):
+                                    for r_orig in st.session_state['editar_escala'][aba_e]['linhas']:
+                                        original_map_e[str(r_orig['id']).strip()] = r_orig
+
                                 edit_map_e = {str(r['id']).strip(): r for _, r in df_ge.iterrows()}
                                 upds_e = []
                                 for i, row_s in enumerate(todas_e[1:], start=2):
                                     mid_s = str(row_s[ix_id_e]).strip() if ix_id_e < len(row_s) else ''
                                     if not mid_s or mid_s == 'nan': continue
-                                    for mid_part in re.split(r'[;,\s]+', mid_s):
+                                    for mid_part in re.split(r'[;,]+', mid_s):
                                         mid_part = mid_part.strip()
                                         if not mid_part or mid_part not in edit_map_e: continue
                                         r_e = edit_map_e[mid_part]
-                                        def _u(ix, val):
-                                            if ix is not None and val is not None and str(val).strip() not in ('', 'nan', 'None'):
+                                        r_o = original_map_e.get(mid_part, {})
+                                        def _u(ix, campo):
+                                            val_novo = str(r_e.get(campo, '') or '').strip()
+                                            val_orig = str(r_o.get(campo, '') or '').strip()
+                                            if ix is not None and val_novo != val_orig and val_novo not in ('nan', 'None'):
                                                 cl = chr(ord('A') + ix)
-                                                upds_e.append({'range': f'{cl}{i}', 'values': [[str(val).strip()]]})
-                                        _u(ix_sv_e, r_e.get('serviço'))
-                                        _u(ix_hr_e, r_e.get('horário'))
-                                        _u(ix_in_e, r_e.get('indicativo'))
-                                        _u(ix_ra_e, r_e.get('rádio'))
-                                        _u(ix_gi_e, r_e.get('giro'))
-                                        _u(ix_ob_e, r_e.get('observações'))
-                                        break  # só atualizar pela primeira ocorrência do militar
+                                                upds_e.append({'range': f'{cl}{i}', 'values': [[val_novo]]})
+                                        _u(ix_sv_e, 'serviço')
+                                        _u(ix_hr_e, 'horário')
+                                        _u(ix_in_e, 'indicativo')
+                                        _u(ix_ra_e, 'rádio')
+                                        _u(ix_gi_e, 'giro')
+                                        _u(ix_ob_e, 'observações')
+                                        break
                                 if upds_e:
-                                    st.session_state['debug_upds'] = f"{aba_e}: {len(upds_e)} updates — ex: {upds_e[:3]}"
                                     ws_e.batch_update(upds_e)
-                                else:
-                                    st.session_state['debug_upds'] = f"{aba_e}: ZERO updates. edit_map keys: {list(edit_map_e.keys())[:5]}"
 
                             load_data.clear()
+                            st.success(f"✅ {sum(len(u) for u in [upds_e])} células atualizadas!")
+                            # Recarregar tabela com dados frescos
                             del st.session_state['editar_escala']
-                            st.success("✅ Alterações guardadas!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro: {e}")
