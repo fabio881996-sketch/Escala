@@ -4161,7 +4161,28 @@ else:
 
             # ── Botão para carregar/resetar tabela ──
             if st.button("📋 Carregar tabela do dia", key="btn_carregar_tabela", use_container_width=True):
-                df_existente = load_data_direto(get_sheet(), aba_dia)
+                sh_tab = get_sheet()
+                # Criar aba do dia se não existir, copiando estrutura de outra aba
+                abas_existentes_tab = [ws.title for ws in sh_tab.worksheets()]
+                if aba_dia not in abas_existentes_tab:
+                    # Encontrar aba modelo (outro dia)
+                    aba_modelo = None
+                    for ws_t in sh_tab.worksheets():
+                        if re.match(r'^\d{2}-\d{2}$', ws_t.title):
+                            aba_modelo = ws_t
+                            break
+                    if aba_modelo:
+                        # Copiar só os cabeçalhos
+                        hdrs_modelo = aba_modelo.row_values(1)
+                        ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_modelo))
+                        ws_nova.update('A1', [hdrs_modelo])
+                    else:
+                        # Criar com cabeçalhos padrão
+                        hdrs_pad = ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
+                        ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_pad))
+                        ws_nova.update('A1', [hdrs_pad])
+
+                df_existente = load_data_direto(sh_tab, aba_dia)
 
                 # Construir mapa id -> dados da escala existente
                 # load_data_direto já explode IDs múltiplos (cada ID em linha separada)
@@ -4524,6 +4545,15 @@ else:
 
             if st.button("📋 Carregar dias", key="btn_carregar_editar", use_container_width=True):
                 sh_e = get_sheet()
+                abas_existentes_e = [ws.title for ws in sh_e.worksheets()]
+                # Criar abas que não existam
+                aba_modelo_e = next((ws for ws in sh_e.worksheets() if re.match(r'^\d{2}-\d{2}$', ws.title)), None)
+                hdrs_modelo_e = aba_modelo_e.row_values(1) if aba_modelo_e else ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
+                for d_e_chk in dias_editar:
+                    aba_chk = d_e_chk.strftime("%d-%m")
+                    if aba_chk not in abas_existentes_e:
+                        ws_chk = sh_e.add_worksheet(title=aba_chk, rows=200, cols=len(hdrs_modelo_e))
+                        ws_chk.update('A1', [hdrs_modelo_e])
                 # Pré-calcular férias uma vez para todos os dias/militares
                 ferias_cache_e = {}
                 for d_e in dias_editar:
@@ -4738,6 +4768,112 @@ else:
                         if upds_g:
                             ws_g.batch_update(upds_g)
 
+                        # ── Atualizar ordem_escala ──
+                        _slots_auto = {
+                            'atendimento':           ['00-08','08-16','16-24'],
+                            'patrulha ocorrencias':  ['00-08','08-16','16-24'],
+                            'apoio atendimento':     ['08-16','16-24'],
+                        }
+                        _slot_cols = {
+                            f"{sv} {hr}": f"{sv.title()} {hr}"
+                            for sv, hrs in _slots_auto.items() for hr in hrs
+                        }
+                        # Mapear norm -> nome real
+                        _slot_col_real = {}
+                        for sv_n, hrs in _slots_auto.items():
+                            for hr in hrs:
+                                chave = f"{sv_n} {hr}"
+                                # Encontrar nome real
+                                for s in ['Atendimento','Patrulha Ocorrências','Apoio Atendimento']:
+                                    if norm(s) == sv_n:
+                                        _slot_col_real[chave] = f"{s} {hr}"
+                                        break
+
+                        # Ler ordem_escala do dia
+                        aba_data = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
+                        nome_ord_dia = f"ordem_escala {aba_g}"
+                        nome_ord_ant = f"ordem_escala {(aba_data - timedelta(days=1)).strftime('%d-%m')}"
+                        abas_all = [ws.title for ws in sh_gc.worksheets()]
+
+                        # Ler ordem do dia anterior (base)
+                        ws_ord_ant = None
+                        for nome_o in [nome_ord_dia, nome_ord_ant]:
+                            if nome_o in abas_all:
+                                ws_ord_ant = sh_gc.worksheet(nome_o)
+                                break
+
+                        if ws_ord_ant:
+                            ord_vals = ws_ord_ant.get_all_values()
+                            ord_hdrs = [h.strip() for h in ord_vals[0]]
+                            ordem_atual = {h: [] for h in ord_hdrs}
+                            for row_o in ord_vals[1:]:
+                                for i_o, h_o in enumerate(ord_hdrs):
+                                    v_o = str(row_o[i_o]).strip() if i_o < len(row_o) else ''
+                                    if v_o:
+                                        ordem_atual[h_o].append(v_o)
+
+                            # Ler ordem do dia anterior puro (para repor desescalados)
+                            ord_ant_vals = None
+                            if nome_ord_ant in abas_all:
+                                ord_ant_vals = sh_gc.worksheet(nome_ord_ant).get_all_values()
+                            ordem_anterior = {}
+                            if ord_ant_vals:
+                                ord_ant_hdrs = [h.strip() for h in ord_ant_vals[0]]
+                                for h_a in ord_ant_hdrs:
+                                    ordem_anterior[h_a] = []
+                                for row_a in ord_ant_vals[1:]:
+                                    for i_a, h_a in enumerate(ord_ant_hdrs):
+                                        v_a = str(row_a[i_a]).strip() if i_a < len(row_a) else ''
+                                        if v_a:
+                                            ordem_anterior[h_a].append(v_a)
+
+                            # Aplicar mudanças
+                            for mid, dados in editor_map.items():
+                                sv_novo = norm(dados['serviço'])
+                                hr_novo = dados['horário']
+                                sv_orig = norm(original.get(mid, {}).get('serviço', ''))
+                                hr_orig = original.get(mid, {}).get('horário', '')
+                                chave_nova = f"{sv_novo} {hr_novo}"
+                                chave_orig = f"{sv_orig} {hr_orig}"
+                                col_nova = _slot_col_real.get(chave_nova)
+                                col_orig = _slot_col_real.get(chave_orig)
+
+                                if sv_novo == sv_orig and hr_novo == hr_orig:
+                                    continue  # sem mudança
+
+                                # Desescalado — repor na posição original
+                                if col_orig and not col_nova:
+                                    if col_orig in ordem_atual and mid in ordem_atual[col_orig]:
+                                        # Remover da posição atual
+                                        ordem_atual[col_orig].remove(mid)
+                                        # Inserir na posição que tinha no dia anterior
+                                        if col_orig in ordem_anterior and mid in ordem_anterior[col_orig]:
+                                            pos_ant = ordem_anterior[col_orig].index(mid)
+                                            ordem_atual[col_orig].insert(pos_ant, mid)
+                                        else:
+                                            ordem_atual[col_orig].insert(0, mid)
+
+                                # Escalado novo — mover para o fim
+                                if col_nova and col_nova in ordem_atual:
+                                    if mid in ordem_atual[col_nova]:
+                                        ordem_atual[col_nova].remove(mid)
+                                    ordem_atual[col_nova].append(mid)
+
+                            # Gravar ordem_escala atualizado
+                            nova_ord = [ord_hdrs]
+                            ml_o = max((len(v) for v in ordem_atual.values()), default=1)
+                            for i_o in range(ml_o):
+                                nova_ord.append([ordem_atual[h][i_o] if i_o < len(ordem_atual[h]) else '' for h in ord_hdrs])
+                            if nome_ord_dia in abas_all:
+                                ws_ord_upd = sh_gc.worksheet(nome_ord_dia)
+                                ws_ord_upd.clear()
+                                ws_ord_upd.update('A1', nova_ord)
+                                ws_ord_upd.hide()
+                            else:
+                                ws_ord_new = sh_gc.add_worksheet(title=nome_ord_dia, rows=100, cols=len(ord_hdrs))
+                                ws_ord_new.update('A1', nova_ord)
+                                ws_ord_new.hide()
+
                 dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 
                 if len(abas_lista) == 2:
@@ -4761,10 +4897,10 @@ else:
                         column_config={
                             'id':     st.column_config.TextColumn('ID', disabled=True, width='small'),
                             'nome':   st.column_config.TextColumn('Nome', disabled=True, width='small'),
-                            label_1:  st.column_config.SelectboxColumn(label_1, options=todos_servicos_e, width='medium'),
-                            label_h1: st.column_config.TextColumn(label_h1, width='small'),
-                            label_2:  st.column_config.SelectboxColumn(label_2, options=todos_servicos_e, width='medium'),
-                            label_h2: st.column_config.TextColumn(label_h2, width='small'),
+                            label_1:  st.column_config.SelectboxColumn(label_1, options=st.session_state.get('opts_sv_e', opts_sv_e), width='medium'),
+                            label_h1: st.column_config.SelectboxColumn(label_h1, options=opts_hor_e, width='small'),
+                            label_2:  st.column_config.SelectboxColumn(label_2, options=st.session_state.get('opts_sv_e', opts_sv_e), width='medium'),
+                            label_h2: st.column_config.SelectboxColumn(label_h2, options=opts_hor_e, width='small'),
                         },
                         hide_index=True, use_container_width=True,
                         key="editor_unificado", num_rows="fixed",
@@ -4785,6 +4921,7 @@ else:
                                     rows_1.append(r1o); rows_2.append(r2o)
                                 _guardar_sheets({aba_1: pd.DataFrame(rows_1), aba_2: pd.DataFrame(rows_2)})
                                 del st.session_state['editar_escala']
+                                st.session_state.pop('editar_escala_original', None)
                                 st.success("✅ Guardado!")
                                 st.rerun()
                             except Exception as e:
