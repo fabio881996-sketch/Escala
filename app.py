@@ -4569,44 +4569,94 @@ else:
                     for aba_g, df_g in editados_dict.items():
                         ws_g = sh_gc.worksheet(aba_g)
                         todas_g = ws_g.get_all_values()
+                        if not todas_g: continue
                         hdrs_g = [h.strip().lower() for h in todas_g[0]]
-                        ix_id_g = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
-                        ix_sv_g = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
-                        ix_hr_g = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
-                        ix_in_g = hdrs_g.index('indicativo rádio') if 'indicativo rádio' in hdrs_g else (hdrs_g.index('indicativo') if 'indicativo' in hdrs_g else None)
-                        ix_ra_g = hdrs_g.index('rádio') if 'rádio' in hdrs_g else None
-                        ix_gi_g = hdrs_g.index('giro') if 'giro' in hdrs_g else None
-                        ix_ob_g = hdrs_g.index('observações') if 'observações' in hdrs_g else None
-                        # Converter df para dict id->valores
-                        mapa_g = {}
-                        for _, row_g in df_g.iterrows():
-                            mid = str(row_g['id']).strip()
-                            mapa_g[mid] = {
-                                'serviço':     str(row_g.get('serviço','') or '').strip(),
-                                'horário':     str(row_g.get('horário','') or '').strip(),
-                                'indicativo':  str(row_g.get('indicativo','') or '').strip(),
-                                'rádio':       str(row_g.get('rádio','') or '').strip(),
-                                'giro':        str(row_g.get('giro','') or '').strip(),
-                                'observações': str(row_g.get('observações','') or '').strip(),
-                            }
+                        ix_id_g  = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
+                        ix_sv_g  = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
+                        ix_hr_g  = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
+
+                        # Estado original (antes de editar) — do session_state
+                        original = st.session_state.get('editar_escala_original', {}).get(aba_g, {})
+
+                        # Converter editor para dict id -> {serviço, horário, ...}
+                        editor_map = {}
+                        for _, r in df_g.iterrows():
+                            mid = str(r['id']).strip()
+                            if mid and mid != 'nan':
+                                editor_map[mid] = {
+                                    'serviço':     str(r.get('serviço','') or '').strip(),
+                                    'horário':     str(r.get('horário','') or '').strip(),
+                                    'indicativo':  str(r.get('indicativo','') or '').strip(),
+                                    'rádio':       str(r.get('rádio','') or '').strip(),
+                                    'giro':        str(r.get('giro','') or '').strip(),
+                                    'observações': str(r.get('observações','') or '').strip(),
+                                }
+
+                        # Construir mapa de linhas do Sheets: (norm_serv, horário) -> índice linha (1-based)
+                        linhas_sheet = {}
+                        for i, row in enumerate(todas_g[1:], start=1):
+                            sv = norm(str(row[ix_sv_g]).strip()) if ix_sv_g < len(row) else ''
+                            hr = str(row[ix_hr_g]).strip() if ix_hr_g < len(row) else ''
+                            if sv:
+                                linhas_sheet[(sv, hr)] = i  # índice na lista todas_g
+
+                        # Construir novo estado das linhas
+                        # Para cada linha do Sheets, recalcular quem está lá
+                        novas_linhas = {}  # (sv,hr) -> lista de IDs
+                        for (sv, hr), idx in linhas_sheet.items():
+                            row = todas_g[idx]
+                            ids_atuais = [m.strip() for m in re.split(r'[;,]+', str(row[ix_id_g]).strip()) if m.strip()]
+                            novas_linhas[(sv, hr)] = ids_atuais[:]
+
+                        # Aplicar mudanças do editor
+                        for mid, dados in editor_map.items():
+                            sv_novo = norm(dados['serviço'])
+                            hr_novo = dados['horário']
+                            sv_orig = norm(original.get(mid, {}).get('serviço', ''))
+                            hr_orig = original.get(mid, {}).get('horário', '')
+
+                            # Remover da linha original se mudou
+                            if sv_orig and (sv_orig != sv_novo or hr_orig != hr_novo):
+                                chave_orig = (sv_orig, hr_orig)
+                                if chave_orig in novas_linhas and mid in novas_linhas[chave_orig]:
+                                    novas_linhas[chave_orig].remove(mid)
+
+                            # Adicionar à linha nova
+                            if sv_novo:
+                                chave_nova = (sv_novo, hr_novo)
+                                if chave_nova in novas_linhas:
+                                    if mid not in novas_linhas[chave_nova]:
+                                        novas_linhas[chave_nova].append(mid)
+                                else:
+                                    novas_linhas[chave_nova] = [mid]
+
+                        # Escrever updates no Sheets
                         upds_g = []
-                        for i, row_s in enumerate(todas_g[1:], start=2):
-                            mid_s = str(row_s[ix_id_g]).strip() if ix_id_g < len(row_s) else ''
-                            if not mid_s or mid_s == 'nan': continue
-                            for mid_p in re.split(r'[;,]+', mid_s):
-                                mid_p = mid_p.strip()
-                                if not mid_p or mid_p not in mapa_g: continue
-                                v = mapa_g[mid_p]
-                                if ix_sv_g is not None and v['serviço']: upds_g.append({'range': f'{chr(ord("A")+ix_sv_g)}{i}', 'values': [[v['serviço']]]})
-                                if ix_hr_g is not None and v['horário']: upds_g.append({'range': f'{chr(ord("A")+ix_hr_g)}{i}', 'values': [[v['horário']]]})
-                                if ix_in_g is not None and v['indicativo']: upds_g.append({'range': f'{chr(ord("A")+ix_in_g)}{i}', 'values': [[v['indicativo']]]})
-                                if ix_ra_g is not None and v['rádio']: upds_g.append({'range': f'{chr(ord("A")+ix_ra_g)}{i}', 'values': [[v['rádio']]]})
-                                if ix_gi_g is not None and v['giro']: upds_g.append({'range': f'{chr(ord("A")+ix_gi_g)}{i}', 'values': [[v['giro']]]})
-                                if ix_ob_g is not None and v['observações']: upds_g.append({'range': f'{chr(ord("A")+ix_ob_g)}{i}', 'values': [[v['observações']]]})
-                                break
+                        cl_id = chr(ord('A') + ix_id_g)
+                        for (sv, hr), idx in linhas_sheet.items():
+                            ids_novos = novas_linhas.get((sv, hr), [])
+                            ids_str = ';'.join(ids_novos)
+                            linha_sheet = idx + 1  # +1 porque todas_g[0] é header
+                            upds_g.append({'range': f'{cl_id}{linha_sheet}', 'values': [[ids_str]]})
+
+                        # Linhas novas (serviços que não existiam no Sheets)
+                        for (sv, hr), ids in novas_linhas.items():
+                            if (sv, hr) not in linhas_sheet and ids:
+                                # Encontrar nome real do serviço
+                                sv_real = ids[0]  # fallback
+                                for mid in ids:
+                                    sv_real_r = editor_map.get(mid, {}).get('serviço', '')
+                                    if sv_real_r:
+                                        sv_real = sv_real_r
+                                        break
+                                nova_linha = [''] * len(hdrs_g)
+                                nova_linha[ix_id_g] = ';'.join(ids)
+                                nova_linha[ix_sv_g] = sv_real
+                                nova_linha[ix_hr_g] = hr
+                                ws_g.append_row(nova_linha)
+
                         if upds_g:
                             ws_g.batch_update(upds_g)
-                    load_data.clear()
 
                 dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 
@@ -4689,25 +4739,13 @@ else:
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
                             try:
-                                sh_gc = get_sheet()
-                                ws_dbg = sh_gc.worksheet(aba_e)
-                                todas_dbg = ws_dbg.get_all_values()
-                                hdrs_dbg = [h.strip().lower() for h in todas_dbg[0]]
-                                ix_id_dbg = hdrs_dbg.index('id') if 'id' in hdrs_dbg else 0
-                                # Mostrar primeiras 5 linhas com ID
-                                linhas_com_id = [(i+2, row[ix_id_dbg], row[1] if len(row)>1 else '') 
-                                                 for i, row in enumerate(todas_dbg[1:]) 
-                                                 if str(row[ix_id_dbg]).strip()][:8]
-                                st.write("Estrutura Sheets (linha, ID, serviço):", linhas_com_id)
-                                # Ver onde está o militar editado
-                                diff = df_editado_s.compare(df_s)
-                                if not diff.empty:
-                                    idx_editados = diff.index.tolist()
-                                    st.write("Linhas editadas (idx):", idx_editados)
-                                    for idx in idx_editados:
-                                        st.write(f"  idx={idx} id={df_editado_s.at[idx,'id']} serviço={df_editado_s.at[idx,'serviço']} horário={df_editado_s.at[idx,'horário']}")
+                                _guardar_sheets({aba_e: df_editado_s})
+                                del st.session_state['editar_escala']
+                                st.session_state.pop('editar_escala_original', None)
+                                st.success("✅ Guardado!")
+                                st.rerun()
                             except Exception as e:
-                                st.error(f"Erro debug: {e}")
+                                st.error(f"Erro: {e}")
 
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
