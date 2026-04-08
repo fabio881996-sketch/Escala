@@ -4557,7 +4557,20 @@ else:
                             opts_rad_e = set([''])
                             opts_gir_e = set([''])
                             opts_vtr_e = set([''])
+                            opts_sv_dia = set(opts_sv_e)  # começar com as listas
                             for row_r in vals_e_raw[1:]:
+                                v_sv = _get(row_r, ix_sv_r)
+                                v_hr = _get(row_r, ix_hr_r)
+                                v_in = _get(row_r, ix_in_r)
+                                v_ra = _get(row_r, ix_ra_r)
+                                v_gi = _get(row_r, ix_gi_r)
+                                v_vt = _get(row_r, ix_vt_r)
+                                if v_sv: opts_sv_dia.add(v_sv)
+                                if v_hr: opts_hor_e.add(v_hr)
+                                if v_in: opts_ind_e.add(v_in)
+                                if v_ra: opts_rad_e.add(v_ra)
+                                if v_gi: opts_gir_e.add(v_gi)
+                                if v_vt: opts_vtr_e.add(v_vt)
                                 v_hr = _get(row_r, ix_hr_r)
                                 v_in = _get(row_r, ix_in_r)
                                 v_ra = _get(row_r, ix_ra_r)
@@ -4588,6 +4601,7 @@ else:
                             st.session_state['opts_rad_e'] = sorted(opts_rad_e)
                             st.session_state['opts_gir_e'] = sorted(opts_gir_e)
                             st.session_state['opts_vtr_e'] = sorted(opts_vtr_e)
+                            st.session_state['opts_sv_e']  = [''] + sorted(opts_sv_dia - {''})
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
                     em_ferias_e = ferias_cache_e[d_e]
@@ -4784,7 +4798,7 @@ else:
                         column_config={
                             'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
                             'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
-                            'serviço':     st.column_config.SelectboxColumn('Serviço', options=todos_servicos_e, width='medium'),
+                            'serviço':     st.column_config.SelectboxColumn('Serviço', options=st.session_state.get('opts_sv_e', opts_sv_e), width='medium'),
                             'horário':     st.column_config.SelectboxColumn('Horário', options=opts_hor_e, width='small'),
                             'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=opts_ind_e, width='small'),
                             'rádio':       st.column_config.SelectboxColumn('Rádio', options=opts_rad_e, width='small'),
