@@ -4552,10 +4552,11 @@ else:
                 st.session_state['editar_escala'] = dados_editar
                 st.rerun()
 
+            if 'debug_upds' in st.session_state:
+                st.info(st.session_state.pop('debug_upds'))
+
             # ── Mostrar tabelas por dia ──
             if 'editar_escala' in st.session_state:
-                if 'debug_upds' in st.session_state:
-                    st.info(st.session_state.pop('debug_upds'))
                 dados_editar = st.session_state['editar_escala']
                 abas_lista = list(dados_editar.items())
 
