@@ -4577,18 +4577,32 @@ else:
                         ix_ra_g = hdrs_g.index('rádio') if 'rádio' in hdrs_g else None
                         ix_gi_g = hdrs_g.index('giro') if 'giro' in hdrs_g else None
                         ix_ob_g = hdrs_g.index('observações') if 'observações' in hdrs_g else None
-                        mapa_g = {str(r['id']).strip(): r for _, r in df_g.iterrows()}
+                        # Converter df para dict id->valores
+                        mapa_g = {}
+                        for _, row_g in df_g.iterrows():
+                            mid = str(row_g['id']).strip()
+                            mapa_g[mid] = {
+                                'serviço':     str(row_g.get('serviço','') or '').strip(),
+                                'horário':     str(row_g.get('horário','') or '').strip(),
+                                'indicativo':  str(row_g.get('indicativo','') or '').strip(),
+                                'rádio':       str(row_g.get('rádio','') or '').strip(),
+                                'giro':        str(row_g.get('giro','') or '').strip(),
+                                'observações': str(row_g.get('observações','') or '').strip(),
+                            }
                         upds_g = []
-                        for i, row_g in enumerate(todas_g[1:], start=2):
-                            mid_g = str(row_g[ix_id_g]).strip() if ix_id_g < len(row_g) else ''
-                            if not mid_g or mid_g == 'nan': continue
-                            for mid_p in re.split(r'[;,]+', mid_g):
+                        for i, row_s in enumerate(todas_g[1:], start=2):
+                            mid_s = str(row_s[ix_id_g]).strip() if ix_id_g < len(row_s) else ''
+                            if not mid_s or mid_s == 'nan': continue
+                            for mid_p in re.split(r'[;,]+', mid_s):
                                 mid_p = mid_p.strip()
                                 if not mid_p or mid_p not in mapa_g: continue
-                                r_g = mapa_g[mid_p]
-                                for ix_g, campo_g in [(ix_sv_g,'serviço'),(ix_hr_g,'horário'),(ix_in_g,'indicativo'),(ix_ra_g,'rádio'),(ix_gi_g,'giro'),(ix_ob_g,'observações')]:
-                                    if ix_g is not None:
-                                        upds_g.append({'range': f'{chr(ord("A")+ix_g)}{i}', 'values': [[str(r_g.get(campo_g,'') or '').strip()]]})
+                                v = mapa_g[mid_p]
+                                if ix_sv_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_sv_g)}{i}', 'values': [[v['serviço']]]})
+                                if ix_hr_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_hr_g)}{i}', 'values': [[v['horário']]]})
+                                if ix_in_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_in_g)}{i}', 'values': [[v['indicativo']]]})
+                                if ix_ra_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_ra_g)}{i}', 'values': [[v['rádio']]]})
+                                if ix_gi_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_gi_g)}{i}', 'values': [[v['giro']]]})
+                                if ix_ob_g is not None: upds_g.append({'range': f'{chr(ord("A")+ix_ob_g)}{i}', 'values': [[v['observações']]]})
                                 break
                         if upds_g:
                             ws_g.batch_update(upds_g)
