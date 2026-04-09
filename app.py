@@ -346,9 +346,9 @@ def invalidar_trocas():
     """Limpa cache de trocas."""
     load_trocas.clear()
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_ferias(ano: int) -> pd.DataFrame:
-    """Carrega plano de férias de um ano — cache 1h."""
+    """Carrega plano de férias de um ano — cache 5min."""
     try:
         sh = get_sheet()
         if sh is None:
