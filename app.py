@@ -4460,8 +4460,19 @@ else:
                 st.markdown(f"**{len(linhas)} militares — {d_gerar.strftime('%d/%m/%Y')}**")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
+                # Filtro de pesquisa
+                pesq = st.text_input("🔍 Pesquisar por ID ou nome:", placeholder="ex: 507 ou Silva", key="pesq_tabela", label_visibility="collapsed")
+
                 # Construir df editável
                 df_edit = pd.DataFrame(linhas)
+                if pesq.strip():
+                    mask_pesq = (
+                        df_edit['id'].astype(str).str.contains(pesq.strip(), case=False, na=False) |
+                        df_edit['nome'].astype(str).str.contains(pesq.strip(), case=False, na=False)
+                    )
+                    df_edit_show = df_edit[mask_pesq].copy()
+                else:
+                    df_edit_show = df_edit.copy()
 
                 # Serviços disponíveis por militar para dropdown
                 opcoes_servico = {}
@@ -4491,14 +4502,22 @@ else:
                     'observações': st.column_config.TextColumn('Observações', width='large'),
                 }
 
-                df_editado = st.data_editor(
-                    df_edit,
+                df_editado_show = st.data_editor(
+                    df_edit_show,
                     column_config=col_config,
                     hide_index=True,
                     use_container_width=True,
                     key="editor_escala",
                     num_rows="fixed",
                 )
+                # Fundir edições de volta no df completo
+                df_editado = df_edit.copy()
+                for _, row_ed in df_editado_show.iterrows():
+                    mid_ed = str(row_ed['id']).strip()
+                    idx_ed = df_editado[df_editado['id'].astype(str).str.strip() == mid_ed].index
+                    if len(idx_ed) > 0:
+                        for col_ed in df_editado_show.columns:
+                            df_editado.at[idx_ed[0], col_ed] = row_ed[col_ed]
 
                 col_g1, col_g2, col_g3 = st.columns(3)
 
