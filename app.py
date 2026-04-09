@@ -364,6 +364,54 @@ def load_ferias(ano: int) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
+@st.cache_data(ttl=300)
+def load_licencas(ano: int) -> pd.DataFrame:
+    """Carrega aba Licenças — id, tipo, inicio, fim."""
+    try:
+        sh = get_sheet()
+        if sh is None: return pd.DataFrame()
+        ws = sh.worksheet("Licenças")
+        vals = ws.get_all_values()
+        if not vals or len(vals) < 2: return pd.DataFrame()
+        hdrs = [h.strip() for h in vals[0]]
+        df = pd.DataFrame(vals[1:], columns=hdrs)
+        return df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+    except:
+        return pd.DataFrame()
+
+def militar_de_licenca(mid: str, data, df_licencas: pd.DataFrame) -> str:
+    """Devolve tipo de licença/baixa/diligência ou '' se não está."""
+    if df_licencas.empty: return ''
+    cols = df_licencas.columns.tolist()
+    col_id  = 'id'    if 'id'    in cols else cols[0]
+    col_tp  = 'tipo'  if 'tipo'  in cols else (cols[1] if len(cols)>1 else None)
+    col_ini = next((c for c in cols if 'ini' in c.lower()), None)
+    col_fim = next((c for c in cols if 'fim' in c.lower()), None)
+    if not col_ini or not col_fim: return ''
+
+    data_date = data if hasattr(data, 'strftime') else datetime.strptime(str(data), '%d-%m').replace(year=datetime.now().year)
+    if hasattr(data_date, 'date'): data_date = data_date.date()
+
+    linhas = df_licencas[df_licencas[col_id].astype(str).str.strip() == str(mid).strip()]
+    for _, row in linhas.iterrows():
+        ini_s = str(row.get(col_ini, '')).strip()
+        fim_s = str(row.get(col_fim, '')).strip()
+        if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan': continue
+        try:
+            # Suportar DD-MM ou DD/MM/YYYY
+            if '/' in ini_s:
+                ini_d = datetime.strptime(ini_s, '%d/%m/%Y').date()
+                fim_d = datetime.strptime(fim_s, '%d/%m/%Y').date()
+            else:
+                ano = data_date.year
+                ini_d = datetime.strptime(f"{ini_s}-{ano}", '%d-%m-%Y').date()
+                fim_d = datetime.strptime(f"{fim_s}-{ano}", '%d-%m-%Y').date()
+            if ini_d <= data_date <= fim_d:
+                return str(row.get(col_tp, 'Licença')).strip() if col_tp else 'Licença'
+        except:
+            continue
+    return ''
+
 @st.cache_data(ttl=3600)
 def load_folgas(ano: int) -> pd.DataFrame:
     """Carrega aba folgas_YYYY — id, fds, grupo."""
@@ -1890,6 +1938,7 @@ else:
     feriados   = load_feriados(ano_atual)
     df_folgas  = load_folgas(ano_atual)
     grupos_folga = load_grupos_folga()
+    df_licencas = load_licencas(ano_atual)
 
     u_id      = str(st.session_state['user_id'])
     u_nome    = st.session_state['user_nome']
@@ -1954,7 +2003,7 @@ else:
             "👥 Efetivo",
         ]
         if is_admin:
-            menu_opt += ["", "🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "📢 Publicar Escala", "👤 Gerir Utilizadores"]
+            menu_opt += ["", "🏖️ Férias", "🏥 Licenças", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "📢 Publicar Escala", "👤 Gerir Utilizadores"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
@@ -4428,15 +4477,27 @@ else:
                     # Filtrar militares de férias (não mostrar na tabela)
                     if militar_de_ferias(mid, d_gerar, df_ferias, feriados):
                         continue
-                    # Dados existentes, folgas ou vazio
+                    # Dados existentes, licenças, folgas, serviço por defeito ou vazio
                     if mid in mapa_existente:
                         dados = mapa_existente[mid]
                     else:
-                        tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
-                        if tipo_folga:
-                            dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                        tipo_lic = militar_de_licenca(mid, d_gerar, df_licencas)
+                        if tipo_lic:
+                            dados = {'serviço': tipo_lic, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                            tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
+                            if tipo_folga:
+                                dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                            else:
+                                # Serviço por defeito da coluna 'serviço' em folgas_2026
+                                serv_defeito = ''
+                                if not df_folgas.empty and 'serviço' in df_folgas.columns:
+                                    col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                                    linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
+                                    if not linha_f.empty:
+                                        sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
+                                        if sv_f and sv_f != 'nan': serv_defeito = sv_f
+                                dados = {'serviço': serv_defeito, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
 
                     linhas.append({
                         'id': mid,
@@ -4465,14 +4526,46 @@ else:
 
                 # Construir df editável
                 df_edit = pd.DataFrame(linhas)
+
+                # Mapeamento de abreviaturas para o gerar escala
+                _abrev = {
+                    'Atendimento 00-08':          'A1', 'Atendimento 08-16':          'A2', 'Atendimento 16-24':          'A3',
+                    'Patrulha Ocorrências 00-08':  'PO1','Patrulha Ocorrências 08-16':  'PO2','Patrulha Ocorrências 16-24':  'PO3',
+                    'Apoio Atendimento 08-16':     'AA2','Apoio Atendimento 16-24':     'AA3',
+                }
+                _abrev_inv = {v: k.split(' ')[0]+' '+k.split(' ')[-1] if ' ' in k else k for k, v in _abrev.items()}
+                # Abrev completo serviço+horário → abreviatura
+                _serv_abrev = {k.rsplit(' ',1)[0]: {k.rsplit(' ',1)[1]: v} for k, v in _abrev.items()}
+
+                # Opções de serviço com abreviaturas
+                _sv_auto_abrev = [''] + [_abrev.get(f"{s} {h}", s) if any(f"{s} " in k for k in _abrev) else s
+                                         for s in ['A1','A2','A3','PO1','PO2','PO3','AA2','AA3']] + \
+                                 [s for s in (_listas_auto.get('Serviço', todos_servicos) or todos_servicos)
+                                  if s and s not in ('Atendimento','Patrulha Ocorrências','Apoio Atendimento','')]
+                # Lista limpa
+                _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + \
+                                 [s for s in (_listas_auto.get('Serviço', []) or [])
+                                  if s and s not in ('','Atendimento','Patrulha Ocorrências','Apoio Atendimento')]
+
+                # Aplicar abreviaturas no df_edit para display
+                def _to_abrev(serv, hor):
+                    chave = f"{serv} {hor}".strip()
+                    return _abrev.get(chave, serv)
+                df_edit_abrev = df_edit.copy()
+                df_edit_abrev['serviço'] = df_edit.apply(lambda r: _to_abrev(str(r['serviço']).strip(), str(r['horário']).strip()), axis=1)
+                # Para abreviados, horário já está implícito — limpar
+                for k, v in _abrev.items():
+                    mask_ab = df_edit_abrev['serviço'] == v
+                    df_edit_abrev.loc[mask_ab, 'horário'] = ''
+
                 if pesq.strip():
                     mask_pesq = (
-                        df_edit['id'].astype(str).str.contains(pesq.strip(), case=False, na=False) |
-                        df_edit['nome'].astype(str).str.contains(pesq.strip(), case=False, na=False)
+                        df_edit_abrev['id'].astype(str).str.contains(pesq.strip(), case=False, na=False) |
+                        df_edit_abrev['nome'].astype(str).str.contains(pesq.strip(), case=False, na=False)
                     )
-                    df_edit_show = df_edit[mask_pesq].copy()
+                    df_edit_show = df_edit_abrev[mask_pesq].copy()
                 else:
-                    df_edit_show = df_edit.copy()
+                    df_edit_show = df_edit_abrev.copy()
 
                 # Serviços disponíveis por militar para dropdown
                 opcoes_servico = {}
@@ -4504,20 +4597,42 @@ else:
 
                 df_editado_show = st.data_editor(
                     df_edit_show,
-                    column_config=col_config,
+                    column_config={
+                        'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
+                        'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
+                        'serviço':     st.column_config.SelectboxColumn('Serviço', options=_sv_opts_abrev, width='small'),
+                        'horário':     st.column_config.SelectboxColumn('Horário', options=_hor_auto, width='small'),
+                        'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=_ind_auto, width='small'),
+                        'rádio':       st.column_config.SelectboxColumn('Rádio', options=_rad_auto, width='small'),
+                        'giro':        st.column_config.SelectboxColumn('Giro', options=_gir_auto, width='small'),
+                        'viatura':     st.column_config.SelectboxColumn('Viatura', options=_vtr_auto, width='small'),
+                        'observações': st.column_config.TextColumn('Observações', width='large'),
+                    },
                     hide_index=True,
                     use_container_width=True,
                     key="editor_escala",
                     num_rows="fixed",
                 )
-                # Fundir edições de volta no df completo
+                # Fundir edições de volta no df completo e converter abreviaturas
                 df_editado = df_edit.copy()
                 for _, row_ed in df_editado_show.iterrows():
                     mid_ed = str(row_ed['id']).strip()
                     idx_ed = df_editado[df_editado['id'].astype(str).str.strip() == mid_ed].index
                     if len(idx_ed) > 0:
                         for col_ed in df_editado_show.columns:
-                            df_editado.at[idx_ed[0], col_ed] = row_ed[col_ed]
+                            val_ed = row_ed[col_ed]
+                            # Converter abreviatura de volta para serviço+horário
+                            if col_ed == 'serviço' and str(val_ed).strip() in _abrev.values():
+                                abrev_val = str(val_ed).strip()
+                                # Encontrar serviço e horário originais
+                                for chave_ab, ab_val in _abrev.items():
+                                    if ab_val == abrev_val:
+                                        partes = chave_ab.rsplit(' ', 1)
+                                        df_editado.at[idx_ed[0], 'serviço'] = partes[0]
+                                        df_editado.at[idx_ed[0], 'horário'] = partes[1] if len(partes) > 1 else ''
+                                        break
+                            else:
+                                df_editado.at[idx_ed[0], col_ed] = val_ed
 
                 col_g1, col_g2, col_g3 = st.columns(3)
 
@@ -4593,10 +4708,26 @@ else:
                                     ("Apoio Atendimento",   "16-24", 1),
                                 ]
 
+                                # Contar quantos já estão manualmente preenchidos por slot
+                                slots_preenchidos_g = {}
+                                for _, row_e in df_editado.iterrows():
+                                    sv_e = str(row_e['serviço']).strip()
+                                    hr_e = str(row_e['horário']).strip()
+                                    if sv_e and sv_e != 'nan' and hr_e:
+                                        chave_s = (norm(sv_e), hr_e)
+                                        slots_preenchidos_g[chave_s] = slots_preenchidos_g.get(chave_s, 0) + 1
+
+                                SLOTS_AJUSTADOS = []
+                                for sv_s, hr_s, num_s in SLOTS:
+                                    ja = slots_preenchidos_g.get((norm(sv_s), hr_s), 0)
+                                    vagas = max(0, num_s - ja)
+                                    if vagas > 0:
+                                        SLOTS_AJUSTADOS.append((sv_s, hr_s, vagas))
+
                                 ids_escalados_g = set()
                                 novas_linhas = {str(row_e['id']): dict(row_e) for _, row_e in df_editado.iterrows()}
 
-                                for servico, horario, num in SLOTS:
+                                for servico, horario, num in SLOTS_AJUSTADOS:
                                     col_key = f"{servico} {horario}"
                                     if col_key not in ordem_g:
                                         continue
@@ -5513,6 +5644,66 @@ else:
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro: {e}")
+
+    # --- 🏥 LICENÇAS (ADMIN) ---
+    elif menu == "🏥 Licenças":
+        st.title("🏥 Licenças / Baixas / Diligências")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        # Mostrar registos existentes
+        df_lic_show = load_licencas(ano_atual)
+        if not df_lic_show.empty:
+            st.dataframe(df_lic_show, use_container_width=True, hide_index=True)
+        else:
+            st.info("Sem registos.")
+
+        st.markdown("---")
+        st.markdown("#### ➕ Adicionar registo")
+
+        col_l1, col_l2 = st.columns(2)
+        with col_l1:
+            mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
+                          for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
+            mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
+            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Inquéritos", "Secretaria", "Pronto", "Tribunal"], key="lic_tipo")
+        with col_l2:
+            ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
+            fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
+
+        if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_lic"):
+            try:
+                sh_l = get_sheet()
+                ws_l = sh_l.worksheet("Licenças")
+                mid_l = mil_opts_l[mil_sel_l]
+                ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y')])
+                load_licencas.clear()
+                st.success("✅ Registo adicionado!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro: {e}")
+
+        # Remover registo
+        if not df_lic_show.empty:
+            st.markdown("---")
+            st.markdown("#### 🗑️ Remover registo")
+            col_id_l = 'id' if 'id' in df_lic_show.columns else df_lic_show.columns[0]
+            col_tp_l = 'tipo' if 'tipo' in df_lic_show.columns else df_lic_show.columns[1]
+            col_in_l = next((c for c in df_lic_show.columns if 'ini' in c.lower()), None)
+            opts_rem_l = {f"{r[col_id_l]} — {r[col_tp_l]} {r.get(col_in_l,'')}" : i
+                          for i, (_, r) in enumerate(df_lic_show.iterrows())}
+            rem_sel_l = st.selectbox("Registo:", list(opts_rem_l.keys()), key="lic_rem")
+            if st.button("🗑️ Remover", key="btn_rem_lic", use_container_width=True):
+                try:
+                    sh_l = get_sheet()
+                    ws_l = sh_l.worksheet("Licenças")
+                    ws_l.delete_rows(opts_rem_l[rem_sel_l] + 2)  # +2 header+base0
+                    load_licencas.clear()
+                    st.success("✅ Removido!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
 
     # --- 📢 PUBLICAR ESCALA (ADMIN) ---
     elif menu == "📢 Publicar Escala":
