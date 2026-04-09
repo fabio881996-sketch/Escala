@@ -5667,7 +5667,7 @@ else:
             mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
                           for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
             mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
-            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Inquéritos", "Secretaria", "Pronto", "Tribunal"], key="lic_tipo")
+            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência"], key="lic_tipo")
         with col_l2:
             ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
             fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
