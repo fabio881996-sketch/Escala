@@ -4527,25 +4527,26 @@ else:
                 # Construir df editável
                 df_edit = pd.DataFrame(linhas)
 
+                # Carregar listas para dropdowns
+                _listas_auto = load_listas()
+                _hor_auto = _listas_auto.get('Horário', ['', '00-08', '08-16', '16-24'])
+                _ind_auto = _listas_auto.get('Indicativo', [''])
+                _rad_auto = _listas_auto.get('Rádio', [''])
+                _vtr_auto = _listas_auto.get('Viatura', [''])
+                _gir_auto = _listas_auto.get('Giro', [''])
+                if len(_hor_auto) <= 1: _hor_auto = ['', '00-08', '08-16', '16-24']
+
                 # Mapeamento de abreviaturas para o gerar escala
                 _abrev = {
                     'Atendimento 00-08':          'A1', 'Atendimento 08-16':          'A2', 'Atendimento 16-24':          'A3',
                     'Patrulha Ocorrências 00-08':  'PO1','Patrulha Ocorrências 08-16':  'PO2','Patrulha Ocorrências 16-24':  'PO3',
                     'Apoio Atendimento 08-16':     'AA2','Apoio Atendimento 16-24':     'AA3',
                 }
-                _abrev_inv = {v: k.split(' ')[0]+' '+k.split(' ')[-1] if ' ' in k else k for k, v in _abrev.items()}
-                # Abrev completo serviço+horário → abreviatura
-                _serv_abrev = {k.rsplit(' ',1)[0]: {k.rsplit(' ',1)[1]: v} for k, v in _abrev.items()}
 
-                # Opções de serviço com abreviaturas
-                _sv_auto_abrev = [''] + [_abrev.get(f"{s} {h}", s) if any(f"{s} " in k for k in _abrev) else s
-                                         for s in ['A1','A2','A3','PO1','PO2','PO3','AA2','AA3']] + \
-                                 [s for s in (_listas_auto.get('Serviço', todos_servicos) or todos_servicos)
-                                  if s and s not in ('Atendimento','Patrulha Ocorrências','Apoio Atendimento','')]
-                # Lista limpa
-                _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + \
-                                 [s for s in (_listas_auto.get('Serviço', []) or [])
+                # Opções de serviço — abreviaturas + extras das listas
+                _extras_listas = [s for s in (_listas_auto.get('Serviço', []) or [])
                                   if s and s not in ('','Atendimento','Patrulha Ocorrências','Apoio Atendimento')]
+                _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + _extras_listas
 
                 # Aplicar abreviaturas no df_edit para display
                 def _to_abrev(serv, hor):
@@ -4575,18 +4576,10 @@ else:
                     opcoes_servico[mid] = [''] + servs_mil
 
                 # Usar st.data_editor
-                _listas_auto = load_listas()
-                _hor_auto = _listas_auto.get('Horário', ['', '00-08', '08-16', '16-24'])
-                _ind_auto = _listas_auto.get('Indicativo', [''])
-                _rad_auto = _listas_auto.get('Rádio', [''])
-                _vtr_auto = _listas_auto.get('Viatura', [''])
-                _gir_auto = _listas_auto.get('Giro', [''])
-                _sv_auto  = _listas_auto.get('Serviço', todos_servicos) or todos_servicos
-                if len(_hor_auto) <= 1: _hor_auto = ['', '00-08', '08-16', '16-24']
                 col_config = {
                     'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
                     'nome':        st.column_config.TextColumn('Nome', disabled=True, width='medium'),
-                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=_sv_auto, width='large'),
+                    'serviço':     st.column_config.SelectboxColumn('Serviço', options=_sv_opts_abrev, width='small'),
                     'horário':     st.column_config.SelectboxColumn('Horário', options=_hor_auto, width='small'),
                     'indicativo':  st.column_config.SelectboxColumn('Indicativo', options=_ind_auto, width='small'),
                     'rádio':       st.column_config.SelectboxColumn('Rádio', options=_rad_auto, width='small'),
