@@ -930,6 +930,88 @@ def salvar_troca_gsheet(linha: list) -> bool:
         st.error(f"Erro ao guardar: {e}")
         return False
 
+_SLOTS_AUTO = {
+    (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
+    (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
+    (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
+    (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
+    (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
+    (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
+    (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
+    (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
+}
+
+def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
+    """
+    Atualiza o ordem_escala do dia seguinte com base no que ficou escalado no aba_dia.
+    - Parte do ordem_escala do próprio dia (criado ao confirmar o anterior)
+    - Move para o fim TODOS os militares escalados nos slots auto (auto + manuais)
+    - Grava como ordem_escala do dia seguinte
+    """
+    try:
+        abas = [ws.title for ws in sh.worksheets()]
+        aba_ord = f"ordem_escala {aba_dia}"
+        aba_ord_ant = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
+
+        # Ler base — próprio dia > anterior
+        ws_base = None
+        for nome in [aba_ord, aba_ord_ant]:
+            if nome in abas:
+                ws_base = sh.worksheet(nome)
+                break
+        if not ws_base:
+            return
+
+        vals = ws_base.get_all_values()
+        if not vals: return
+        hdrs = [h.strip() for h in vals[0]]
+        ordem = {h: [] for h in hdrs}
+        for row in vals[1:]:
+            for i, h in enumerate(hdrs):
+                v = str(row[i]).strip() if i < len(row) else ''
+                if v: ordem[h].append(v)
+
+        # Ler aba do dia para saber quem ficou escalado
+        ws_dia = sh.worksheet(aba_dia)
+        vals_dia = ws_dia.get_all_values()
+        if not vals_dia: return
+        hdrs_dia = [h.strip().lower() for h in vals_dia[0]]
+        ix_id = hdrs_dia.index('id')      if 'id'      in hdrs_dia else 0
+        ix_sv = hdrs_dia.index('serviço') if 'serviço' in hdrs_dia else 1
+        ix_hr = hdrs_dia.index('horário') if 'horário' in hdrs_dia else 2
+
+        for row in vals_dia[1:]:
+            sv  = norm(str(row[ix_sv]).strip()) if ix_sv < len(row) else ''
+            hr  = str(row[ix_hr]).strip()        if ix_hr < len(row) else ''
+            ids = str(row[ix_id]).strip()         if ix_id < len(row) else ''
+            col_key = _SLOTS_AUTO.get((sv, hr))
+            if not col_key or not ids or ids == 'nan':
+                continue
+            for mid in re.split(r'[;,]+', ids):
+                mid = mid.strip()
+                if mid and col_key in ordem and mid in ordem[col_key]:
+                    ordem[col_key].remove(mid)
+                    ordem[col_key].append(mid)
+
+        # Gravar ordem_escala do dia seguinte
+        nome_prox = f"ordem_escala {(d_gerar + timedelta(days=1)).strftime('%d-%m')}"
+        nova = [hdrs]
+        ml = max((len(v) for v in ordem.values()), default=1)
+        for i in range(ml):
+            nova.append([ordem[h][i] if i < len(ordem[h]) else '' for h in hdrs])
+
+        if nome_prox in abas:
+            ws_p = sh.worksheet(nome_prox)
+            ws_p.clear()
+            ws_p.update('A1', nova)
+            ws_p.hide()
+        else:
+            ws_p = sh.add_worksheet(title=nome_prox, rows=100, cols=len(hdrs))
+            ws_p.update('A1', nova)
+            ws_p.hide()
+    except Exception as e:
+        st.error(f"Erro ao atualizar ordem_escala: {e}")
+
 # ============================================================
 # 5. FUNÇÕES PDF
 # ============================================================
@@ -4659,6 +4741,26 @@ else:
                             try:
                                 sh_g = get_sheet()
 
+                                # Aplicar horários das abreviaturas no df_editado
+                                _abrev_hor = {
+                                    'A1': ('Atendimento', '00-08'),
+                                    'A2': ('Atendimento', '08-16'),
+                                    'A3': ('Atendimento', '16-24'),
+                                    'PO1': ('Patrulha Ocorrências', '00-08'),
+                                    'PO2': ('Patrulha Ocorrências', '08-16'),
+                                    'PO3': ('Patrulha Ocorrências', '16-24'),
+                                    'AA2': ('Apoio Atendimento', '08-16'),
+                                    'AA3': ('Apoio Atendimento', '16-24'),
+                                }
+                                for idx_ab, row_ab in df_editado.iterrows():
+                                    sv_ab = str(row_ab['serviço']).strip()
+                                    hor_ab = str(row_ab['horário']).strip()
+                                    if sv_ab in _abrev_hor:
+                                        serv_real, hor_real = _abrev_hor[sv_ab]
+                                        df_editado.at[idx_ab, 'serviço'] = serv_real
+                                        if not hor_ab or hor_ab == 'nan':
+                                            df_editado.at[idx_ab, 'horário'] = hor_real
+
                                 # Indisponíveis = quem já tem serviço preenchido
                                 ids_indisponiveis = set()
                                 for _, row_e in df_editado.iterrows():
@@ -4766,6 +4868,20 @@ else:
                     if st.button("✅ CONFIRMAR E GUARDAR", use_container_width=True, type="primary", key="btn_confirmar_tabela"):
                         with st.spinner("A guardar..."):
                             try:
+                                # Aplicar horários das abreviaturas
+                                _abrev_hor_c = {
+                                    'A1': ('Atendimento', '00-08'), 'A2': ('Atendimento', '08-16'), 'A3': ('Atendimento', '16-24'),
+                                    'PO1': ('Patrulha Ocorrências', '00-08'), 'PO2': ('Patrulha Ocorrências', '08-16'), 'PO3': ('Patrulha Ocorrências', '16-24'),
+                                    'AA2': ('Apoio Atendimento', '08-16'), 'AA3': ('Apoio Atendimento', '16-24'),
+                                }
+                                for idx_c, row_c2 in df_editado.iterrows():
+                                    sv_c2  = str(row_c2['serviço']).strip()
+                                    hor_c2 = str(row_c2['horário']).strip()
+                                    if sv_c2 in _abrev_hor_c:
+                                        serv_c2, hor_def = _abrev_hor_c[sv_c2]
+                                        df_editado.at[idx_c, 'serviço'] = serv_c2
+                                        if not hor_c2 or hor_c2 == 'nan':
+                                            df_editado.at[idx_c, 'horário'] = hor_def
                                 sh_c = get_sheet()
                                 ws_dia_c = sh_c.worksheet(aba_dia)
                                 todas_linhas_c = ws_dia_c.get_all_values()
@@ -4828,75 +4944,8 @@ else:
                                 if upds_c:
                                     ws_dia_c.batch_update(upds_c)
 
-                                # Atualizar ordem_escala do dia seguinte
-                                # Sempre partir do ordem_escala atual do dia e mover escalados para o fim
-                                aba_ord_atual = f"ordem_escala {aba_dia}"
-                                aba_ord_ant_c = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
-                                abas_c = [ws.title for ws in sh_c.worksheets()]
-
-                                # Ler ordem base — preferir do dia atual, senão do anterior
-                                ws_ord_base = None
-                                for nome_ord in [aba_ord_atual, aba_ord_ant_c]:
-                                    if nome_ord in abas_c:
-                                        ws_ord_base = sh_c.worksheet(nome_ord)
-                                        break
-
-                                if ws_ord_base:
-                                    vals_ord = ws_ord_base.get_all_values()
-                                    hdrs_ord = [str(h).strip() for h in vals_ord[0]]
-                                    ordem_base_c = {h: [] for h in hdrs_ord}
-                                    for row_o in vals_ord[1:]:
-                                        for i, h in enumerate(hdrs_ord):
-                                            val = str(row_o[i]).strip() if i < len(row_o) else ''
-                                            if val:
-                                                ordem_base_c[h].append(val)
-
-                                    # Identificar militares escalados nos slots principais
-                                    _slots_c = {
-                                        (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
-                                        (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
-                                        (norm("Atendimento"),          "16-24"): "Atendimento 16-24",
-                                        (norm("Patrulha Ocorrências"), "00-08"): "Patrulha Ocorrências 00-08",
-                                        (norm("Patrulha Ocorrências"), "08-16"): "Patrulha Ocorrências 08-16",
-                                        (norm("Patrulha Ocorrências"), "16-24"): "Patrulha Ocorrências 16-24",
-                                        (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
-                                        (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
-                                    }
-                                    # Reler o dia gravado para saber quem ficou escalado
-                                    todas_c2 = ws_dia_c.get_all_values()
-                                    hdrs_c2  = [h.strip().lower() for h in todas_c2[0]]
-                                    ix_id_c2  = hdrs_c2.index('id')      if 'id'      in hdrs_c2 else 0
-                                    ix_sv_c2  = hdrs_c2.index('serviço') if 'serviço' in hdrs_c2 else 1
-                                    ix_hr_c2  = hdrs_c2.index('horário') if 'horário' in hdrs_c2 else 2
-
-                                    for row_c2 in todas_c2[1:]:
-                                        sv = norm(str(row_c2[ix_sv_c2]).strip()) if ix_sv_c2 < len(row_c2) else ''
-                                        hr = str(row_c2[ix_hr_c2]).strip()       if ix_hr_c2 < len(row_c2) else ''
-                                        id_c2 = str(row_c2[ix_id_c2]).strip()    if ix_id_c2 < len(row_c2) else ''
-                                        col_key_c = _slots_c.get((sv, hr))
-                                        if not col_key_c or not id_c2 or id_c2 == 'nan':
-                                            continue
-                                        for mid_c2 in re.split(r'[;,]', id_c2):
-                                            mid_c2 = mid_c2.strip()
-                                            if mid_c2 and col_key_c in ordem_base_c and mid_c2 in ordem_base_c[col_key_c]:
-                                                ordem_base_c[col_key_c].remove(mid_c2)
-                                                ordem_base_c[col_key_c].append(mid_c2)
-
-                                    # Gravar ordem do dia seguinte
-                                    nome_prox_c = f"ordem_escala {(d_gerar + timedelta(days=1)).strftime('%d-%m')}"
-                                    nova_o_c = [hdrs_ord]
-                                    ml_c = max((len(v) for v in ordem_base_c.values()), default=1)
-                                    for i in range(ml_c):
-                                        nova_o_c.append([ordem_base_c[h][i] if i < len(ordem_base_c[h]) else '' for h in hdrs_ord])
-                                    if nome_prox_c in abas_c:
-                                        ws_pc = sh_c.worksheet(nome_prox_c)
-                                        ws_pc.clear()
-                                        ws_pc.update('A1', nova_o_c)
-                                        ws_pc.hide()
-                                    else:
-                                        ws_pc = sh_c.add_worksheet(title=nome_prox_c, rows=100, cols=len(hdrs_ord))
-                                        ws_pc.update('A1', nova_o_c)
-                                        ws_pc.hide()
+                                # Atualizar ordem_escala
+                                _atualizar_ordem_escala_dia(sh_c, aba_dia, d_gerar)
 
                                 load_data.clear()
                                 del st.session_state['tabela_escala']
@@ -5184,111 +5233,12 @@ else:
                         if upds_g:
                             ws_g.batch_update(upds_g)
 
-                        # ── Atualizar ordem_escala ──
-                        _slots_auto = {
-                            'atendimento':           ['00-08','08-16','16-24'],
-                            'patrulha ocorrencias':  ['00-08','08-16','16-24'],
-                            'apoio atendimento':     ['08-16','16-24'],
-                        }
-                        _slot_cols = {
-                            f"{sv} {hr}": f"{sv.title()} {hr}"
-                            for sv, hrs in _slots_auto.items() for hr in hrs
-                        }
-                        # Mapear norm -> nome real
-                        _slot_col_real = {}
-                        for sv_n, hrs in _slots_auto.items():
-                            for hr in hrs:
-                                chave = f"{sv_n} {hr}"
-                                # Encontrar nome real
-                                for s in ['Atendimento','Patrulha Ocorrências','Apoio Atendimento']:
-                                    if norm(s) == sv_n:
-                                        _slot_col_real[chave] = f"{s} {hr}"
-                                        break
-
-                        # Ler ordem_escala do dia
-                        aba_data = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
-                        nome_ord_dia = f"ordem_escala {aba_g}"
-                        nome_ord_ant = f"ordem_escala {(aba_data - timedelta(days=1)).strftime('%d-%m')}"
-                        abas_all = [ws.title for ws in sh_gc.worksheets()]
-
-                        # Ler ordem do dia anterior (base)
-                        ws_ord_ant = None
-                        for nome_o in [nome_ord_dia, nome_ord_ant]:
-                            if nome_o in abas_all:
-                                ws_ord_ant = sh_gc.worksheet(nome_o)
-                                break
-
-                        if ws_ord_ant:
-                            ord_vals = ws_ord_ant.get_all_values()
-                            ord_hdrs = [h.strip() for h in ord_vals[0]]
-                            ordem_atual = {h: [] for h in ord_hdrs}
-                            for row_o in ord_vals[1:]:
-                                for i_o, h_o in enumerate(ord_hdrs):
-                                    v_o = str(row_o[i_o]).strip() if i_o < len(row_o) else ''
-                                    if v_o:
-                                        ordem_atual[h_o].append(v_o)
-
-                            # Ler ordem do dia anterior puro (para repor desescalados)
-                            ord_ant_vals = None
-                            if nome_ord_ant in abas_all:
-                                ord_ant_vals = sh_gc.worksheet(nome_ord_ant).get_all_values()
-                            ordem_anterior = {}
-                            if ord_ant_vals:
-                                ord_ant_hdrs = [h.strip() for h in ord_ant_vals[0]]
-                                for h_a in ord_ant_hdrs:
-                                    ordem_anterior[h_a] = []
-                                for row_a in ord_ant_vals[1:]:
-                                    for i_a, h_a in enumerate(ord_ant_hdrs):
-                                        v_a = str(row_a[i_a]).strip() if i_a < len(row_a) else ''
-                                        if v_a:
-                                            ordem_anterior[h_a].append(v_a)
-
-                            # Aplicar mudanças
-                            for mid, dados in editor_map.items():
-                                sv_novo = norm(dados['serviço'])
-                                hr_novo = dados['horário']
-                                sv_orig = norm(original.get(mid, {}).get('serviço', ''))
-                                hr_orig = original.get(mid, {}).get('horário', '')
-                                chave_nova = f"{sv_novo} {hr_novo}"
-                                chave_orig = f"{sv_orig} {hr_orig}"
-                                col_nova = _slot_col_real.get(chave_nova)
-                                col_orig = _slot_col_real.get(chave_orig)
-
-                                if sv_novo == sv_orig and hr_novo == hr_orig:
-                                    continue  # sem mudança
-
-                                # Desescalado — repor na posição original
-                                if col_orig and not col_nova:
-                                    if col_orig in ordem_atual and mid in ordem_atual[col_orig]:
-                                        # Remover da posição atual
-                                        ordem_atual[col_orig].remove(mid)
-                                        # Inserir na posição que tinha no dia anterior
-                                        if col_orig in ordem_anterior and mid in ordem_anterior[col_orig]:
-                                            pos_ant = ordem_anterior[col_orig].index(mid)
-                                            ordem_atual[col_orig].insert(pos_ant, mid)
-                                        else:
-                                            ordem_atual[col_orig].insert(0, mid)
-
-                                # Escalado novo — mover para o fim
-                                if col_nova and col_nova in ordem_atual:
-                                    if mid in ordem_atual[col_nova]:
-                                        ordem_atual[col_nova].remove(mid)
-                                    ordem_atual[col_nova].append(mid)
-
-                            # Gravar ordem_escala atualizado
-                            nova_ord = [ord_hdrs]
-                            ml_o = max((len(v) for v in ordem_atual.values()), default=1)
-                            for i_o in range(ml_o):
-                                nova_ord.append([ordem_atual[h][i_o] if i_o < len(ordem_atual[h]) else '' for h in ord_hdrs])
-                            if nome_ord_dia in abas_all:
-                                ws_ord_upd = sh_gc.worksheet(nome_ord_dia)
-                                ws_ord_upd.clear()
-                                ws_ord_upd.update('A1', nova_ord)
-                                ws_ord_upd.hide()
-                            else:
-                                ws_ord_new = sh_gc.add_worksheet(title=nome_ord_dia, rows=100, cols=len(ord_hdrs))
-                                ws_ord_new.update('A1', nova_ord)
-                                ws_ord_new.hide()
+                        # Atualizar ordem_escala — usando função central
+                        try:
+                            aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
+                            _atualizar_ordem_escala_dia(sh_gc, aba_g, aba_data_g)
+                        except:
+                            pass
 
                 dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 
@@ -5646,11 +5596,30 @@ else:
             st.stop()
 
         # Mostrar registos existentes
-        df_lic_show = load_licencas(ano_atual)
+        df_lic_all = load_licencas(ano_atual)
+        # Filtrar só as em vigor (fim >= hoje)
+        hoje_lic = datetime.now().date()
+        if not df_lic_all.empty:
+            col_fim_l = next((c for c in df_lic_all.columns if 'fim' in c.lower()), None)
+            if col_fim_l:
+                def _lic_em_vigor(fim_str):
+                    try:
+                        if '/' in str(fim_str):
+                            return datetime.strptime(str(fim_str).strip(), '%d/%m/%Y').date() >= hoje_lic
+                        else:
+                            return datetime.strptime(f"{fim_str.strip()}-{hoje_lic.year}", '%d-%m-%Y').date() >= hoje_lic
+                    except:
+                        return True
+                df_lic_show = df_lic_all[df_lic_all[col_fim_l].apply(_lic_em_vigor)]
+            else:
+                df_lic_show = df_lic_all
+        else:
+            df_lic_show = df_lic_all
+
         if not df_lic_show.empty:
             st.dataframe(df_lic_show, use_container_width=True, hide_index=True)
         else:
-            st.info("Sem registos.")
+            st.info("Sem licenças em vigor.")
 
         st.markdown("---")
         st.markdown("#### ➕ Adicionar registo")
