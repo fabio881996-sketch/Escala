@@ -4510,10 +4510,17 @@ else:
                         linhas_limpas = []
                         for row_l in linhas_atuais:
                             sv_l = str(row_l.get('serviço', '')).strip().lower()
+                            mid_l = str(row_l.get('id', '')).strip()
                             if sv_l in _serv_manter:
+                                # já tem folga/férias — manter
                                 linhas_limpas.append(row_l)
                             else:
-                                linhas_limpas.append({**row_l, 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
+                                # Recalcular folga para este militar
+                                tipo_folga_l = militar_de_folga(mid_l, d_gerar, df_folgas, grupos_folga, feriados)
+                                if tipo_folga_l:
+                                    linhas_limpas.append({**row_l, 'serviço': tipo_folga_l, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
+                                else:
+                                    linhas_limpas.append({**row_l, 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
                         st.session_state['tabela_escala'] = linhas_limpas
                         st.session_state.pop('ordem_gerada', None)
                         st.rerun()
