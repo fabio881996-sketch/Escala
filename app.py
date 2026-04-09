@@ -3308,7 +3308,7 @@ else:
 
             tipo_troca = st.radio(
                 "Tipo de pedido:",
-                ["🔄 Troca Simples", "🔁 Troca a 3", "💶 Fazer Remunerado"],
+                ["🔄 Troca Simples", "💶 Fazer Remunerado", "💶 Dar Remunerado"],
                 horizontal=True
             )
             st.markdown("---")
@@ -3469,66 +3469,56 @@ else:
                                         if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", ""]):
                                             st.success("✅ Pedido enviado com sucesso!")
 
-                # ── Troca a 3 ──
-                elif tipo_troca == "🔁 Troca a 3":
-                    if meu.empty:
-                        st.warning("Não tens serviço escalado nesse dia.")
+                # ── Dar Remunerado ──
+                elif tipo_troca == "💶 Dar Remunerado":
+                    # Verificar se tenho remunerado escalado nesse dia
+                    meu_rem = df_d[
+                        (df_d['id'].astype(str).str.strip() == u_id) &
+                        (df_d['serviço'].str.lower().str.contains('remu|grat', na=False))
+                    ]
+                    if meu_rem.empty:
+                        st.warning("Não tens nenhum remunerado escalado nesse dia.")
                     else:
-                        if servico_override:
-                            meu_serv_t3 = servico_override.split('(')[0].strip()
-                            meu_hor_t3  = servico_override.split('(')[1].rstrip(')') if '(' in servico_override else ''
-                        else:
-                            meu_serv_t3 = meu.iloc[0]['serviço']
-                            meu_hor_t3  = meu.iloc[0]['horário']
-                        st.info(f"📋 O teu serviço: **{meu_serv_t3} ({meu_hor_t3})**")
+                        rem_row = meu_rem.iloc[0]
+                        rem_serv = str(rem_row.get('serviço', '')).strip()
+                        rem_hor  = str(rem_row.get('horário', '')).strip()
+                        st.info(f"📋 O teu remunerado: **{rem_serv} ({rem_hor})**")
 
-                        # Exceções para troca a 3 — só estas situações impedem
-                        _imp_t3 = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|pronto'
-
-                        outros_t3 = df_d[
+                        # Mostrar militares disponíveis para ceder
+                        _imp_dar = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|pronto'
+                        outros_dar = df_d[
                             (df_d['id'].astype(str).str.strip() != u_id) &
                             (df_d['id'].astype(str).str.strip() != '') &
-                            (df_d['id'].astype(str).str.strip() != 'nan') &
-                            (~df_d['id'].astype(str).str.strip().isin(ids_com_troca))
+                            (df_d['id'].astype(str).str.strip() != 'nan')
                         ]
-                        # Excluir apenas as situações que impedem a troca a 3
-                        outros_t3 = outros_t3[~outros_t3['serviço'].str.lower().apply(norm).str.contains(_imp_t3, na=False)]
-                        # Excluir militares de férias
-                        outros_t3 = outros_t3[~outros_t3['id'].astype(str).apply(
+                        outros_dar = outros_dar[~outros_dar['serviço'].str.lower().apply(norm).str.contains(_imp_dar, na=False)]
+                        outros_dar = outros_dar[~outros_dar['id'].astype(str).apply(
                             lambda mid: militar_de_ferias(mid, dt_s, df_ferias, feriados)
                         )]
-                        outros_t3 = outros_t3[~outros_t3['id'].astype(str).apply(_tem_rem_nao_cedido)]
-                        opcoes_t3 = {
-                            f"{r['id']} {get_nome_curto(df_util, str(r['id']))} — {r['serviço']} ({r['horário']})": r['id']
-                            for _, r in outros_t3.iterrows() if str(r['id']).strip()
-                        }
-                        if len(opcoes_t3) < 2:
-                            st.warning("Não há militares suficientes disponíveis para uma troca a 3.")
+                        # Verificar sobreposição de horário
+                        opts_dar = []
+                        ini_rem, fim_rem = _parse_horario(rem_hor)
+                        for _, r_dar in outros_dar.iterrows():
+                            mid_dar = str(r_dar['id']).strip()
+                            hor_dar = str(r_dar.get('horário', '')).strip()
+                            if ini_rem is not None and hor_dar:
+                                ini_d, fim_d = _parse_horario(hor_dar)
+                                if ini_d is not None and not (fim_rem <= ini_d or ini_rem >= fim_d):
+                                    continue  # sobreposição
+                            nome_dar = get_nome_curto(df_util, mid_dar)
+                            opts_dar.append(f"{mid_dar} {nome_dar} — {r_dar['serviço']} ({hor_dar})")
+
+                        if not opts_dar:
+                            st.warning("Não há militares disponíveis para ceder o remunerado.")
                         else:
-                            sel1 = st.selectbox("1º militar (tu ficas com o serviço dele):", list(opcoes_t3.keys()), key="t3_sel1")
-                            sel2 = st.selectbox("2º militar (o 1º fica com o serviço dele):", [o for o in opcoes_t3.keys() if o != sel1], key="t3_sel2")
-                            id1   = str(opcoes_t3[sel1])
-                            id2   = str(opcoes_t3[sel2])
-                            row1  = df_d[df_d['id'].astype(str) == id1].iloc[0]
-                            row2  = df_d[df_d['id'].astype(str) == id2].iloc[0]
-                            serv1 = row1['serviço']; hor1 = row1['horário']
-                            serv2 = row2['serviço']; hor2 = row2['horário']
-                            st.markdown(f"""
-                            **Resumo da troca a 3:**
-                            - **Tu** `{meu_serv_t3} ({meu_hor_t3})` → ficas com o serviço do **1º**
-                            - **{sel1}** `{serv1} ({hor1})` → fica com o serviço do **2º**
-                            - **{sel2}** `{serv2} ({hor2})` → fica com o **teu** serviço
-                            """)
-                            if st.button("📨 Enviar pedidos de troca a 3", use_container_width=True):
-                                data_str = dt_s.strftime('%d/%m/%Y')
-                                meu_serv_t3_completo = servico_override if servico_override else f"{meu_serv_t3} ({meu_hor_t3})"
-                                # Tu → 1º (tu dás o teu serviço ao 1º, recebes o serv1)
-                                linha1 = [data_str, u_id, meu_serv_t3_completo, id1, f"{serv1} ({hor1})", "Pendente_Militar", "", "", ""]
-                                # 2º → 1º (2º dá o seu serviço ao 1º, 1º recebe serv2)
-                                linha2 = [data_str, id2, f"{serv2} ({hor2})", id1, meu_serv_t3_completo, "Pendente_Militar", "", "", ""]
-                                salvar_troca_gsheet(linha1)
-                                salvar_troca_gsheet(linha2)
-                                st.success("✅ Dois pedidos de troca enviados! Aguarda aceitação de ambos.")
+                            with st.form("dar_rem"):
+                                st.info("Seleciona o militar a quem queres ceder o remunerado.")
+                                dar_sel = st.selectbox("Militar:", opts_dar)
+                                if st.form_submit_button("💶 CEDER REMUNERADO", use_container_width=True):
+                                    id_dest_dar = dar_sel.split(" ")[0]
+                                    serv_completo = f"{rem_serv} ({rem_hor})"
+                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), id_dest_dar, "MATAR_REMUNERADO", u_id, serv_completo, "Pendente_Militar", ""]):
+                                        st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
 
                 # ── Fazer Remunerado ──
                 elif tipo_troca == "💶 Fazer Remunerado":
