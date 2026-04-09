@@ -4500,7 +4500,23 @@ else:
                     num_rows="fixed",
                 )
 
-                col_g1, col_g2 = st.columns(2)
+                col_g1, col_g2, col_g3 = st.columns(3)
+
+                # ── Botão Limpar ──
+                with col_g3:
+                    if st.button("🗑️ Limpar escala", use_container_width=True, key="btn_limpar_escala"):
+                        linhas_atuais = st.session_state.get('tabela_escala', [])
+                        _serv_manter = {'férias', 'folga semanal', 'folga complementar'}
+                        linhas_limpas = []
+                        for row_l in linhas_atuais:
+                            sv_l = str(row_l.get('serviço', '')).strip().lower()
+                            if sv_l in _serv_manter:
+                                linhas_limpas.append(row_l)
+                            else:
+                                linhas_limpas.append({**row_l, 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
+                        st.session_state['tabela_escala'] = linhas_limpas
+                        st.session_state.pop('ordem_gerada', None)
+                        st.rerun()
 
                 # ── Botão Gerar Escala Automática ──
                 with col_g1:
