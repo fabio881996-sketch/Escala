@@ -2065,12 +2065,12 @@ else:
 
                 # Carregar todos os dias do mês
                 servicos_mes = {}
-                dias_publicados_cal = _dias_pub_global if not is_admin else set()
+                dias_publicados_cal = _dias_pub_global  # todos filtram por publicados
                 for d in range(1, n_dias + 1):
                     dt_cal = datetime(ano_sel, mes_sel, d)
                     aba = dt_cal.strftime("%d-%m")
-                    # Não-admins: só mostrar dias publicados
-                    if not is_admin and dias_publicados_cal is not None and aba not in dias_publicados_cal:
+                    # Só mostrar dias publicados
+                    if aba not in dias_publicados_cal:
                         continue
                     df_cal = load_data(aba)
                     if not df_cal.empty:
