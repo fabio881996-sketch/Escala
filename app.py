@@ -4889,6 +4889,10 @@ else:
                                         chave_s = (norm(sv_e), hr_e)
                                         slots_preenchidos_g[chave_s] = slots_preenchidos_g.get(chave_s, 0) + 1
 
+                                # Debug — mostrar o que está preenchido
+                                st.info(f"🔍 Slots preenchidos: {slots_preenchidos_g}")
+                                st.info(f"🔍 SLOTS_AJUSTADOS: {SLOTS_AJUSTADOS}")
+
                                 SLOTS_AJUSTADOS = []
                                 for sv_s, hr_s, num_s in SLOTS:
                                     ja = slots_preenchidos_g.get((norm(sv_s), hr_s), 0)
