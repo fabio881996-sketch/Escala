@@ -2203,9 +2203,9 @@ else:
         st.title("📅 A Minha Escala")
 
         if is_admin:
-            tab_escala, tab_folgas_me = st.tabs(["📅 Escala", "🏖️ Folgas"])
+            tab_escala, = st.tabs(["📅 Escala"])
         else:
-            tab_escala, tab_stats, tab_ferias, tab_folgas_me = st.tabs(["📅 Escala", "📊 Estatísticas", "🏖️ Férias", "🏖️ Folgas"])
+            tab_escala, tab_stats, tab_ferias = st.tabs(["📅 Escala", "📊 Estatísticas", "🏖️ Férias"])
 
         with tab_escala:
 
@@ -2353,6 +2353,44 @@ else:
                         )
                     else:
                         st.info("Não encontrei serviços para os próximos dias.")
+
+            with st.expander("🏖️ Exportar Mapa de Folgas (.ics)", expanded=False):
+                st.caption("Gera um ficheiro .ics com todas as tuas folgas do ano.")
+                if st.button("📥 Gerar mapa de folgas", use_container_width=True, key="btn_ics_folgas"):
+                    with st.spinner("A calcular folgas..."):
+                        ano_fme = datetime.now().year
+                        df_folgas_me = load_folgas(ano_fme)
+                        grupos_me    = load_grupos_folga()
+                        from calendar import monthrange as _mr
+                        ics_f = ["BEGIN:VCALENDAR","VERSION:2.0",
+                                 "PRODID:-//GNR Famalicão//Folgas//PT",
+                                 "CALSCALE:GREGORIAN","METHOD:PUBLISH",
+                                 "X-WR-CALNAME:Folgas GNR Famalicão"]
+                        n_folgas = 0
+                        for m in range(1, 13):
+                            _, n_dias = _mr(ano_fme, m)
+                            for d in range(1, n_dias+1):
+                                dt = datetime(ano_fme, m, d).date()
+                                tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
+                                if tipo:
+                                    dtstr = dt.strftime('%Y%m%d')
+                                    dtend = (dt + timedelta(days=1)).strftime('%Y%m%d')
+                                    ics_f += ["BEGIN:VEVENT",
+                                              f"UID:folga-{u_id}-{dtstr}@gnr",
+                                              f"DTSTART;VALUE=DATE:{dtstr}",
+                                              f"DTEND;VALUE=DATE:{dtend}",
+                                              f"SUMMARY:{'😴' if 'Semanal' in tipo else '🌿'} {tipo}",
+                                              "END:VEVENT"]
+                                    n_folgas += 1
+                        ics_f.append("END:VCALENDAR")
+                        if n_folgas > 0:
+                            st.download_button(f"⬇️ Descarregar ({n_folgas} folgas)",
+                                               data="\r\n".join(ics_f).encode('utf-8'),
+                                               file_name=f"folgas_{u_id}_{ano_fme}.ics",
+                                               mime="text/calendar",
+                                               use_container_width=True, key="dl_folgas_ics")
+                        else:
+                            st.info("Não tens folgas configuradas.")
 
             st.markdown("---")
 
@@ -3065,8 +3103,33 @@ else:
                                 unsafe_allow_html=True
                             )
 
-
-    # --- 📊 ESTATÍSTICAS ---
+                        # Exportar férias para calendário
+                        st.markdown("---")
+                        with st.expander("📆 Exportar Mapa de Férias (.ics)", expanded=False):
+                            st.caption("Gera um ficheiro .ics com as tuas férias para importar no calendário.")
+                            if st.button("📥 Gerar mapa de férias", use_container_width=True, key="btn_ics_ferias"):
+                                ics_fer = ["BEGIN:VCALENDAR","VERSION:2.0",
+                                           "PRODID:-//GNR Famalicão//Ferias//PT",
+                                           "CALSCALE:GREGORIAN","METHOD:PUBLISH",
+                                           "X-WR-CALNAME:Férias GNR Famalicão"]
+                                for i, (ini_d, fim_d, du, dc) in enumerate(periodos_ft, 1):
+                                    dtstr = ini_d.strftime('%Y%m%d')
+                                    dtend = (fim_d + timedelta(days=1)).strftime('%Y%m%d')
+                                    ics_fer += ["BEGIN:VEVENT",
+                                                f"UID:ferias-{u_id}-{i}-{dtstr}@gnr",
+                                                f"DTSTART;VALUE=DATE:{dtstr}",
+                                                f"DTEND;VALUE=DATE:{dtend}",
+                                                f"SUMMARY:🏖️ Férias ({du} dias úteis)",
+                                                "END:VEVENT"]
+                                ics_fer.append("END:VCALENDAR")
+                                st.download_button(
+                                    f"⬇️ Descarregar ({len(periodos_ft)} períodos)",
+                                    data="\r\n".join(ics_fer).encode('utf-8'),
+                                    file_name=f"ferias_{u_id}_{ano_tf}.ics",
+                                    mime="text/calendar",
+                                    use_container_width=True,
+                                    key="dl_ferias_ics"
+                                )
     elif menu == "📊 Estatísticas":
         st.title("📊 Estatísticas de Serviço")
 
@@ -3604,99 +3667,6 @@ else:
                             """)
                         else:
                             st.info(f"Nenhum registo encontrado para **{serv_sel_h}** com este militar.")
-
-    # --- Tab Folgas (Minha Escala) ---
-        with tab_folgas_me:
-            st.markdown("#### 🏖️ As Minhas Folgas")
-
-            ano_fme = datetime.now().year
-            df_folgas_me = load_folgas(ano_fme)
-            grupos_me    = load_grupos_folga()
-
-            # Opção mensal/anual
-            vista_me = st.radio("Vista:", ["📅 Mensal", "📆 Anual"], horizontal=True, key="vista_folgas_me")
-
-            from calendar import monthrange as _mr
-            meses_pt = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-            dias_pt  = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
-
-            if vista_me == "📅 Mensal":
-                mes_me = st.selectbox("Mês:", range(1,13), format_func=lambda m: meses_pt[m-1],
-                                      index=datetime.now().month-1, key="mes_folgas_me")
-                _, n_dias_me = _mr(ano_fme, mes_me)
-                dias_folga_me = []
-                for d in range(1, n_dias_me+1):
-                    dt = datetime(ano_fme, mes_me, d).date()
-                    tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
-                    if tipo:
-                        dias_folga_me.append((dt, tipo))
-
-                if not dias_folga_me:
-                    st.info("Sem folgas este mês.")
-                else:
-                    for dt, tipo in dias_folga_me:
-                        cor = "#FEF9C3" if tipo == "Folga Semanal" else "#DCFCE7"
-                        borda = "#EAB308" if tipo == "Folga Semanal" else "#22C55E"
-                        st.markdown(f"""
-                        <div style='background:{cor};border-left:4px solid {borda};border-radius:8px;
-                        padding:8px 14px;margin-bottom:6px;display:flex;justify-content:space-between'>
-                            <span style='font-weight:700'>{dt.strftime('%d/%m/%Y')} ({dias_pt[dt.weekday()]})</span>
-                            <span style='color:#555;font-size:0.85rem'>{tipo}</span>
-                        </div>""", unsafe_allow_html=True)
-            else:
-                # Vista anual — todos os dias
-                todas_folgas_me = []
-                for m in range(1, 13):
-                    _, n_dias = _mr(ano_fme, m)
-                    for d in range(1, n_dias+1):
-                        dt = datetime(ano_fme, m, d).date()
-                        tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
-                        if tipo:
-                            todas_folgas_me.append((dt, tipo))
-
-                st.caption(f"Total: {len(todas_folgas_me)} dias de folga em {ano_fme}")
-                for dt, tipo in todas_folgas_me:
-                    cor = "#FEF9C3" if tipo == "Folga Semanal" else "#DCFCE7"
-                    borda = "#EAB308" if tipo == "Folga Semanal" else "#22C55E"
-                    st.markdown(f"""
-                    <div style='background:{cor};border-left:4px solid {borda};border-radius:8px;
-                    padding:6px 14px;margin-bottom:4px;display:flex;justify-content:space-between'>
-                        <span style='font-weight:600;font-size:0.9rem'>{dt.strftime('%d/%m/%Y')} ({dias_pt[dt.weekday()]})</span>
-                        <span style='color:#555;font-size:0.82rem'>{tipo}</span>
-                    </div>""", unsafe_allow_html=True)
-
-            # Botão exportar .ics
-            st.markdown("---")
-            if st.button("📥 Exportar folgas para calendário (.ics)", use_container_width=True, key="btn_ics_folgas"):
-                todas_ics = []
-                for m in range(1, 13):
-                    _, n_dias = _mr(ano_fme, m)
-                    for d in range(1, n_dias+1):
-                        dt = datetime(ano_fme, m, d).date()
-                        tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
-                        if tipo:
-                            todas_ics.append((dt, tipo))
-
-                ics = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//GNR Famalicão//Folgas//PT",
-                       "CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Folgas GNR Famalicão"]
-                for dt, tipo in todas_ics:
-                    uid = f"folga-{u_id}-{dt.strftime('%Y%m%d')}@gnr"
-                    dtstr = dt.strftime('%Y%m%d')
-                    dtend = (dt + timedelta(days=1)).strftime('%Y%m%d')
-                    ics += [
-                        "BEGIN:VEVENT",
-                        f"UID:{uid}",
-                        f"DTSTART;VALUE=DATE:{dtstr}",
-                        f"DTEND;VALUE=DATE:{dtend}",
-                        f"SUMMARY:{tipo}",
-                        "END:VEVENT"
-                    ]
-                ics.append("END:VCALENDAR")
-                ics_bytes = "\r\n".join(ics).encode('utf-8')
-                st.download_button("⬇️ Descarregar .ics", data=ics_bytes,
-                                   file_name=f"folgas_{u_id}_{ano_fme}.ics",
-                                   mime="text/calendar", key="dl_ics_folgas")
 
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
