@@ -4631,9 +4631,11 @@ else:
                 _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + _extras_listas
 
                 # Aplicar abreviaturas no df_edit para display
+                # Mapeamento normalizado para converter serviço+horário → abreviatura
+                _abrev_norm = {f"{norm(k.rsplit(' ',1)[0])} {k.rsplit(' ',1)[1]}": v for k, v in _abrev.items()}
                 def _to_abrev(serv, hor):
-                    chave = f"{serv} {hor}".strip()
-                    return _abrev.get(chave, serv)
+                    chave_norm = f"{norm(serv)} {hor}".strip()
+                    return _abrev_norm.get(chave_norm, serv)
                 df_edit_abrev = df_edit.copy()
                 df_edit_abrev['serviço'] = df_edit.apply(lambda r: _to_abrev(str(r['serviço']).strip(), str(r['horário']).strip()), axis=1)
                 # Para abreviados, horário já está implícito -- limpar
