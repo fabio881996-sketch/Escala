@@ -11,7 +11,7 @@ import hashlib
 import secrets
 
 def norm(t):
-“”“Normaliza texto para comparação — remove acentos e coloca em minúsculas.”””
+“”“Normaliza texto para comparação – remove acentos e coloca em minúsculas.”””
 return unicodedata.normalize(‘NFKD’, str(t).lower()).encode(‘ascii’, ‘ignore’).decode(‘ascii’)
 
 def hash_pin(pin: str, salt: str = None):
@@ -22,7 +22,7 @@ h = hashlib.sha256(f”{salt}{pin}”.encode()).hexdigest()
 return h, salt
 
 def verificar_pin(pin_input: str, pin_guardado: str) -> bool:
-“”“Verifica PIN — suporta texto simples (migração) e hash:salt.”””
+“”“Verifica PIN – suporta texto simples (migração) e hash:salt.”””
 pin_input = str(pin_input).strip().zfill(4)
 pin_guardado = str(pin_guardado).strip()
 # Formato hash: “hash:salt”
@@ -277,7 +277,7 @@ return None
 
 @st.cache_resource
 def get_sheet():
-“”“Abre a Sheet uma única vez e reutiliza — evita open_by_url repetido.”””
+“”“Abre a Sheet uma única vez e reutiliza – evita open_by_url repetido.”””
 client = get_gsheet_client()
 if client is None:
 return None
@@ -316,7 +316,7 @@ time.sleep(wait)
 return pd.DataFrame()
 
 def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
-“”“Lê aba diretamente do Sheets SEM cache — para uso na geração de escala.”””
+“”“Lê aba diretamente do Sheets SEM cache – para uso na geração de escala.”””
 import time
 for tentativa in range(3):
 try:
@@ -362,7 +362,7 @@ load_trocas.clear()
 
 @st.cache_data(ttl=300)
 def load_ferias(ano: int) -> pd.DataFrame:
-“”“Carrega plano de férias de um ano — cache 5min.”””
+“”“Carrega plano de férias de um ano – cache 5min.”””
 try:
 sh = get_sheet()
 if sh is None:
@@ -380,7 +380,7 @@ return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def load_licencas(ano: int) -> pd.DataFrame:
-“”“Carrega aba Licenças — id, tipo, inicio, fim.”””
+“”“Carrega aba Licenças – id, tipo, inicio, fim.”””
 try:
 sh = get_sheet()
 if sh is None: return pd.DataFrame()
@@ -430,7 +430,7 @@ return ''
 
 @st.cache_data(ttl=3600)
 def load_folgas(ano: int) -> pd.DataFrame:
-“”“Carrega aba folgas_YYYY — id, fds, grupo.”””
+“”“Carrega aba folgas_YYYY – id, fds, grupo.”””
 try:
 sh = get_sheet()
 if sh is None: return pd.DataFrame()
@@ -445,7 +445,7 @@ return pd.DataFrame()
 
 @st.cache_data(ttl=3600)
 def load_grupos_folga() -> dict:
-“”“Carrega aba grupos_folga — {grupo: {tipo_folga: [dias DD-MM]}}.”””
+“”“Carrega aba grupos_folga – {grupo: {tipo_folga: [dias DD-MM]}}.”””
 try:
 sh = get_sheet()
 if sh is None: return {}
@@ -499,7 +499,7 @@ return ''
 @st.cache_data(ttl=86400)
 @st.cache_data(ttl=120)
 def load_dias_publicados() -> set:
-“”“Carrega datas publicadas da aba ‘escala_publicada’ — formato DD-MM.”””
+“”“Carrega datas publicadas da aba ‘escala_publicada’ – formato DD-MM.”””
 try:
 sh = get_sheet()
 if sh is None:
@@ -512,7 +512,7 @@ return set()
 
 @st.cache_data(ttl=300)
 def load_servicos() -> dict:
-“”“Carrega aba serviços — dict {militar_id: [servicos]}.”””
+“”“Carrega aba serviços – dict {militar_id: [servicos]}.”””
 try:
 sh = get_sheet()
 if sh is None: return {}
@@ -532,7 +532,7 @@ return {}
 
 @st.cache_data(ttl=300)
 def load_listas() -> dict:
-“”“Carrega aba listas — dict {coluna: [valores]}.”””
+“”“Carrega aba listas – dict {coluna: [valores]}.”””
 try:
 sh = get_sheet()
 if sh is None: return {}
@@ -548,7 +548,7 @@ except:
 return {}
 
 def load_feriados(ano: int) -> list:
-“”“Carrega feriados de um ano da aba ‘feriados’ — cache 24h.”””
+“”“Carrega feriados de um ano da aba ‘feriados’ – cache 24h.”””
 try:
 sh = get_sheet()
 if sh is None:
@@ -557,7 +557,7 @@ ws = sh.worksheet(“feriados”)
 valores = ws.get_all_values()
 if not valores:
 return []
-# Debug temporário — guardar em session_state para mostrar
+# Debug temporário – guardar em session_state para mostrar
 feriados = []
 num_cols = max(len(r) for r in valores)
 for ci in range(num_cols):
@@ -642,7 +642,7 @@ return False
 
 @st.cache_data(ttl=86400)
 def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
-“”“Conta serviços históricos de um militar — cache 24h.”””
+“”“Conta serviços históricos de um militar – cache 24h.”””
 def _n3(t): return norm(t)
 try:
 client = get_gsheet_client()
@@ -736,7 +736,7 @@ for delta, label in [(-1, "dia anterior"), (1, "dia seguinte")]:
         if serv_orig_hor and hor_adj.strip() == serv_orig_hor.strip():
             continue
         if _e_atendimento(serv_adj):
-            continue  # exceção — adjacente é atendimento/apoio
+            continue  # exceção -- adjacente é atendimento/apoio
         if re.search(r'remu|grat', norm(serv_adj)):
             continue  # remunerados não contam para descanso
         ini_adj, fim_adj = _parse_horario(hor_adj)
@@ -780,7 +780,7 @@ def get_servicos_fixos(mil_id, hor_excluir):
     for delta, offset, df_adj in [(-1, 0, df_anterior), (0, 1440, df_dia), (1, 2880, df_seguinte)]:
         if df_adj is None or df_adj.empty:
             continue
-        # Aplicar trocas aprovadas — usar id_disp se disponível, senão id
+        # Aplicar trocas aprovadas -- usar id_disp se disponível, senão id
         if 'id_disp' in df_adj.columns:
             # Militar aparece no id_disp quando tem troca
             mask = df_adj['id_disp'].astype(str).str.contains(str(mil_id), na=False)
@@ -821,7 +821,7 @@ def verificar_militar(mil_id, serv_novo, hor_novo, hor_excluir, label):
     fixos = get_servicos_fixos(mil_id, hor_excluir)
     msgs = []
     for ini_f, fim_f, s_f, h_f in fixos:
-        # Se qualquer um dos serviços for atendimento/apoio — isento
+        # Se qualquer um dos serviços for atendimento/apoio -- isento
         if _isento(s_f):
             continue
         # descanso entre fim do fixo e início do novo
@@ -846,7 +846,7 @@ return erros
 ```
 
 def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = “”) -> bool:
-“”“Atualiza o status de uma troca na Google Sheet — batch update numa chamada.”””
+“”“Atualiza o status de uma troca na Google Sheet – batch update numa chamada.”””
 try:
 sh = get_sheet()
 aba = sh.worksheet(“registos_trocas”)
@@ -978,7 +978,7 @@ aba_ord = f”ordem_escala {aba_dia}”
 aba_ord_ant = f”ordem_escala {(d_gerar - timedelta(days=1)).strftime(’%d-%m’)}”
 
 ```
-    # Ler base — próprio dia > anterior
+    # Ler base -- próprio dia > anterior
     ws_base = None
     for nome in [aba_ord, aba_ord_ant]:
         if nome in abas:
@@ -1202,7 +1202,7 @@ def _iniciais(mid):
         return partes[0]
     return str(mid)
 
-# Efetivo — ordem da aba utilizadores
+# Efetivo -- ordem da aba utilizadores
 if not df_util.empty and 'id' in df_util.columns:
     todos_ids = [str(r).strip() for r in df_util['id'] if str(r).strip() and str(r).strip() != 'nan']
 else:
@@ -1218,7 +1218,7 @@ def draw_sidebar(y_top=None):
     # Fundo branco
     c.setFillColor(white)
     c.rect(SB_X, SB_TM, SB_W, y_top - SB_TM, fill=1, stroke=0)
-    # Cabeçalho EFETIVO — fundo escuro, letra branca
+    # Cabeçalho EFETIVO -- fundo escuro, letra branca
     c.setFillColor(HexColor("#1a1a1a"))
     c.rect(SB_X, y_top - 8*mm, SB_W, 8*mm, fill=1, stroke=0)
     c.setFillColor(white)
@@ -1264,7 +1264,7 @@ def draw_header(y):
     box_h = 20*mm
     header_w = TW - box_w - 2*mm
 
-    # Cabeçalho sem fundo — borda simples, texto a preto
+    # Cabeçalho sem fundo -- borda simples, texto a preto
     c.setStrokeColor(black)
     c.setLineWidth(0.8)
     c.rect(LM, y-box_h, header_w, box_h, fill=0, stroke=1)
@@ -1283,7 +1283,7 @@ def draw_header(y):
     c.setFont("Helvetica-Bold", 10)
     c.drawCentredString(LM + header_w/2, y-15*mm, titulo)
 
-    # Caixa de assinatura — canto superior direito
+    # Caixa de assinatura -- canto superior direito
     box_x = LM + header_w + 2*mm
     box_y = y - box_h
     c.setStrokeColor(black)
@@ -1301,7 +1301,7 @@ def draw_header(y):
     return y - box_h - 2*mm
 
 def sec_title(y, label, x=LM, w=TW):
-    # Borda simples com texto a negrito — sem fundo escuro (poupa toner)
+    # Borda simples com texto a negrito -- sem fundo escuro (poupa toner)
     c.setStrokeColor(black)
     c.setLineWidth(0.8)
     c.rect(x, y-5.5*mm, w, 5.5*mm, fill=0, stroke=1)
@@ -1378,9 +1378,9 @@ y -= 2*mm
 draw_sidebar(y_top=y)  # barra lateral começa alinhada com as ausências
 
 # ---- AUSÊNCIAS e ADM lado a lado ----
-CW_ESQ = TW * 0.60 - 1*mm   # ausências — 60%
-CW_DIR = TW * 0.40 - 1*mm   # ADM — 40%
-CW2 = TW/2 - 1*mm           # atendimento/apoio — 50/50
+CW_ESQ = TW * 0.60 - 1*mm   # ausências -- 60%
+CW_DIR = TW * 0.40 - 1*mm   # ADM -- 40%
+CW2 = TW/2 - 1*mm           # atendimento/apoio -- 50/50
 GAP = 2*mm
 
 # Recolher grupos
@@ -1487,7 +1487,7 @@ if not df_at.empty or not df_ap.empty:
 
     cols_at = ["Horário", "Militar(es)"]
 
-    # Coluna esquerda — Atendimento
+    # Coluna esquerda -- Atendimento
     y_esq2 = y_at
     if not df_at.empty:
         wids_at_l = [20*mm, CW2-20*mm]
@@ -1498,7 +1498,7 @@ if not df_at.empty or not df_ap.empty:
             y_esq2 = tbl_row(y_esq2, [hor, ids], wids_at_l, fill, x=LM)
             fill = not fill
 
-    # Coluna direita — Apoio
+    # Coluna direita -- Apoio
     y_dir2 = y_at
     if not df_ap.empty:
         wids_at_r = [20*mm, CW2-20*mm]
@@ -1600,7 +1600,7 @@ if not df_rem.empty:
     max_pts_rm  = x_obs_end - x_obs_start
     x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w
 
-    # Agrupar linhas por obs para fundir célula — preservar ordem original
+    # Agrupar linhas por obs para fundir célula -- preservar ordem original
     linhas_rem = []
     vistos = {}  # hor -> já processado
     for _, row in df_rem.iterrows():
@@ -1612,7 +1612,7 @@ if not df_rem.empty:
         ids = ", ".join(grp["id_fmt"].tolist())
         obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
         if obs == 'nan': obs = ""
-        # Viatura — procurar coluna independentemente de maiúsculas/minúsculas
+        # Viatura -- procurar coluna independentemente de maiúsculas/minúsculas
         vtr = ""
         col_vtr = next((c for c in df_rem.columns if norm(c) == 'viatura'), None)
         if col_vtr:
@@ -1653,7 +1653,7 @@ if not df_rem.empty:
             y_grupo[idx] = y
         y_posicoes.append((y, row_h))
 
-        # Fundo linha horário + militares — primeira branca, depois alterna
+        # Fundo linha horário + militares -- primeira branca, depois alterna
         if idx > 0 and idx % 2 == 1:
             c.setFillColor(FILL_ALT)
             c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_vtr_w, row_h, fill=1, stroke=0)
@@ -1792,7 +1792,7 @@ mask = df_f[‘serviço’].str.lower().str.contains(pattern, na=False)
 return df_f[mask].copy(), df_f[~mask].copy()
 
 def _limpar_sem_militar(df: pd.DataFrame) -> pd.DataFrame:
-“”“Remove linhas onde id está vazio — serviços sem militar escalado.”””
+“”“Remove linhas onde id está vazio – serviços sem militar escalado.”””
 if ‘id’ not in df.columns:
 return df
 return df[df[‘id’].astype(str).str.strip().str.len() > 0].copy()
@@ -1973,7 +1973,7 @@ def _keypad_fragment():
                             if len(new) == 4:
                                 df_u = load_utilizadores()
                                 if not df_u.empty and 'pin' in df_u.columns:
-                                    # Verificar PIN — suporta texto simples e hash
+                                    # Verificar PIN -- suporta texto simples e hash
                                     user = None
                                     for _, row_u in df_u.iterrows():
                                         if verificar_pin(new, str(row_u.get('pin', ''))):
@@ -2038,8 +2038,8 @@ if modo == "pin":
     """, unsafe_allow_html=True)
     _keypad_fragment()
 
-# ── MODO EMAIL/PASSWORD ── (removido — login só por PIN)
-# ── MODO REGISTAR PIN ── (removido — PINs criados pelos admins)
+# ── MODO EMAIL/PASSWORD ── (removido -- login só por PIN)
+# ── MODO REGISTAR PIN ── (removido -- PINs criados pelos admins)
 ```
 
 # ============================================================
@@ -2237,7 +2237,7 @@ if menu == "📅 Minha Escala":
                         <span style='font-size:1.8rem'>🎂</span>
                         <div>
                             <div style='font-weight:700;color:#713F12;font-size:0.95rem'>Hoje é o aniversário de {nome}!</div>
-                            <div style='color:#92400E;font-size:0.82rem'>Completa {idade} anos — Parabéns! 🎉</div>
+                            <div style='color:#92400E;font-size:0.82rem'>Completa {idade} anos -- Parabéns! 🎉</div>
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -3075,9 +3075,9 @@ elif menu == "📊 Estatísticas":
 
     if is_admin:
         militares_opts = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
-        sel_mil = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts.keys()))
-        alvo_id   = u_id if sel_mil == "— O meu próprio —" else militares_opts[sel_mil]
-        alvo_nome = u_nome if sel_mil == "— O meu próprio —" else sel_mil
+        sel_mil = st.selectbox("Selecionar militar:", ["-- O meu próprio --"] + list(militares_opts.keys()))
+        alvo_id   = u_id if sel_mil == "-- O meu próprio --" else militares_opts[sel_mil]
+        alvo_nome = u_nome if sel_mil == "-- O meu próprio --" else sel_mil
     else:
         alvo_id   = u_id
         alvo_nome = u_nome
@@ -3215,8 +3215,8 @@ elif menu == "🏖️ Férias":
 
         if is_admin:
             militares_opts_f = {f"{r['posto']} {r['nome']} (ID: {r['id']})": str(r['id']) for _, r in df_util.iterrows()}
-            sel_mil_f = st.selectbox("Selecionar militar:", ["— O meu próprio —"] + list(militares_opts_f.keys()))
-            alvo_id_f = u_id if sel_mil_f == "— O meu próprio —" else militares_opts_f[sel_mil_f]
+            sel_mil_f = st.selectbox("Selecionar militar:", ["-- O meu próprio --"] + list(militares_opts_f.keys()))
+            alvo_id_f = u_id if sel_mil_f == "-- O meu próprio --" else militares_opts_f[sel_mil_f]
         else:
             alvo_id_f = u_id
 
@@ -3300,7 +3300,7 @@ elif menu == "🔍 Escala Geral":
                     if m_d.any():
                         df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
 
-                # Aplicar matar remunerado — mesmo formato que trocas normais
+                # Aplicar matar remunerado -- mesmo formato que trocas normais
                 matar_apr = df_trocas[
                     (df_trocas['data'] == d_sel.strftime('%d/%m/%Y')) &
                     (df_trocas['status'] == 'Aprovada') &
@@ -3312,7 +3312,7 @@ elif menu == "🔍 Escala Geral":
                     mask_linha = (
                         df_at['serviço'].astype(str).str.strip().str.lower() == serv_r.lower()
                     ) & (df_at['horário'].astype(str).str.strip() == hor_r.strip())
-                    # Linha do cedente — substitui pelo novo titular
+                    # Linha do cedente -- substitui pelo novo titular
                     m_cedente = mask_linha & (df_at['id'].astype(str) == str(mt['id_destino']))
                     if m_cedente.any():
                         df_at.loc[m_cedente, 'id_disp'] = f"{mt['id_origem']} 🔄 {mt['id_destino']}"
@@ -3478,7 +3478,7 @@ elif menu == "🔍 Escala Geral":
             # 4. Outros Serviços
             mostrar_secao("Outros Serviços",           df_outros,     mostrar_extras=True, excluir_cols=['giro'])
 
-            # 5. Remunerados — obs igual com rowspan (células fundidas)
+            # 5. Remunerados -- obs igual com rowspan (células fundidas)
             if not df_remu.empty:
                 st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
                 # Preparar linhas por horário
@@ -3551,7 +3551,7 @@ elif menu == "🔍 Escala Geral":
                         mid = str(r.get(col_id_u, '')).strip()
                         nome = str(r.get(col_nome_u, '')).strip()
                         if mid and mid != 'nan':
-                            mil_opts_h[f"{mid} — {nome}"] = mid
+                            mil_opts_h[f"{mid} -- {nome}"] = mid
                     mil_sel_h = st.selectbox("Militar:", list(mil_opts_h.keys()), key="mil_sel_hist")
                 with col_sh3:
                     hor_sel_h = st.text_input("Horário:", placeholder="ex: 00-08", key="hor_sel_hist")
@@ -3594,7 +3594,7 @@ elif menu == "🔍 Escala Geral":
                                 break  # parar ao primeiro encontrado
 
                     if resultado_h:
-                        nome_mil = mil_sel_h.split('—')[1].strip() if '—' in mil_sel_h else mil_sel_h
+                        nome_mil = mil_sel_h.split('--')[1].strip() if '--' in mil_sel_h else mil_sel_h
                         st.success(f"✅ Último serviço encontrado:")
                         st.markdown(f"""
                         | Campo | Valor |
@@ -3686,7 +3686,7 @@ elif menu == "🔄 Trocas":
 
             meu = df_d[df_d['id'].astype(str) == u_id]
 
-            # IDs que já têm troca pendente nesse dia — excluir das listas
+            # IDs que já têm troca pendente nesse dia -- excluir das listas
             ids_com_troca = set()
             if not df_trocas.empty:
                 tr_ocupados = df_trocas[
@@ -3707,7 +3707,7 @@ elif menu == "🔄 Trocas":
                 ]
                 ids_sem_remunerado.update(rem_apr['id_destino'].astype(str).tolist())
 
-            # Função auxiliar — remunerado não cedido é impedimento
+            # Função auxiliar -- remunerado não cedido é impedimento
             def _tem_rem_nao_cedido(mid):
                 mid = str(mid).strip()
                 rows_rem = df_d[(df_d['id'].astype(str).str.strip() == mid) &
@@ -3739,7 +3739,7 @@ elif menu == "🔄 Trocas":
                     # Folgas: disponíveis sempre (sem verificação de descanso)
                     mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
                     mask_imp   = df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)
-                    # Remunerados que NÃO foram cedidos — são impedimento
+                    # Remunerados que NÃO foram cedidos -- são impedimento
                     mask_rem_nao_cedido = df_d['id'].astype(str).apply(_tem_rem_nao_cedido)
                     # Debug
                     cols_folga = df_d[base_mask & mask_folga]
@@ -3750,7 +3750,7 @@ elif menu == "🔄 Trocas":
                         meu_serv_nome = meu_s.rsplit('(', 1)[0].strip()
                         meu_hor_val   = meu_s.rsplit('(', 1)[1].rstrip(')') if '(' in meu_s else meu.iloc[0]['horário']
                         opts = []
-                        # Folgas — verificar só o descanso do militar de folga (destino)
+                        # Folgas -- verificar só o descanso do militar de folga (destino)
                         for _, row_c in cols_folga.iterrows():
                             id_c   = str(row_c['id'])
                             serv_c = str(row_c['serviço'])
@@ -3760,7 +3760,7 @@ elif menu == "🔄 Trocas":
                             if not erros_dest_only:
                                 nome_c = get_nome_curto(df_util, id_c)
                                 opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c})")
-                        # Restantes — com verificação de descanso
+                        # Restantes -- com verificação de descanso
                         for _, row_c in cols.iterrows():
                             id_c   = str(row_c['id'])
                             serv_c = str(row_c['serviço'])
@@ -3817,7 +3817,7 @@ elif menu == "🔄 Trocas":
                             if ini_d is not None and not (fim_rem <= ini_d or ini_rem >= fim_d):
                                 continue  # sobreposição
                         nome_dar = get_nome_curto(df_util, mid_dar)
-                        opts_dar.append(f"{mid_dar} {nome_dar} — {r_dar['serviço']} ({hor_dar})")
+                        opts_dar.append(f"{mid_dar} {nome_dar} -- {r_dar['serviço']} ({hor_dar})")
 
                     if not opts_dar:
                         st.warning("Não há militares disponíveis para ceder o remunerado.")
@@ -3840,7 +3840,7 @@ elif menu == "🔄 Trocas":
                 elif militar_de_ferias(u_id, dt_s, df_ferias, feriados):
                     _motivo_imp = 'Férias'
                 if _motivo_imp:
-                    st.warning(f"Não podes fazer remunerados — estás com **{_motivo_imp}**.")
+                    st.warning(f"Não podes fazer remunerados -- estás com **{_motivo_imp}**.")
                 else:
                     rem_dia = df_d[
                         (df_d['id'].astype(str).str.strip() != u_id) &
@@ -3853,7 +3853,7 @@ elif menu == "🔄 Trocas":
                     if rem_dia.empty:
                         st.info("Não há serviços remunerados escalados neste dia.")
                     else:
-                        # Verificar sobreposição — usar horário real após trocas aprovadas
+                        # Verificar sobreposição -- usar horário real após trocas aprovadas
                         meu_ini, meu_fim = (None, None)
                         meu_hor_real = None
                         if servico_override and '(' in servico_override:
@@ -3908,7 +3908,7 @@ elif menu == "🔄 Trocas":
                 else:
                     col_tf1, col_tf2 = st.columns(2)
                     with col_tf1:
-                        opts_meus = {f"{d.strftime('%d/%m/%Y')} — {t}": d for d, t in meus_dias_folga}
+                        opts_meus = {f"{d.strftime('%d/%m/%Y')} -- {t}": d for d, t in meus_dias_folga}
                         meu_dia_sel = st.selectbox("O meu dia de folga:", list(opts_meus.keys()), key="tf_meu_dia")
                         meu_dia_tf = opts_meus[meu_dia_sel]
                         meu_tipo_tf = dict(meus_dias_folga)[meu_dia_tf]
@@ -3937,7 +3937,7 @@ elif menu == "🔄 Trocas":
 
                     if outros_tf and mil_tf_sel in outros_tf:
                         dados_mil_tf = outros_tf[mil_tf_sel]
-                        opts_dias_tf = {f"{d.strftime('%d/%m/%Y')} — {t}": d for d, t in dados_mil_tf['dias']}
+                        opts_dias_tf = {f"{d.strftime('%d/%m/%Y')} -- {t}": d for d, t in dados_mil_tf['dias']}
                         dia_dele_sel = st.selectbox("Dia de folga dele:", list(opts_dias_tf.keys()), key="tf_dia_dele")
                         dia_dele_tf = opts_dias_tf[dia_dele_sel]
                         tipo_dele_tf = dict(dados_mil_tf['dias'])[dia_dele_tf]
@@ -4046,10 +4046,10 @@ elif menu == "🔄 Trocas":
 
                     if is_matar:
                         papel = "Requerente" if fui_origem else "Cedente"
-                        titulo = f"{cor} {r['data']} — Fazer Remunerado: {outro_serv} ({status})"
+                        titulo = f"{cor} {r['data']} -- Fazer Remunerado: {outro_serv} ({status})"
                     else:
                         papel = "Requerente" if fui_origem else "Substituto"
-                        titulo = f"{cor} {r['data']} — {meu_serv} ↔ {outro_serv} ({status})"
+                        titulo = f"{cor} {r['data']} -- {meu_serv} ↔ {outro_serv} ({status})"
 
                     with st.expander(titulo, expanded=False):
                         col1, col2 = st.columns(2)
@@ -4316,7 +4316,7 @@ elif menu == "🚨 Alertas":
                 if count > 1:
                     n = get_nome_militar(df_util, mid)
                     servs = df_a_serv[df_a_serv['id'].astype(str) == str(mid)][['serviço','horário']].values.tolist()
-                    alertas_duplos.append(f"**{d_s_a}** — {n}: {' / '.join([f'{s} ({h})' for s,h in servs])}")
+                    alertas_duplos.append(f"**{d_s_a}** -- {n}: {' / '.join([f'{s} ({h})' for s,h in servs])}")
 
             # ── Alerta 3: Menos de 8h descanso ──
             aba_ant = (dt_a - timedelta(days=1)).strftime('%d-%m')
@@ -4340,14 +4340,14 @@ elif menu == "🚨 Alertas":
                             if 0 <= descanso < 480:
                                 n = get_nome_militar(df_util, mid)
                                 h2, m2 = descanso//60, descanso%60
-                                alertas_descanso.append(f"**{d_s_a}** — {n}: {h2}h{m2:02d}m entre `{ra['serviço']} ({ra['horário']})` e `{rh['serviço']} ({rh['horário']})`")
+                                alertas_descanso.append(f"**{d_s_a}** -- {n}: {h2}h{m2:02d}m entre `{ra['serviço']} ({ra['horário']})` e `{rh['serviço']} ({rh['horário']})`")
 
             # ── Alerta 4: Não escalado ──
             ids_na_escala = set(df_a[df_a['id'].astype(str).str.strip() != '']['id'].astype(str).str.strip())
             em_ferias_hoje = _ids_de_ferias_no_dia(dt_a)
             for mid in sorted(ids_ativos - ids_na_escala - em_ferias_hoje):
                 n = get_nome_militar(df_util, mid)
-                alertas_esquecidos.append(f"**{d_s_a}** — {n} ({mid})")
+                alertas_esquecidos.append(f"**{d_s_a}** -- {n} ({mid})")
     with st.expander(f"👥 Militar escalado 2x ({len(alertas_duplos)})", expanded=len(alertas_duplos) > 0):
         if alertas_duplos:
             for a in alertas_duplos: st.warning(a)
@@ -4493,7 +4493,7 @@ elif menu == "⚙️ Gerar Escala":
                             ordem_base[col_key_m].remove(mid_m)
                             ordem_base[col_key_m].append(mid_m)
 
-                # Escrever ordem — substituir sempre
+                # Escrever ordem -- substituir sempre
                 nova_o_r = [hdrs_prox]
                 ml_r = max((len(v) for v in ordem_base.values()), default=1)
                 for i in range(ml_r):
@@ -4638,7 +4638,7 @@ elif menu == "⚙️ Gerar Escala":
         if 'tabela_escala' in st.session_state and st.session_state.get('tabela_dia') == aba_dia:
             linhas = st.session_state['tabela_escala']
 
-            st.markdown(f"**{len(linhas)} militares — {d_gerar.strftime('%d/%m/%Y')}**")
+            st.markdown(f"**{len(linhas)} militares -- {d_gerar.strftime('%d/%m/%Y')}**")
             st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
             # Filtro de pesquisa
@@ -4663,7 +4663,7 @@ elif menu == "⚙️ Gerar Escala":
                 'Apoio Atendimento 08-16':     'AA2','Apoio Atendimento 16-24':     'AA3',
             }
 
-            # Opções de serviço — abreviaturas + extras das listas
+            # Opções de serviço -- abreviaturas + extras das listas
             _extras_listas = [s for s in (_listas_auto.get('Serviço', []) or [])
                               if s and s not in ('','Atendimento','Patrulha Ocorrências','Apoio Atendimento')]
             _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + _extras_listas
@@ -4674,7 +4674,7 @@ elif menu == "⚙️ Gerar Escala":
                 return _abrev.get(chave, serv)
             df_edit_abrev = df_edit.copy()
             df_edit_abrev['serviço'] = df_edit.apply(lambda r: _to_abrev(str(r['serviço']).strip(), str(r['horário']).strip()), axis=1)
-            # Para abreviados, horário já está implícito — limpar
+            # Para abreviados, horário já está implícito -- limpar
             for k, v in _abrev.items():
                 mask_ab = df_edit_abrev['serviço'] == v
                 df_edit_abrev.loc[mask_ab, 'horário'] = ''
@@ -4759,7 +4759,7 @@ elif menu == "⚙️ Gerar Escala":
                         sv_l = str(row_l.get('serviço', '')).strip().lower()
                         mid_l = str(row_l.get('id', '')).strip()
                         if sv_l in _serv_manter:
-                            # já tem folga/férias — manter
+                            # já tem folga/férias -- manter
                             linhas_limpas.append(row_l)
                         else:
                             # Recalcular folga para este militar
@@ -4932,7 +4932,7 @@ elif menu == "⚙️ Gerar Escala":
                             ix_giro_c = hdrs_c.index('giro') if 'giro' in hdrs_c else None
                             ix_obs_c  = hdrs_c.index('observações') if 'observações' in hdrs_c else (hdrs_c.index('observacoes') if 'observacoes' in hdrs_c else None)
 
-                            # Construir mapa de edições — só militares com serviço preenchido
+                            # Construir mapa de edições -- só militares com serviço preenchido
                             edit_map = {}
                             for _, row_e in df_editado.iterrows():
                                 mid_e = str(row_e['id']).strip()
@@ -4964,7 +4964,7 @@ elif menu == "⚙️ Gerar Escala":
                                     _upd(ix_giro_c, row_e.get('giro',''))
                                     _upd(ix_obs_c,  row_e.get('observações',''))
                                 else:
-                                    # Linha com múltiplos IDs (ex: Patrulha) — só atualizar se algum está no edit_map
+                                    # Linha com múltiplos IDs (ex: Patrulha) -- só atualizar se algum está no edit_map
                                     for mid_s in ids_c:
                                         if mid_s in edit_map:
                                             row_e = edit_map[mid_s]
@@ -5187,7 +5187,7 @@ elif menu == "⚙️ Gerar Escala":
                     ix_sv_g  = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
                     ix_hr_g  = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
 
-                    # Estado original (antes de editar) — do session_state
+                    # Estado original (antes de editar) -- do session_state
                     original = st.session_state.get('editar_escala_original', {}).get(aba_g, {})
 
                     # Converter editor para dict id -> {serviço, horário, ...}
@@ -5271,7 +5271,7 @@ elif menu == "⚙️ Gerar Escala":
                     if upds_g:
                         ws_g.batch_update(upds_g)
 
-                    # Atualizar ordem_escala — usando função central
+                    # Atualizar ordem_escala -- usando função central
                     try:
                         aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
                         _atualizar_ordem_escala_dia(sh_gc, aba_g, aba_data_g)
@@ -5334,7 +5334,7 @@ elif menu == "⚙️ Gerar Escala":
             else:
                 aba_e, info_e = abas_lista[0]
                 d_e = info_e['data']
-                st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} — {dias_pt[d_e.weekday()]}**")
+                st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} -- {dias_pt[d_e.weekday()]}**")
                 df_s = pd.DataFrame(info_e['linhas'])
                 df_editado_s = st.data_editor(
                     df_s,
@@ -5515,14 +5515,14 @@ elif menu == "⚙️ Gerar Escala":
 
                         # Verificar ausente
                         if mid_r in ausentes_dia:
-                            skipped.append(f"{mid_r} — ausente")
+                            skipped.append(f"{mid_r} -- ausente")
                             continue
 
                         # Verificar sobreposição
                         sobreposto = False
                         for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
                             if _sobreposicao(hi_rem, hf_rem, hi_s, hf_s):
-                                skipped.append(f"{mid_r} — sobreposição com {serv_s} ({hi_s}-{hf_s})")
+                                skipped.append(f"{mid_r} -- sobreposição com {serv_s} ({hi_s}-{hf_s})")
                                 sobreposto = True
                                 break
                         if sobreposto:
@@ -5533,7 +5533,7 @@ elif menu == "⚙️ Gerar Escala":
                             descanso_ok = True
                             for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
                                 if not _verif_descanso(hi_s, hf_s, hi_rem, hf_rem):
-                                    skipped.append(f"{mid_r} — menos de 8h descanso com {serv_s}")
+                                    skipped.append(f"{mid_r} -- menos de 8h descanso com {serv_s}")
                                     descanso_ok = False
                                     break
                             if not descanso_ok:
@@ -5553,10 +5553,10 @@ elif menu == "⚙️ Gerar Escala":
 
                 # Mostrar resultado
                 if nomeados:
-                    st.success(f"✅ {len(nomeados)} militar(es) nomeado(s) para Tabela {tab_rem_sel} — {hor_rem}:")
+                    st.success(f"✅ {len(nomeados)} militar(es) nomeado(s) para Tabela {tab_rem_sel} -- {hor_rem}:")
                     for n in nomeados:
                         ul = n['ultima_vez'].strftime('%d/%m/%Y') if pd.notna(n['ultima_vez']) else "Nunca"
-                        st.markdown(f"- **{n['nome']} ({n['id']})** — último: {ul} | total ano: {n['total']}")
+                        st.markdown(f"- **{n['nome']} ({n['id']})** -- último: {ul} | total ano: {n['total']}")
                     for av in avisos:
                         st.warning(av)
                     if skipped:
@@ -5691,7 +5691,7 @@ elif menu == "🏥 Licenças":
         col_id_l = 'id' if 'id' in df_lic_show.columns else df_lic_show.columns[0]
         col_tp_l = 'tipo' if 'tipo' in df_lic_show.columns else df_lic_show.columns[1]
         col_in_l = next((c for c in df_lic_show.columns if 'ini' in c.lower()), None)
-        opts_rem_l = {f"{r[col_id_l]} — {r[col_tp_l]} {r.get(col_in_l,'')}" : i
+        opts_rem_l = {f"{r[col_id_l]} -- {r[col_tp_l]} {r.get(col_in_l,'')}" : i
                       for i, (_, r) in enumerate(df_lic_show.iterrows())}
         rem_sel_l = st.selectbox("Registo:", list(opts_rem_l.keys()), key="lic_rem")
         if st.button("🗑️ Remover", key="btn_rem_lic", use_container_width=True):
