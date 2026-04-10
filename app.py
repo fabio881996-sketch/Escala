@@ -2085,7 +2085,7 @@ else:
             "👥 Efetivo",
         ]
         if is_admin:
-            menu_opt += ["", "🏖️ Férias", "🏥 Licenças", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "📢 Publicar Escala", "👤 Gerir Utilizadores"]
+            menu_opt += ["", "🏖️ Férias", "🏥 Dispensas", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "📢 Publicar Escala", "👤 Gerir Utilizadores"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
@@ -5589,8 +5589,8 @@ else:
                             st.error(f"Erro: {e}")
 
     # --- 🏥 LICENÇAS (ADMIN) ---
-    elif menu == "🏥 Licenças":
-        st.title("🏥 Licenças / Baixas / Diligências")
+    elif menu == "🏥 Dispensas":
+        st.title("🏥 Dispensas")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
             st.stop()
@@ -5629,7 +5629,7 @@ else:
             mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
                           for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
             mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
-            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência"], key="lic_tipo")
+            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Folga Complementar"], key="lic_tipo")
         with col_l2:
             ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
             fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
