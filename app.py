@@ -4638,10 +4638,7 @@ else:
                     return _abrev_norm.get(chave_norm, serv)
                 df_edit_abrev = df_edit.copy()
                 df_edit_abrev['serviço'] = df_edit.apply(lambda r: _to_abrev(str(r['serviço']).strip(), str(r['horário']).strip()), axis=1)
-                # Para abreviados, horário já está implícito -- limpar
-                for k, v in _abrev.items():
-                    mask_ab = df_edit_abrev['serviço'] == v
-                    df_edit_abrev.loc[mask_ab, 'horário'] = ''
+                # Não limpar horário — fica visível para edição
 
                 if pesq.strip():
                     mask_pesq = (
