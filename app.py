@@ -462,10 +462,25 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
     if linha.empty: return ''
     row = linha.iloc[0]
 
+    # Verificar exceções individuais — formato: "06-04(Folga Semanal)→09-04;..."
+    excecoes_str = str(row.get('exceções', '') or row.get('excecoes', '')).strip()
+    if excecoes_str and excecoes_str != 'nan':
+        for exc in re.split(r'[;]+', excecoes_str):
+            exc = exc.strip()
+            if not exc: continue
+            # Formato: DD-MM(Tipo)→DD-MM
+            m_exc = re.match(r'(\d{2}-\d{2})\(([^)]+)\)→(\d{2}-\d{2})', exc)
+            if m_exc:
+                dia_orig, tipo_exc, dia_novo = m_exc.group(1), m_exc.group(2), m_exc.group(3)
+                if dia_novo == aba:
+                    return tipo_exc  # novo dia de folga
+                if dia_orig == aba:
+                    return ''  # dia original foi movido — não folga aqui
+
     # Verificar FDS
     fds = str(row.get('fds', '')).strip().lower()
     if fds in ('sim', 'yes', '1', 'true'):
-        if data_date.weekday() >= 5:  # Sábado=5, Domingo=6
+        if data_date.weekday() >= 5:
             return 'Folga Semanal'
         if aba in [f.strftime('%d-%m') if hasattr(f, 'strftime') else str(f) for f in feriados]:
             return 'Folga Semanal'
@@ -866,50 +881,70 @@ def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str 
                         hdrs_f = [h.strip().lower() for h in vals_f[0]]
                         ix_id_f   = hdrs_f.index('id') if 'id' in hdrs_f else 0
                         ix_grp_f  = hdrs_f.index('grupo') if 'grupo' in hdrs_f else None
-                        # Carregar grupos
                         ws_grp = sh.worksheet("grupos_folga")
                         vals_grp = ws_grp.get_all_values()
                         hdrs_grp = [h.strip() for h in vals_grp[0]]
                         tipos_grp = [h for h in hdrs_grp if h != 'grupo']
 
-                        def _trocar_dia_grupo(mid_from, dia_from, mid_to, dia_to):
-                            """Move dia_from do grupo de mid_from para o grupo de mid_to e vice-versa."""
-                            # Encontrar grupos dos militares
-                            grp_from, grp_to = None, None
+                        # Encontrar grupo do militar
+                        def _get_grupo(mid):
                             for row_f in vals_f[1:]:
-                                mid_f = str(row_f[ix_id_f]).strip()
-                                if mid_f == mid_from and ix_grp_f:
-                                    grp_from = str(row_f[ix_grp_f]).strip()
-                                if mid_f == mid_to and ix_grp_f:
-                                    grp_to = str(row_f[ix_grp_f]).strip()
+                                if str(row_f[ix_id_f]).strip() == mid and ix_grp_f:
+                                    return str(row_f[ix_grp_f]).strip()
+                            return None
 
-                            upds_grp = []
-                            for i_grp, row_grp in enumerate(vals_grp[1:], start=2):
-                                grp_nome = str(row_grp[0]).strip()
-                                for tipo_g in tipos_grp:
-                                    ix_t = hdrs_grp.index(tipo_g)
-                                    dias_str = str(row_grp[ix_t]).strip() if ix_t < len(row_grp) else ''
-                                    dias_list = [d.strip() for d in re.split(r'[;,]+', dias_str) if d.strip()]
+                        if id_o == id_d:
+                            # Mudança de folga — guardar exceção na coluna 'exceções' do folgas_2026
+                            # Determinar tipo da folga original
+                            tipo_orig = ''
+                            m_tipo = re.search(r'\(([^)]+)\)', serv_o)
+                            if m_tipo: tipo_orig = m_tipo.group(1)
 
-                                    mudou = False
-                                    if grp_from and grp_nome == grp_from and dia_from in dias_list:
-                                        dias_list.remove(dia_from)
-                                        dias_list.append(dia_to)
-                                        mudou = True
-                                    if grp_to and grp_nome == grp_to and dia_to in dias_list:
-                                        dias_list.remove(dia_to)
-                                        dias_list.append(dia_from)
-                                        mudou = True
-                                    if mudou:
-                                        cl_g = chr(ord('A') + ix_t)
-                                        upds_grp.append({'range': f'{cl_g}{i_grp}', 'values': [[';'.join(sorted(dias_list))]]})
+                            grp = _get_grupo(id_o)
+                            # Adicionar exceção: dia_o(tipo)→dia_d
+                            nova_exc = f"{dia_o}({tipo_orig})→{dia_d}"
+                            # Encontrar linha do militar no folgas_2026
+                            col_exc = 'exceções' if 'exceções' in hdrs_f else ('excecoes' if 'excecoes' in hdrs_f else None)
+                            if col_exc:
+                                ix_exc = hdrs_f.index(col_exc)
+                                for i_f, row_f in enumerate(vals_f[1:], start=2):
+                                    if str(row_f[ix_id_f]).strip() == id_o:
+                                        exc_atual = str(row_f[ix_exc]).strip() if ix_exc < len(row_f) else ''
+                                        exc_atual = '' if exc_atual == 'nan' else exc_atual
+                                        nova_lista = (exc_atual + ';' + nova_exc).strip(';')
+                                        cl_exc = chr(ord('A') + ix_exc)
+                                        ws_f.update(f'{cl_exc}{i_f}', [[nova_lista]])
+                                        break
+                        else:
+                            # Troca entre dois militares — lógica original
+                            def _trocar_dia_grupo(mid_from, dia_from, mid_to, dia_to):
+                                grp_from = _get_grupo(mid_from)
+                                grp_to   = _get_grupo(mid_to)
+                                upds_grp = []
+                                for i_grp, row_grp in enumerate(vals_grp[1:], start=2):
+                                    grp_nome = str(row_grp[0]).strip()
+                                    for tipo_g in tipos_grp:
+                                        ix_t = hdrs_grp.index(tipo_g)
+                                        dias_str = str(row_grp[ix_t]).strip() if ix_t < len(row_grp) else ''
+                                        dias_list = [d.strip() for d in re.split(r'[;,]+', dias_str) if d.strip()]
+                                        mudou = False
+                                        if grp_from and grp_nome == grp_from and dia_from in dias_list:
+                                            dias_list.remove(dia_from)
+                                            dias_list.append(dia_to)
+                                            mudou = True
+                                        if grp_to and grp_nome == grp_to and dia_to in dias_list:
+                                            dias_list.remove(dia_to)
+                                            dias_list.append(dia_from)
+                                            mudou = True
+                                        if mudou:
+                                            cl_g = chr(ord('A') + ix_t)
+                                            upds_grp.append({'range': f'{cl_g}{i_grp}', 'values': [[';'.join(sorted(dias_list))]]})
+                                if upds_grp:
+                                    ws_grp.batch_update(upds_grp)
+                            _trocar_dia_grupo(id_o, dia_o, id_d, dia_d)
 
-                            if upds_grp:
-                                ws_grp.batch_update(upds_grp)
-                            load_grupos_folga.clear()
-                            load_folgas.clear()
-
-                        _trocar_dia_grupo(id_o, dia_o, id_d, dia_d)
+                        load_grupos_folga.clear()
+                        load_folgas.clear()
             except Exception as _ef:
                 pass  # não bloquear se falhar a atualização das folgas
 
@@ -2168,9 +2203,9 @@ else:
         st.title("📅 A Minha Escala")
 
         if is_admin:
-            tab_escala, = st.tabs(["📅 Escala"])
+            tab_escala, tab_folgas_me = st.tabs(["📅 Escala", "🏖️ Folgas"])
         else:
-            tab_escala, tab_stats, tab_ferias = st.tabs(["📅 Escala", "📊 Estatísticas", "🏖️ Férias"])
+            tab_escala, tab_stats, tab_ferias, tab_folgas_me = st.tabs(["📅 Escala", "📊 Estatísticas", "🏖️ Férias", "🏖️ Folgas"])
 
         with tab_escala:
 
@@ -3570,6 +3605,99 @@ else:
                         else:
                             st.info(f"Nenhum registo encontrado para **{serv_sel_h}** com este militar.")
 
+    # --- Tab Folgas (Minha Escala) ---
+        with tab_folgas_me:
+            st.markdown("#### 🏖️ As Minhas Folgas")
+
+            ano_fme = datetime.now().year
+            df_folgas_me = load_folgas(ano_fme)
+            grupos_me    = load_grupos_folga()
+
+            # Opção mensal/anual
+            vista_me = st.radio("Vista:", ["📅 Mensal", "📆 Anual"], horizontal=True, key="vista_folgas_me")
+
+            from calendar import monthrange as _mr
+            meses_pt = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                        "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+            dias_pt  = ["Seg","Ter","Qua","Qui","Sex","Sáb","Dom"]
+
+            if vista_me == "📅 Mensal":
+                mes_me = st.selectbox("Mês:", range(1,13), format_func=lambda m: meses_pt[m-1],
+                                      index=datetime.now().month-1, key="mes_folgas_me")
+                _, n_dias_me = _mr(ano_fme, mes_me)
+                dias_folga_me = []
+                for d in range(1, n_dias_me+1):
+                    dt = datetime(ano_fme, mes_me, d).date()
+                    tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
+                    if tipo:
+                        dias_folga_me.append((dt, tipo))
+
+                if not dias_folga_me:
+                    st.info("Sem folgas este mês.")
+                else:
+                    for dt, tipo in dias_folga_me:
+                        cor = "#FEF9C3" if tipo == "Folga Semanal" else "#DCFCE7"
+                        borda = "#EAB308" if tipo == "Folga Semanal" else "#22C55E"
+                        st.markdown(f"""
+                        <div style='background:{cor};border-left:4px solid {borda};border-radius:8px;
+                        padding:8px 14px;margin-bottom:6px;display:flex;justify-content:space-between'>
+                            <span style='font-weight:700'>{dt.strftime('%d/%m/%Y')} ({dias_pt[dt.weekday()]})</span>
+                            <span style='color:#555;font-size:0.85rem'>{tipo}</span>
+                        </div>""", unsafe_allow_html=True)
+            else:
+                # Vista anual — todos os dias
+                todas_folgas_me = []
+                for m in range(1, 13):
+                    _, n_dias = _mr(ano_fme, m)
+                    for d in range(1, n_dias+1):
+                        dt = datetime(ano_fme, m, d).date()
+                        tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
+                        if tipo:
+                            todas_folgas_me.append((dt, tipo))
+
+                st.caption(f"Total: {len(todas_folgas_me)} dias de folga em {ano_fme}")
+                for dt, tipo in todas_folgas_me:
+                    cor = "#FEF9C3" if tipo == "Folga Semanal" else "#DCFCE7"
+                    borda = "#EAB308" if tipo == "Folga Semanal" else "#22C55E"
+                    st.markdown(f"""
+                    <div style='background:{cor};border-left:4px solid {borda};border-radius:8px;
+                    padding:6px 14px;margin-bottom:4px;display:flex;justify-content:space-between'>
+                        <span style='font-weight:600;font-size:0.9rem'>{dt.strftime('%d/%m/%Y')} ({dias_pt[dt.weekday()]})</span>
+                        <span style='color:#555;font-size:0.82rem'>{tipo}</span>
+                    </div>""", unsafe_allow_html=True)
+
+            # Botão exportar .ics
+            st.markdown("---")
+            if st.button("📥 Exportar folgas para calendário (.ics)", use_container_width=True, key="btn_ics_folgas"):
+                todas_ics = []
+                for m in range(1, 13):
+                    _, n_dias = _mr(ano_fme, m)
+                    for d in range(1, n_dias+1):
+                        dt = datetime(ano_fme, m, d).date()
+                        tipo = militar_de_folga(u_id, dt, df_folgas_me, grupos_me, feriados)
+                        if tipo:
+                            todas_ics.append((dt, tipo))
+
+                ics = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//GNR Famalicão//Folgas//PT",
+                       "CALSCALE:GREGORIAN","METHOD:PUBLISH","X-WR-CALNAME:Folgas GNR Famalicão"]
+                for dt, tipo in todas_ics:
+                    uid = f"folga-{u_id}-{dt.strftime('%Y%m%d')}@gnr"
+                    dtstr = dt.strftime('%Y%m%d')
+                    dtend = (dt + timedelta(days=1)).strftime('%Y%m%d')
+                    ics += [
+                        "BEGIN:VEVENT",
+                        f"UID:{uid}",
+                        f"DTSTART;VALUE=DATE:{dtstr}",
+                        f"DTEND;VALUE=DATE:{dtend}",
+                        f"SUMMARY:{tipo}",
+                        "END:VEVENT"
+                    ]
+                ics.append("END:VCALENDAR")
+                ics_bytes = "\r\n".join(ics).encode('utf-8')
+                st.download_button("⬇️ Descarregar .ics", data=ics_bytes,
+                                   file_name=f"folgas_{u_id}_{ano_fme}.ics",
+                                   mime="text/calendar", key="dl_ics_folgas")
+
     # --- 🔄 SOLICITAR TROCA ---
     # --- 🔄 TROCAS ---
     elif menu == "🔄 Trocas":
@@ -3581,7 +3709,7 @@ else:
 
             tipo_troca = st.radio(
                 "Tipo de pedido:",
-                ["🔄 Troca Simples", "💶 Fazer Remunerado", "💶 Dar Remunerado", "📅 Troca de Folga"],
+                ["🔄 Troca Simples", "💶 Fazer Remunerado", "💶 Dar Remunerado", "📅 Mudar Folga"],
                 horizontal=True
             )
             st.markdown("---")
@@ -3850,10 +3978,8 @@ else:
                                             st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
 
                 # ── Troca de Folga ──
-                elif tipo_troca == "📅 Troca de Folga":
-                    ano_tf = dt_s.year
-
-                    # Carregar folgas e grupos
+                elif tipo_troca == "📅 Mudar Folga":
+                    ano_tf = datetime.now().year
                     df_folgas_tf = load_folgas(ano_tf)
                     grupos_tf    = load_grupos_folga()
 
@@ -3868,53 +3994,24 @@ else:
                     if not meus_dias_folga:
                         st.warning("Não tens dias de folga nos próximos 60 dias.")
                     else:
-                        col_tf1, col_tf2 = st.columns(2)
-                        with col_tf1:
-                            opts_meus = {f"{d.strftime('%d/%m/%Y')} -- {t}": d for d, t in meus_dias_folga}
-                            meu_dia_sel = st.selectbox("O meu dia de folga:", list(opts_meus.keys()), key="tf_meu_dia")
-                            meu_dia_tf = opts_meus[meu_dia_sel]
-                            meu_tipo_tf = dict(meus_dias_folga)[meu_dia_tf]
+                        opts_meus = {f"{d.strftime('%d/%m/%Y')} -- {t}": (d, t) for d, t in meus_dias_folga}
+                        meu_dia_sel = st.selectbox("Folga que queres mudar:", list(opts_meus.keys()), key="tf_meu_dia")
+                        meu_dia_tf, meu_tipo_tf = opts_meus[meu_dia_sel]
 
-                        with col_tf2:
-                            # Militares com folga nos próximos 60 dias
-                            outros_tf = {}
-                            for _, row_u_tf in df_util.iterrows():
-                                mid_tf = str(row_u_tf.get('id','')).strip()
-                                if not mid_tf or mid_tf == u_id: continue
-                                nome_tf = get_nome_curto(df_util, mid_tf)
-                                # Dias de folga deste militar
-                                dias_tf = []
-                                for i_tf2 in range(60):
-                                    dt_tf2 = datetime.now().date() + timedelta(days=i_tf2)
-                                    tipo_tf2 = militar_de_folga(mid_tf, dt_tf2, df_folgas_tf, grupos_tf, feriados)
-                                    if tipo_tf2:
-                                        dias_tf.append((dt_tf2, tipo_tf2))
-                                if dias_tf:
-                                    outros_tf[f"{mid_tf} {nome_tf}"] = {'id': mid_tf, 'dias': dias_tf}
+                        # Escolher qualquer dia que não seja dia de folga
+                        novo_dia_tf = st.date_input("Novo dia de folga:", format="DD/MM/YYYY", key="tf_novo_dia",
+                                                     value=meu_dia_tf + timedelta(days=1))
 
-                            if not outros_tf:
-                                st.warning("Nenhum militar com folgas disponíveis.")
-                            else:
-                                mil_tf_sel = st.selectbox("Militar:", list(outros_tf.keys()), key="tf_mil")
-
-                        if outros_tf and mil_tf_sel in outros_tf:
-                            dados_mil_tf = outros_tf[mil_tf_sel]
-                            opts_dias_tf = {f"{d.strftime('%d/%m/%Y')} -- {t}": d for d, t in dados_mil_tf['dias']}
-                            dia_dele_sel = st.selectbox("Dia de folga dele:", list(opts_dias_tf.keys()), key="tf_dia_dele")
-                            dia_dele_tf = opts_dias_tf[dia_dele_sel]
-                            tipo_dele_tf = dict(dados_mil_tf['dias'])[dia_dele_tf]
-
-                            st.markdown(f"""
-                            **Resumo da troca:**
-                            - **Tu** folgas em `{meu_dia_tf.strftime('%d/%m/%Y')}` ({meu_tipo_tf}) → passas a folgar em `{dia_dele_tf.strftime('%d/%m/%Y')}`
-                            - **{mil_tf_sel}** folga em `{dia_dele_tf.strftime('%d/%m/%Y')}` ({tipo_dele_tf}) → passa a folgar em `{meu_dia_tf.strftime('%d/%m/%Y')}`
-                            """)
-
-                            if st.button("📅 SOLICITAR TROCA DE FOLGA", use_container_width=True, key="btn_tf"):
-                                id_dest_tf = dados_mil_tf['id']
+                        # Verificar que o novo dia não é já folga
+                        tipo_novo = militar_de_folga(u_id, novo_dia_tf, df_folgas_tf, grupos_tf, feriados)
+                        if tipo_novo:
+                            st.warning(f"Já estás de {tipo_novo} nesse dia.")
+                        else:
+                            st.info(f"📋 Mover folga de **{meu_dia_tf.strftime('%d/%m/%Y')}** ({meu_tipo_tf}) para **{novo_dia_tf.strftime('%d/%m/%Y')}**")
+                            if st.button("📅 SOLICITAR MUDANÇA DE FOLGA", use_container_width=True, key="btn_tf"):
                                 serv_orig_tf = f"Folga {meu_dia_tf.strftime('%d/%m/%Y')} ({meu_tipo_tf})"
-                                serv_dest_tf = f"Folga {dia_dele_tf.strftime('%d/%m/%Y')} ({tipo_dele_tf})"
-                                if salvar_troca_gsheet([meu_dia_tf.strftime('%d/%m/%Y'), u_id, serv_orig_tf, id_dest_tf, serv_dest_tf, "Pendente_Admin", ""]):
+                                serv_dest_tf = f"Folga {novo_dia_tf.strftime('%d/%m/%Y')} ({meu_tipo_tf})"
+                                if salvar_troca_gsheet([meu_dia_tf.strftime('%d/%m/%Y'), u_id, serv_orig_tf, u_id, serv_dest_tf, "Pendente_Admin", ""]):
                                     st.success("✅ Pedido enviado para validação!")
 
         # --- 📥 PEDIDOS RECEBIDOS ---
