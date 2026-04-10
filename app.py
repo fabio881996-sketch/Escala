@@ -4818,7 +4818,7 @@ else:
                             try:
                                 sh_g = get_sheet()
 
-                                # Aplicar horários das abreviaturas no df_editado
+                                # Aplicar horários das abreviaturas no df_editado ANTES de calcular slots
                                 _abrev_hor = {
                                     'A1': ('Atendimento', '00-08'),
                                     'A2': ('Atendimento', '08-16'),
@@ -4838,7 +4838,7 @@ else:
                                         if not hor_ab or hor_ab == 'nan':
                                             df_editado.at[idx_ab, 'horário'] = hor_real
 
-                                # Indisponíveis = quem já tem serviço preenchido
+                                # Indisponíveis = quem já tem serviço preenchido (após converter abreviaturas)
                                 ids_indisponiveis = set()
                                 for _, row_e in df_editado.iterrows():
                                     mid = str(row_e['id']).strip()
