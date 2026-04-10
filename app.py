@@ -2354,7 +2354,7 @@ else:
                     else:
                         st.info("Não encontrei serviços para os próximos dias.")
 
-            with st.expander("🏖️ Exportar Mapa de Folgas (.ics)", expanded=False):
+            with st.expander("🏖️ Exportar Mapa de Folgas", expanded=False):
                 st.caption("Gera um ficheiro .ics com todas as tuas folgas do ano.")
                 if st.button("📥 Gerar mapa de folgas", use_container_width=True, key="btn_ics_folgas"):
                     with st.spinner("A calcular folgas..."):
@@ -3105,7 +3105,7 @@ else:
 
                         # Exportar férias para calendário
                         st.markdown("---")
-                        with st.expander("📆 Exportar Mapa de Férias (.ics)", expanded=False):
+                        with st.expander("📆 Exportar Mapa de Férias", expanded=False):
                             st.caption("Gera um ficheiro .ics com as tuas férias para importar no calendário.")
                             if st.button("📥 Gerar mapa de férias", use_container_width=True, key="btn_ics_ferias"):
                                 ics_fer = ["BEGIN:VCALENDAR","VERSION:2.0",
