@@ -2247,6 +2247,9 @@ else:
                 col_exp1, col_exp2 = st.columns(2)
                 with col_exp1:
                     dias_exp = st.slider("Dias a incluir:", 7, 90, 30)
+                with col_exp2:
+                    incl_folgas_exp = st.checkbox("Incluir folgas", value=True, key="exp_incl_folgas")
+                    incl_ferias_exp = st.checkbox("Incluir férias", value=True, key="exp_incl_ferias")
                 if st.button("📥 Gerar ficheiro .ics", use_container_width=True):
                     ics_lines = [
                         "BEGIN:VCALENDAR",
@@ -2282,6 +2285,12 @@ else:
                             hor_exp  = str(row_exp.get('horário', '')).strip()
                             obs_exp  = str(row_exp.get('observações', '')).strip()
                             if not serv_exp:
+                                continue
+                            # Filtrar folgas e férias conforme opção do utilizador
+                            s_n_skip = norm(serv_exp)
+                            if not incl_folgas_exp and any(x in s_n_skip for x in ['folga']):
+                                continue
+                            if not incl_ferias_exp and any(x in s_n_skip for x in ['ferias']):
                                 continue
 
                             # Emoji por tipo de serviço
@@ -3080,31 +3089,8 @@ else:
                             dc = (fim_ext - ini_d).days + 1
                             periodos_ft.append((ini_d, fim_d, du, dc))
                         total_du_ft = sum(p[2] for p in periodos_ft)
-                        st.markdown(
-                            f'<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:12px;'
-                            f'padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
-                            f'<div><div style="font-size:0.8rem;color:#065F46;font-weight:600">PLANO DE FÉRIAS {ano_tf}</div>'
-                            f'<div style="font-size:1.1rem;font-weight:800;color:#064E3B">{u_nome}</div></div>'
-                            f'<div style="text-align:right"><div style="font-size:1.8rem;font-weight:900;color:#059669">{total_du_ft}</div>'
-                            f'<div style="font-size:0.75rem;color:#065F46">dias úteis</div></div></div>',
-                            unsafe_allow_html=True
-                        )
-                        for i, (ini_d, fim_d, du, dc) in enumerate(periodos_ft, 1):
-                            st.markdown(
-                                f'<div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:10px;'
-                                f'padding:14px 18px;margin-bottom:10px">'
-                                f'<div style="font-size:0.72rem;color:#16A34A;font-weight:700;margin-bottom:6px">PERÍODO {i}</div>'
-                                f'<div style="font-size:1rem;font-weight:700;color:#14532D">🏖️ {fmt_data_f(ini_d)}</div>'
-                                f'<div style="font-size:0.85rem;color:#166534;margin:2px 0 10px 0">até {fmt_data_f(fim_d)}</div>'
-                                f'<div style="display:flex;gap:10px;flex-wrap:wrap">'
-                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">📅 {dc} dias corridos</span>'
-                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">💼 {du} dias úteis</span>'
-                                f'</div></div>',
-                                unsafe_allow_html=True
-                            )
 
-                        # Exportar férias para calendário
-                        st.markdown("---")
+                        # Exportar férias para calendário — em cima
                         with st.expander("📆 Exportar Mapa de Férias", expanded=False):
                             st.caption("Gera um ficheiro .ics com as tuas férias para importar no calendário.")
                             if st.button("📥 Gerar mapa de férias", use_container_width=True, key="btn_ics_ferias"):
@@ -3130,6 +3116,31 @@ else:
                                     use_container_width=True,
                                     key="dl_ferias_ics"
                                 )
+                        st.markdown("---")
+                        total_du_ft = sum(p[2] for p in periodos_ft)
+                        st.markdown(
+                            f'<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border-radius:12px;'
+                            f'padding:16px 20px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center">'
+                            f'<div><div style="font-size:0.8rem;color:#065F46;font-weight:600">PLANO DE FÉRIAS {ano_tf}</div>'
+                            f'<div style="font-size:1.1rem;font-weight:800;color:#064E3B">{u_nome}</div></div>'
+                            f'<div style="text-align:right"><div style="font-size:1.8rem;font-weight:900;color:#059669">{total_du_ft}</div>'
+                            f'<div style="font-size:0.75rem;color:#065F46">dias úteis</div></div></div>',
+                            unsafe_allow_html=True
+                        )
+                        for i, (ini_d, fim_d, du, dc) in enumerate(periodos_ft, 1):
+                            st.markdown(
+                                f'<div style="background:#F0FDF4;border-left:4px solid #16A34A;border-radius:10px;'
+                                f'padding:14px 18px;margin-bottom:10px">'
+                                f'<div style="font-size:0.72rem;color:#16A34A;font-weight:700;margin-bottom:6px">PERÍODO {i}</div>'
+                                f'<div style="font-size:1rem;font-weight:700;color:#14532D">🏖️ {fmt_data_f(ini_d)}</div>'
+                                f'<div style="font-size:0.85rem;color:#166534;margin:2px 0 10px 0">até {fmt_data_f(fim_d)}</div>'
+                                f'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">📅 {dc} dias corridos</span>'
+                                f'<span style="font-size:0.78rem;background:#DCFCE7;color:#15803D;padding:3px 10px;border-radius:12px;font-weight:600">💼 {du} dias úteis</span>'
+                                f'</div></div>',
+                                unsafe_allow_html=True
+                            )
+
     elif menu == "📊 Estatísticas":
         st.title("📊 Estatísticas de Serviço")
 
