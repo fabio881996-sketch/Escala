@@ -4855,7 +4855,10 @@ else:
                                     try:
                                         ws_ordem_g = sh_g.worksheet(aba_ordem_ant)
                                     except:
-                                        st.error("Não encontrei ordem_escala.")
+                                        # Listar abas disponíveis para debug
+                                        abas_disp = [ws.title for ws in sh_g.worksheets()]
+                                        abas_ord = [a for a in abas_disp if 'ordem' in a.lower()]
+                                        st.error(f"Não encontrei ordem_escala. A procurar: '{aba_ordem}' ou '{aba_ordem_ant}'. Abas ordem disponíveis: {abas_ord}")
                                         st.stop()
 
                                 ordem_vals_g = ws_ordem_g.get_all_values()
