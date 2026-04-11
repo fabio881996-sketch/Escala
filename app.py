@@ -479,7 +479,7 @@ linha = df_folgas[df_folgas[col_id].astype(str).str.strip() == str(mid).strip()]
 if linha.empty: return ''
 row = linha.iloc[0]
 
-# Verificar exceções individuais — formato: "06-04(Folga Semanal)→09-04;..."
+# Verificar exceções individuais -- formato: "06-04(Folga Semanal)→09-04;..."
 excecoes_str = str(row.get('exceções', '') or row.get('excecoes', '')).strip()
 if excecoes_str and excecoes_str != 'nan':
     for exc in re.split(r'[;]+', excecoes_str):
@@ -492,7 +492,7 @@ if excecoes_str and excecoes_str != 'nan':
             if dia_novo == aba:
                 return tipo_exc  # novo dia de folga
             if dia_orig == aba:
-                return ''  # dia original foi movido — não folga aqui
+                return ''  # dia original foi movido -- não folga aqui
 
 # Verificar FDS
 fds = str(row.get('fds', '')).strip().lower()
@@ -917,7 +917,7 @@ aba.update_cell(row, 6, novo_status)
                         return None
 
                     if id_o == id_d:
-                        # Mudança de folga — guardar exceção na coluna 'exceções' do folgas_2026
+                        # Mudança de folga -- guardar exceção na coluna 'exceções' do folgas_2026
                         # Determinar tipo da folga original
                         tipo_orig = ''
                         m_tipo = re.search(r'\(([^)]+)\)', serv_o)
@@ -939,7 +939,7 @@ aba.update_cell(row, 6, novo_status)
                                     ws_f.update(f'{cl_exc}{i_f}', [[nova_lista]])
                                     break
                     else:
-                        # Troca entre dois militares — lógica original
+                        # Troca entre dois militares -- lógica original
                         def _trocar_dia_grupo(mid_from, dia_from, mid_to, dia_to):
                             grp_from = _get_grupo(mid_from)
                             grp_to   = _get_grupo(mid_to)
@@ -1003,7 +1003,7 @@ _SLOTS_AUTO = {
 def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
 “””
 Atualiza o ordem_escala do dia seguinte com base no que ficou escalado no aba_dia.
-- Parte SEMPRE do ordem_escala do próprio dia (imutável — criado ao confirmar o anterior)
+- Parte SEMPRE do ordem_escala do próprio dia (imutável – criado ao confirmar o anterior)
 - Move para o fim TODOS os militares escalados nos slots auto
 - Grava como ordem_escala do dia seguinte (sobrescreve se já existir)
 “””
@@ -1055,7 +1055,7 @@ aba_ord_ant = f”ordem_escala {(d_gerar - timedelta(days=1)).strftime(’%d-%m�
             if mid:
                 escalados_por_slot.setdefault(col_key, []).append(mid)
 
-    # Mover escalados para o fim da fila — por slot
+    # Mover escalados para o fim da fila -- por slot
     for col_key, mids in escalados_por_slot.items():
         if col_key not in ordem:
             continue
@@ -3139,7 +3139,7 @@ if menu == "📅 Minha Escala":
                         periodos_ft.append((ini_d, fim_d, du, dc))
                     total_du_ft = sum(p[2] for p in periodos_ft)
 
-                    # Exportar férias para calendário — em cima
+                    # Exportar férias para calendário -- em cima
                     with st.expander("📆 Exportar Mapa de Férias", expanded=False):
                         st.caption("Gera um ficheiro .ics com as tuas férias para importar no calendário.")
                         if st.button("📥 Gerar mapa de férias", use_container_width=True, key="btn_ics_ferias"):
@@ -4774,7 +4774,7 @@ elif menu == "⚙️ Gerar Escala":
                 return _abrev_norm.get(chave_norm, serv)
             df_edit_abrev = df_edit.copy()
             df_edit_abrev['serviço'] = df_edit.apply(lambda r: _to_abrev(str(r['serviço']).strip(), str(r['horário']).strip()), axis=1)
-            # Não limpar horário — fica visível para edição
+            # Não limpar horário -- fica visível para edição
 
             if pesq.strip():
                 mask_pesq = (
@@ -4996,7 +4996,7 @@ elif menu == "⚙️ Gerar Escala":
                                         pass
                                     else:
                                         if mid not in novas_linhas:
-                                            continue  # não está na tabela do dia — saltar
+                                            continue  # não está na tabela do dia -- saltar
                                         colocados.append(mid)
                                         ids_escalados_g.add(mid)
 
