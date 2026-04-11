@@ -412,9 +412,9 @@ def militar_de_licenca(mid: str, data, df_licencas: pd.DataFrame) -> str:
             continue
     return ''
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=300)
 def load_folgas(ano: int) -> pd.DataFrame:
-    """Carrega aba folgas_YYYY -- id, fds, grupo."""
+    """Carrega aba folgas_YYYY -- id, fds, grupo, serviço, exceções."""
     try:
         sh = get_sheet()
         if sh is None: return pd.DataFrame()
@@ -4640,6 +4640,15 @@ else:
                     # Dados existentes, dispensas, folgas, serviço por defeito ou vazio
                     if mid in mapa_existente:
                         dados = mapa_existente[mid]
+                        # Se já existe mas sem serviço, aplicar serviço por defeito
+                        if not str(dados.get('serviço','')).strip() or str(dados.get('serviço','')).strip() == 'nan':
+                            if not df_folgas.empty and 'serviço' in df_folgas.columns:
+                                col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
+                                if not linha_f.empty:
+                                    sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
+                                    if sv_f and sv_f != 'nan':
+                                        dados = {**dados, 'serviço': sv_f}
                     else:
                         tipo_lic = militar_de_licenca(mid, d_gerar, df_licencas)
                         if tipo_lic:
