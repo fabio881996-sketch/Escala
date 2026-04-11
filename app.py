@@ -4683,6 +4683,13 @@ else:
                         if tipo_folga:
                             dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
+                            # Debug — guardar info para o primeiro militar sem folga
+                            if 'debug_folga' not in st.session_state:
+                                col_id_dbg = 'id' if 'id' in df_folgas.columns else (df_folgas.columns[0] if not df_folgas.empty else 'id')
+                                linha_dbg = df_folgas[df_folgas[col_id_dbg].astype(str).str.strip() == mid] if not df_folgas.empty else pd.DataFrame()
+                                grp_dbg = str(linha_dbg.iloc[0].get('grupo','')) if not linha_dbg.empty else 'nao_encontrado'
+                                aba_dbg = d_gerar.strftime('%d-%m')
+                                st.session_state['debug_folga'] = f"mid:{mid} grupo:{grp_dbg} aba:{aba_dbg} grupos_keys:{list(grupos_folga.keys())} cols:{list(df_folgas.columns) if not df_folgas.empty else []}"
                             # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
                             serv_defeito = ''
                             if not df_folgas.empty and 'serviço' in df_folgas.columns:
@@ -4713,6 +4720,9 @@ else:
                 linhas = st.session_state['tabela_escala']
 
 
+
+                if 'debug_folga' in st.session_state:
+                    st.warning(f"🔍 Folga debug: {st.session_state.pop('debug_folga')}")
 
                 st.markdown(f"**{len(linhas)} militares -- {d_gerar.strftime('%d/%m/%Y')}**")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
