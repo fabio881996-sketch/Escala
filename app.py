@@ -4678,6 +4678,11 @@ else:
             if 'tabela_escala' in st.session_state and st.session_state.get('tabela_dia') == aba_dia:
                 linhas = st.session_state['tabela_escala']
 
+                if 'debug_a1' in st.session_state:
+                    st.warning(f"🔍 A1 debug: {st.session_state.pop('debug_a1')}")
+                if 'debug_slots' in st.session_state:
+                    st.info(f"🔍 Slots: {st.session_state.pop('debug_slots')}")
+
                 st.markdown(f"**{len(linhas)} militares -- {d_gerar.strftime('%d/%m/%Y')}**")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
@@ -4900,8 +4905,7 @@ else:
                                         SLOTS_AJUSTADOS.append((sv_s, hr_s, vagas))
 
                                 # Debug
-                                st.info(f"🔍 Slots preenchidos: {slots_preenchidos_g}")
-                                st.info(f"🔍 SLOTS_AJUSTADOS: {SLOTS_AJUSTADOS}")
+                                st.session_state['debug_slots'] = f"Preenchidos: {slots_preenchidos_g} | Ajustados: {SLOTS_AJUSTADOS}"
 
                                 ids_escalados_g = set()
                                 novas_linhas = {str(row_e['id']): dict(row_e) for _, row_e in df_editado.iterrows()}
@@ -4937,7 +4941,7 @@ else:
                                             colocados.append(mid)
                                             ids_escalados_g.add(mid)
                                     if servico == "Atendimento" and horario == "00-08":
-                                        st.info(f"🔍 A1 fila: {ordem_g[col_key][:8]} | colocados: {colocados} | saltados: {_debug_a1[:5]}")
+                                        st.session_state['debug_a1'] = f"fila: {ordem_g[col_key][:8]} | colocados: {colocados} | saltados: {_debug_a1[:5]}"
 
                                     for mid in colocados:
                                         if mid not in novas_linhas:
