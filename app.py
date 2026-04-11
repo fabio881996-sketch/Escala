@@ -11,7 +11,7 @@ import hashlib
 import secrets
 
 def norm(t):
-“”“Normaliza texto para comparação – remove acentos e coloca em minúsculas.”””
+”””Normaliza texto para comparação – remove acentos e coloca em minúsculas.”””
 return unicodedata.normalize(‘NFKD’, str(t).lower()).encode(‘ascii’, ‘ignore’).decode(‘ascii’)
 
 def hash_pin(pin: str, salt: str = None):
