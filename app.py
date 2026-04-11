@@ -4938,16 +4938,14 @@ else:
                                         if motivo:
                                             _debug_a1.append(f"{mid}:{motivo}")
                                         else:
+                                            if mid not in novas_linhas:
+                                                continue  # não está na tabela do dia — saltar
                                             colocados.append(mid)
                                             ids_escalados_g.add(mid)
                                     if servico == "Atendimento" and horario == "00-08":
                                         st.session_state['debug_a1'] = f"fila: {ordem_g[col_key][:8]} | colocados: {colocados} | saltados: {_debug_a1[:5]}"
 
                                     for mid in colocados:
-                                        if mid not in novas_linhas:
-                                            if servico == "Atendimento" and horario == "00-08":
-                                                st.session_state['debug_a1'] += f" | {mid} NAO em novas_linhas! chaves: {list(novas_linhas.keys())[:5]}"
-                                            continue
                                         novas_linhas[mid]['serviço'] = servico
                                         novas_linhas[mid]['horário'] = horario
                                         if servico == 'Patrulha Ocorrências':
