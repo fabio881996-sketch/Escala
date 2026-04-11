@@ -1809,10 +1809,13 @@ def filtrar_secao(keys: list, df_f: pd.DataFrame) -> tuple:
     return df_f[mask].copy(), df_f[~mask].copy()
 
 def _limpar_sem_militar(df: pd.DataFrame) -> pd.DataFrame:
-    """Remove linhas onde id está vazio -- serviços sem militar escalado."""
-    if 'id' not in df.columns:
+    """Remove linhas onde id ou serviço está vazio -- serviços sem militar escalado."""
+    if df.empty:
         return df
-    return df[df['id'].astype(str).str.strip().str.len() > 0].copy()
+    mask = df['id'].astype(str).str.strip().str.len() > 0 if 'id' in df.columns else pd.Series([True]*len(df))
+    if 'serviço' in df.columns:
+        mask = mask & (df['serviço'].astype(str).str.strip().str.len() > 0)
+    return df[mask].copy()
 
 def _cel_expandivel(val: str, limite: int = 60) -> str:
     """Renderiza texto diretamente sem truncar."""
