@@ -4888,13 +4888,9 @@ else:
                                 for _, row_e in df_editado.iterrows():
                                     sv_e = str(row_e['serviço']).strip()
                                     hr_e = str(row_e['horário']).strip()
-                                    if sv_e and sv_e != 'nan' and hr_e:
+                                    if sv_e and sv_e != 'nan' and hr_e and hr_e != 'nan':
                                         chave_s = (norm(sv_e), hr_e)
                                         slots_preenchidos_g[chave_s] = slots_preenchidos_g.get(chave_s, 0) + 1
-
-                                # Debug — mostrar o que está preenchido
-                                st.info(f"🔍 Slots preenchidos: {slots_preenchidos_g}")
-                                st.info(f"🔍 SLOTS_AJUSTADOS: {SLOTS_AJUSTADOS}")
 
                                 SLOTS_AJUSTADOS = []
                                 for sv_s, hr_s, num_s in SLOTS:
@@ -4902,6 +4898,10 @@ else:
                                     vagas = max(0, num_s - ja)
                                     if vagas > 0:
                                         SLOTS_AJUSTADOS.append((sv_s, hr_s, vagas))
+
+                                # Debug
+                                st.info(f"🔍 Slots preenchidos: {slots_preenchidos_g}")
+                                st.info(f"🔍 SLOTS_AJUSTADOS: {SLOTS_AJUSTADOS}")
 
                                 ids_escalados_g = set()
                                 novas_linhas = {str(row_e['id']): dict(row_e) for _, row_e in df_editado.iterrows()}
