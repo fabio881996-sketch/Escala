@@ -4945,6 +4945,8 @@ else:
 
                                     for mid in colocados:
                                         if mid not in novas_linhas:
+                                            if servico == "Atendimento" and horario == "00-08":
+                                                st.session_state['debug_a1'] += f" | {mid} NAO em novas_linhas! chaves: {list(novas_linhas.keys())[:5]}"
                                             continue
                                         novas_linhas[mid]['serviço'] = servico
                                         novas_linhas[mid]['horário'] = horario
