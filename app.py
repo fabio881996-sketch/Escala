@@ -4910,22 +4910,34 @@ else:
                                     col_key = f"{servico} {horario}"
                                     if col_key not in ordem_g:
                                         if servico == "Atendimento" and horario == "00-08":
-                                            st.warning(f"⚠️ Coluna '{col_key}' não encontrada na ordem_escala. Colunas disponíveis: {list(ordem_g.keys())}")
+                                            st.warning(f"⚠️ A1: coluna '{col_key}' não existe. Colunas: {list(ordem_g.keys())}")
                                         continue
                                     colocados = []
-                                    _debug_skip = []
+                                    _debug_a1 = []
                                     for mid in ordem_g[col_key]:
                                         if len(colocados) >= num: break
-                                        if mid in ids_indisponiveis or mid in ids_escalados_g:
-                                            _debug_skip.append(f"{mid}:indisponivel")
-                                            continue
-                                        if servico not in militares_servicos.get(mid, []):
-                                            _debug_skip.append(f"{mid}:sem_servico({militares_servicos.get(mid,[])})")
-                                            continue
-                                        colocados.append(mid)
-                                        ids_escalados_g.add(mid)
-                                    if not colocados and servico == "Atendimento" and horario == "00-08":
-                                        st.warning(f"⚠️ A1 não escalado. Fila: {ordem_g[col_key][:5]}. Saltados: {_debug_skip[:5]}")
+                                        motivo = None
+                                        if mid in ids_indisponiveis: motivo = 'indisponivel'
+                                        elif mid in ids_escalados_g: motivo = 'ja_escalado'
+                                        elif servico not in militares_servicos.get(mid, []): motivo = f'sem_servico:{militares_servicos.get(mid,[])}'
+                                        else:
+                                            if not df_ant_g2.empty:
+                                                rows_ant = df_ant_g2[df_ant_g2['id'].astype(str).str.strip() == mid]
+                                                ini_novo, _ = _parse_horario(horario)
+                                                ok = True
+                                                for _, r_ant in rows_ant.iterrows():
+                                                    _, fim_ant = _parse_horario(str(r_ant.get('horário','')))
+                                                    if fim_ant and ini_novo is not None:
+                                                        if (1440 - fim_ant) + ini_novo < 480:
+                                                            ok = False; break
+                                                if not ok: motivo = 'descanso'
+                                        if motivo:
+                                            _debug_a1.append(f"{mid}:{motivo}")
+                                        else:
+                                            colocados.append(mid)
+                                            ids_escalados_g.add(mid)
+                                    if servico == "Atendimento" and horario == "00-08":
+                                        st.info(f"🔍 A1 fila: {ordem_g[col_key][:8]} | colocados: {colocados} | saltados: {_debug_a1[:5]}")
 
                                     for mid in colocados:
                                         if mid not in novas_linhas:
