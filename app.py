@@ -4685,13 +4685,15 @@ else:
                         if tipo_folga:
                             dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            # Debug — guardar info para o primeiro militar sem folga
+                            # Debug — só para militares com grupo mas sem folga
                             if 'debug_folga' not in st.session_state:
                                 col_id_dbg = 'id' if 'id' in df_folgas.columns else (df_folgas.columns[0] if not df_folgas.empty else 'id')
                                 linha_dbg = df_folgas[df_folgas[col_id_dbg].astype(str).str.strip() == mid] if not df_folgas.empty else pd.DataFrame()
-                                grp_dbg = str(linha_dbg.iloc[0].get('grupo','')) if not linha_dbg.empty else 'nao_encontrado'
-                                aba_dbg = d_gerar.strftime('%d-%m')
-                                st.session_state['debug_folga'] = f"mid:{mid} grupo:{grp_dbg} aba:{aba_dbg} grupos_keys:{list(grupos_folga.keys())} cols:{list(df_folgas.columns) if not df_folgas.empty else []}"
+                                grp_dbg = str(linha_dbg.iloc[0].get('grupo','')) if not linha_dbg.empty else ''
+                                if grp_dbg:  # só debug se tem grupo
+                                    aba_dbg = d_gerar.strftime('%d-%m')
+                                    dias_grp = grupos_folga.get(grp_dbg, {})
+                                    st.session_state['debug_folga'] = f"mid:{mid} grupo:{grp_dbg} aba:{aba_dbg} dias_grupo:{dias_grp}"
                             # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
                             serv_defeito = ''
                             if not df_folgas.empty and 'serviço' in df_folgas.columns:
