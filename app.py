@@ -423,6 +423,16 @@ def load_folgas(ano: int) -> pd.DataFrame:
         if not vals or len(vals) < 2: return pd.DataFrame()
         hdrs = [h.strip() for h in vals[0]]
         df = pd.DataFrame(vals[1:], columns=hdrs)
+        # Normalizar nomes de colunas — garantir que 'serviço' e 'exceções' são reconhecidos
+        rename_map = {}
+        for col in df.columns:
+            col_n = col.strip().lower()
+            if col_n in ('servico', 'serviço', 'service'): rename_map[col] = 'serviço'
+            elif col_n in ('excecoes', 'exceções', 'exceçoes'): rename_map[col] = 'exceções'
+            elif col_n in ('grupo', 'group'): rename_map[col] = 'grupo'
+            elif col_n in ('fds',): rename_map[col] = 'fds'
+        if rename_map:
+            df = df.rename(columns=rename_map)
         return df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
     except:
         return pd.DataFrame()
