@@ -4666,9 +4666,12 @@ else:
                     # Dados existentes, folgas, serviço por defeito ou vazio
                     if mid in mapa_existente:
                         dados = mapa_existente[mid]
-                        # Se já existe mas sem serviço, aplicar serviço por defeito
+                        # Se já existe mas sem serviço, verificar folgas e serviço por defeito
                         if not str(dados.get('serviço','')).strip() or str(dados.get('serviço','')).strip() == 'nan':
-                            if not df_folgas.empty and 'serviço' in df_folgas.columns:
+                            tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
+                            if tipo_folga:
+                                dados = {**dados, 'serviço': tipo_folga}
+                            elif not df_folgas.empty and 'serviço' in df_folgas.columns:
                                 col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
                                 linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
                                 if not linha_f.empty:
