@@ -4730,8 +4730,24 @@ else:
 
 
 
+                # Debug folgas — mostrar quem devia ter folga neste dia
+                if grupos_folga and not df_folgas.empty:
+                    _devia_folgar = []
+                    col_id_dbg2 = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                    aba_dbg2 = d_gerar.strftime('%d-%m')
+                    for _, row_dbg in df_folgas.iterrows():
+                        mid_dbg = str(row_dbg.get(col_id_dbg2, '')).strip()
+                        grp_dbg = str(row_dbg.get('grupo', '')).strip()
+                        if grp_dbg and grp_dbg in grupos_folga:
+                            for tipo_d, dias_d in grupos_folga[grp_dbg].items():
+                                if aba_dbg2 in dias_d:
+                                    _devia_folgar.append(f"{mid_dbg}({grp_dbg}:{tipo_d})")
+                    st.session_state['debug_folga2'] = f"Devia folgar em {aba_dbg2}: {_devia_folgar}"
+
                 if 'debug_folga' in st.session_state:
                     st.warning(f"🔍 Folga debug: {st.session_state.pop('debug_folga')}")
+                if 'debug_folga2' in st.session_state:
+                    st.info(f"🔍 {st.session_state.pop('debug_folga2')}")
 
                 st.markdown(f"**{len(linhas)} militares -- {d_gerar.strftime('%d/%m/%Y')}**")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
