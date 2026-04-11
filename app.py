@@ -4637,19 +4637,20 @@ else:
                     # Filtrar militares de férias (não mostrar na tabela)
                     if militar_de_ferias(mid, d_gerar, df_ferias, feriados):
                         continue
-                    # Dados existentes, licenças, folgas, serviço por defeito ou vazio
+                    # Dados existentes, dispensas, folgas, serviço por defeito ou vazio
                     if mid in mapa_existente:
                         dados = mapa_existente[mid]
                     else:
                         tipo_lic = militar_de_licenca(mid, d_gerar, df_licencas)
                         if tipo_lic:
-                            dados = {'serviço': tipo_lic, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                            # Dispensas — excluir da tabela (como férias)
+                            continue
                         else:
                             tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
                             if tipo_folga:
                                 dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                             else:
-                                # Serviço por defeito da coluna 'serviço' em folgas_2026
+                                # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
                                 serv_defeito = ''
                                 if not df_folgas.empty and 'serviço' in df_folgas.columns:
                                     col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
