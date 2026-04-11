@@ -5047,7 +5047,18 @@ elif menu == "⚙️ Gerar Escala":
                             ix_giro_c = hdrs_c.index('giro') if 'giro' in hdrs_c else None
                             ix_obs_c  = hdrs_c.index('observações') if 'observações' in hdrs_c else (hdrs_c.index('observacoes') if 'observacoes' in hdrs_c else None)
 
-                            # Construir mapa de edições -- só militares com serviço preenchido
+                            # Limpar todas as células de serviço/horário/etc da aba (exceto cabeçalho e IDs)
+                            n_rows = len(todas_linhas_c)
+                            limpar_upds = []
+                            for ix_clear in [ix_serv_c, ix_hor_c, ix_ind_c, ix_rad_c, ix_giro_c, ix_obs_c]:
+                                if ix_clear is not None:
+                                    cl = chr(ord('A') + ix_clear)
+                                    for r in range(2, n_rows + 1):
+                                        limpar_upds.append({'range': f'{cl}{r}', 'values': [['']]})
+                            if limpar_upds:
+                                ws_dia_c.batch_update(limpar_upds)
+
+                            # Construir mapa de edições -- todos os militares com serviço
                             edit_map = {}
                             for _, row_e in df_editado.iterrows():
                                 mid_e = str(row_e['id']).strip()
