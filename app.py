@@ -4671,11 +4671,16 @@ else:
                         # Se já existe mas sem serviço, verificar folgas e serviço por defeito
                         if not str(dados.get('serviço','')).strip() or str(dados.get('serviço','')).strip() == 'nan':
                             tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
+                            if not tipo_folga:
+                                # Tentar com ID sem zeros à esquerda
+                                mid_alt = str(int(mid)) if mid.isdigit() else mid
+                                tipo_folga = militar_de_folga(mid_alt, d_gerar, df_folgas, grupos_folga, feriados)
                             if tipo_folga:
                                 dados = {**dados, 'serviço': tipo_folga}
                             elif not df_folgas.empty and 'serviço' in df_folgas.columns:
                                 col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
+                                mid_alt = str(int(mid)) if mid.isdigit() else mid
+                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip().apply(lambda x: str(int(x)) if x.isdigit() else x) == mid_alt]
                                 if not linha_f.empty:
                                     sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
                                     if sv_f and sv_f != 'nan':
