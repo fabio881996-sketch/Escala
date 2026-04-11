@@ -4634,10 +4634,12 @@ else:
                         continue
                     nome  = str(row_u.get('nome', '')).strip()
                     posto = str(row_u.get('posto', '')).strip()
-                    # Filtrar militares de férias (não mostrar na tabela)
+                    # Filtrar militares de férias e dispensas (não mostrar na tabela)
                     if militar_de_ferias(mid, d_gerar, df_ferias, feriados):
                         continue
-                    # Dados existentes, dispensas, folgas, serviço por defeito ou vazio
+                    if militar_de_licenca(mid, d_gerar, df_licencas):
+                        continue
+                    # Dados existentes, folgas, serviço por defeito ou vazio
                     if mid in mapa_existente:
                         dados = mapa_existente[mid]
                         # Se já existe mas sem serviço, aplicar serviço por defeito
@@ -4650,24 +4652,19 @@ else:
                                     if sv_f and sv_f != 'nan':
                                         dados = {**dados, 'serviço': sv_f}
                     else:
-                        tipo_lic = militar_de_licenca(mid, d_gerar, df_licencas)
-                        if tipo_lic:
-                            # Dispensas — excluir da tabela (como férias)
-                            continue
+                        tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
+                        if tipo_folga:
+                            dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
-                            if tipo_folga:
-                                dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
-                            else:
-                                # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
-                                serv_defeito = ''
-                                if not df_folgas.empty and 'serviço' in df_folgas.columns:
-                                    col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-                                    linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
-                                    if not linha_f.empty:
-                                        sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
-                                        if sv_f and sv_f != 'nan': serv_defeito = sv_f
-                                dados = {'serviço': serv_defeito, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                            # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
+                            serv_defeito = ''
+                            if not df_folgas.empty and 'serviço' in df_folgas.columns:
+                                col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
+                                if not linha_f.empty:
+                                    sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
+                                    if sv_f and sv_f != 'nan': serv_defeito = sv_f
+                            dados = {'serviço': serv_defeito, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
 
                     linhas.append({
                         'id': mid,
@@ -4813,15 +4810,22 @@ else:
                             sv_l = str(row_l.get('serviço', '')).strip().lower()
                             mid_l = str(row_l.get('id', '')).strip()
                             if sv_l in _serv_manter:
-                                # já tem folga/férias -- manter
                                 linhas_limpas.append(row_l)
                             else:
-                                # Recalcular folga para este militar
+                                # Recalcular folga
                                 tipo_folga_l = militar_de_folga(mid_l, d_gerar, df_folgas, grupos_folga, feriados)
                                 if tipo_folga_l:
                                     linhas_limpas.append({**row_l, 'serviço': tipo_folga_l, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
                                 else:
-                                    linhas_limpas.append({**row_l, 'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
+                                    # Repor serviço por defeito (Pronto, Inquéritos, etc.)
+                                    serv_def_l = ''
+                                    if not df_folgas.empty and 'serviço' in df_folgas.columns:
+                                        col_id_fl = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                                        linha_fl = df_folgas[df_folgas[col_id_fl].astype(str).str.strip() == mid_l]
+                                        if not linha_fl.empty:
+                                            sv_fl = str(linha_fl.iloc[0].get('serviço', '')).strip()
+                                            if sv_fl and sv_fl != 'nan': serv_def_l = sv_fl
+                                    linhas_limpas.append({**row_l, 'serviço': serv_def_l, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
                         st.session_state['tabela_escala'] = linhas_limpas
                         st.session_state.pop('ordem_gerada', None)
                         st.rerun()
