@@ -468,7 +468,9 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
     data_date = data if hasattr(data, 'weekday') else datetime.strptime(str(data), '%d-%m').replace(year=datetime.now().year)
 
     col_id = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-    linha = df_folgas[df_folgas[col_id].astype(str).str.strip() == str(mid).strip()]
+    # Comparar IDs sem zeros à esquerda e sem espaços
+    mid_norm = str(mid).strip().lstrip('0') or '0'
+    linha = df_folgas[df_folgas[col_id].astype(str).str.strip().str.lstrip('0').apply(lambda x: x or '0') == mid_norm]
     if linha.empty: return ''
     row = linha.iloc[0]
 
