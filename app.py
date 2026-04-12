@@ -5036,23 +5036,11 @@ else:
                                 ix_giro_c = hdrs_c.index('giro') if 'giro' in hdrs_c else None
                                 ix_obs_c  = hdrs_c.index('observações') if 'observações' in hdrs_c else (hdrs_c.index('observacoes') if 'observacoes' in hdrs_c else None)
 
-                                # Limpar todas as células de serviço/horário/etc da aba (exceto cabeçalho e IDs)
-                                n_rows = len(todas_linhas_c)
-                                limpar_upds = []
-                                for ix_clear in [ix_serv_c, ix_hor_c, ix_ind_c, ix_rad_c, ix_giro_c, ix_obs_c]:
-                                    if ix_clear is not None:
-                                        cl = chr(ord('A') + ix_clear)
-                                        for r in range(2, n_rows + 1):
-                                            limpar_upds.append({'range': f'{cl}{r}', 'values': [['']]})
-                                if limpar_upds:
-                                    ws_dia_c.batch_update(limpar_upds)
-
-                                # Construir mapa de edições -- todos os militares com serviço
+                                # Construir mapa mid → dados
                                 edit_map = {}
                                 for _, row_e in df_editado.iterrows():
                                     mid_e = str(row_e['id']).strip()
-                                    sv_e  = str(row_e.get('serviço','')).strip()
-                                    if mid_e and sv_e and sv_e != 'nan':
+                                    if mid_e and mid_e != 'nan':
                                         edit_map[mid_e] = row_e
 
                                 upds_c = []
@@ -5061,38 +5049,44 @@ else:
                                     if not mid_c or mid_c == 'nan':
                                         continue
                                     ids_c = [m.strip() for m in re.split(r'[;,]', mid_c) if m.strip()]
-                                    # Só atualizar se TODOS os IDs desta linha estão no edit_map com o mesmo serviço
-                                    # Ou se é uma linha de um só militar
+
+                                    def _upd(ix, val):
+                                        if ix is not None:
+                                            cl = chr(ord('A') + ix)
+                                            upds_c.append({'range': f'{cl}{i}', 'values': [[str(val).strip() if val and str(val).strip() != 'nan' else '']]})
+
                                     if len(ids_c) == 1:
                                         mid_s = ids_c[0]
-                                        if mid_s not in edit_map:
-                                            continue
-                                        row_e = edit_map[mid_s]
-                                        def _upd(ix, val):
-                                            if ix is not None and str(val).strip() and str(val).strip() != 'nan':
-                                                cl = chr(ord('A') + ix)
-                                                upds_c.append({'range': f'{cl}{i}', 'values': [[str(val).strip()]]})
-                                        _upd(ix_serv_c, row_e['serviço'])
-                                        _upd(ix_hor_c,  row_e['horário'])
-                                        _upd(ix_ind_c,  row_e.get('indicativo',''))
-                                        _upd(ix_rad_c,  row_e.get('rádio',''))
-                                        _upd(ix_giro_c, row_e.get('giro',''))
-                                        _upd(ix_obs_c,  row_e.get('observações',''))
+                                        if mid_s in edit_map:
+                                            row_e = edit_map[mid_s]
+                                            _upd(ix_serv_c, row_e['serviço'])
+                                            _upd(ix_hor_c,  row_e['horário'])
+                                            _upd(ix_ind_c,  row_e.get('indicativo',''))
+                                            _upd(ix_rad_c,  row_e.get('rádio',''))
+                                            _upd(ix_giro_c, row_e.get('giro',''))
+                                            _upd(ix_obs_c,  row_e.get('observações',''))
+                                        else:
+                                            # Limpar linha
+                                            for ix in [ix_serv_c, ix_hor_c, ix_ind_c, ix_rad_c, ix_giro_c, ix_obs_c]:
+                                                if ix is not None:
+                                                    upds_c.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [['']]})
                                     else:
-                                        # Linha com múltiplos IDs (ex: Patrulha) -- só atualizar se algum está no edit_map
+                                        # Linha com múltiplos IDs — encontrar o serviço que corresponde
+                                        serv_linha = str(row_c[ix_serv_c]).strip() if ix_serv_c < len(row_c) else ''
+                                        encontrou = False
                                         for mid_s in ids_c:
                                             if mid_s in edit_map:
                                                 row_e = edit_map[mid_s]
-                                                sv_linha = str(row_c[ix_serv_c]).strip() if ix_serv_c < len(row_c) else ''
-                                                # Só atualizar se o serviço bate com o que está na linha
-                                                if norm(str(row_e['serviço'])) == norm(sv_linha) or not sv_linha:
-                                                    def _upd2(ix, val):
-                                                        if ix is not None and str(val).strip() and str(val).strip() != 'nan':
-                                                            cl = chr(ord('A') + ix)
-                                                            upds_c.append({'range': f'{cl}{i}', 'values': [[str(val).strip()]]})
-                                                    _upd2(ix_hor_c,  row_e['horário'])
-                                                    _upd2(ix_ind_c,  row_e.get('indicativo',''))
-                                                break
+                                                sv_e = str(row_e['serviço']).strip()
+                                                if sv_e and sv_e != 'nan' and norm(sv_e) == norm(serv_linha):
+                                                    _upd(ix_hor_c,  row_e['horário'])
+                                                    _upd(ix_ind_c,  row_e.get('indicativo',''))
+                                                    encontrou = True
+                                                    break
+                                        if not encontrou:
+                                            for ix in [ix_serv_c, ix_hor_c, ix_ind_c, ix_rad_c, ix_giro_c, ix_obs_c]:
+                                                if ix is not None:
+                                                    upds_c.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [['']]})
 
                                 if upds_c:
                                     ws_dia_c.batch_update(upds_c)
