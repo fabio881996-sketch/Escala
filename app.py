@@ -5037,26 +5037,39 @@ else:
                                 if not todas_linhas_c:
                                     ws_dia_c.update('A1', [hdrs_c_raw])
 
-                                # Escrever linhas — uma por militar com serviço
-                                nova_data = []
+                                # Agrupar militares por serviço+horário
+                                grupos_sv = {}  # (serviço, horário) -> {ids, indicativo, rádio, giro, viatura, observações}
                                 for _, row_e in df_editado.iterrows():
                                     sv_e = str(row_e.get('serviço','')).strip()
-                                    if not sv_e or sv_e == 'nan':
-                                        continue
+                                    if not sv_e or sv_e == 'nan': continue
                                     mid_e = str(row_e['id']).strip()
-                                    if not mid_e or mid_e == 'nan':
-                                        continue
+                                    if not mid_e or mid_e == 'nan': continue
+                                    hr_e  = str(row_e.get('horário','')).strip()
+                                    chave = (sv_e, hr_e)
+                                    if chave not in grupos_sv:
+                                        grupos_sv[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                                    grupos_sv[chave]['ids'].append(mid_e)
+                                    # Guardar outros campos do primeiro militar
+                                    for campo in ['indicativo','rádio','giro','viatura','observações']:
+                                        val = str(row_e.get(campo,'')).strip()
+                                        if val and val != 'nan' and not grupos_sv[chave][campo]:
+                                            grupos_sv[chave][campo] = val
+
+                                nova_data = []
+                                for (sv_e, hr_e), dados_g in grupos_sv.items():
                                     linha_nova = [''] * len(hdrs_c_raw)
-                                    for col_nome, val in [('id', mid_e), ('serviço', sv_e),
-                                                          ('horário', row_e.get('horário','')),
-                                                          ('indicativo', row_e.get('indicativo','')),
-                                                          ('rádio', row_e.get('rádio','')),
-                                                          ('giro', row_e.get('giro','')),
-                                                          ('viatura', row_e.get('viatura','')),
-                                                          ('observações', row_e.get('observações',''))]:
+                                    for col_nome, val in [
+                                        ('id', ';'.join(dados_g['ids'])),
+                                        ('serviço', sv_e), ('horário', hr_e),
+                                        ('indicativo', dados_g['indicativo']),
+                                        ('rádio', dados_g['rádio']),
+                                        ('giro', dados_g['giro']),
+                                        ('viatura', dados_g['viatura']),
+                                        ('observações', dados_g['observações'])
+                                    ]:
                                         idx_col = next((i for i,h in enumerate(hdrs_c) if col_nome in h), None)
                                         if idx_col is not None:
-                                            linha_nova[idx_col] = str(val).strip() if val and str(val).strip() != 'nan' else ''
+                                            linha_nova[idx_col] = val
                                     nova_data.append(linha_nova)
                                 if nova_data:
                                     ws_dia_c.append_rows(nova_data)
@@ -5286,43 +5299,47 @@ else:
                                     'observações': str(r.get('observações','') or '').strip(),
                                 }
 
-                        if len(todas_g) <= 1:
-                            # Aba vazia — escrever linhas novas
+                        def _agrupar_e_escrever(editor_map, ws, hdrs_raw, hdrs):
+                            """Agrupa militares por serviço+horário e escreve no Sheets."""
+                            grupos = {}
+                            for mid, dados in editor_map.items():
+                                sv = dados['serviço']
+                                if not sv: continue
+                                hr = dados['horário']
+                                chave = (sv, hr)
+                                if chave not in grupos:
+                                    grupos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                                grupos[chave]['ids'].append(mid)
+                                for campo in ['indicativo','rádio','giro','viatura','observações']:
+                                    if dados[campo] and not grupos[chave][campo]:
+                                        grupos[chave][campo] = dados[campo]
                             nova_data = []
+                            for (sv, hr), d in grupos.items():
+                                linha = [''] * len(hdrs_raw)
+                                for col_nome, val in [
+                                    ('id', ';'.join(d['ids'])), ('serviço', sv), ('horário', hr),
+                                    ('indicativo', d['indicativo']), ('rádio', d['rádio']),
+                                    ('giro', d['giro']), ('viatura', d['viatura']), ('observações', d['observações'])
+                                ]:
+                                    idx_col = next((i for i,h in enumerate(hdrs) if col_nome in h), None)
+                                    if idx_col is not None:
+                                        linha[idx_col] = val
+                                nova_data.append(linha)
+                            if nova_data:
+                                ws.append_rows(nova_data)
+
+                        if len(todas_g) <= 1:
+                            # Aba vazia — escrever agrupado
                             hdrs_raw = [h.strip() for h in todas_g[0]] if todas_g else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
                             if not todas_g:
                                 ws_g.update('A1', [hdrs_raw])
-                            for mid, dados in editor_map.items():
-                                if not dados['serviço']: continue
-                                linha = [''] * len(hdrs_raw)
-                                for col, val in [('id', mid), ('serviço', dados['serviço']),
-                                                 ('horário', dados['horário']), ('indicativo', dados['indicativo']),
-                                                 ('rádio', dados['rádio']), ('giro', dados['giro']),
-                                                 ('viatura', dados['viatura']), ('observações', dados['observações'])]:
-                                    idx_col = next((i for i,h in enumerate(hdrs_g) if col in h), None)
-                                    if idx_col is not None:
-                                        linha[idx_col] = val
-                                nova_data.append(linha)
-                            if nova_data:
-                                ws_g.append_rows(nova_data)
+                            _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
                         else:
-                            # Limpar aba e reescrever
-                            ws_g.resize(rows=1)
-                            nova_data = []
+                            # Aba com dados — limpar e reescrever agrupado
                             hdrs_raw = [h.strip() for h in todas_g[0]]
-                            for mid, dados in editor_map.items():
-                                if not dados['serviço']: continue
-                                linha = [''] * len(hdrs_raw)
-                                for col, val in [('id', mid), ('serviço', dados['serviço']),
-                                                 ('horário', dados['horário']), ('indicativo', dados['indicativo']),
-                                                 ('rádio', dados['rádio']), ('giro', dados['giro']),
-                                                 ('viatura', dados['viatura']), ('observações', dados['observações'])]:
-                                    idx_col = next((i for i,h in enumerate(hdrs_g) if col in h), None)
-                                    if idx_col is not None:
-                                        linha[idx_col] = val
-                                nova_data.append(linha)
-                            if nova_data:
-                                ws_g.append_rows(nova_data)
+                            ws_g.clear()
+                            ws_g.update('A1', [hdrs_raw])
+                            _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
 
                         # Atualizar ordem_escala
                         try:
