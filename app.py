@@ -5029,76 +5029,37 @@ else:
                                 sh_c = get_sheet()
                                 ws_dia_c = sh_c.worksheet(aba_dia)
                                 todas_linhas_c = ws_dia_c.get_all_values()
-                                hdrs_c_raw = [h.strip() for h in todas_linhas_c[0]] if todas_linhas_c else []
+                                hdrs_c_raw = [h.strip() for h in todas_linhas_c[0]] if todas_linhas_c else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
                                 hdrs_c = [h.lower() for h in hdrs_c_raw]
 
-                                # Se a aba está vazia, criar estrutura a partir do df_editado
-                                if len(todas_linhas_c) <= 1:
-                                    # Escrever linhas diretamente — uma linha por militar com serviço
-                                    nova_data = []
-                                    if not hdrs_c_raw:
-                                        hdrs_c_raw = ['id', 'serviço', 'horário', 'indicativo', 'rádio', 'giro', 'viatura', 'observações']
-                                        ws_dia_c.update('A1', [hdrs_c_raw])
-                                        hdrs_c = [h.lower() for h in hdrs_c_raw]
-                                    for _, row_e in df_editado.iterrows():
-                                        sv_e = str(row_e.get('serviço','')).strip()
-                                        if not sv_e or sv_e == 'nan':
-                                            continue
-                                        mid_e = str(row_e['id']).strip()
-                                        linha_nova = [''] * len(hdrs_c_raw)
-                                        for col_nome, val in [('id', mid_e), ('serviço', sv_e),
-                                                              ('horário', row_e.get('horário','')),
-                                                              ('indicativo', row_e.get('indicativo','')),
-                                                              ('rádio', row_e.get('rádio','')),
-                                                              ('giro', row_e.get('giro','')),
-                                                              ('viatura', row_e.get('viatura','')),
-                                                              ('observações', row_e.get('observações',''))]:
-                                            idx_col = next((i for i, h in enumerate(hdrs_c) if col_nome in h), None)
-                                            if idx_col is not None:
-                                                linha_nova[idx_col] = str(val).strip() if val and str(val).strip() != 'nan' else ''
-                                        nova_data.append(linha_nova)
-                                    if nova_data:
-                                        ws_dia_c.append_rows(nova_data)
-                                else:
-                                    # Aba tem dados — atualizar linhas existentes
-                                    ix_id_c   = hdrs_c.index('id')      if 'id'      in hdrs_c else 0
-                                    ix_serv_c = hdrs_c.index('serviço') if 'serviço' in hdrs_c else 1
-                                    ix_hor_c  = hdrs_c.index('horário') if 'horário' in hdrs_c else 2
-                                    ix_ind_c  = next((i for i,h in enumerate(hdrs_c) if 'indicat' in h), None)
-                                    ix_rad_c  = next((i for i,h in enumerate(hdrs_c) if 'r' in h and 'dio' in h), None)
-                                    ix_giro_c = hdrs_c.index('giro') if 'giro' in hdrs_c else None
-                                    ix_obs_c  = next((i for i,h in enumerate(hdrs_c) if 'obs' in h or 'serv' in h and i > ix_serv_c), None)
+                                # Limpar aba — manter só cabeçalho
+                                ws_dia_c.resize(rows=1)
+                                if not todas_linhas_c:
+                                    ws_dia_c.update('A1', [hdrs_c_raw])
 
-                                    edit_map = {str(row_e['id']).strip(): row_e for _, row_e in df_editado.iterrows()
-                                                if str(row_e['id']).strip() and str(row_e['id']).strip() != 'nan'}
-
-                                    upds_c = []
-                                    for i, row_c in enumerate(todas_linhas_c[1:], start=2):
-                                        mid_c = str(row_c[ix_id_c]).strip() if ix_id_c < len(row_c) else ''
-                                        if not mid_c or mid_c == 'nan': continue
-                                        ids_c = [m.strip() for m in re.split(r'[;,]', mid_c) if m.strip()]
-
-                                        def _upd(ix, val):
-                                            if ix is not None:
-                                                cl = chr(ord('A') + ix)
-                                                upds_c.append({'range': f'{cl}{i}', 'values': [[str(val).strip() if val and str(val).strip() != 'nan' else '']]})
-
-                                        if len(ids_c) == 1:
-                                            mid_s = ids_c[0]
-                                            if mid_s in edit_map:
-                                                row_e = edit_map[mid_s]
-                                                _upd(ix_serv_c, row_e['serviço'])
-                                                _upd(ix_hor_c,  row_e['horário'])
-                                                if ix_ind_c: _upd(ix_ind_c, row_e.get('indicativo',''))
-                                                if ix_rad_c: _upd(ix_rad_c, row_e.get('rádio',''))
-                                                if ix_giro_c: _upd(ix_giro_c, row_e.get('giro',''))
-                                                if ix_obs_c: _upd(ix_obs_c, row_e.get('observações',''))
-                                            else:
-                                                for ix in [ix_serv_c, ix_hor_c, ix_ind_c, ix_rad_c, ix_giro_c, ix_obs_c]:
-                                                    if ix is not None:
-                                                        upds_c.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [['']]})
-                                    if upds_c:
-                                        ws_dia_c.batch_update(upds_c)
+                                # Escrever linhas — uma por militar com serviço
+                                nova_data = []
+                                for _, row_e in df_editado.iterrows():
+                                    sv_e = str(row_e.get('serviço','')).strip()
+                                    if not sv_e or sv_e == 'nan':
+                                        continue
+                                    mid_e = str(row_e['id']).strip()
+                                    if not mid_e or mid_e == 'nan':
+                                        continue
+                                    linha_nova = [''] * len(hdrs_c_raw)
+                                    for col_nome, val in [('id', mid_e), ('serviço', sv_e),
+                                                          ('horário', row_e.get('horário','')),
+                                                          ('indicativo', row_e.get('indicativo','')),
+                                                          ('rádio', row_e.get('rádio','')),
+                                                          ('giro', row_e.get('giro','')),
+                                                          ('viatura', row_e.get('viatura','')),
+                                                          ('observações', row_e.get('observações',''))]:
+                                        idx_col = next((i for i,h in enumerate(hdrs_c) if col_nome in h), None)
+                                        if idx_col is not None:
+                                            linha_nova[idx_col] = str(val).strip() if val and str(val).strip() != 'nan' else ''
+                                    nova_data.append(linha_nova)
+                                if nova_data:
+                                    ws_dia_c.append_rows(nova_data)
 
                                 # Atualizar ordem_escala
                                 _atualizar_ordem_escala_dia(sh_c, aba_dia, d_gerar)
@@ -5345,47 +5306,23 @@ else:
                             if nova_data:
                                 ws_g.append_rows(nova_data)
                         else:
-                            # Aba com dados — atualizar por mid
-                            upds_g = []
-                            mids_atualizados = set()
-                            for i, row in enumerate(todas_g[1:], start=2):
-                                mid_c = str(row[ix_id_g]).strip() if ix_id_g < len(row) else ''
-                                if not mid_c or mid_c == 'nan': continue
-                                # Suportar múltiplos IDs na mesma linha
-                                ids_linha = [m.strip() for m in re.split(r'[;,]+', mid_c) if m.strip()]
-                                for mid in ids_linha:
-                                    if mid in editor_map:
-                                        dados = editor_map[mid]
-                                        def _u(ix, val):
-                                            if ix is not None:
-                                                upds_g.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [[val or '']]})
-                                        _u(ix_sv_g,  dados['serviço'])
-                                        _u(ix_hr_g,  dados['horário'])
-                                        _u(ix_ind_g, dados['indicativo'])
-                                        _u(ix_rad_g, dados['rádio'])
-                                        _u(ix_gir_g, dados['giro'])
-                                        _u(ix_vtr_g, dados['viatura'])
-                                        _u(ix_obs_g, dados['observações'])
-                                        mids_atualizados.add(mid)
-                                        break  # só atualizar uma vez por linha
-                            # Militares novos que não tinham linha
-                            novos = []
+                            # Limpar aba e reescrever
+                            ws_g.resize(rows=1)
+                            nova_data = []
                             hdrs_raw = [h.strip() for h in todas_g[0]]
                             for mid, dados in editor_map.items():
-                                if mid not in mids_atualizados and dados['serviço']:
-                                    linha = [''] * len(hdrs_raw)
-                                    for col, val in [('id', mid), ('serviço', dados['serviço']),
-                                                     ('horário', dados['horário']), ('indicativo', dados['indicativo']),
-                                                     ('rádio', dados['rádio']), ('giro', dados['giro']),
-                                                     ('viatura', dados['viatura']), ('observações', dados['observações'])]:
-                                        idx_col = next((i for i,h in enumerate(hdrs_g) if col in h), None)
-                                        if idx_col is not None:
-                                            linha[idx_col] = val
-                                    novos.append(linha)
-                            if upds_g:
-                                ws_g.batch_update(upds_g)
-                            if novos:
-                                ws_g.append_rows(novos)
+                                if not dados['serviço']: continue
+                                linha = [''] * len(hdrs_raw)
+                                for col, val in [('id', mid), ('serviço', dados['serviço']),
+                                                 ('horário', dados['horário']), ('indicativo', dados['indicativo']),
+                                                 ('rádio', dados['rádio']), ('giro', dados['giro']),
+                                                 ('viatura', dados['viatura']), ('observações', dados['observações'])]:
+                                    idx_col = next((i for i,h in enumerate(hdrs_g) if col in h), None)
+                                    if idx_col is not None:
+                                        linha[idx_col] = val
+                                nova_data.append(linha)
+                            if nova_data:
+                                ws_g.append_rows(nova_data)
 
                         # Atualizar ordem_escala
                         try:
@@ -5441,10 +5378,6 @@ else:
                                     rows_1.append(r1o); rows_2.append(r2o)
                                 df1 = pd.DataFrame(rows_1)
                                 df2 = pd.DataFrame(rows_2)
-                                # Debug
-                                n_sv1 = df1[df1['serviço'].str.strip().str.len() > 0].shape[0]
-                                n_sv2 = df2[df2['serviço'].str.strip().str.len() > 0].shape[0]
-                                st.info(f"🔍 A guardar: {aba_1}={n_sv1} serviços, {aba_2}={n_sv2} serviços")
                                 _guardar_sheets({aba_1: df1, aba_2: df2})
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
