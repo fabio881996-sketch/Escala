@@ -4725,6 +4725,8 @@ else:
                 with col_cnt2:
                     n_disponiveis = sum(1 for l in linhas if not str(l.get('serviço','')).strip() or str(l.get('serviço','')).strip() == 'nan')
                     st.markdown(f"**{n_disponiveis} disponíveis**")
+                if 'debug_confirmar' in st.session_state:
+                    st.warning(f"🔍 {st.session_state.pop('debug_confirmar')}")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
                 # Filtro de pesquisa
@@ -5090,6 +5092,8 @@ else:
 
                                 if upds_c:
                                     ws_dia_c.batch_update(upds_c)
+                                else:
+                                    st.session_state['debug_confirmar'] = f"upds_c vazio! edit_map keys: {list(edit_map.keys())[:5]} | aba linhas: {[str(r[ix_id_c])[:20] for r in todas_linhas_c[1:5]]}"
 
                                 # Atualizar ordem_escala
                                 _atualizar_ordem_escala_dia(sh_c, aba_dia, d_gerar)
