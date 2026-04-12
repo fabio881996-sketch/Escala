@@ -4690,15 +4690,6 @@ else:
                         if tipo_folga:
                             dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            # Debug — só para militares com grupo mas sem folga
-                            if 'debug_folga' not in st.session_state:
-                                col_id_dbg = 'id' if 'id' in df_folgas.columns else (df_folgas.columns[0] if not df_folgas.empty else 'id')
-                                linha_dbg = df_folgas[df_folgas[col_id_dbg].astype(str).str.strip() == mid] if not df_folgas.empty else pd.DataFrame()
-                                grp_dbg = str(linha_dbg.iloc[0].get('grupo','')) if not linha_dbg.empty else ''
-                                if grp_dbg:  # só debug se tem grupo
-                                    aba_dbg = d_gerar.strftime('%d-%m')
-                                    dias_grp = grupos_folga.get(grp_dbg, {})
-                                    st.session_state['debug_folga'] = f"mid:{mid} grupo:{grp_dbg} aba:{aba_dbg} dias_grupo:{dias_grp}"
                             # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
                             serv_defeito = ''
                             if not df_folgas.empty and 'serviço' in df_folgas.columns:
@@ -4728,31 +4719,11 @@ else:
             if 'tabela_escala' in st.session_state and st.session_state.get('tabela_dia') == aba_dia:
                 linhas = st.session_state['tabela_escala']
 
-
-
-                # Debug folgas — mostrar quem devia ter folga neste dia
-                if grupos_folga and not df_folgas.empty:
-                    _devia_folgar = []
-                    col_id_dbg2 = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-                    aba_dbg2 = d_gerar.strftime('%d-%m')
-                    for _, row_dbg in df_folgas.iterrows():
-                        mid_dbg = str(row_dbg.get(col_id_dbg2, '')).strip()
-                        grp_dbg = str(row_dbg.get('grupo', '')).strip()
-                        if grp_dbg and grp_dbg in grupos_folga:
-                            for tipo_d, dias_d in grupos_folga[grp_dbg].items():
-                                if aba_dbg2 in dias_d:
-                                    _devia_folgar.append(f"{mid_dbg}({grp_dbg}:{tipo_d})")
-                    st.session_state['debug_folga2'] = f"Devia folgar em {aba_dbg2}: {_devia_folgar}"
-
-                if 'debug_folga' in st.session_state:
-                    st.warning(f"🔍 Folga debug: {st.session_state.pop('debug_folga')}")
-                if 'debug_folga2' in st.session_state:
-                    st.info(f"🔍 {st.session_state.pop('debug_folga2')}")
-
                 col_cnt1, col_cnt2 = st.columns(2)
                 with col_cnt1:
                     st.markdown(f"**{len(linhas)} militares — {d_gerar.strftime('%d/%m/%Y')}**")
                 with col_cnt2:
+                    n_disponiveis = sum(1 for l in linhas if not str(l.get('serviço','')).strip() or str(l.get('serviço','')).strip() == 'nan')
                     st.markdown(f"**{n_disponiveis} disponíveis**")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
@@ -4783,8 +4754,6 @@ else:
                                   if s and s not in ('','Atendimento','Patrulha Ocorrências','Apoio Atendimento')]
                 _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + _extras_listas
 
-                # Contador de disponíveis (serviço vazio)
-                n_disponiveis = sum(1 for l in linhas if not str(l.get('serviço','')).strip() or str(l.get('serviço','')).strip() == 'nan')
 
                 # Aplicar abreviaturas no df_edit para display
                 # Mapeamento normalizado para converter serviço+horário → abreviatura
