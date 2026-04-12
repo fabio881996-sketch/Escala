@@ -4749,7 +4749,11 @@ else:
                 if 'debug_folga2' in st.session_state:
                     st.info(f"🔍 {st.session_state.pop('debug_folga2')}")
 
-                st.markdown(f"**{len(linhas)} militares -- {d_gerar.strftime('%d/%m/%Y')}**")
+                col_cnt1, col_cnt2 = st.columns(2)
+                with col_cnt1:
+                    st.markdown(f"**{len(linhas)} militares — {d_gerar.strftime('%d/%m/%Y')}**")
+                with col_cnt2:
+                    st.markdown(f"**{n_disponiveis} disponíveis**")
                 st.caption("Preenche os serviços, gera a escala automática e edita conforme necessário.")
 
                 # Filtro de pesquisa
@@ -4774,10 +4778,13 @@ else:
                     'Apoio Atendimento 08-16':     'AA2','Apoio Atendimento 16-24':     'AA3',
                 }
 
-                # Opções de serviço -- abreviaturas + extras das listas
+                # Opções de serviço -- abreviaturas + todos os serviços das listas
                 _extras_listas = [s for s in (_listas_auto.get('Serviço', []) or [])
                                   if s and s not in ('','Atendimento','Patrulha Ocorrências','Apoio Atendimento')]
                 _sv_opts_abrev = ['', 'A1','A2','A3','PO1','PO2','PO3','AA2','AA3'] + _extras_listas
+
+                # Contador de disponíveis (serviço vazio)
+                n_disponiveis = sum(1 for l in linhas if not str(l.get('serviço','')).strip() or str(l.get('serviço','')).strip() == 'nan')
 
                 # Aplicar abreviaturas no df_edit para display
                 # Mapeamento normalizado para converter serviço+horário → abreviatura
