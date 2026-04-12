@@ -5304,11 +5304,13 @@ else:
                         ix_id_g  = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
                         ix_sv_g  = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
                         ix_hr_g  = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
+                        ix_ind_g = next((i for i,h in enumerate(hdrs_g) if 'indicat' in h), None)
+                        ix_rad_g = next((i for i,h in enumerate(hdrs_g) if h in ('rádio','radio')), None)
+                        ix_gir_g = hdrs_g.index('giro') if 'giro' in hdrs_g else None
+                        ix_vtr_g = hdrs_g.index('viatura') if 'viatura' in hdrs_g else None
+                        ix_obs_g = next((i for i,h in enumerate(hdrs_g) if 'obs' in h), None)
 
-                        # Estado original (antes de editar) -- do session_state
-                        original = st.session_state.get('editar_escala_original', {}).get(aba_g, {})
-
-                        # Converter editor para dict id -> {serviço, horário, ...}
+                        # Converter editor para dict id -> dados
                         editor_map = {}
                         for _, r in df_g.iterrows():
                             mid = str(r['id']).strip()
@@ -5323,73 +5325,69 @@ else:
                                     'observações': str(r.get('observações','') or '').strip(),
                                 }
 
-                        # Construir mapa de linhas do Sheets: (norm_serv, horário) -> índice linha (1-based)
-                        linhas_sheet = {}
-                        for i, row in enumerate(todas_g[1:], start=1):
-                            sv = norm(str(row[ix_sv_g]).strip()) if ix_sv_g < len(row) else ''
-                            hr = str(row[ix_hr_g]).strip() if ix_hr_g < len(row) else ''
-                            if sv:
-                                linhas_sheet[(sv, hr)] = i  # índice na lista todas_g
+                        if len(todas_g) <= 1:
+                            # Aba vazia — escrever linhas novas
+                            nova_data = []
+                            hdrs_raw = [h.strip() for h in todas_g[0]] if todas_g else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
+                            if not todas_g:
+                                ws_g.update('A1', [hdrs_raw])
+                            for mid, dados in editor_map.items():
+                                if not dados['serviço']: continue
+                                linha = [''] * len(hdrs_raw)
+                                for col, val in [('id', mid), ('serviço', dados['serviço']),
+                                                 ('horário', dados['horário']), ('indicativo', dados['indicativo']),
+                                                 ('rádio', dados['rádio']), ('giro', dados['giro']),
+                                                 ('viatura', dados['viatura']), ('observações', dados['observações'])]:
+                                    idx_col = next((i for i,h in enumerate(hdrs_g) if col in h), None)
+                                    if idx_col is not None:
+                                        linha[idx_col] = val
+                                nova_data.append(linha)
+                            if nova_data:
+                                ws_g.append_rows(nova_data)
+                        else:
+                            # Aba com dados — atualizar por mid
+                            upds_g = []
+                            mids_atualizados = set()
+                            for i, row in enumerate(todas_g[1:], start=2):
+                                mid_c = str(row[ix_id_g]).strip() if ix_id_g < len(row) else ''
+                                if not mid_c or mid_c == 'nan': continue
+                                # Suportar múltiplos IDs na mesma linha
+                                ids_linha = [m.strip() for m in re.split(r'[;,]+', mid_c) if m.strip()]
+                                for mid in ids_linha:
+                                    if mid in editor_map:
+                                        dados = editor_map[mid]
+                                        def _u(ix, val):
+                                            if ix is not None:
+                                                upds_g.append({'range': f'{chr(ord("A")+ix)}{i}', 'values': [[val or '']]})
+                                        _u(ix_sv_g,  dados['serviço'])
+                                        _u(ix_hr_g,  dados['horário'])
+                                        _u(ix_ind_g, dados['indicativo'])
+                                        _u(ix_rad_g, dados['rádio'])
+                                        _u(ix_gir_g, dados['giro'])
+                                        _u(ix_vtr_g, dados['viatura'])
+                                        _u(ix_obs_g, dados['observações'])
+                                        mids_atualizados.add(mid)
+                                        break  # só atualizar uma vez por linha
+                            # Militares novos que não tinham linha
+                            novos = []
+                            hdrs_raw = [h.strip() for h in todas_g[0]]
+                            for mid, dados in editor_map.items():
+                                if mid not in mids_atualizados and dados['serviço']:
+                                    linha = [''] * len(hdrs_raw)
+                                    for col, val in [('id', mid), ('serviço', dados['serviço']),
+                                                     ('horário', dados['horário']), ('indicativo', dados['indicativo']),
+                                                     ('rádio', dados['rádio']), ('giro', dados['giro']),
+                                                     ('viatura', dados['viatura']), ('observações', dados['observações'])]:
+                                        idx_col = next((i for i,h in enumerate(hdrs_g) if col in h), None)
+                                        if idx_col is not None:
+                                            linha[idx_col] = val
+                                    novos.append(linha)
+                            if upds_g:
+                                ws_g.batch_update(upds_g)
+                            if novos:
+                                ws_g.append_rows(novos)
 
-                        # Construir novo estado das linhas
-                        # Para cada linha do Sheets, recalcular quem está lá
-                        novas_linhas = {}  # (sv,hr) -> lista de IDs
-                        for (sv, hr), idx in linhas_sheet.items():
-                            row = todas_g[idx]
-                            ids_atuais = [m.strip() for m in re.split(r'[;,]+', str(row[ix_id_g]).strip()) if m.strip()]
-                            novas_linhas[(sv, hr)] = ids_atuais[:]
-
-                        # Aplicar mudanças do editor
-                        for mid, dados in editor_map.items():
-                            sv_novo = norm(dados['serviço'])
-                            hr_novo = dados['horário']
-                            sv_orig = norm(original.get(mid, {}).get('serviço', ''))
-                            hr_orig = original.get(mid, {}).get('horário', '')
-
-                            # Remover da linha original se mudou
-                            if sv_orig and (sv_orig != sv_novo or hr_orig != hr_novo):
-                                chave_orig = (sv_orig, hr_orig)
-                                if chave_orig in novas_linhas and mid in novas_linhas[chave_orig]:
-                                    novas_linhas[chave_orig].remove(mid)
-
-                            # Adicionar à linha nova
-                            if sv_novo:
-                                chave_nova = (sv_novo, hr_novo)
-                                if chave_nova in novas_linhas:
-                                    if mid not in novas_linhas[chave_nova]:
-                                        novas_linhas[chave_nova].append(mid)
-                                else:
-                                    novas_linhas[chave_nova] = [mid]
-
-                        # Escrever updates no Sheets
-                        upds_g = []
-                        cl_id = chr(ord('A') + ix_id_g)
-                        for (sv, hr), idx in linhas_sheet.items():
-                            ids_novos = novas_linhas.get((sv, hr), [])
-                            ids_str = ';'.join(ids_novos)
-                            linha_sheet = idx + 1  # +1 porque todas_g[0] é header
-                            upds_g.append({'range': f'{cl_id}{linha_sheet}', 'values': [[ids_str]]})
-
-                        # Linhas novas (serviços que não existiam no Sheets)
-                        for (sv, hr), ids in novas_linhas.items():
-                            if (sv, hr) not in linhas_sheet and ids:
-                                # Encontrar nome real do serviço
-                                sv_real = ids[0]  # fallback
-                                for mid in ids:
-                                    sv_real_r = editor_map.get(mid, {}).get('serviço', '')
-                                    if sv_real_r:
-                                        sv_real = sv_real_r
-                                        break
-                                nova_linha = [''] * len(hdrs_g)
-                                nova_linha[ix_id_g] = ';'.join(ids)
-                                nova_linha[ix_sv_g] = sv_real
-                                nova_linha[ix_hr_g] = hr
-                                ws_g.append_row(nova_linha)
-
-                        if upds_g:
-                            ws_g.batch_update(upds_g)
-
-                        # Atualizar ordem_escala -- usando função central
+                        # Atualizar ordem_escala
                         try:
                             aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
                             _atualizar_ordem_escala_dia(sh_gc, aba_g, aba_data_g)
@@ -5441,7 +5439,13 @@ else:
                                     r2o['serviço'] = str(row_u.get(label_2) or '')
                                     r2o['horário'] = str(row_u.get(label_h2) or '')
                                     rows_1.append(r1o); rows_2.append(r2o)
-                                _guardar_sheets({aba_1: pd.DataFrame(rows_1), aba_2: pd.DataFrame(rows_2)})
+                                df1 = pd.DataFrame(rows_1)
+                                df2 = pd.DataFrame(rows_2)
+                                # Debug
+                                n_sv1 = df1[df1['serviço'].str.strip().str.len() > 0].shape[0]
+                                n_sv2 = df2[df2['serviço'].str.strip().str.len() > 0].shape[0]
+                                st.info(f"🔍 A guardar: {aba_1}={n_sv1} serviços, {aba_2}={n_sv2} serviços")
+                                _guardar_sheets({aba_1: df1, aba_2: df2})
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
                                 st.success("✅ Guardado!")
