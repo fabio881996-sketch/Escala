@@ -2860,18 +2860,9 @@ else:
                                         if partes:
                                             colegas_html = f'<p style="font-size:0.78rem;color:#475569">👥 {" | ".join(partes)}</p>'
 
-                                st.markdown(
-                                    f'<div class="card-servico {card_class}">'
-                                    f'<p><b>{lbl}</b></p>'
-                                    f'<h3>{icone_s} {row["serviço"]}</h3>'
-                                    f'<p>🕒 {row["horário"]}</p>'
-                                    f'{colegas_html}'
-                                    f'{obs_html}'
-                                    f'</div>',
-                                    unsafe_allow_html=True
-                                )
                                 # Verificar se tem remunerado no mesmo dia
                                 df_rem_dia = df_d  # já carregado acima
+                                cards_rem = []  # lista de (horario_inicio_min, html)
                                 if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
                                     # Remunerados escalados diretamente
                                     rem_mil = df_rem_dia[df_rem_dia['id'].astype(str) == u_id]
@@ -2987,7 +2978,7 @@ else:
                                             if not mt_este.empty:
                                                 cedente_nome = get_nome_militar(df_util, mt_este.iloc[0]['id_destino'])
                                                 matar_html = f'<p style="font-size:0.78rem;color:#059669">🔄 c/ {cedente_nome}</p>'
-                                        st.markdown(
+                                        _html_rem = (
                                             f'<div class="card-servico card-rem">'
                                             f'<p><b>💶 REMUNERADO</b></p>'
                                             f'<h3>💰 {rr["serviço"]}</h3>'
@@ -2995,9 +2986,30 @@ else:
                                             f'{colegas_rem_html}'
                                             f'{matar_html}'
                                             f'{obs_r_html}'
-                                            f'</div>',
-                                            unsafe_allow_html=True
+                                            f'</div>'
                                         )
+                                        _ini_rem, _ = _parse_horario(str(rr['horário']))
+                                        cards_rem.append((_ini_rem if _ini_rem is not None else 9999, _html_rem))
+                                # Ordenar e renderizar remunerados — antes ou depois do serviço principal
+                                _hor_principal, _ = _parse_horario(str(row['horário']))
+                                _hor_principal = _hor_principal if _hor_principal is not None else 9999
+                                for _ini_r, _html_r in sorted(cards_rem):
+                                    if _ini_r < _hor_principal:
+                                        st.markdown(_html_r, unsafe_allow_html=True)
+                                # Mostrar serviço principal
+                                st.markdown(
+                                    f'<div class="card-servico {card_class}">'
+                                    f'<p><b>{lbl}</b></p>'
+                                    f'<h3>{icone_s} {row["serviço"]}</h3>'
+                                    f'<p>🕒 {row["horário"]}</p>'
+                                    f'{colegas_html}'
+                                    f'{obs_html}'
+                                    f'</div>',
+                                    unsafe_allow_html=True
+                                )
+                                for _ini_r, _html_r in sorted(cards_rem):
+                                    if _ini_r >= _hor_principal:
+                                        st.markdown(_html_r, unsafe_allow_html=True)
                                 encontrou_algum = True
                             # Aba existe mas o militar não está escalado
                             else:
