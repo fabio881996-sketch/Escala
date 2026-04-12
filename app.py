@@ -5232,15 +5232,13 @@ else:
                     except Exception as _err_e:
                         st.warning(f"Erro ao ler {aba_e}: {_err_e}")
                     em_ferias_e = ferias_cache_e[d_e]
-                    linhas_e = []
+                    linhas_e_raw = []
                     for _, row_u in df_util.iterrows():
                         mid = str(row_u.get('id', '')).strip()
                         if not mid or mid == 'nan': continue
                         nome  = str(row_u.get('nome', '')).strip()
-                        posto = str(row_u.get('posto', '')).strip()
-                        # Abreviar nome: inicial + apelido
                         partes_nome = nome.split()
-                        nome_curto = f"{partes_nome[0][0]}.{partes_nome[-1]}" if len(partes_nome) >= 2 else nome
+                        apelido = partes_nome[-1] if partes_nome else nome
                         if mid in mapa_e:
                             dados = mapa_e[mid]
                         elif mid in em_ferias_e:
@@ -5251,11 +5249,37 @@ else:
                                 dados = {'serviço': tipo_lic_e, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                             else:
                                 dados = {'serviço': 'Disponível', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
-                        linhas_e.append({'id': mid, 'nome': f"{posto} {nome_curto}".strip(),
-                                         'serviço': dados.get('serviço',''), 'horário': dados.get('horário',''),
-                                         'indicativo': dados.get('indicativo',''), 'rádio': dados.get('rádio',''),
-                                         'giro': dados.get('giro',''), 'viatura': dados.get('viatura',''),
-                                         'observações': dados.get('observações','')})
+                        linhas_e_raw.append({'id': mid, 'apelido': apelido,
+                                             'serviço': dados.get('serviço',''), 'horário': dados.get('horário',''),
+                                             'indicativo': dados.get('indicativo',''), 'rádio': dados.get('rádio',''),
+                                             'giro': dados.get('giro',''), 'viatura': dados.get('viatura',''),
+                                             'observações': dados.get('observações','')})
+
+                    # Agrupar por serviço+horário (só quando ambos preenchidos)
+                    grupos_e = {}
+                    linhas_e = []
+                    for r in linhas_e_raw:
+                        sv = r['serviço']
+                        hr = r['horário']
+                        if sv and hr:
+                            chave = (sv, hr)
+                            if chave in grupos_e:
+                                idx = grupos_e[chave]
+                                linhas_e[idx]['id']   += ';' + r['id']
+                                linhas_e[idx]['nome'] += ', ' + r['apelido']
+                            else:
+                                grupos_e[chave] = len(linhas_e)
+                                linhas_e.append({'id': r['id'], 'nome': r['apelido'],
+                                                 'serviço': sv, 'horário': hr,
+                                                 'indicativo': r['indicativo'], 'rádio': r['rádio'],
+                                                 'giro': r['giro'], 'viatura': r['viatura'],
+                                                 'observações': r['observações']})
+                        else:
+                            linhas_e.append({'id': r['id'], 'nome': r['apelido'],
+                                             'serviço': sv, 'horário': hr,
+                                             'indicativo': r['indicativo'], 'rádio': r['rádio'],
+                                             'giro': r['giro'], 'viatura': r['viatura'],
+                                             'observações': r['observações']})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
                 st.session_state['editar_escala'] = dados_editar
                 st.session_state['editar_escala_original'] = {
