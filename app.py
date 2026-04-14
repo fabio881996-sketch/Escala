@@ -380,13 +380,14 @@ def load_licencas(ano: int) -> pd.DataFrame:
         return pd.DataFrame()
 
 def militar_de_licenca(mid: str, data, df_licencas: pd.DataFrame) -> str:
-    """Devolve tipo de licença/baixa/diligência ou '' se não está."""
+    """Devolve tipo de licença/baixa/diligência ou '' se não está. Formato: 'Tipo|observações'"""
     if df_licencas.empty: return ''
     cols = df_licencas.columns.tolist()
     col_id  = 'id'    if 'id'    in cols else cols[0]
     col_tp  = 'tipo'  if 'tipo'  in cols else (cols[1] if len(cols)>1 else None)
     col_ini = next((c for c in cols if 'ini' in c.lower()), None)
     col_fim = next((c for c in cols if 'fim' in c.lower()), None)
+    col_obs = next((c for c in cols if 'obs' in c.lower()), None)
     if not col_ini or not col_fim: return ''
 
     data_date = data if hasattr(data, 'strftime') else datetime.strptime(str(data), '%d-%m').replace(year=datetime.now().year)
@@ -398,7 +399,6 @@ def militar_de_licenca(mid: str, data, df_licencas: pd.DataFrame) -> str:
         fim_s = str(row.get(col_fim, '')).strip()
         if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan': continue
         try:
-            # Suportar DD-MM ou DD/MM/YYYY
             if '/' in ini_s:
                 ini_d = datetime.strptime(ini_s, '%d/%m/%Y').date()
                 fim_d = datetime.strptime(fim_s, '%d/%m/%Y').date()
@@ -407,7 +407,10 @@ def militar_de_licenca(mid: str, data, df_licencas: pd.DataFrame) -> str:
                 ini_d = datetime.strptime(f"{ini_s}-{ano}", '%d-%m-%Y').date()
                 fim_d = datetime.strptime(f"{fim_s}-{ano}", '%d-%m-%Y').date()
             if ini_d <= data_date <= fim_d:
-                return str(row.get(col_tp, 'Licença')).strip() if col_tp else 'Licença'
+                tipo = str(row.get(col_tp, 'Licença')).strip() if col_tp else 'Licença'
+                obs  = str(row.get(col_obs, '') or '').strip() if col_obs else ''
+                obs  = '' if obs == 'nan' else obs
+                return f"{tipo}|{obs}" if obs else tipo
         except:
             continue
     return ''
@@ -4630,7 +4633,7 @@ else:
                         ws_nova.update('A1', [hdrs_pad])
 
                 # Ler aba do dia diretamente para apanhar IDs múltiplos
-                mapa_existente = {}
+                mapa_existente = {}  # mid -> lista de dados (pode ter remunerado + serviço normal)
                 try:
                     ws_dia_tab = sh_tab.worksheet(aba_dia)
                     vals_tab = ws_dia_tab.get_all_values()
@@ -4649,8 +4652,10 @@ else:
                         for row_t in vals_tab[1:]:
                             id_raw = _gt(row_t, ix_id_t)
                             if not id_raw: continue
+                            sv_t = _gt(row_t, ix_sv_t)
+                            if not sv_t: continue  # ignorar linhas sem serviço
                             dados_t = {
-                                'serviço':    _gt(row_t, ix_sv_t),
+                                'serviço':    sv_t,
                                 'horário':    _gt(row_t, ix_hr_t),
                                 'indicativo': _gt(row_t, ix_in_t),
                                 'rádio':      _gt(row_t, ix_ra_t),
@@ -4661,7 +4666,9 @@ else:
                             for mid in re.split(r'[;,\n]+', id_raw):
                                 mid = mid.strip()
                                 if mid:
-                                    mapa_existente[mid] = dados_t
+                                    if mid not in mapa_existente:
+                                        mapa_existente[mid] = []
+                                    mapa_existente[mid].append(dados_t)
                 except:
                     pass
 
@@ -4679,24 +4686,40 @@ else:
                         continue
                     # Dados existentes, folgas, serviço por defeito ou vazio
                     if mid in mapa_existente:
-                        dados = mapa_existente[mid]
-                        # Se já existe mas sem serviço, verificar folgas e serviço por defeito
+                        lista_dados = mapa_existente[mid]
+                        # Separar remunerados dos serviços normais
+                        servs_normais = [d for d in lista_dados if not norm(d.get('serviço','')).startswith('remu') and not norm(d.get('serviço','')).startswith('grat')]
+                        servs_rem     = [d for d in lista_dados if norm(d.get('serviço','')).startswith('remu') or norm(d.get('serviço','')).startswith('grat')]
+                        # Usar o serviço normal como principal
+                        dados = servs_normais[0] if servs_normais else lista_dados[0]
+                        # Se tem folga/ausência e sem serviço, verificar folgas
                         if not str(dados.get('serviço','')).strip() or str(dados.get('serviço','')).strip() == 'nan':
                             tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
-                            if not tipo_folga:
-                                # Tentar com ID sem zeros à esquerda
-                                mid_alt = str(int(mid)) if mid.isdigit() else mid
-                                tipo_folga = militar_de_folga(mid_alt, d_gerar, df_folgas, grupos_folga, feriados)
                             if tipo_folga:
                                 dados = {**dados, 'serviço': tipo_folga}
                             elif not df_folgas.empty and 'serviço' in df_folgas.columns:
                                 col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-                                mid_alt = str(int(mid)) if mid.isdigit() else mid
-                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip().apply(lambda x: str(int(x)) if x.isdigit() else x) == mid_alt]
+                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
                                 if not linha_f.empty:
                                     sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
                                     if sv_f and sv_f != 'nan':
                                         dados = {**dados, 'serviço': sv_f}
+                        # Adicionar linha principal
+                        linhas.append({
+                            'id': mid, 'nome': f"{posto} {nome}".strip(),
+                            'serviço': dados['serviço'], 'horário': dados['horário'],
+                            'indicativo': dados['indicativo'], 'rádio': dados['rádio'],
+                            'giro': dados['giro'], 'observações': dados['observações'],
+                        })
+                        # Adicionar remunerados como linhas extra
+                        for d_rem in servs_rem:
+                            linhas.append({
+                                'id': mid, 'nome': f"{posto} {nome}".strip(),
+                                'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
+                                'indicativo': d_rem['indicativo'], 'rádio': d_rem['rádio'],
+                                'giro': d_rem['giro'], 'observações': d_rem['observações'],
+                            })
+                        continue  # já adicionou as linhas
                     else:
                         tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
                         if tipo_folga:
@@ -4813,6 +4836,7 @@ else:
                     use_container_width=True,
                     key="editor_escala",
                     num_rows="fixed",
+                    height=min(50 + len(df_edit_show) * 35, 2000),
                 )
                 # Converter abreviaturas de volta e construir df_editado completo
                 _abrev_hor = {
@@ -4854,19 +4878,27 @@ else:
                     if st.button("🗑️ Limpar escala", use_container_width=True, key="btn_limpar_escala"):
                         linhas_atuais = st.session_state.get('tabela_escala', [])
                         _serv_manter = {'férias', 'folga semanal', 'folga complementar'}
+                        _serv_remover = {'remu', 'grat'}  # remover remunerados
+                        # Remover duplicados por mid (remunerados duplicam o militar)
+                        mids_vistos = set()
                         linhas_limpas = []
                         for row_l in linhas_atuais:
                             sv_l = str(row_l.get('serviço', '')).strip().lower()
                             mid_l = str(row_l.get('id', '')).strip()
+                            # Remover linhas de remunerado
+                            if any(x in sv_l for x in _serv_remover):
+                                continue
+                            # Evitar duplicados do mesmo militar
+                            if mid_l in mids_vistos:
+                                continue
+                            mids_vistos.add(mid_l)
                             if sv_l in _serv_manter:
                                 linhas_limpas.append(row_l)
                             else:
-                                # Recalcular folga
                                 tipo_folga_l = militar_de_folga(mid_l, d_gerar, df_folgas, grupos_folga, feriados)
                                 if tipo_folga_l:
                                     linhas_limpas.append({**row_l, 'serviço': tipo_folga_l, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''})
                                 else:
-                                    # Repor serviço por defeito (Pronto, Inquéritos, etc.)
                                     serv_def_l = ''
                                     if not df_folgas.empty and 'serviço' in df_folgas.columns:
                                         col_id_fl = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
@@ -5256,9 +5288,11 @@ else:
                         elif mid in em_ferias_e:
                             dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
-                            tipo_lic_e = militar_de_licenca(mid, d_e, df_licencas)
-                            if tipo_lic_e:
-                                dados = {'serviço': tipo_lic_e, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                            _lic_raw_e = militar_de_licenca(mid, d_e, df_licencas)
+                            if _lic_raw_e:
+                                _lic_tipo_e = _lic_raw_e.split('|')[0] if '|' in _lic_raw_e else _lic_raw_e
+                                _lic_obs_e  = _lic_raw_e.split('|')[1] if '|' in _lic_raw_e else ''
+                                dados = {'serviço': _lic_tipo_e, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': _lic_obs_e}
                             else:
                                 dados = {'serviço': 'Disponível', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         linhas_e_raw.append({'id': mid, 'apelido': apelido,
@@ -5417,7 +5451,8 @@ else:
                             label_h2: st.column_config.SelectboxColumn(label_h2, options=opts_hor_e, width='small'),
                         },
                         hide_index=True, use_container_width=True,
-                        key="editor_unificado", num_rows="fixed",
+                        key="editor_unificado", num_rows="dynamic",
+                        height=min(50 + len(df_uni) * 35, 2000),
                     )
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
@@ -5447,11 +5482,12 @@ else:
                     aba_e, info_e = abas_lista[0]
                     d_e = info_e['data']
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} -- {dias_pt[d_e.weekday()]}**")
+                    st.caption("💡 O campo ID aceita vários militares separados por `;` (ex: `507;1185`). Podes adicionar ou remover linhas.")
                     df_s = pd.DataFrame(info_e['linhas'])
                     df_editado_s = st.data_editor(
                         df_s,
                         column_config={
-                            'id':          st.column_config.TextColumn('ID', disabled=True, width='small'),
+                            'id':          st.column_config.TextColumn('ID(s)', width='small'),
                             'nome':        st.column_config.TextColumn('Nome', disabled=True, width='small'),
                             'serviço':     st.column_config.SelectboxColumn('Serviço', options=st.session_state.get('opts_sv_e', opts_sv_e), width='medium'),
                             'horário':     st.column_config.SelectboxColumn('Horário', options=opts_hor_e, width='small'),
@@ -5462,7 +5498,8 @@ else:
                             'observações': st.column_config.TextColumn('Observações', width='medium'),
                         },
                         hide_index=True, use_container_width=True,
-                        key=f"editor_{aba_e}", num_rows="fixed",
+                        key=f"editor_{aba_e}", num_rows="dynamic",
+                        height=min(50 + len(df_s) * 35, 2000),
                     )
                     if st.button("✅ GUARDAR ALTERAÇÕES", use_container_width=True, type="primary", key="btn_guardar_editar"):
                         with st.spinner("A guardar..."):
@@ -5779,17 +5816,18 @@ else:
             mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
                           for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
             mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
-            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Folga Complementar"], key="lic_tipo")
+            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Tribunal", "Folga Complementar"], key="lic_tipo")
         with col_l2:
             ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
             fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
+        obs_l = st.text_input("Observações:", placeholder="ex: Tribunal de Braga", key="lic_obs")
 
         if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_lic"):
             try:
                 sh_l = get_sheet()
                 ws_l = sh_l.worksheet("Licenças")
                 mid_l = mil_opts_l[mil_sel_l]
-                ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y')])
+                ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y'), obs_l.strip()])
                 load_licencas.clear()
                 st.success("✅ Registo adicionado!")
                 st.rerun()
