@@ -4802,6 +4802,18 @@ else:
                 def _to_abrev(serv, hor):
                     chave_norm = f"{norm(serv)} {hor}".strip()
                     return _abrev_norm.get(chave_norm, serv)
+
+                # Se há edições pendentes do data_editor (chave no session_state), aplicar ao tabela_escala
+                _editor_key = "editor_escala"
+                if _editor_key in st.session_state and pesq.strip():
+                    _editor_state = st.session_state.get(_editor_key, {})
+                    if _editor_state and 'edited_rows' in _editor_state:
+                        _tabela_atual = st.session_state.get('tabela_escala', linhas)
+                        _df_temp = pd.DataFrame(_tabela_atual)
+                        for _idx_str, _changes in _editor_state['edited_rows'].items():
+                            # idx no df_edit_show filtrado
+                            pass  # será tratado pela fusão abaixo
+
                 df_edit_abrev = df_edit.copy()
                 df_edit_abrev['serviço'] = df_edit.apply(lambda r: _to_abrev(str(r['serviço']).strip(), str(r['horário']).strip()), axis=1)
                 # Não limpar horário -- fica visível para edição
@@ -4874,6 +4886,34 @@ else:
                     for col_ed in ['indicativo', 'rádio', 'giro', 'viatura', 'observações']:
                         if col_ed in row_ed.index:
                             df_editado.at[i, col_ed] = row_ed[col_ed]
+
+                # Guardar edições no session_state para persistir durante pesquisa
+                if pesq.strip():
+                    # Só atualizar as linhas que foram editadas (visíveis na pesquisa)
+                    tabela_atual = st.session_state.get('tabela_escala', linhas)
+                    tabela_df = pd.DataFrame(tabela_atual)
+                    for _, row_ed in df_editado_show.iterrows():
+                        mid_ed = str(row_ed['id']).strip()
+                        idx_t = tabela_df[tabela_df['id'].astype(str).str.strip() == mid_ed].index
+                        if len(idx_t) > 0:
+                            i_t = idx_t[0]
+                            # Aplicar conversão de abreviatura
+                            sv_t = str(row_ed.get('serviço','')).strip()
+                            hor_t = str(row_ed.get('horário','')).strip()
+                            if sv_t in _abrev_hor:
+                                serv_r, hor_r = _abrev_hor[sv_t]
+                                tabela_df.at[i_t, 'serviço'] = serv_r
+                                if not hor_t or hor_t == 'nan':
+                                    tabela_df.at[i_t, 'horário'] = hor_r
+                                else:
+                                    tabela_df.at[i_t, 'horário'] = hor_t
+                            else:
+                                tabela_df.at[i_t, 'serviço'] = sv_t
+                                tabela_df.at[i_t, 'horário'] = hor_t
+                            for col_t in ['indicativo','rádio','giro','viatura','observações']:
+                                if col_t in row_ed.index:
+                                    tabela_df.at[i_t, col_t] = row_ed[col_t]
+                    st.session_state['tabela_escala'] = tabela_df.to_dict('records')
 
                 col_g1, col_g2, col_g3 = st.columns(3)
 
@@ -5820,7 +5860,7 @@ else:
             mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
                           for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
             mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
-            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Tribunal", "Folga Complementar"], key="lic_tipo")
+            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Tribunal", "FCAA CTer", "Folga Complementar"], key="lic_tipo")
         with col_l2:
             ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
             fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
