@@ -4691,8 +4691,12 @@ else:
                         servs_normais = [d for d in lista_dados if not norm(d.get('serviço','')).startswith('remu') and not norm(d.get('serviço','')).startswith('grat')]
                         servs_rem     = [d for d in lista_dados if norm(d.get('serviço','')).startswith('remu') or norm(d.get('serviço','')).startswith('grat')]
                         # Usar o serviço normal como principal
-                        dados = servs_normais[0] if servs_normais else lista_dados[0]
-                        # Se tem folga/ausência e sem serviço, verificar folgas
+                        if servs_normais:
+                            dados = servs_normais[0]
+                        else:
+                            # Só tem remunerado — linha principal fica vazia (para escalamento)
+                            dados = {'serviço': '', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                        # Se sem serviço, verificar folgas e por defeito
                         if not str(dados.get('serviço','')).strip() or str(dados.get('serviço','')).strip() == 'nan':
                             tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
                             if tipo_folga:
@@ -4704,7 +4708,7 @@ else:
                                     sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
                                     if sv_f and sv_f != 'nan':
                                         dados = {**dados, 'serviço': sv_f}
-                        # Adicionar linha principal
+                        # Adicionar linha principal (serviço normal ou vazio)
                         linhas.append({
                             'id': mid, 'nome': f"{posto} {nome}".strip(),
                             'serviço': dados['serviço'], 'horário': dados['horário'],
