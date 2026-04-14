@@ -4987,7 +4987,9 @@ else:
                                 for _, row_e in df_editado.iterrows():
                                     mid = str(row_e['id']).strip()
                                     serv = str(row_e['serviço']).strip()
-                                    if serv and serv != 'nan':
+                                    serv_norm = norm(serv)
+                                    # Remunerados não impedem de ser escalado noutro serviço
+                                    if serv and serv != 'nan' and not any(x in serv_norm for x in ['remu','grat']):
                                         ids_indisponiveis.add(mid)
 
                                 # Carregar ordem_escala
