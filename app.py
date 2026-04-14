@@ -5063,16 +5063,20 @@ else:
                                         elif mid in ids_escalados_g: motivo = 'ja_escalado'
                                         elif servico not in militares_servicos.get(mid, []): motivo = f'sem_servico:{militares_servicos.get(mid,[])}'
                                         else:
+                                            ini_novo, _ = _parse_horario(horario)
+                                            ok = True
+                                            # Verificar descanso em relação ao dia anterior
+                                            # Remunerados não contam para o descanso
                                             if not df_ant_g2.empty:
                                                 rows_ant = df_ant_g2[df_ant_g2['id'].astype(str).str.strip() == mid]
-                                                ini_novo, _ = _parse_horario(horario)
-                                                ok = True
+                                                # Excluir remunerados
+                                                rows_ant = rows_ant[~rows_ant['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                                                 for _, r_ant in rows_ant.iterrows():
                                                     _, fim_ant = _parse_horario(str(r_ant.get('horário','')))
                                                     if fim_ant and ini_novo is not None:
                                                         if (1440 - fim_ant) + ini_novo < 480:
                                                             ok = False; break
-                                                if not ok: motivo = 'descanso'
+                                            if not ok: motivo = 'descanso'
                                         if motivo:
                                             pass
                                         else:
