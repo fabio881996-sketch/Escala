@@ -2785,7 +2785,7 @@ else:
                         df_d = load_data(dt.strftime("%d-%m"))
                         if not df_d.empty:
                             # Suportar IDs agrupados (507;1185) e excluir remunerados como serviço principal
-                            m = df_d[df_d['id'].astype(str).apply(lambda x: u_id in re.split(r'[;,]+', x))]
+                            m = df_d[df_d['id'].astype(str).apply(lambda x: u_id in [i.strip() for i in re.split(r'[;,]+', x)])]
                             m = m[~m['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                             if not m.empty:
                                 row = m.iloc[0]
