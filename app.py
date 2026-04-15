@@ -2784,7 +2784,9 @@ else:
                     else:
                         df_d = load_data(dt.strftime("%d-%m"))
                         if not df_d.empty:
-                            m = df_d[df_d['id'].astype(str) == u_id]
+                            # Suportar IDs agrupados (507;1185) e excluir remunerados como serviço principal
+                            m = df_d[df_d['id'].astype(str).apply(lambda x: u_id in re.split(r'[;,]+', x))]
+                            m = m[~m['serviço'].apply(norm).str.contains('remu|grat', na=False)]
                             if not m.empty:
                                 row = m.iloc[0]
                                 obs_val = str(row.get('observações', '') or '').strip()
@@ -2872,8 +2874,8 @@ else:
                                         lambda x: u_id in re.split(r'[;,]+', x)
                                     )]
                                     rem_mil = rem_mil[rem_mil['serviço'].apply(norm).str.contains('remu|grat', na=False)]
-                                    # Remover duplicados por serviço+horário
-                                    rem_mil = rem_mil.drop_duplicates(subset=['serviço','horário'])
+                                    # Remover duplicados por serviço+horário (manter primeiro)
+                                    rem_mil = rem_mil.drop_duplicates(subset=['serviço','horário'], keep='first').reset_index(drop=True)
                                     # Excluir remunerados que foram cedidos (matar remunerado aprovado onde sou o cedente)
                                     if not df_trocas.empty:
                                         cedidos = df_trocas[
