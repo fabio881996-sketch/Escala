@@ -289,16 +289,19 @@ def _df_from_records(records) -> pd.DataFrame:
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega dados de uma aba da Google Sheet com cache de 3 minutos."""
     import time
-    for tentativa in range(4):
+    for tentativa in range(3):
         try:
             sh = get_sheet()
             if sh is None:
                 return pd.DataFrame()
             return _df_from_records(sh.worksheet(aba_nome).get_all_records())
         except Exception as e:
-            if tentativa < 3:
-                wait = 15 * (tentativa + 1)
-                time.sleep(wait)
+            err_str = str(e).lower()
+            # Se a aba não existe, não tentar mais
+            if 'not found' in err_str or 'worksheet' in err_str:
+                return pd.DataFrame()
+            if tentativa < 2:
+                time.sleep(5 * (tentativa + 1))
     return pd.DataFrame()
 
 def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
@@ -4385,7 +4388,7 @@ else:
             j = 0
             df_ant_cache = {}
 
-            while dias_sem < 3 and j < 20:
+            while dias_sem < 2 and j < 10:
                 dt_a = hoje_a + timedelta(days=j)
                 aba_a = dt_a.strftime('%d-%m')
                 df_a = load_data(aba_a)
