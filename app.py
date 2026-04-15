@@ -5132,6 +5132,15 @@ else:
                                 hdrs_c_raw = [h.strip() for h in todas_linhas_c[0]] if todas_linhas_c else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
                                 hdrs_c = [h.lower() for h in hdrs_c_raw]
 
+                                # Guardar linhas de remunerado existentes antes de limpar
+                                linhas_rem_preservar = []
+                                if len(todas_linhas_c) > 1:
+                                    ix_sv_p = hdrs_c.index('serviço') if 'serviço' in hdrs_c else 1
+                                    for row_p in todas_linhas_c[1:]:
+                                        sv_p = norm(str(row_p[ix_sv_p]).strip()) if ix_sv_p < len(row_p) else ''
+                                        if any(x in sv_p for x in ['remu','grat']):
+                                            linhas_rem_preservar.append(row_p)
+
                                 # Limpar aba — manter só cabeçalho
                                 ws_dia_c.resize(rows=1)
                                 if not todas_linhas_c:
@@ -5173,6 +5182,9 @@ else:
                                     nova_data.append(linha_nova)
                                 if nova_data:
                                     ws_dia_c.append_rows(nova_data)
+                                # Restaurar remunerados preservados
+                                if linhas_rem_preservar:
+                                    ws_dia_c.append_rows(linhas_rem_preservar)
 
                                 # Atualizar ordem_escala
                                 _atualizar_ordem_escala_dia(sh_c, aba_dia, d_gerar)
@@ -5470,11 +5482,17 @@ else:
                                 ws_g.update('A1', [hdrs_raw])
                             _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
                         else:
-                            # Aba com dados — limpar e reescrever agrupado
+                            # Aba com dados — preservar remunerados, limpar e reescrever agrupado
                             hdrs_raw = [h.strip() for h in todas_g[0]]
+                            hdrs_g_lower = [h.lower() for h in hdrs_raw]
+                            ix_sv_g2 = hdrs_g_lower.index('serviço') if 'serviço' in hdrs_g_lower else 1
+                            linhas_rem_g = [r for r in todas_g[1:] if any(x in norm(str(r[ix_sv_g2]).strip()) for x in ['remu','grat'])]
                             ws_g.clear()
                             ws_g.update('A1', [hdrs_raw])
                             _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
+                            # Restaurar remunerados
+                            if linhas_rem_g:
+                                ws_g.append_rows(linhas_rem_g)
 
                         # Atualizar ordem_escala
                         try:
