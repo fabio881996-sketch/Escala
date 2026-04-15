@@ -2867,9 +2867,13 @@ else:
                                 df_rem_dia = df_d  # já carregado acima
                                 cards_rem = []  # lista de (horario_inicio_min, html)
                                 if not df_rem_dia.empty and 'serviço' in df_rem_dia.columns:
-                                    # Remunerados escalados diretamente
-                                    rem_mil = df_rem_dia[df_rem_dia['id'].astype(str) == u_id]
+                                    # Remunerados escalados diretamente -- verificar se u_id está em qualquer linha (incluindo agrupadas)
+                                    rem_mil = df_rem_dia[df_rem_dia['id'].astype(str).apply(
+                                        lambda x: u_id in re.split(r'[;,]+', x)
+                                    )]
                                     rem_mil = rem_mil[rem_mil['serviço'].apply(norm).str.contains('remu|grat', na=False)]
+                                    # Remover duplicados por serviço+horário
+                                    rem_mil = rem_mil.drop_duplicates(subset=['serviço','horário'])
                                     # Excluir remunerados que foram cedidos (matar remunerado aprovado onde sou o cedente)
                                     if not df_trocas.empty:
                                         cedidos = df_trocas[
