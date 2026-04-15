@@ -5315,7 +5315,9 @@ else:
                                 for mid in re.split(r'[;,\n]+', id_raw):
                                     mid = mid.strip()
                                     if mid:
-                                        mapa_e[mid] = dados_r
+                                        if mid not in mapa_e:
+                                            mapa_e[mid] = []
+                                        mapa_e[mid].append(dados_r)
                             # Combinar com opts base das listas (garantir que ficam sempre disponíveis)
                             st.session_state['opts_hor_e'] = [''] + sorted(opts_hor_e - {''})
                             st.session_state['opts_ind_e'] = [''] + sorted(opts_ind_e - {''})
@@ -5334,7 +5336,10 @@ else:
                         partes_nome = nome.split()
                         apelido = partes_nome[-1] if partes_nome else nome
                         if mid in mapa_e:
-                            dados = mapa_e[mid]
+                            lista_e = mapa_e[mid]
+                            # Preferir serviço normal (não remunerado)
+                            servs_normais_e = [d for d in lista_e if not norm(d.get('serviço','')).startswith('remu') and not norm(d.get('serviço','')).startswith('grat')]
+                            dados = servs_normais_e[0] if servs_normais_e else lista_e[0]
                         elif mid in em_ferias_e:
                             dados = {'serviço': 'Férias', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
