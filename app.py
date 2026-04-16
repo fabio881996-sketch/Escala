@@ -5673,10 +5673,8 @@ else:
                         if col not in df_ord_rem.columns:
                             df_ord_rem[col] = ''
 
-                    # DEBUG hex — remover depois
-                    if 'disponivel' in df_ord_rem.columns:
-                        for v in df_ord_rem['disponivel'].head(3).tolist():
-                            st.write(f"raw disponivel repr: {repr(v)} hex: {v.encode('utf-8').hex() if isinstance(v,str) else v}")
+                    # DEBUG colunas — remover depois
+                    st.write("Colunas e repr:", {repr(c): c.encode('utf-8').hex() for c in df_ord_rem.columns})
                     # Converter tipos booleanos
                     for bcol in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso']:
                         raw = df_ord_rem[bcol]
