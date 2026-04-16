@@ -3955,17 +3955,46 @@ else:
                                 if not verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg):
                                     nome_c = get_nome_curto(df_util, id_c)
                                     opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c})")
+
+                            # Militares com remunerado não cedido -- aparecem com indicação 💶
+                            cols_com_rem = df_d[
+                                base_mask &
+                                ~mask_folga & ~mask_imp &
+                                mask_rem_nao_cedido &
+                                ~df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False)
+                            ]
+                            for _, row_c in cols_com_rem.iterrows():
+                                id_c   = str(row_c['id'])
+                                serv_c = str(row_c['serviço'])
+                                hor_c  = str(row_c['horário'])
+                                if not verificar_descanso_troca(u_id, id_c, dt_s, meu_serv_nome, meu_hor_val, serv_c, hor_c, df_d, df_ant, df_seg):
+                                    rem_rows_c = df_d[(df_d['id'].astype(str).str.strip() == id_c) &
+                                                      (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))]
+                                    if not rem_rows_c.empty:
+                                        rem_hor_c = str(rem_rows_c.iloc[0]['horário']).strip()
+                                        nome_c = get_nome_curto(df_util, id_c)
+                                        opts.append(f"{id_c} {nome_c} - {serv_c} ({hor_c}) 💶[{rem_hor_c}]")
+
                             if not opts:
                                 st.warning("Não há militares disponíveis para troca neste dia (restrições de descanso).")
                             else:
-                                with st.form("tr_simples"):
-                                    alvo = st.selectbox("👤 Trocar com:", opts)
-                                    st.markdown("<br>", unsafe_allow_html=True)
-                                    if st.form_submit_button("📨 ENVIAR PEDIDO", use_container_width=True):
-                                        id_d  = alvo.split(" ")[0]
-                                        s_d   = alvo.split(" - ", 1)[1]
-                                        if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", ""]):
-                                            st.success("✅ Pedido enviado com sucesso!")
+                                alvo = st.selectbox("👤 Trocar com:", opts, key="sel_alvo_troca")
+                                incluir_rem = False
+                                if alvo and '💶[' in alvo:
+                                    rem_hor_aviso = alvo.split('💶[')[1].rstrip(']')
+                                    incluir_rem = st.checkbox(
+                                        f"⚠️ Este militar tem remunerado ({rem_hor_aviso}). Incluir transferência do remunerado?",
+                                        key="chk_incluir_rem"
+                                    )
+                                st.markdown("<br>", unsafe_allow_html=True)
+                                if st.button("📨 ENVIAR PEDIDO", use_container_width=True, key="btn_enviar_troca"):
+                                    id_d = alvo.split(" ")[0]
+                                    # Limpar indicação de remunerado do serviço destino
+                                    s_d_raw = alvo.split(" - ", 1)[1]
+                                    s_d = s_d_raw.split(" 💶[")[0] if " 💶[" in s_d_raw else s_d_raw
+                                    obs_troca = "INCLUIR_REMUNERADO" if incluir_rem else ""
+                                    if salvar_troca_gsheet([dt_s.strftime('%d/%m/%Y'), u_id, meu_s, id_d, s_d, "Pendente_Militar", obs_troca]):
+                                        st.success("✅ Pedido enviado com sucesso!")
 
                 # ── Dar Remunerado ──
                 elif tipo_troca == "💶 Dar Remunerado":
@@ -4151,17 +4180,36 @@ else:
                                 unsafe_allow_html=True
                             )
                         else:
+                            obs_r = str(r.get('observações', '') or '').strip()
+                            tem_rem_troca = obs_r == 'INCLUIR_REMUNERADO'
                             st.markdown(
                                 f'<div class="card-servico card-troca">'
                                 f'<h3>📅 {data_fmt}</h3>'
                                 f'<p>👤 <b>{nome_orig}</b> quer trocar contigo</p>'
                                 f'<p>🟢 Recebes: <b>{r["servico_origem"]}</b></p>'
                                 f'<p>🔴 Dás: <b>{r["servico_destino"]}</b></p>'
+                                + (f'<p>💶 Inclui transferência do teu remunerado para {nome_orig}</p>' if tem_rem_troca else '') +
                                 f'</div>',
                                 unsafe_allow_html=True
                             )
                         c1, c2 = st.columns(2)
                         if c1.button("✅ ACEITAR", key=f"ac_{idx}", use_container_width=True):
+                            obs_r = str(r.get('observações', '') or '').strip()
+                            if obs_r == 'INCLUIR_REMUNERADO':
+                                # Criar também pedido de transferência do remunerado
+                                rem_rows_dest = df_trocas  # já temos df_trocas
+                                # Buscar remunerado do destino (u_id) naquele dia
+                                try:
+                                    df_dia_rem_t = load_data(datetime.strptime(r['data'], '%d/%m/%Y').strftime('%d-%m'))
+                                    rem_meu = df_dia_rem_t[
+                                        (df_dia_rem_t['id'].astype(str).str.strip() == u_id) &
+                                        (df_dia_rem_t['serviço'].str.lower().str.contains(r'remu|grat', na=False))
+                                    ]
+                                    if not rem_meu.empty:
+                                        serv_rem = f"{rem_meu.iloc[0]['serviço']} ({rem_meu.iloc[0]['horário']})"
+                                        salvar_troca_gsheet([r['data'], u_id, 'MATAR_REMUNERADO', r['id_origem'], serv_rem, 'Pendente_Admin', ''])
+                                except:
+                                    pass
                             st.session_state['pedido_acao'] = {'idx': idx, 'status': 'Pendente_Admin'}
                             st.rerun()
                         if c2.button("❌ RECUSAR", key=f"re_{idx}", use_container_width=True):
