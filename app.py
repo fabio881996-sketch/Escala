@@ -4021,7 +4021,6 @@ else:
                             (df_d['id'].astype(str).str.strip() != u_id) &
                             (df_d['id'].astype(str).str.strip() != '') &
                             (df_d['id'].astype(str).str.strip() != 'nan') &
-                            (~df_d['id'].astype(str).str.strip().isin(ids_com_troca)) &
                             (~df_d['id'].astype(str).str.strip().isin(ids_sem_remunerado)) &
                             (df_d['serviço'].str.lower().str.contains(r'remu|grat', na=False))
                         ]
