@@ -1064,8 +1064,18 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
                 if v: ordem[h].append(v)
 
         # Ler aba do dia para saber quem ficou escalado
-        ws_dia = sh.worksheet(aba_dia)
-        vals_dia = ws_dia.get_all_values()
+        import time as _t2
+        _t2.sleep(1)
+        for _tentativa in range(3):
+            try:
+                ws_dia = sh.worksheet(aba_dia)
+                vals_dia = ws_dia.get_all_values()
+                break
+            except Exception as _ex:
+                if '429' in str(_ex) and _tentativa < 2:
+                    _t2.sleep(20)
+                else:
+                    return
         if not vals_dia: return
         hdrs_dia = [h.strip().lower() for h in vals_dia[0]]
         ix_id = hdrs_dia.index('id')      if 'id'      in hdrs_dia else 0
@@ -5455,10 +5465,20 @@ else:
                 abas_lista = list(dados_editar.items())
 
                 def _guardar_sheets(editados_dict):
+                    import time
                     sh_gc = get_sheet()
                     for aba_g, df_g in editados_dict.items():
-                        ws_g = sh_gc.worksheet(aba_g)
-                        todas_g = ws_g.get_all_values()
+                        # Retry em caso de 429
+                        for tentativa in range(3):
+                            try:
+                                ws_g = sh_gc.worksheet(aba_g)
+                                todas_g = ws_g.get_all_values()
+                                break
+                            except Exception as ex:
+                                if '429' in str(ex) and tentativa < 2:
+                                    time.sleep(20 * (tentativa + 1))
+                                else:
+                                    raise
                         if not todas_g: continue
                         hdrs_g = [h.strip().lower() for h in todas_g[0]]
                         ix_id_g  = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
@@ -5533,8 +5553,10 @@ else:
                             if linhas_rem_g:
                                 ws_g.append_rows(linhas_rem_g)
 
-                        # Atualizar ordem_escala
+                        # Atualizar ordem_escala (com delay para evitar 429)
                         try:
+                            import time as _t
+                            _t.sleep(2)
                             aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
                             _atualizar_ordem_escala_dia(sh_gc, aba_g, aba_data_g)
                         except:
