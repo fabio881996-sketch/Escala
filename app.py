@@ -3911,9 +3911,24 @@ else:
                             ~((df_d['serviço'] == meu_serv_orig) & (df_d['horário'] == meu_hor_orig)) &
                             ~(estou_de_folga & df_d['serviço'].str.lower().str.contains('folga', na=False))
                         )
-                        # Folgas: disponíveis sempre (sem verificação de descanso)
-                        mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
-                        mask_imp   = df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False)
+                        # IDs de militares com serviço Pronto no folgas_2026 -- nunca aparecem nas trocas
+                        ids_pronto = set()
+                        if not df_folgas.empty:
+                            col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                            col_sv_f = 'serviço' if 'serviço' in df_folgas.columns else None
+                            if col_sv_f:
+                                ids_pronto = set(df_folgas[df_folgas[col_sv_f].apply(norm).str.contains('pronto', na=False)][col_id_f].astype(str).str.strip().tolist())
+
+                        # Folgas disponíveis para troca -- excluir Folga Semanal e Complementar e militares de Pronto
+                        mask_folga = (
+                            df_d['serviço'].str.lower().str.contains('folga', na=False) &
+                            ~df_d['serviço'].apply(norm).str.contains('folga semanal|folga complementar', na=False) &
+                            ~df_d['id'].astype(str).str.strip().isin(ids_pronto)
+                        )
+                        mask_imp   = (
+                            df_d['serviço'].apply(norm).str.contains(IMPEDIMENTOS_PATTERN + '|folga semanal|folga complementar', na=False) |
+                            df_d['id'].astype(str).str.strip().isin(ids_pronto)
+                        )
                         # Remunerados que NÃO foram cedidos -- são impedimento
                         mask_rem_nao_cedido = df_d['id'].astype(str).apply(_tem_rem_nao_cedido)
                         # Debug
