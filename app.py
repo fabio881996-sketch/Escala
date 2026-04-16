@@ -5644,14 +5644,17 @@ else:
                     df_dia_rem = load_data(aba_rem)
                     data_str_rem = d_rem.strftime("%d/%m/%Y")
 
-                    # Determinar coluna de horas correta: A fds / A semana / B
+                    # Determinar colunas corretas: A fds / A semana / B
                     is_fds = d_rem.weekday() >= 5  # sábado=5, domingo=6
                     if tab_rem_sel == "B":
-                        col_total = "total_ano_b"
+                        col_total  = "total_ano_b"
+                        col_ultimo = "ultimo_b"
                     elif is_fds:
-                        col_total = "total_ano_a_fds"
+                        col_total  = "total_ano_a_fds"
+                        col_ultimo = "ultimo_a_fds"
                     else:
-                        col_total = "total_ano_a_semana"
+                        col_total  = "total_ano_a_semana"
+                        col_ultimo = "ultimo_a_semana"
 
                     # Calcular horas do remunerado a nomear
                     hi_rem, hf_rem, horas_rem = None, None, 0
@@ -5664,7 +5667,7 @@ else:
                             pass
 
                     # Garantir colunas existem
-                    for col in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso', col_total]:
+                    for col in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso', col_total, col_ultimo]:
                         if col not in df_ord_rem.columns:
                             df_ord_rem[col] = ''
 
@@ -5678,6 +5681,8 @@ else:
                         df_ord_rem[bcol] = df_ord_rem[bcol].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
 
                     df_ord_rem[col_total] = pd.to_numeric(df_ord_rem[col_total], errors='coerce').fillna(0)
+                    # Converter data do último — vazio fica NaT (vai primeiro na ordenação)
+                    df_ord_rem[col_ultimo] = pd.to_datetime(df_ord_rem[col_ultimo], dayfirst=True, errors='coerce')
 
                     # Funções auxiliares
                     def _sobreposicao(h1_ini, h1_fim, h2_ini, h2_fim):
@@ -5746,8 +5751,12 @@ else:
 
                     # Filtrar só disponíveis
                     df_disp = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
-                    # Ordenar por menos horas (critério principal)
-                    df_disp_sorted = df_disp.sort_values(col_total, ascending=True)
+                    # Ordenar: NaT (nunca nomeado) primeiro, depois data mais antiga, desempate por menos horas
+                    df_disp_sorted = df_disp.sort_values(
+                        [col_ultimo, col_total],
+                        ascending=[True, True],
+                        na_position='first'
+                    )
 
                     def _pode_nomear(row_r, mid_r, motivo_skip):
                         """Verifica sobreposição e descanso. Devolve True se pode ser nomeado."""
@@ -5851,6 +5860,7 @@ else:
                             'tabela': tab_rem_sel,
                             'observacao': obs_rem,
                             'col_total': col_total,
+                            'col_ultimo': col_ultimo,
                             'horas_rem': horas_rem,
                         }
                     else:
@@ -5877,20 +5887,27 @@ else:
                                 "", "", "",
                                 dados_rem['observacao'],
                             ])
-                            # Atualizar horas em ordem_remunerados
+                            # Atualizar horas e data último em ordem_remunerados
+                            import unicodedata as _udn
+                            def _nc(s): return _udn.normalize('NFD',s).encode('ascii','ignore').decode('ascii').strip().lower()
                             ws_ord = sh_conf.worksheet("ordem_remunerados")
                             todos_vals = ws_ord.get_all_values()
-                            hdrs_ord = [h.strip().lower() for h in todos_vals[0]]
+                            hdrs_ord = [_nc(h) for h in todos_vals[0]]
                             col_id_idx  = hdrs_ord.index('id') if 'id' in hdrs_ord else 0
-                            col_tot_idx = hdrs_ord.index(dados_rem['col_total']) if dados_rem['col_total'] in hdrs_ord else None
+                            col_tot_idx = hdrs_ord.index(dados_rem['col_total'])  if dados_rem['col_total']  in hdrs_ord else None
+                            col_ult_idx = hdrs_ord.index(dados_rem['col_ultimo']) if dados_rem['col_ultimo'] in hdrs_ord else None
                             horas_add   = dados_rem.get('horas_rem', 0) or 1
                             upds_ord = []
                             for i, row_o in enumerate(todos_vals[1:], start=2):
                                 mid_o = str(row_o[col_id_idx]).strip() if col_id_idx < len(row_o) else ''
-                                if mid_o in ids_nomeados and col_tot_idx is not None:
-                                    total_atual = int(str(row_o[col_tot_idx]).strip() or 0) if col_tot_idx < len(row_o) else 0
-                                    cl = chr(ord('A') + col_tot_idx)
-                                    upds_ord.append({'range': f'{cl}{i}', 'values': [[total_atual + horas_add]]})
+                                if mid_o in ids_nomeados:
+                                    if col_tot_idx is not None:
+                                        total_atual = int(str(row_o[col_tot_idx]).strip() or 0) if col_tot_idx < len(row_o) else 0
+                                        cl = chr(ord('A') + col_tot_idx)
+                                        upds_ord.append({'range': f'{cl}{i}', 'values': [[total_atual + horas_add]]})
+                                    if col_ult_idx is not None:
+                                        cl2 = chr(ord('A') + col_ult_idx)
+                                        upds_ord.append({'range': f'{cl2}{i}', 'values': [[dados_rem['data']]]})
                             if upds_ord:
                                 ws_ord.batch_update(upds_ord)
                             load_data.clear()
@@ -6036,10 +6053,13 @@ else:
                         is_fds_s = rem_g['data_obj'].weekday() >= 5
                         if rem_g['tabela'] == 'B':
                             col_tot_s = 'total_ano_b'
+                            col_ult_s = 'ultimo_b'
                         elif is_fds_s:
                             col_tot_s = 'total_ano_a_fds'
+                            col_ult_s = 'ultimo_a_fds'
                         else:
                             col_tot_s = 'total_ano_a_semana'
+                            col_ult_s = 'ultimo_a_semana'
 
                         # Carregar dados do dia para verificar elegibilidade
                         df_dia_s = load_data(rem_g['aba'])
@@ -6082,7 +6102,15 @@ else:
                         elegiveis_s = []
                         df_disp_s = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
                         df_disp_s[col_tot_s] = pd.to_numeric(df_disp_s[col_tot_s], errors='coerce').fillna(0)
-                        df_disp_s = df_disp_s.sort_values(col_tot_s, ascending=True)
+                        if col_ult_s not in df_disp_s.columns:
+                            df_disp_s[col_ult_s] = pd.NaT
+                        else:
+                            df_disp_s[col_ult_s] = pd.to_datetime(df_disp_s[col_ult_s], dayfirst=True, errors='coerce')
+                        df_disp_s = df_disp_s.sort_values(
+                            [col_ult_s, col_tot_s],
+                            ascending=[True, True],
+                            na_position='first'
+                        )
 
                         for _, row_s in df_disp_s.iterrows():
                             mid_s2 = str(row_s.get('id', '')).strip()
