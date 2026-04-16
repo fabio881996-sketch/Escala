@@ -5476,6 +5476,29 @@ else:
                                              'giro': r['giro'], 'viatura': r['viatura'],
                                              'observações': r['observações']})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
+
+                    # Adicionar remunerados manuais do Sheets como linhas extra
+                    # (não aparecem individualmente porque cada militar já tem o seu serviço principal)
+                    for mid_rem, lista_rem in mapa_e.items():
+                        for d_rem in lista_rem:
+                            if re.search(r'remu|grat', norm(d_rem.get('serviço',''))):
+                                # Verificar se já aparece como linha principal deste militar
+                                mid_existe = any(str(l['id']).strip() == mid_rem and re.search(r'remu|grat', norm(str(l.get('serviço','')))) for l in linhas_e)
+                                if not mid_existe:
+                                    # Adicionar linha de remunerado
+                                    apelido_rem = ''
+                                    row_u_rem = df_util[df_util['id'].astype(str).str.strip() == mid_rem]
+                                    if not row_u_rem.empty:
+                                        nome_rem = str(row_u_rem.iloc[0].get('nome','')).strip()
+                                        partes_rem = nome_rem.split()
+                                        apelido_rem = partes_rem[-1] if partes_rem else nome_rem
+                                    linhas_e.append({
+                                        'id': mid_rem, 'nome': apelido_rem,
+                                        'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
+                                        'indicativo': d_rem.get('indicativo',''), 'rádio': d_rem.get('rádio',''),
+                                        'giro': d_rem.get('giro',''), 'viatura': d_rem.get('viatura',''),
+                                        'observações': d_rem.get('observações',''),
+                                    })
                 st.session_state['editar_escala'] = dados_editar
                 st.session_state['editar_escala_original'] = {
                     aba: {mid: dict(r) for r in info['linhas'] for mid in [str(r['id']).strip()]}
