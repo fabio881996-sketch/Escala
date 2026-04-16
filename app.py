@@ -3183,12 +3183,7 @@ else:
                             du = sum(1 for n in range((fim_d - ini_d).days + 1)
                                     if (ini_d + timedelta(days=n)).weekday() < 5
                                     and (ini_d + timedelta(days=n)) not in fer_tab)
-                            fim_ext = ini_d
-                            while True:
-                                prox = fim_ext + timedelta(days=1)
-                                if prox.weekday() >= 5 or prox in fer_tab: fim_ext = prox
-                                else: break
-                            dc = (fim_ext - ini_d).days + 1
+                            dc = (fim_d - ini_d).days + 1
                             periodos_ft.append((ini_d, fim_d, du, dc))
                         total_du_ft = sum(p[2] for p in periodos_ft)
 
@@ -3363,15 +3358,7 @@ else:
                     return None
 
                 def dias_corridos_reais(ini_d, fim_d, fer_f):
-                    # Estender fim_d para incluir fins de semana e feriados subsequentes
-                    fim_ext = fim_d
-                    while True:
-                        proximo = fim_ext + timedelta(days=1)
-                        if proximo.weekday() >= 5 or proximo in fer_f:
-                            fim_ext = proximo
-                        else:
-                            break
-                    return (fim_ext - ini_d).days + 1
+                    return (fim_d - ini_d).days + 1
                 for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
                     ini_v = str(row_f.get(ini_c, '')).strip()
                     fim_v = str(row_f.get(fim_c, '')).strip()
@@ -5338,6 +5325,9 @@ else:
                         ws_chk.update('A1', [hdrs_modelo_e])
                 # Pré-calcular férias uma vez para todos os dias/militares
                 ferias_cache_e = {}
+                if 'id' not in df_util.columns:
+                    st.error("Erro ao carregar utilizadores. Tenta novamente.")
+                    st.stop()
                 for d_e in dias_editar:
                     em_ferias = set()
                     for mid in df_util['id'].astype(str).str.strip():
