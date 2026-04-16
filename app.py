@@ -5613,7 +5613,10 @@ else:
                 ws_ord_rem = sh_rem.worksheet("ordem_remunerados")
                 _vals_rem = ws_ord_rem.get_all_values()
                 if len(_vals_rem) > 1:
-                    _hdrs_rem = [c.strip().lower() for c in _vals_rem[0]]
+                    import unicodedata as _ud
+                    def _norm_col(s):
+                        return _ud.normalize('NFD', s).encode('ascii','ignore').decode('ascii').strip().lower()
+                    _hdrs_rem = [_norm_col(c) for c in _vals_rem[0]]
                     df_ord_rem = pd.DataFrame(_vals_rem[1:], columns=_hdrs_rem)
                 else:
                     df_ord_rem = pd.DataFrame()
