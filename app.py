@@ -5712,6 +5712,9 @@ else:
 
                     # Classificar militares do dia
                     # militares_com_servico: têm serviço real (não folga, não ausência, não remunerado)
+                    # Padrão de impedimento — qualquer serviço que não seja operacional normal
+                    _IMP = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
+
                     # militares_de_folga: têm Folga Semanal ou Folga Complementar
                     servicos_dia = {}
                     militares_com_servico = set()
@@ -5724,7 +5727,10 @@ else:
                             serv_norm = norm(str(row_sd.get('serviço', '')))
                             if 'folga semanal' in serv_norm or 'folga complementar' in serv_norm:
                                 militares_de_folga.add(mid_sd)
-                            elif not any(x in serv_norm for x in ['remu','grat','ferias','licen','doente','baixa','dilig','tribunal']):
+                            elif re.search(_IMP, serv_norm):
+                                # impedimento — vai para ausentes_dia
+                                pass
+                            elif not re.search(r'remu|grat', serv_norm):
                                 hor_sd = str(row_sd.get('horário', '')).strip()
                                 hi_sd, hf_sd = None, None
                                 if '-' in hor_sd:
@@ -5736,10 +5742,10 @@ else:
                                 servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
                                 militares_com_servico.add(mid_sd)
 
-                    # Ausentes no dia (férias, licenças, etc.)
+                    # Ausentes no dia (todas as situações de impedimento)
                     ausentes_dia = set()
                     if not df_dia_rem.empty:
-                        aus_mask = df_dia_rem['serviço'].apply(norm).str.contains('ferias|licen|doente|baixa|dilig|tribunal', na=False)
+                        aus_mask = df_dia_rem['serviço'].apply(norm).str.contains(_IMP, na=False)
                         for mid_a in df_dia_rem[aus_mask]['id'].astype(str).str.strip().tolist():
                             if mid_a:
                                 ausentes_dia.add(mid_a)
