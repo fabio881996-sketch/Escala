@@ -5745,6 +5745,15 @@ else:
 
                     # Filtrar só disponíveis
                     df_disp = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
+                    # DEBUG CONVERSÃO — remover depois
+                    with st.expander('🔧 DEBUG CONVERSÃO'):
+                        st.write('disponivel únicos após conversão:', df_ord_rem['disponivel'].unique().tolist())
+                        st.write('voluntario únicos:', df_ord_rem['voluntario'].unique().tolist())
+                        st.write('folga únicos:', df_ord_rem['folga'].unique().tolist())
+                        st.write('df_disp linhas:', len(df_disp))
+                        st.write('militares_com_servico:', militares_com_servico)
+                        st.write('militares_de_folga:', militares_de_folga)
+                        st.write('ausentes_dia:', ausentes_dia)
 
                     # Ordenar por menos horas (critério principal)
                     df_disp_sorted = df_disp.sort_values(col_total, ascending=True)
