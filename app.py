@@ -4476,10 +4476,10 @@ else:
                         rows_a = df_ant_serv[df_ant_serv['id'].astype(str) == mid]
                         for _, rh in rows_h.iterrows():
                             ini_h, _ = _parse_horario(rh['horário'])
-                            if ini_h is None or _e_atendimento(rh['serviço']): continue
+                            if ini_h is None: continue
                             for _, ra in rows_a.iterrows():
                                 _, fim_a = _parse_horario(ra['horário'])
-                                if fim_a is None or _e_atendimento(ra['serviço']): continue
+                                if fim_a is None: continue
                                 descanso = (ini_h + 1440) - fim_a
                                 if 0 <= descanso < 480:
                                     n = get_nome_militar(df_util, mid)
