@@ -332,8 +332,25 @@ def load_utilizadores() -> pd.DataFrame:
                 time.sleep(1)
     return pd.DataFrame()
 
-@st.cache_data(ttl=30)
-def load_trocas() -> pd.DataFrame:
+@st.cache_data(ttl=60)
+def load_ordem_remunerados() -> pd.DataFrame:
+    """Carrega ordem_remunerados com cache de 60s."""
+    try:
+        sh = get_sheet()
+        if sh is None:
+            return pd.DataFrame()
+        ws = sh.worksheet("ordem_remunerados")
+        vals = ws.get_all_values()
+        if len(vals) <= 1:
+            return pd.DataFrame()
+        import unicodedata as _ud
+        def _nc(s): return _ud.normalize('NFD', s).encode('ascii','ignore').decode('ascii').strip().lower()
+        hdrs = [_nc(c) for c in vals[0]]
+        return pd.DataFrame(vals[1:], columns=hdrs)
+    except Exception:
+        return pd.DataFrame()
+
+
     """Carrega registos_trocas com cache curto de 30s."""
     for tentativa in range(3):
         try:
@@ -5607,25 +5624,11 @@ else:
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
 
-            # Carregar ordem_remunerados
-            try:
-                sh_rem = get_sheet()
-                ws_ord_rem = sh_rem.worksheet("ordem_remunerados")
-                _vals_rem = ws_ord_rem.get_all_values()
-                if len(_vals_rem) > 1:
-                    import unicodedata as _ud
-                    def _norm_col(s):
-                        return _ud.normalize('NFD', s).encode('ascii','ignore').decode('ascii').strip().lower()
-                    _hdrs_rem = [_norm_col(c) for c in _vals_rem[0]]
-                    df_ord_rem = pd.DataFrame(_vals_rem[1:], columns=_hdrs_rem)
-                else:
-                    df_ord_rem = pd.DataFrame()
-            except Exception as e:
-                st.error(f"Aba 'ordem_remunerados' não encontrada: {e}")
-                st.stop()
-
+            # Carregar ordem_remunerados (cacheado)
+            df_ord_rem = load_ordem_remunerados()
             if df_ord_rem.empty:
-                st.info("Sem dados na aba 'ordem_remunerados'.")
+                st.error("Aba 'ordem_remunerados' não encontrada ou vazia.")
+                st.stop()
             else:
                 col_r1, col_r2, col_r3, col_r4 = st.columns(4)
                 with col_r1:
@@ -5915,6 +5918,7 @@ else:
                             for mid_h in ids_nomeados:
                                 ws_hist.append_row([mid_h, dados_rem['data'], dados_rem['col_ultimo']])
                             load_data.clear()
+                            load_ordem_remunerados.clear()
                             del st.session_state['rem_nomeados']
                             st.success("✅ Nomeação confirmada e escala atualizada!")
                             st.rerun()
@@ -6110,6 +6114,7 @@ else:
                                     _repor_data_ultimo(ws_ord_c, hdrs_c2, ws_hist_c, mid_c2, col_ult_c, data_cancel)
 
                                 load_data.clear()
+                                load_ordem_remunerados.clear()
                                 del st.session_state[f'gest_acao_{chave_base}']
                                 st.success("✅ Remunerado cancelado e horas subtraídas.")
                                 st.rerun()
@@ -6306,6 +6311,7 @@ else:
                                             break
 
                                 load_data.clear()
+                                load_ordem_remunerados.clear()
                                 del st.session_state[f'gest_acao_{chave_base}']
                                 st.success(f"✅ {nomes_atuais.get(mid_sair, mid_sair)} substituído por {get_nome_curto(df_util, mid_entra)}.")
                                 st.rerun()
