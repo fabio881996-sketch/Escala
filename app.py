@@ -5477,28 +5477,42 @@ else:
                                              'observações': r['observações']})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
 
-                    # Adicionar remunerados manuais do Sheets como linhas extra
-                    # (não aparecem individualmente porque cada militar já tem o seu serviço principal)
+                    # Adicionar remunerados manuais agrupados por serviço+horário
+                    grupos_rem_e = {}  # (serviço, horário) -> {ids, nomes, ...}
                     for mid_rem, lista_rem in mapa_e.items():
                         for d_rem in lista_rem:
-                            if re.search(r'remu|grat', norm(d_rem.get('serviço',''))):
-                                # Verificar se já aparece como linha principal deste militar
-                                mid_existe = any(str(l['id']).strip() == mid_rem and re.search(r'remu|grat', norm(str(l.get('serviço','')))) for l in linhas_e)
-                                if not mid_existe:
-                                    # Adicionar linha de remunerado
-                                    apelido_rem = ''
-                                    row_u_rem = df_util[df_util['id'].astype(str).str.strip() == mid_rem]
-                                    if not row_u_rem.empty:
-                                        nome_rem = str(row_u_rem.iloc[0].get('nome','')).strip()
-                                        partes_rem = nome_rem.split()
-                                        apelido_rem = partes_rem[-1] if partes_rem else nome_rem
-                                    linhas_e.append({
-                                        'id': mid_rem, 'nome': apelido_rem,
-                                        'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
-                                        'indicativo': d_rem.get('indicativo',''), 'rádio': d_rem.get('rádio',''),
-                                        'giro': d_rem.get('giro',''), 'viatura': d_rem.get('viatura',''),
-                                        'observações': d_rem.get('observações',''),
-                                    })
+                            if not re.search(r'remu|grat', norm(d_rem.get('serviço',''))):
+                                continue
+                            sv_r = d_rem['serviço']
+                            hr_r = d_rem['horário']
+                            chave_r = (sv_r, hr_r)
+                            apelido_rem = ''
+                            row_u_rem = df_util[df_util['id'].astype(str).str.strip() == mid_rem]
+                            if not row_u_rem.empty:
+                                nome_rem = str(row_u_rem.iloc[0].get('nome','')).strip()
+                                partes_rem = nome_rem.split()
+                                apelido_rem = partes_rem[-1] if partes_rem else nome_rem
+                            if chave_r not in grupos_rem_e:
+                                grupos_rem_e[chave_r] = {
+                                    'ids': [mid_rem], 'nomes': [apelido_rem],
+                                    'indicativo': d_rem.get('indicativo',''),
+                                    'rádio': d_rem.get('rádio',''),
+                                    'giro': d_rem.get('giro',''),
+                                    'viatura': d_rem.get('viatura',''),
+                                    'observações': d_rem.get('observações',''),
+                                }
+                            else:
+                                if mid_rem not in grupos_rem_e[chave_r]['ids']:
+                                    grupos_rem_e[chave_r]['ids'].append(mid_rem)
+                                    grupos_rem_e[chave_r]['nomes'].append(apelido_rem)
+                    for (sv_r, hr_r), g_r in grupos_rem_e.items():
+                        linhas_e.append({
+                            'id': ';'.join(g_r['ids']), 'nome': ', '.join(g_r['nomes']),
+                            'serviço': sv_r, 'horário': hr_r,
+                            'indicativo': g_r['indicativo'], 'rádio': g_r['rádio'],
+                            'giro': g_r['giro'], 'viatura': g_r['viatura'],
+                            'observações': g_r['observações'],
+                        })
                 st.session_state['editar_escala'] = dados_editar
                 st.session_state['editar_escala_original'] = {
                     aba: {mid: dict(r) for r in info['linhas'] for mid in [str(r['id']).strip()]}
