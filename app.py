@@ -5705,28 +5705,33 @@ else:
                         fim_novo = to_min(hf_novo, hi_novo)
                         return (abs(ini_novo - fim_serv) >= 480) and (abs(ini_serv - fim_novo) >= 480)
 
-                    # Serviços do dia por militar (excluindo remunerados já escalados)
+                    # Classificar militares do dia
+                    # militares_com_servico: têm serviço real (não folga, não ausência, não remunerado)
+                    # militares_de_folga: têm Folga Semanal ou Folga Complementar
                     servicos_dia = {}
                     militares_com_servico = set()
+                    militares_de_folga = set()
                     if not df_dia_rem.empty:
-                        df_serv_dia = df_dia_rem[~df_dia_rem['serviço'].apply(norm).str.contains('remu|grat', na=False)]
-                        df_serv_dia = df_serv_dia[~df_serv_dia['serviço'].apply(norm).str.contains('ferias|licen|doente|baixa|dilig|tribunal', na=False)]
-                        for _, row_sd in df_serv_dia.iterrows():
+                        for _, row_sd in df_dia_rem.iterrows():
                             mid_sd = str(row_sd['id']).strip()
                             if not mid_sd:
                                 continue
-                            hor_sd = str(row_sd.get('horário', '')).strip()
-                            hi_sd, hf_sd = None, None
-                            if '-' in hor_sd:
-                                try:
-                                    hi_sd = int(hor_sd.split('-')[0].strip())
-                                    hf_sd = int(hor_sd.split('-')[1].strip())
-                                except:
-                                    pass
-                            servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
-                            militares_com_servico.add(mid_sd)
+                            serv_norm = norm(str(row_sd.get('serviço', '')))
+                            if 'folga semanal' in serv_norm or 'folga complementar' in serv_norm:
+                                militares_de_folga.add(mid_sd)
+                            elif not any(x in serv_norm for x in ['remu','grat','ferias','licen','doente','baixa','dilig','tribunal']):
+                                hor_sd = str(row_sd.get('horário', '')).strip()
+                                hi_sd, hf_sd = None, None
+                                if '-' in hor_sd:
+                                    try:
+                                        hi_sd = int(hor_sd.split('-')[0].strip())
+                                        hf_sd = int(hor_sd.split('-')[1].strip())
+                                    except:
+                                        pass
+                                servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
+                                militares_com_servico.add(mid_sd)
 
-                    # Ausentes no dia
+                    # Ausentes no dia (férias, licenças, etc.)
                     ausentes_dia = set()
                     if not df_dia_rem.empty:
                         aus_mask = df_dia_rem['serviço'].apply(norm).str.contains('ferias|licen|doente|baixa|dilig|tribunal', na=False)
@@ -5746,16 +5751,13 @@ else:
 
                     def _pode_nomear(row_r, mid_r, motivo_skip):
                         """Verifica sobreposição e descanso. Devolve True se pode ser nomeado."""
-                        # Ausente
                         if mid_r in ausentes_dia:
                             motivo_skip.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
                             return False
-                        # Sobreposição horária
                         for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
                             if _sobreposicao(hi_rem, hf_rem, hi_s, hf_s):
                                 motivo_skip.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — sobreposição com {serv_s}")
                                 return False
-                        # Descanso (só quem não prescinde)
                         if not bool(row_r['prescinde_descanso']):
                             for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
                                 if not _verif_descanso(hi_s, hf_s, hi_rem, hf_rem):
@@ -5767,7 +5769,8 @@ else:
                     avisos   = []
                     skipped  = []
 
-                    # GRUPO 1: voluntários COM serviço naquele dia
+                    # GRUPO 1: voluntários com serviço normal ou disponíveis (sem nada na escala)
+                    # Excluídos: ausentes, de folga semanal/complementar
                     for _, row_r in df_disp_sorted.iterrows():
                         if len(nomeados) >= n_rem:
                             break
@@ -5776,13 +5779,17 @@ else:
                             continue
                         if not bool(row_r['voluntario']):
                             continue
-                        if mid_r not in militares_com_servico:
+                        if mid_r in ausentes_dia:
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
                             continue
+                        if mid_r in militares_de_folga:
+                            continue  # reservado para grupo 2
                         if _pode_nomear(row_r, mid_r, skipped):
+                            grupo = 'Voluntário c/ serviço' if mid_r in militares_com_servico else 'Voluntário disponível'
                             nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                             'grupo': 'Voluntário c/ serviço', 'total': int(row_r[col_total])})
+                                             'grupo': grupo, 'total': int(row_r[col_total])})
 
-                    # GRUPO 2: voluntários DE FOLGA (com flag folga=True)
+                    # GRUPO 2: voluntários de Folga Semanal/Complementar com folga=Sim
                     for _, row_r in df_disp_sorted.iterrows():
                         if len(nomeados) >= n_rem:
                             break
@@ -5791,18 +5798,18 @@ else:
                             continue
                         if not bool(row_r['voluntario']):
                             continue
-                        if mid_r in militares_com_servico:
-                            continue  # já foi considerado no grupo 1
+                        if mid_r not in militares_de_folga:
+                            continue
                         if mid_r in ausentes_dia:
                             skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
                             continue
                         if not bool(row_r['folga']):
-                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — voluntário mas não aceita folga")
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — voluntário de folga mas folga=Não")
                             continue
                         nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
                                          'grupo': 'Voluntário de folga', 'total': int(row_r[col_total])})
 
-                    # GRUPO 3: não voluntários
+                    # GRUPO 3: não voluntários com serviço normal ou disponíveis (nunca de folga)
                     for _, row_r in df_disp_sorted.iterrows():
                         if len(nomeados) >= n_rem:
                             break
@@ -5814,14 +5821,11 @@ else:
                         if mid_r in ausentes_dia:
                             skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
                             continue
-                        # Não voluntários de folga: verificar flag folga
-                        if mid_r not in militares_com_servico and not bool(row_r['folga']):
-                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — não voluntário e não aceita folga")
+                        if mid_r in militares_de_folga:
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — não voluntário de folga, não nomeável")
                             continue
-                        if mid_r in militares_com_servico:
-                            # Tem serviço — verificar sobreposição/descanso
-                            if not _pode_nomear(row_r, mid_r, skipped):
-                                continue
+                        if not _pode_nomear(row_r, mid_r, skipped):
+                            continue
                         avisos.append(f"⚠️ **{get_nome_curto(df_util, mid_r)} ({mid_r})** nomeado fora da lista de voluntários")
                         nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
                                          'grupo': 'Não voluntário', 'total': int(row_r[col_total])})
