@@ -3919,14 +3919,11 @@ else:
                             if col_sv_f:
                                 ids_pronto = set(df_folgas[df_folgas[col_sv_f].apply(norm).str.contains('pronto', na=False)][col_id_f].astype(str).str.strip().tolist())
 
-                        # Folgas disponíveis para troca -- excluir Folga Semanal e Complementar e militares de Pronto
-                        mask_folga = (
-                            df_d['serviço'].str.lower().str.contains('folga', na=False) &
-                            ~df_d['serviço'].apply(norm).str.contains('folga semanal|folga complementar', na=False) &
-                            ~df_d['id'].astype(str).str.strip().isin(ids_pronto)
-                        )
-                        mask_imp   = (
-                            df_d['serviço'].apply(norm).str.contains(IMPEDIMENTOS_PATTERN + '|folga semanal|folga complementar', na=False) |
+                        # Folgas: disponíveis para troca (sem verificação de descanso)
+                        mask_folga = df_d['serviço'].str.lower().str.contains('folga', na=False)
+                        # Impedimentos: férias, baixa, licenças, etc. + militares de Pronto
+                        mask_imp = (
+                            df_d['serviço'].str.lower().str.contains(IMPEDIMENTOS_PATTERN, na=False) |
                             df_d['id'].astype(str).str.strip().isin(ids_pronto)
                         )
                         # Remunerados que NÃO foram cedidos -- são impedimento
