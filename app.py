@@ -5628,14 +5628,8 @@ else:
                             hdrs_raw = [h.strip() for h in todas_g[0]]
                             hdrs_g_lower = [h.lower() for h in hdrs_raw]
                             ix_sv_g2 = hdrs_g_lower.index('serviço') if 'serviço' in hdrs_g_lower else 1
-                            # Guardar linhas de remunerados/gratificados existentes no Sheets
-                            linhas_rem_g = [r for r in todas_g[1:] if any(x in norm(str(r[ix_sv_g2]).strip()) for x in ['remu','grat'])]
-                            # IDs já existentes nos remunerados do Sheets
-                            ids_rem_existentes = set()
-                            for lr in linhas_rem_g:
-                                for x in re.split(r'[;,]', str(lr[0])):
-                                    ids_rem_existentes.add(x.strip())
-                            # Construir linhas para remunerados novos/editados do editor
+                            # Remunerados: reconstruir totalmente a partir do editor
+                            # (o editor já tem todas as linhas de remunerado carregadas do Sheets)
                             hdrs_nc2 = [_nc(h) for h in hdrs_raw]
                             _mc2 = {
                                 'id':        next((i for i,h in enumerate(hdrs_nc2) if h == 'id'), 0),
@@ -5647,51 +5641,26 @@ else:
                                 'giro':      next((i for i,h in enumerate(hdrs_nc2) if h == 'giro'), None),
                                 'obs':       next((i for i,h in enumerate(hdrs_nc2) if 'obs' in h), None),
                             }
+                            linhas_rem_g = []
                             for _, r_novo in df_g.iterrows():
                                 id_raw_n = str(r_novo.get('id','') or '').strip()
-                                serv_n = str(r_novo.get('serviço','') or '').strip()
+                                serv_n   = str(r_novo.get('serviço','') or '').strip()
                                 if not id_raw_n or id_raw_n == 'nan' or not re.search(r'remu|grat', norm(serv_n)):
                                     continue
-                                # Dividir IDs agrupados
-                                mids_n = [x.strip() for x in re.split(r'[;,]', id_raw_n) if x.strip()]
-                                # Só adicionar se nenhum dos IDs já existir
-                                if any(m in ids_rem_existentes for m in mids_n):
-                                    # Já existe — atualizar linha existente em vez de duplicar
-                                    for i_lr, lr in enumerate(linhas_rem_g):
-                                        lr_ids = {x.strip() for x in re.split(r'[;,]', str(lr[0]))}
-                                        if lr_ids & set(mids_n):
-                                            # Atualizar campos
-                                            linha_upd = list(lr) + [''] * max(0, len(hdrs_raw) - len(lr))
-                                            for chave_n, val_n in [
-                                                ('id', id_raw_n), ('servico', serv_n),
-                                                ('horario', str(r_novo.get('horário','') or '').strip()),
-                                                ('indicativo', str(r_novo.get('indicativo','') or '').strip()),
-                                                ('radio', str(r_novo.get('rádio','') or '').strip()),
-                                                ('giro', str(r_novo.get('giro','') or '').strip()),
-                                                ('viatura', str(r_novo.get('viatura','') or '').strip()),
-                                                ('obs', str(r_novo.get('observações','') or '').strip()),
-                                            ]:
-                                                idx_n = _mc2.get(chave_n)
-                                                if idx_n is not None and val_n:
-                                                    linha_upd[idx_n] = val_n
-                                            linhas_rem_g[i_lr] = linha_upd
-                                            break
-                                else:
-                                    # Novo remunerado — adicionar
-                                    linha_nova = [''] * len(hdrs_raw)
-                                    for chave_n, val_n in [
-                                        ('id', id_raw_n), ('servico', serv_n),
-                                        ('horario', str(r_novo.get('horário','') or '').strip()),
-                                        ('indicativo', str(r_novo.get('indicativo','') or '').strip()),
-                                        ('radio', str(r_novo.get('rádio','') or '').strip()),
-                                        ('giro', str(r_novo.get('giro','') or '').strip()),
-                                        ('viatura', str(r_novo.get('viatura','') or '').strip()),
-                                        ('obs', str(r_novo.get('observações','') or '').strip()),
-                                    ]:
-                                        idx_n = _mc2.get(chave_n)
-                                        if idx_n is not None:
-                                            linha_nova[idx_n] = val_n
-                                    linhas_rem_g.append(linha_nova)
+                                linha_nova = [''] * len(hdrs_raw)
+                                for chave_n, val_n in [
+                                    ('id', id_raw_n), ('servico', serv_n),
+                                    ('horario', str(r_novo.get('horário','') or '').strip()),
+                                    ('indicativo', str(r_novo.get('indicativo','') or '').strip()),
+                                    ('radio', str(r_novo.get('rádio','') or '').strip()),
+                                    ('giro', str(r_novo.get('giro','') or '').strip()),
+                                    ('viatura', str(r_novo.get('viatura','') or '').strip()),
+                                    ('obs', str(r_novo.get('observações','') or '').strip()),
+                                ]:
+                                    idx_n = _mc2.get(chave_n)
+                                    if idx_n is not None:
+                                        linha_nova[idx_n] = val_n
+                                linhas_rem_g.append(linha_nova)
                             # Construir novas linhas em memória
                             hdrs_nc = [_nc(h) for h in hdrs_raw]
                             # mapa fixo por posição — mais robusto que contains
