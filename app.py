@@ -4676,6 +4676,12 @@ else:
                     aba_modelo_t = next((t for t in abas_existentes_tab if re.match(r'^\d{2}-\d{2}$', t)), None)
                     if aba_modelo_t:
                         hdrs_modelo = sh_tab.worksheet(aba_modelo_t).row_values(1)
+                        # Garantir colunas obrigatórias
+                        hdrs_modelo_nc = [_nc(h) for h in hdrs_modelo]
+                        if 'giro' not in hdrs_modelo_nc:
+                            hdrs_modelo.append('giro')
+                        if 'viatura' not in hdrs_modelo_nc:
+                            hdrs_modelo.append('viatura')
                         ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_modelo))
                         ws_nova.update('A1', [hdrs_modelo])
                     else:
@@ -4765,7 +4771,7 @@ else:
                             'id': mid, 'nome': f"{posto} {nome}".strip(),
                             'serviço': dados['serviço'], 'horário': dados['horário'],
                             'indicativo': dados['indicativo'], 'rádio': dados['rádio'],
-                            'giro': dados['giro'], 'observações': dados['observações'],
+                            'giro': dados['giro'], 'viatura': dados.get('viatura',''), 'observações': dados['observações'],
                         })
                         # Adicionar remunerados como linhas extra
                         for d_rem in servs_rem:
@@ -4773,7 +4779,7 @@ else:
                                 'id': mid, 'nome': f"{posto} {nome}".strip(),
                                 'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
                                 'indicativo': d_rem['indicativo'], 'rádio': d_rem['rádio'],
-                                'giro': d_rem['giro'], 'observações': d_rem['observações'],
+                                'giro': d_rem['giro'], 'viatura': d_rem.get('viatura',''), 'observações': d_rem['observações'],
                             })
                         continue  # já adicionou as linhas
                     else:
@@ -4799,6 +4805,7 @@ else:
                         'indicativo':  dados['indicativo'],
                         'rádio':       dados['rádio'],
                         'giro':        dados['giro'],
+                        'viatura':     dados.get('viatura',''),
                         'observações': dados['observações'],
                     })
 
@@ -5310,6 +5317,11 @@ else:
                 aba_modelo_e = next((t for t in abas_existentes_e if re.match(r'^\d{2}-\d{2}$', t)), None)
                 if aba_modelo_e:
                     hdrs_modelo_e = sh_e.worksheet(aba_modelo_e).row_values(1)
+                    hdrs_modelo_e_nc = [_nc(h) for h in hdrs_modelo_e]
+                    if 'giro' not in hdrs_modelo_e_nc:
+                        hdrs_modelo_e.append('giro')
+                    if 'viatura' not in hdrs_modelo_e_nc:
+                        hdrs_modelo_e.append('viatura')
                 else:
                     hdrs_modelo_e = ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
                 for d_e_chk in dias_editar:
@@ -5532,26 +5544,26 @@ else:
                                 for campo in ['indicativo','rádio','giro','viatura','observações']:
                                     if dados[campo] and not grupos[chave][campo]:
                                         grupos[chave][campo] = dados[campo]
-                            hdrs_l = [h.lower() for h in hdrs_raw]
+                            hdrs_l = [_nc(h) for h in hdrs_raw]
                             mapa_c = {
-                                'id':          next((i for i,h in enumerate(hdrs_l) if h == 'id'), None),
-                                'serviço':     next((i for i,h in enumerate(hdrs_l) if 'servi' in h), None),
-                                'horário':     next((i for i,h in enumerate(hdrs_l) if 'hor' in h), None),
-                                'indicativo':  next((i for i,h in enumerate(hdrs_l) if h == 'indicativo' or h == 'indicativo rádio'), None),
-                                'rádio':       next((i for i,h in enumerate(hdrs_l) if h in ('rádio','radio')), None),
-                                'viatura':     next((i for i,h in enumerate(hdrs_l) if 'viatur' in h), None),
-                                'giro':        next((i for i,h in enumerate(hdrs_l) if h == 'giro'), None),
-                                'observações': next((i for i,h in enumerate(hdrs_l) if 'obs' in h), None),
+                                'id':        next((i for i,h in enumerate(hdrs_l) if h == 'id'), 0),
+                                'servico':   next((i for i,h in enumerate(hdrs_l) if 'servi' in h), 1),
+                                'horario':   next((i for i,h in enumerate(hdrs_l) if h == 'horario'), 2),
+                                'indicativo':next((i for i,h in enumerate(hdrs_l) if h in ('indicativo','indicativo radio')), None),
+                                'radio':     next((i for i,h in enumerate(hdrs_l) if h == 'radio'), None),
+                                'viatura':   next((i for i,h in enumerate(hdrs_l) if h == 'viatura'), None),
+                                'giro':      next((i for i,h in enumerate(hdrs_l) if h == 'giro'), None),
+                                'obs':       next((i for i,h in enumerate(hdrs_l) if 'obs' in h), None),
                             }
                             nova_data = []
                             for (sv, hr), d in grupos.items():
                                 linha = [''] * len(hdrs_raw)
-                                for col_nome, val in [
-                                    ('id', ';'.join(d['ids'])), ('serviço', sv), ('horário', hr),
-                                    ('indicativo', d['indicativo']), ('rádio', d['rádio']),
-                                    ('giro', d['giro']), ('viatura', d['viatura']), ('observações', d['observações'])
+                                for chave_c, val in [
+                                    ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
+                                    ('indicativo', d['indicativo']), ('radio', d['rádio']),
+                                    ('giro', d['giro']), ('viatura', d['viatura']), ('obs', d['observações'])
                                 ]:
-                                    idx_col = mapa_c.get(col_nome)
+                                    idx_col = mapa_c.get(chave_c)
                                     if idx_col is not None:
                                         linha[idx_col] = val
                                 nova_data.append(linha)
@@ -5572,7 +5584,18 @@ else:
                             # Guardar linhas de remunerados/gratificados
                             linhas_rem_g = [r for r in todas_g[1:] if any(x in norm(str(r[ix_sv_g2]).strip()) for x in ['remu','grat'])]
                             # Construir novas linhas em memória
-                            hdrs_lower = [h.lower() for h in hdrs_raw]
+                            hdrs_nc = [_nc(h) for h in hdrs_raw]
+                            # mapa fixo por posição — mais robusto que contains
+                            _mc = {
+                                'id':        next((i for i,h in enumerate(hdrs_nc) if h == 'id'), 0),
+                                'servico':   next((i for i,h in enumerate(hdrs_nc) if 'servi' in h), 1),
+                                'horario':   next((i for i,h in enumerate(hdrs_nc) if h == 'horario'), 2),
+                                'indicativo':next((i for i,h in enumerate(hdrs_nc) if h in ('indicativo','indicativo radio')), None),
+                                'radio':     next((i for i,h in enumerate(hdrs_nc) if h == 'radio'), None),
+                                'viatura':   next((i for i,h in enumerate(hdrs_nc) if h == 'viatura'), None),
+                                'giro':      next((i for i,h in enumerate(hdrs_nc) if h == 'giro'), None),
+                                'obs':       next((i for i,h in enumerate(hdrs_nc) if 'obs' in h), None),
+                            }
                             grupos_novos = {}
                             for mid, dados in editor_map.items():
                                 sv = dados['serviço']
@@ -5588,22 +5611,12 @@ else:
                             novas_linhas = []
                             for (sv, hr), d in grupos_novos.items():
                                 linha = [''] * len(hdrs_raw)
-                                mapa_cols = {
-                                    'id':          next((i for i,h in enumerate(hdrs_lower) if h == 'id'), None),
-                                    'serviço':     next((i for i,h in enumerate(hdrs_lower) if 'servi' in h), None),
-                                    'horário':     next((i for i,h in enumerate(hdrs_lower) if 'hor' in h), None),
-                                    'indicativo':  next((i for i,h in enumerate(hdrs_lower) if h == 'indicativo' or h == 'indicativo rádio'), None),
-                                    'rádio':       next((i for i,h in enumerate(hdrs_lower) if h in ('rádio','radio')), None),
-                                    'viatura':     next((i for i,h in enumerate(hdrs_lower) if 'viatur' in h), None),
-                                    'giro':        next((i for i,h in enumerate(hdrs_lower) if h == 'giro'), None),
-                                    'observações': next((i for i,h in enumerate(hdrs_lower) if 'obs' in h), None),
-                                }
-                                for col_nome, val in [
-                                    ('id', ';'.join(d['ids'])), ('serviço', sv), ('horário', hr),
-                                    ('indicativo', d['indicativo']), ('rádio', d['rádio']),
-                                    ('giro', d['giro']), ('viatura', d['viatura']), ('observações', d['observações'])
+                                for chave_mc, val in [
+                                    ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
+                                    ('indicativo', d['indicativo']), ('radio', d['rádio']),
+                                    ('giro', d['giro']), ('viatura', d['viatura']), ('obs', d['observações'])
                                 ]:
-                                    idx_col = mapa_cols.get(col_nome)
+                                    idx_col = _mc.get(chave_mc)
                                     if idx_col is not None:
                                         linha[idx_col] = val
                                 novas_linhas.append(linha)
