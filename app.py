@@ -1576,7 +1576,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             wids_at_l = [20*mm, CW2-20*mm]
             y_esq2 = tbl_header(y_at, cols_at, wids_at_l, x=LM)
             fill = False
-            for hor, grp in df_at.groupby("horário", sort=False):
+            for hor, grp in df_at.assign(_hor_sort=df_at["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
                 ids = ", ".join(grp["id_fmt"].tolist())
                 y_esq2 = tbl_row(y_esq2, [hor, ids], wids_at_l, fill, x=LM)
                 fill = not fill
@@ -1588,7 +1588,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             x_dir2 = LM+CW2+GAP
             y_dir2 = tbl_header(y_at, cols_at, wids_at_r, x=x_dir2)
             fill = False
-            for hor, grp in df_ap.groupby("horário", sort=False):
+            for hor, grp in df_ap.assign(_hor_sort=df_ap["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
                 ids = ", ".join(grp["id_fmt"].tolist())
                 y_dir2 = tbl_row(y_dir2, [hor, ids], wids_at_r, fill, x=x_dir2)
                 fill = not fill
@@ -1603,7 +1603,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         wids_oc = [16*mm, 32*mm, 40*mm, _w/3, _w/3, _w/3]
         y = tbl_header(y, cols_oc, wids_oc)
         fill = False
-        for hor, grp in df_ocorr.groupby("horário", sort=False):
+        for hor, grp in df_ocorr.assign(_hor_sort=df_ocorr["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
             serv = grp["serviço"].iloc[0]
             ind  = grp["indicativo rádio"].iloc[0] if "indicativo rádio" in grp.columns else ""
@@ -1622,7 +1622,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         wids_pp = [16*mm, 32*mm, 34*mm, _wp/3, _wp/3, _wp/3, 14*mm]
         y = tbl_header(y, cols_pp, wids_pp)
         fill = False
-        for hor, grp in df_outras_pat.groupby("horário", sort=False):
+        for hor, grp in df_outras_pat.assign(_hor_sort=df_outras_pat["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
             serv = grp["serviço"].iloc[0]
             ind  = grp["indicativo rádio"].iloc[0] if "indicativo rádio" in grp.columns else ""
@@ -1642,7 +1642,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         wids_ot = [16*mm, 32*mm, 40*mm, _wo/3, _wo/3, _wo/3]
         y = tbl_header(y, cols_ot, wids_ot)
         fill = False
-        for (hor, serv), grp in df_outros.groupby(["horário", "serviço"], sort=False):
+        for (hor, serv), grp in df_outros.assign(_hor_sort=df_outros["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values(["_hor_sort","serviço"]).groupby(["horário", "serviço"], sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
             ind = str(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
             rad = str(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
@@ -1931,6 +1931,10 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
     """Renderiza uma secção da escala com estilo próximo do PDF."""
     if df_sec.empty:
         return
+    # Ordenar cronologicamente pelo início do horário
+    df_sec = df_sec.copy()
+    df_sec['_hor_sort'] = pd.to_numeric(df_sec['horário'].str.extract(r'^(\d+)')[0], errors='coerce').fillna(99)
+    df_sec = df_sec.sort_values(['_hor_sort', 'serviço'])
     st.markdown(_sec_header(titulo), unsafe_allow_html=True)
     if mostrar_extras:
         cols_ag = ['serviço', 'horário']
