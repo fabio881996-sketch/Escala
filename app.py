@@ -5306,15 +5306,18 @@ else:
                 except:
                     pass
 
-            col_e1, col_e2 = st.columns(2)
+            col_e1, col_e2, col_e3 = st.columns([2, 2, 1])
             with col_e1:
                 d_e1 = st.date_input("Dia 1:", format="DD/MM/YYYY", key="d_edit1")
             with col_e2:
                 d_e2 = st.date_input("Dia 2:", format="DD/MM/YYYY", key="d_edit2", value=None)
+            with col_e3:
+                _ord_carregar = st.selectbox("Ordenar por:", ['ID', 'Nome', 'Serviço', 'Horário'], key='ord_carregar')
 
             dias_editar = [d for d in [d_e1, d_e2] if d is not None]
 
             if st.button("📋 Carregar dias", key="btn_carregar_editar", use_container_width=True):
+                st.session_state['ord_editar'] = _ord_carregar
                 sh_e = get_sheet()
                 abas_existentes_e = load_lista_abas()
                 # Criar abas que não existam
@@ -5727,8 +5730,7 @@ else:
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} -- {dias_pt[d_e.weekday()]}**")
                     st.caption("💡 O campo ID aceita vários militares separados por `;` (ex: `507;1185`). Podes adicionar ou remover linhas.")
                     df_s = pd.DataFrame(info_e['linhas'])
-                    _ord_s = st.selectbox("🔃 Ordenar por:", ['ID', 'Nome', 'Serviço', 'Horário'], key='ord_s', label_visibility='collapsed')
-                    _ord_col_s = {'ID': 'id', 'Nome': 'nome', 'Serviço': 'serviço', 'Horário': 'horário'}.get(_ord_s, 'id')
+                    _ord_col_s = {'ID': 'id', 'Nome': 'nome', 'Serviço': 'serviço', 'Horário': 'horário'}.get(st.session_state.get('ord_editar', 'ID'), 'id')
                     if _ord_col_s in df_s.columns:
                         if _ord_col_s == 'id':
                             df_s = df_s.sort_values('id', key=lambda x: pd.to_numeric(x, errors='coerce').fillna(999999)).reset_index(drop=True)
