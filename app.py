@@ -4663,14 +4663,9 @@ else:
                 abas_existentes_tab = load_lista_abas()
                 if aba_dia not in abas_existentes_tab:
                     # Encontrar aba modelo (outro dia)
-                    aba_modelo = None
-                    for ws_t in sh_tab.worksheets():
-                        if re.match(r'^\d{2}-\d{2}$', ws_t.title):
-                            aba_modelo = ws_t
-                            break
-                    if aba_modelo:
-                        # Copiar só os cabeçalhos
-                        hdrs_modelo = aba_modelo.row_values(1)
+                    aba_modelo_t = next((t for t in abas_existentes_tab if re.match(r'^\d{2}-\d{2}$', t)), None)
+                    if aba_modelo_t:
+                        hdrs_modelo = sh_tab.worksheet(aba_modelo_t).row_values(1)
                         ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_modelo))
                         ws_nova.update('A1', [hdrs_modelo])
                     else:
@@ -5294,8 +5289,11 @@ else:
                 sh_e = get_sheet()
                 abas_existentes_e = load_lista_abas()
                 # Criar abas que não existam
-                aba_modelo_e = next((ws for ws in sh_e.worksheets() if re.match(r'^\d{2}-\d{2}$', ws.title)), None)
-                hdrs_modelo_e = aba_modelo_e.row_values(1) if aba_modelo_e else ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
+                aba_modelo_e = next((t for t in abas_existentes_e if re.match(r'^\d{2}-\d{2}$', t)), None)
+                if aba_modelo_e:
+                    hdrs_modelo_e = sh_e.worksheet(aba_modelo_e).row_values(1)
+                else:
+                    hdrs_modelo_e = ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
                 for d_e_chk in dias_editar:
                     aba_chk = d_e_chk.strftime("%d-%m")
                     if aba_chk not in abas_existentes_e:
