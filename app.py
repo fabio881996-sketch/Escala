@@ -5999,28 +5999,36 @@ else:
             remunerados_lista = []  # [{data, aba, linha_idx, ids, horario, tabela, obs}]
 
             with st.spinner("A carregar remunerados..."):
+                sh_gest = get_sheet()
                 for delta in range(15):
                     d_g = hoje + timedelta(days=delta)
                     aba_g = d_g.strftime("%d-%m")
                     if aba_g not in abas_existentes_g:
                         continue
                     try:
-                        vals_g = load_data(aba_g)
-                        if vals_g.empty:
+                        vals_g = sh_gest.worksheet(aba_g).get_all_values()
+                        if not vals_g:
                             continue
-                        for i, row_g in vals_g.iterrows():
-                            serv_g = norm(str(row_g.get('serviço', '')))
+                        hdrs_g = [_nc(c) for c in vals_g[0]]
+                        idx_id   = hdrs_g.index('id')        if 'id'        in hdrs_g else 0
+                        idx_serv = hdrs_g.index('serviço')   if 'serviço'   in hdrs_g else 1
+                        idx_hor  = hdrs_g.index('horário')   if 'horário'   in hdrs_g else 2
+                        idx_obs  = hdrs_g.index('observações') if 'observações' in hdrs_g else 6
+                        for i, row_g in enumerate(vals_g[1:], start=2):  # start=2 = linha real Sheets
+                            if len(row_g) <= idx_serv:
+                                continue
+                            serv_g = norm(str(row_g[idx_serv]))
                             if 'remunerado' in serv_g:
                                 tabela_g = 'A' if 'tabela a' in serv_g else ('B' if 'tabela b' in serv_g else '?')
                                 remunerados_lista.append({
                                     'data': d_g.strftime("%d/%m/%Y"),
                                     'data_obj': d_g,
                                     'aba': aba_g,
-                                    'linha_idx': i,
-                                    'ids': str(row_g.get('id', '')).strip(),
-                                    'horario': str(row_g.get('horário', '')).strip(),
+                                    'linha_idx': i,  # linha real no Sheets (1-based)
+                                    'ids': str(row_g[idx_id]).strip() if idx_id < len(row_g) else '',
+                                    'horario': str(row_g[idx_hor]).strip() if idx_hor < len(row_g) else '',
                                     'tabela': tabela_g,
-                                    'obs': str(row_g.get('observações', '')).strip(),
+                                    'obs': str(row_g[idx_obs]).strip() if idx_obs < len(row_g) else '',
                                 })
                     except:
                         continue
@@ -6065,7 +6073,7 @@ else:
                                     sh_c = get_sheet()
                                     ws_c = sh_c.worksheet(rem_g['aba'])
                                     # Apagar linha (substituir por linha vazia ou delete)
-                                    ws_c.delete_rows(rem_g['linha_idx'] + 1)  # sheets é 1-based
+                                    ws_c.delete_rows(rem_g['linha_idx'])  # já é 1-based
     
                                     # Subtrair horas
                                     is_fds_c = rem_g['data_obj'].weekday() >= 5
@@ -6258,7 +6266,7 @@ else:
                                     sh_s = get_sheet()
                                     ws_s = sh_s.worksheet(rem_g['aba'])
                                     vals_s = ws_s.get_all_values()
-                                    linha_s = rem_g['linha_idx'] + 1  # 1-based
+                                    linha_s = rem_g['linha_idx']  # já é 1-based
     
                                     # Atualizar IDs na linha
                                     ids_novos = [mid_entra if x == mid_sair else x for x in ids_atuais]
