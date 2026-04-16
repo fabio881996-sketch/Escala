@@ -243,7 +243,7 @@ hr { border-color: #E2E8F0 !important; }
 # 3. CONSTANTES
 # ============================================================
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
-IMPEDIMENTOS = ["férias", "licença", "doente", "diligência", "tribunal", "pronto", "secretaria", "inquérito"]
+IMPEDIMENTOS = ["férias", "licença", "doente", "baixa", "diligência", "tribunal", "pronto", "secretaria", "inquérito", "outras licenças", "fcaa"]
 IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 
 # ============================================================
