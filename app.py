@@ -5620,6 +5620,14 @@ else:
             if df_ord_rem.empty:
                 st.info("Sem dados na aba 'ordem_remunerados'.")
             else:
+                # DEBUG RAW — remover depois
+                with st.expander("🔧 DEBUG RAW"):
+                    st.write("Colunas:", list(df_ord_rem.columns))
+                    st.write("Primeiras 3 linhas raw:")
+                    st.dataframe(df_ord_rem.head(3))
+                    if 'disponivel' in df_ord_rem.columns:
+                        st.write("Valores únicos disponivel:", df_ord_rem['disponivel'].unique().tolist())
+                        st.write("Tipos disponivel:", df_ord_rem['disponivel'].apply(type).unique().tolist())
                 col_r1, col_r2, col_r3, col_r4 = st.columns(4)
                 with col_r1:
                     d_rem = st.date_input("Data:", format="DD/MM/YYYY", key="d_rem")
