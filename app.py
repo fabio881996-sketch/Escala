@@ -5602,6 +5602,8 @@ else:
                             except Exception as e:
                                 st.error(f"Erro: {e}")
 
+
+
         with tab_rem:
             st.markdown("#### 💶 Nomear para Remunerado")
 
@@ -5635,35 +5637,40 @@ else:
                     df_dia_rem = load_data(aba_rem)
                     data_str_rem = d_rem.strftime("%d/%m/%Y")
 
-                    # Colunas da tabela selecionada
-                    col_ultima = f"ultima_vez_{tab_rem_sel.lower()}"
-                    col_total  = f"total_ano_{tab_rem_sel.lower()}"
+                    # Determinar coluna de horas correta: A fds / A semana / B
+                    is_fds = d_rem.weekday() >= 5  # sábado=5, domingo=6
+                    if tab_rem_sel == "B":
+                        col_total = "total_ano_b"
+                    elif is_fds:
+                        col_total = "total_ano_a_fds"
+                    else:
+                        col_total = "total_ano_a_semana"
 
-                    # Garantir colunas existem
-                    for col in [col_ultima, col_total, 'voluntario', 'prescinde_descanso']:
-                        if col not in df_ord_rem.columns:
-                            df_ord_rem[col] = ''
-
-                    # Converter tipos
-                    df_ord_rem['voluntario']         = df_ord_rem['voluntario'].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
-                    df_ord_rem['prescinde_descanso'] = df_ord_rem['prescinde_descanso'].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
-                    df_ord_rem[col_total] = pd.to_numeric(df_ord_rem[col_total], errors='coerce').fillna(0)
-                    df_ord_rem[col_ultima] = pd.to_datetime(df_ord_rem[col_ultima], dayfirst=True, errors='coerce')
-
-                    # Horário do remunerado a nomear
-                    hi_rem, hf_rem = None, None
+                    # Calcular horas do remunerado a nomear
+                    hi_rem, hf_rem, horas_rem = None, None, 0
                     if hor_rem and '-' in hor_rem:
                         try:
                             hi_rem = int(hor_rem.split('-')[0].strip())
                             hf_rem = int(hor_rem.split('-')[1].strip())
+                            horas_rem = hf_rem - hi_rem if hf_rem > hi_rem else (24 - hi_rem + hf_rem)
                         except:
                             pass
 
+                    # Garantir colunas existem
+                    for col in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso', col_total]:
+                        if col not in df_ord_rem.columns:
+                            df_ord_rem[col] = ''
+
+                    # Converter tipos booleanos
+                    for bcol in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso']:
+                        df_ord_rem[bcol] = df_ord_rem[bcol].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
+
+                    df_ord_rem[col_total] = pd.to_numeric(df_ord_rem[col_total], errors='coerce').fillna(0)
+
+                    # Funções auxiliares
                     def _sobreposicao(h1_ini, h1_fim, h2_ini, h2_fim):
-                        """Verifica sobreposição parcial entre dois horários."""
                         if None in (h1_ini, h1_fim, h2_ini, h2_fim):
                             return False
-                        # Converter para minutos desde meia-noite (considerar passagem de dia)
                         def to_min(h, base=0):
                             return h * 60 + (1440 if h < base else 0)
                         s1 = to_min(h1_ini); e1 = to_min(h1_fim, h1_ini)
@@ -5671,24 +5678,22 @@ else:
                         return s1 < e2 and s2 < e1
 
                     def _verif_descanso(hi_serv, hf_serv, hi_novo, hf_novo):
-                        """Verifica 8h de descanso antes e depois."""
                         if None in (hi_serv, hf_serv, hi_novo, hf_novo):
                             return True
-                        # Converter tudo para minutos
                         def to_min(h, base=0):
                             return h * 60 + (1440 if h < base else 0)
                         fim_serv = to_min(hf_serv, hi_serv)
                         ini_novo = to_min(hi_novo)
                         ini_serv = to_min(hi_serv)
                         fim_novo = to_min(hf_novo, hi_novo)
-                        descanso_antes = abs(ini_novo - fim_serv) >= 480
-                        descanso_depois = abs(ini_serv - fim_novo) >= 480
-                        return descanso_antes and descanso_depois
+                        return (abs(ini_novo - fim_serv) >= 480) and (abs(ini_serv - fim_novo) >= 480)
 
-                    # Serviços do dia por militar
+                    # Serviços do dia por militar (excluindo remunerados já escalados)
                     servicos_dia = {}
+                    militares_com_servico = set()
                     if not df_dia_rem.empty:
                         df_serv_dia = df_dia_rem[~df_dia_rem['serviço'].apply(norm).str.contains('remu|grat', na=False)]
+                        df_serv_dia = df_serv_dia[~df_serv_dia['serviço'].apply(norm).str.contains('ferias|licen|doente|baixa|dilig|tribunal', na=False)]
                         for _, row_sd in df_serv_dia.iterrows():
                             mid_sd = str(row_sd['id']).strip()
                             if not mid_sd:
@@ -5702,6 +5707,7 @@ else:
                                 except:
                                     pass
                             servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
+                            militares_com_servico.add(mid_sd)
 
                     # Ausentes no dia
                     ausentes_dia = set()
@@ -5710,84 +5716,105 @@ else:
                         for mid_a in df_dia_rem[aus_mask]['id'].astype(str).str.strip().tolist():
                             if mid_a:
                                 ausentes_dia.add(mid_a)
-                    # Verificar férias
                     for _, row_u in df_ord_rem.iterrows():
                         mid_u = str(row_u.get('id', '')).strip()
                         if mid_u and militar_de_ferias(mid_u, d_rem, df_ferias, feriados):
                             ausentes_dia.add(mid_u)
 
-                    # Ordenar por ultima_vez (mais antigo primeiro), desempate total_ano
-                    df_ord_rem_sorted = df_ord_rem.sort_values(
-                        [col_ultima, col_total],
-                        ascending=[True, True],
-                        na_position='first'
-                    )
+                    # Filtrar só disponíveis
+                    df_disp = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
+
+                    # Ordenar por menos horas (critério principal)
+                    df_disp_sorted = df_disp.sort_values(col_total, ascending=True)
+
+                    def _pode_nomear(row_r, mid_r, motivo_skip):
+                        """Verifica sobreposição e descanso. Devolve True se pode ser nomeado."""
+                        # Ausente
+                        if mid_r in ausentes_dia:
+                            motivo_skip.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
+                            return False
+                        # Sobreposição horária
+                        for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
+                            if _sobreposicao(hi_rem, hf_rem, hi_s, hf_s):
+                                motivo_skip.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — sobreposição com {serv_s}")
+                                return False
+                        # Descanso (só quem não prescinde)
+                        if not bool(row_r['prescinde_descanso']):
+                            for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
+                                if not _verif_descanso(hi_s, hf_s, hi_rem, hf_rem):
+                                    motivo_skip.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — menos de 8h descanso com {serv_s}")
+                                    return False
+                        return True
 
                     nomeados = []
                     avisos   = []
                     skipped  = []
 
-                    # 1ª passagem: voluntários
-                    # 2ª passagem: não voluntários (se não chegou)
-                    for fase in ['voluntarios', 'nao_voluntarios']:
+                    # GRUPO 1: voluntários COM serviço naquele dia
+                    for _, row_r in df_disp_sorted.iterrows():
                         if len(nomeados) >= n_rem:
                             break
-                        for _, row_r in df_ord_rem_sorted.iterrows():
-                            if len(nomeados) >= n_rem:
-                                break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in nomeados]:
-                                continue
-                            is_vol = bool(row_r['voluntario'])
-                            if fase == 'voluntarios' and not is_vol:
-                                continue
-                            if fase == 'nao_voluntarios' and is_vol:
-                                continue
+                        mid_r = str(row_r.get('id', '')).strip()
+                        if not mid_r or mid_r in [n['id'] for n in nomeados]:
+                            continue
+                        if not bool(row_r['voluntario']):
+                            continue
+                        if mid_r not in militares_com_servico:
+                            continue
+                        if _pode_nomear(row_r, mid_r, skipped):
+                            nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
+                                             'grupo': 'Voluntário c/ serviço', 'total': int(row_r[col_total])})
 
-                            # Verificar ausente
-                            if mid_r in ausentes_dia:
-                                skipped.append(f"{mid_r} -- ausente")
+                    # GRUPO 2: voluntários DE FOLGA (com flag folga=True)
+                    for _, row_r in df_disp_sorted.iterrows():
+                        if len(nomeados) >= n_rem:
+                            break
+                        mid_r = str(row_r.get('id', '')).strip()
+                        if not mid_r or mid_r in [n['id'] for n in nomeados]:
+                            continue
+                        if not bool(row_r['voluntario']):
+                            continue
+                        if mid_r in militares_com_servico:
+                            continue  # já foi considerado no grupo 1
+                        if mid_r in ausentes_dia:
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
+                            continue
+                        if not bool(row_r['folga']):
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — voluntário mas não aceita folga")
+                            continue
+                        nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
+                                         'grupo': 'Voluntário de folga', 'total': int(row_r[col_total])})
+
+                    # GRUPO 3: não voluntários
+                    for _, row_r in df_disp_sorted.iterrows():
+                        if len(nomeados) >= n_rem:
+                            break
+                        mid_r = str(row_r.get('id', '')).strip()
+                        if not mid_r or mid_r in [n['id'] for n in nomeados]:
+                            continue
+                        if bool(row_r['voluntario']):
+                            continue
+                        if mid_r in ausentes_dia:
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — ausente")
+                            continue
+                        # Não voluntários de folga: verificar flag folga
+                        if mid_r not in militares_com_servico and not bool(row_r['folga']):
+                            skipped.append(f"{get_nome_curto(df_util, mid_r)} ({mid_r}) — não voluntário e não aceita folga")
+                            continue
+                        if mid_r in militares_com_servico:
+                            # Tem serviço — verificar sobreposição/descanso
+                            if not _pode_nomear(row_r, mid_r, skipped):
                                 continue
-
-                            # Verificar sobreposição
-                            sobreposto = False
-                            for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
-                                if _sobreposicao(hi_rem, hf_rem, hi_s, hf_s):
-                                    skipped.append(f"{mid_r} -- sobreposição com {serv_s} ({hi_s}-{hf_s})")
-                                    sobreposto = True
-                                    break
-                            if sobreposto:
-                                continue
-
-                            # Verificar descanso (só quem não prescinde)
-                            if not bool(row_r['prescinde_descanso']):
-                                descanso_ok = True
-                                for hi_s, hf_s, serv_s in servicos_dia.get(mid_r, []):
-                                    if not _verif_descanso(hi_s, hf_s, hi_rem, hf_rem):
-                                        skipped.append(f"{mid_r} -- menos de 8h descanso com {serv_s}")
-                                        descanso_ok = False
-                                        break
-                                if not descanso_ok:
-                                    continue
-
-                            # ✅ Nomear
-                            if fase == 'nao_voluntarios':
-                                avisos.append(f"⚠️ **{get_nome_curto(df_util, mid_r)} ({mid_r})** nomeado fora da lista de voluntários")
-                            nomeados.append({
-                                'id': mid_r,
-                                'nome': get_nome_curto(df_util, mid_r),
-                                'voluntario': is_vol,
-                                'prescinde': bool(row_r['prescinde_descanso']),
-                                'ultima_vez': row_r[col_ultima],
-                                'total': int(row_r[col_total]),
-                            })
+                        avisos.append(f"⚠️ **{get_nome_curto(df_util, mid_r)} ({mid_r})** nomeado fora da lista de voluntários")
+                        nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
+                                         'grupo': 'Não voluntário', 'total': int(row_r[col_total])})
 
                     # Mostrar resultado
+                    tipo_col = "Tabela B" if tab_rem_sel == "B" else ("Tabela A — Fim de Semana" if is_fds else "Tabela A — Semana")
                     if nomeados:
-                        st.success(f"✅ {len(nomeados)} militar(es) nomeado(s) para Tabela {tab_rem_sel} -- {hor_rem}:")
+                        st.success(f"✅ {len(nomeados)} militar(es) nomeado(s) · {tipo_col} · {hor_rem}:")
                         for n in nomeados:
-                            ul = n['ultima_vez'].strftime('%d/%m/%Y') if pd.notna(n['ultima_vez']) else "Nunca"
-                            st.markdown(f"- **{n['nome']} ({n['id']})** -- último: {ul} | total ano: {n['total']}")
+                            st.markdown(f"- **{n['nome']} ({n['id']})** — {n['grupo']} | horas acumuladas: **{n['total']}h**")
                         for av in avisos:
                             st.warning(av)
                         if skipped:
@@ -5795,7 +5822,6 @@ else:
                                 for s in skipped:
                                     st.caption(s)
 
-                        # Guardar em session_state para confirmar
                         st.session_state['rem_nomeados'] = {
                             'nomeados': nomeados,
                             'data': data_str_rem,
@@ -5803,8 +5829,8 @@ else:
                             'horario': hor_rem,
                             'tabela': tab_rem_sel,
                             'observacao': obs_rem,
-                            'col_ultima': col_ultima,
                             'col_total': col_total,
+                            'horas_rem': horas_rem,
                         }
                     else:
                         st.warning("Não foi possível nomear militares suficientes.")
@@ -5816,38 +5842,34 @@ else:
                 # Confirmar nomeação
                 if 'rem_nomeados' in st.session_state:
                     dados_rem = st.session_state['rem_nomeados']
+                    st.info(f"📋 Pronto a confirmar: {', '.join(n['nome'] for n in dados_rem['nomeados'])} — {dados_rem['horario']} — {dados_rem['data']}")
                     if st.button("✅ CONFIRMAR NOMEAÇÃO E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_conf_rem"):
                         try:
                             sh_conf = get_sheet()
                             ws_dia_rem = sh_conf.worksheet(dados_rem['aba'])
                             ids_nomeados = [n['id'] for n in dados_rem['nomeados']]
                             ids_str = ", ".join(ids_nomeados)
-                            # Escrever linha na aba do dia
                             ws_dia_rem.append_row([
                                 ids_str,
                                 f"Svç Remunerado - Tabela {dados_rem['tabela']}",
                                 dados_rem['horario'],
-                                "", "", "",  # indicativo, radio, viatura
+                                "", "", "",
                                 dados_rem['observacao'],
                             ])
-                            # Atualizar ordem_remunerados
+                            # Atualizar horas em ordem_remunerados
                             ws_ord = sh_conf.worksheet("ordem_remunerados")
                             todos_vals = ws_ord.get_all_values()
                             hdrs_ord = [h.strip().lower() for h in todos_vals[0]]
-                            col_id_idx    = hdrs_ord.index('id') if 'id' in hdrs_ord else 0
-                            col_ul_idx    = hdrs_ord.index(dados_rem['col_ultima']) if dados_rem['col_ultima'] in hdrs_ord else None
-                            col_tot_idx   = hdrs_ord.index(dados_rem['col_total'])  if dados_rem['col_total']  in hdrs_ord else None
+                            col_id_idx  = hdrs_ord.index('id') if 'id' in hdrs_ord else 0
+                            col_tot_idx = hdrs_ord.index(dados_rem['col_total']) if dados_rem['col_total'] in hdrs_ord else None
+                            horas_add   = dados_rem.get('horas_rem', 0) or 1
                             upds_ord = []
                             for i, row_o in enumerate(todos_vals[1:], start=2):
                                 mid_o = str(row_o[col_id_idx]).strip() if col_id_idx < len(row_o) else ''
-                                if mid_o in ids_nomeados:
-                                    if col_ul_idx is not None:
-                                        cl = chr(ord('A') + col_ul_idx)
-                                        upds_ord.append({'range': f'{cl}{i}', 'values': [[dados_rem['data']]]})
-                                    if col_tot_idx is not None:
-                                        total_atual = int(str(row_o[col_tot_idx]).strip() or 0) if col_tot_idx < len(row_o) else 0
-                                        cl2 = chr(ord('A') + col_tot_idx)
-                                        upds_ord.append({'range': f'{cl2}{i}', 'values': [[total_atual + 1]]})
+                                if mid_o in ids_nomeados and col_tot_idx is not None:
+                                    total_atual = int(str(row_o[col_tot_idx]).strip() or 0) if col_tot_idx < len(row_o) else 0
+                                    cl = chr(ord('A') + col_tot_idx)
+                                    upds_ord.append({'range': f'{cl}{i}', 'values': [[total_atual + horas_add]]})
                             if upds_ord:
                                 ws_ord.batch_update(upds_ord)
                             load_data.clear()
