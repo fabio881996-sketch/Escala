@@ -330,7 +330,13 @@ def load_utilizadores() -> pd.DataFrame:
             sh = get_sheet()
             if sh is None:
                 return pd.DataFrame()
-            return _df_from_records(sh.worksheet("utilizadores").get_all_records())
+            records = sh.worksheet("utilizadores").get_all_records()
+            if not records:
+                return pd.DataFrame()
+            df = pd.DataFrame(records).astype(str)
+            df.columns = [str(c).strip().lower() for c in df.columns]
+            df = df.fillna("")
+            return df
         except Exception:
             if tentativa < 2:
                 time.sleep(1)
@@ -5585,6 +5591,7 @@ else:
                                 df1 = pd.DataFrame(rows_1)
                                 df2 = pd.DataFrame(rows_2)
                                 _guardar_sheets({aba_1: df1, aba_2: df2})
+                                load_data.clear()
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
                                 st.success("✅ Guardado!")
@@ -5627,6 +5634,7 @@ else:
                                             if val not in opts:
                                                 _adicionar_lista(campo, val)
                                 _guardar_sheets({aba_e: df_editado_s})
+                                load_data.clear()
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
                                 st.success("✅ Guardado!")
