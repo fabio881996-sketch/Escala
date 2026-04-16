@@ -351,6 +351,8 @@ def load_ordem_remunerados() -> pd.DataFrame:
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=30)
+def load_trocas() -> pd.DataFrame:
     """Carrega registos_trocas com cache curto de 30s."""
     for tentativa in range(3):
         try:
