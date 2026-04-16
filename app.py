@@ -5522,7 +5522,7 @@ else:
                                 continue
                             editor_map[mid] = {
                                 'serviço':     serv_r,
-                                'horário':     str(r.get('horário','') or '').strip(),
+                                'horário':     str(r.get('horário','') or '').strip() or ('09-17' if 'fcaa' in norm(serv_r) else ''),
                                 'indicativo':  str(r.get('indicativo','') or '').strip(),
                                 'rádio':       str(r.get('rádio','') or '').strip(),
                                 'giro':        str(r.get('giro','') or '').strip(),
