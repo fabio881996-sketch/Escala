@@ -6010,10 +6010,10 @@ else:
                         if not vals_g:
                             continue
                         hdrs_g = [_nc(c) for c in vals_g[0]]
-                        idx_id   = hdrs_g.index('id')        if 'id'        in hdrs_g else 0
-                        idx_serv = hdrs_g.index('serviço')   if 'serviço'   in hdrs_g else 1
-                        idx_hor  = hdrs_g.index('horário')   if 'horário'   in hdrs_g else 2
-                        idx_obs  = hdrs_g.index('observações') if 'observações' in hdrs_g else 6
+                        idx_id   = hdrs_g.index('id')          if 'id'          in hdrs_g else 0
+                        idx_serv = hdrs_g.index('servico')     if 'servico'     in hdrs_g else 1
+                        idx_hor  = hdrs_g.index('horario')     if 'horario'     in hdrs_g else 2
+                        idx_obs  = hdrs_g.index('observacoes') if 'observacoes' in hdrs_g else 6
                         for i, row_g in enumerate(vals_g[1:], start=2):  # start=2 = linha real Sheets
                             if len(row_g) <= idx_serv:
                                 continue
