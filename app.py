@@ -5142,6 +5142,14 @@ else:
                                         novas_linhas[mid]['horário'] = horario
                                         if servico == 'Patrulha Ocorrências':
                                             novas_linhas[mid]['indicativo'] = '031.6A'
+                                            novas_linhas[mid]['viatura']    = 'BT-05-NX'
+                                            novas_linhas[mid]['giro']       = 'I'
+                                            if horario == '00-08':
+                                                novas_linhas[mid]['rádio'] = '4110201'
+                                            elif horario == '08-16':
+                                                novas_linhas[mid]['rádio'] = '4110203'
+                                            elif horario == '16-24':
+                                                novas_linhas[mid]['rádio'] = '4110204'
                                         # Rodar na ordem
                                         ordem_g[col_key].remove(mid)
                                         ordem_g[col_key].append(mid)
@@ -5524,6 +5532,17 @@ else:
                                 for campo in ['indicativo','rádio','giro','viatura','observações']:
                                     if dados[campo] and not grupos[chave][campo]:
                                         grupos[chave][campo] = dados[campo]
+                            hdrs_l = [h.lower() for h in hdrs_raw]
+                            mapa_c = {
+                                'id':          next((i for i,h in enumerate(hdrs_l) if h == 'id'), None),
+                                'serviço':     next((i for i,h in enumerate(hdrs_l) if 'servi' in h), None),
+                                'horário':     next((i for i,h in enumerate(hdrs_l) if 'hor' in h), None),
+                                'indicativo':  next((i for i,h in enumerate(hdrs_l) if h == 'indicativo' or h == 'indicativo rádio'), None),
+                                'rádio':       next((i for i,h in enumerate(hdrs_l) if h in ('rádio','radio')), None),
+                                'viatura':     next((i for i,h in enumerate(hdrs_l) if 'viatur' in h), None),
+                                'giro':        next((i for i,h in enumerate(hdrs_l) if h == 'giro'), None),
+                                'observações': next((i for i,h in enumerate(hdrs_l) if 'obs' in h), None),
+                            }
                             nova_data = []
                             for (sv, hr), d in grupos.items():
                                 linha = [''] * len(hdrs_raw)
@@ -5532,7 +5551,7 @@ else:
                                     ('indicativo', d['indicativo']), ('rádio', d['rádio']),
                                     ('giro', d['giro']), ('viatura', d['viatura']), ('observações', d['observações'])
                                 ]:
-                                    idx_col = next((i for i,h in enumerate(hdrs) if col_nome in h), None)
+                                    idx_col = mapa_c.get(col_nome)
                                     if idx_col is not None:
                                         linha[idx_col] = val
                                 nova_data.append(linha)
@@ -5569,12 +5588,22 @@ else:
                             novas_linhas = []
                             for (sv, hr), d in grupos_novos.items():
                                 linha = [''] * len(hdrs_raw)
+                                mapa_cols = {
+                                    'id':          next((i for i,h in enumerate(hdrs_lower) if h == 'id'), None),
+                                    'serviço':     next((i for i,h in enumerate(hdrs_lower) if 'servi' in h), None),
+                                    'horário':     next((i for i,h in enumerate(hdrs_lower) if 'hor' in h), None),
+                                    'indicativo':  next((i for i,h in enumerate(hdrs_lower) if h == 'indicativo' or h == 'indicativo rádio'), None),
+                                    'rádio':       next((i for i,h in enumerate(hdrs_lower) if h in ('rádio','radio')), None),
+                                    'viatura':     next((i for i,h in enumerate(hdrs_lower) if 'viatur' in h), None),
+                                    'giro':        next((i for i,h in enumerate(hdrs_lower) if h == 'giro'), None),
+                                    'observações': next((i for i,h in enumerate(hdrs_lower) if 'obs' in h), None),
+                                }
                                 for col_nome, val in [
                                     ('id', ';'.join(d['ids'])), ('serviço', sv), ('horário', hr),
                                     ('indicativo', d['indicativo']), ('rádio', d['rádio']),
                                     ('giro', d['giro']), ('viatura', d['viatura']), ('observações', d['observações'])
                                 ]:
-                                    idx_col = next((i for i,h in enumerate(hdrs_lower) if col_nome in h), None)
+                                    idx_col = mapa_cols.get(col_nome)
                                     if idx_col is not None:
                                         linha[idx_col] = val
                                 novas_linhas.append(linha)
