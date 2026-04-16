@@ -5663,6 +5663,11 @@ else:
 
                     # Converter tipos booleanos
                     for bcol in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso']:
+                        raw = df_ord_rem[bcol]
+                        df_ord_rem[bcol] = (
+                            raw.apply(lambda v: v if isinstance(v, bool) else
+                                      str(v).strip().lower() in ['true','1','sim','yes'])
+                        )
                         df_ord_rem[bcol] = df_ord_rem[bcol].astype(str).str.strip().str.lower().isin(['true','1','sim','yes'])
 
                     df_ord_rem[col_total] = pd.to_numeric(df_ord_rem[col_total], errors='coerce').fillna(0)
