@@ -5490,20 +5490,25 @@ else:
                         ix_vtr_g = hdrs_g.index('viatura') if 'viatura' in hdrs_g else None
                         ix_obs_g = next((i for i,h in enumerate(hdrs_g) if 'obs' in h), None)
 
-                        # Converter editor para dict id -> dados
+                        # Converter editor para dict id -> dados (excluir remunerados)
                         editor_map = {}
                         for _, r in df_g.iterrows():
                             mid = str(r['id']).strip()
-                            if mid and mid != 'nan':
-                                editor_map[mid] = {
-                                    'serviço':     str(r.get('serviço','') or '').strip(),
-                                    'horário':     str(r.get('horário','') or '').strip(),
-                                    'indicativo':  str(r.get('indicativo','') or '').strip(),
-                                    'rádio':       str(r.get('rádio','') or '').strip(),
-                                    'giro':        str(r.get('giro','') or '').strip(),
-                                    'viatura':     str(r.get('viatura','') or '').strip(),
-                                    'observações': str(r.get('observações','') or '').strip(),
-                                }
+                            if not mid or mid == 'nan':
+                                continue
+                            serv_r = str(r.get('serviço','') or '').strip()
+                            # Excluir remunerados e gratificados — são preservados separadamente
+                            if re.search(r'remu|grat', norm(serv_r)):
+                                continue
+                            editor_map[mid] = {
+                                'serviço':     serv_r,
+                                'horário':     str(r.get('horário','') or '').strip(),
+                                'indicativo':  str(r.get('indicativo','') or '').strip(),
+                                'rádio':       str(r.get('rádio','') or '').strip(),
+                                'giro':        str(r.get('giro','') or '').strip(),
+                                'viatura':     str(r.get('viatura','') or '').strip(),
+                                'observações': str(r.get('observações','') or '').strip(),
+                            }
 
                         def _agrupar_e_escrever(editor_map, ws, hdrs_raw, hdrs):
                             """Agrupa militares por serviço+horário e escreve no Sheets."""
@@ -5541,17 +5546,42 @@ else:
                                 ws_g.update('A1', [hdrs_raw])
                             _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
                         else:
-                            # Aba com dados — preservar remunerados, limpar e reescrever agrupado
+                            # Aba com dados — preservar remunerados, construir tudo e escrever atomicamente
                             hdrs_raw = [h.strip() for h in todas_g[0]]
                             hdrs_g_lower = [h.lower() for h in hdrs_raw]
                             ix_sv_g2 = hdrs_g_lower.index('serviço') if 'serviço' in hdrs_g_lower else 1
+                            # Guardar linhas de remunerados/gratificados
                             linhas_rem_g = [r for r in todas_g[1:] if any(x in norm(str(r[ix_sv_g2]).strip()) for x in ['remu','grat'])]
+                            # Construir novas linhas em memória
+                            hdrs_lower = [h.lower() for h in hdrs_raw]
+                            grupos_novos = {}
+                            for mid, dados in editor_map.items():
+                                sv = dados['serviço']
+                                if not sv: continue
+                                hr = dados['horário']
+                                chave = (sv, hr)
+                                if chave not in grupos_novos:
+                                    grupos_novos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                                grupos_novos[chave]['ids'].append(mid)
+                                for campo in ['indicativo','rádio','giro','viatura','observações']:
+                                    if dados[campo] and not grupos_novos[chave][campo]:
+                                        grupos_novos[chave][campo] = dados[campo]
+                            novas_linhas = []
+                            for (sv, hr), d in grupos_novos.items():
+                                linha = [''] * len(hdrs_raw)
+                                for col_nome, val in [
+                                    ('id', ';'.join(d['ids'])), ('serviço', sv), ('horário', hr),
+                                    ('indicativo', d['indicativo']), ('rádio', d['rádio']),
+                                    ('giro', d['giro']), ('viatura', d['viatura']), ('observações', d['observações'])
+                                ]:
+                                    idx_col = next((i for i,h in enumerate(hdrs_lower) if col_nome in h), None)
+                                    if idx_col is not None:
+                                        linha[idx_col] = val
+                                novas_linhas.append(linha)
+                            # Escrever tudo de uma vez: cabeçalho + serviços + remunerados
+                            tudo = [hdrs_raw] + novas_linhas + linhas_rem_g
                             ws_g.clear()
-                            ws_g.update('A1', [hdrs_raw])
-                            _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
-                            # Restaurar remunerados
-                            if linhas_rem_g:
-                                ws_g.append_rows(linhas_rem_g)
+                            ws_g.update('A1', tudo)
 
                         # Atualizar ordem_escala (com delay para evitar 429)
                         try:
