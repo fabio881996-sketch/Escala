@@ -5838,6 +5838,14 @@ else:
                             with st.expander("ℹ️ Militares ignorados"):
                                 for s in skipped:
                                     st.caption(s)
+                        with st.expander("🔧 DEBUG — remover depois"):
+                            st.write("**col_total usado:**", col_total)
+                            st.write("**is_fds:**", is_fds, "| hi_rem:", hi_rem, "| hf_rem:", hf_rem)
+                            st.write("**Militares com serviço:**", militares_com_servico)
+                            st.write("**Ausentes:**", ausentes_dia)
+                            st.write("**df_disp (disponíveis):**")
+                            st.dataframe(df_disp[["id","nome","disponivel","voluntario","folga","prescinde_descanso", col_total]])
+                            st.write("**Skipped:**", skipped)
 
                 # Confirmar nomeação
                 if 'rem_nomeados' in st.session_state:
