@@ -5627,14 +5627,6 @@ else:
             if df_ord_rem.empty:
                 st.info("Sem dados na aba 'ordem_remunerados'.")
             else:
-                # DEBUG RAW — remover depois
-                with st.expander("🔧 DEBUG RAW"):
-                    st.write("Colunas:", list(df_ord_rem.columns))
-                    st.write("Primeiras 3 linhas raw:")
-                    st.dataframe(df_ord_rem.head(3))
-                    if 'disponivel' in df_ord_rem.columns:
-                        st.write("Valores únicos disponivel:", df_ord_rem['disponivel'].unique().tolist())
-                        st.write("Tipos disponivel:", df_ord_rem['disponivel'].apply(type).unique().tolist())
                 col_r1, col_r2, col_r3, col_r4 = st.columns(4)
                 with col_r1:
                     d_rem = st.date_input("Data:", format="DD/MM/YYYY", key="d_rem")
@@ -5676,8 +5668,6 @@ else:
                         if col not in df_ord_rem.columns:
                             df_ord_rem[col] = ''
 
-                    # DEBUG colunas — remover depois
-                    st.write("Colunas e repr:", {repr(c): c.encode('utf-8').hex() for c in df_ord_rem.columns})
                     # Converter tipos booleanos
                     for bcol in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso']:
                         raw = df_ord_rem[bcol]
@@ -5756,16 +5746,6 @@ else:
 
                     # Filtrar só disponíveis
                     df_disp = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
-                    # DEBUG CONVERSÃO — remover depois
-                    with st.expander('🔧 DEBUG CONVERSÃO'):
-                        st.write('disponivel únicos após conversão:', df_ord_rem['disponivel'].unique().tolist())
-                        st.write('voluntario únicos:', df_ord_rem['voluntario'].unique().tolist())
-                        st.write('folga únicos:', df_ord_rem['folga'].unique().tolist())
-                        st.write('df_disp linhas:', len(df_disp))
-                        st.write('militares_com_servico:', militares_com_servico)
-                        st.write('militares_de_folga:', militares_de_folga)
-                        st.write('ausentes_dia:', ausentes_dia)
-
                     # Ordenar por menos horas (critério principal)
                     df_disp_sorted = df_disp.sort_values(col_total, ascending=True)
 
@@ -5879,14 +5859,6 @@ else:
                             with st.expander("ℹ️ Militares ignorados"):
                                 for s in skipped:
                                     st.caption(s)
-                        with st.expander("🔧 DEBUG — remover depois"):
-                            st.write("**col_total usado:**", col_total)
-                            st.write("**is_fds:**", is_fds, "| hi_rem:", hi_rem, "| hf_rem:", hf_rem)
-                            st.write("**Militares com serviço:**", militares_com_servico)
-                            st.write("**Ausentes:**", ausentes_dia)
-                            st.write("**df_disp (disponíveis):**")
-                            st.dataframe(df_disp[["id","nome","disponivel","voluntario","folga","prescinde_descanso", col_total]])
-                            st.write("**Skipped:**", skipped)
 
                 # Confirmar nomeação
                 if 'rem_nomeados' in st.session_state:
@@ -5927,6 +5899,277 @@ else:
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro: {e}")
+
+    # --- GESTÃO DE REMUNERADOS NOMEADOS ---
+        st.divider()
+        st.markdown("#### 📋 Remunerados Nomeados (hoje em diante)")
+
+        hoje = date.today()
+        sh_gest = get_sheet()
+        abas_existentes_g = [ws.title for ws in sh_gest.worksheets()]
+        remunerados_lista = []  # [{data, aba, linha_idx, ids, horario, tabela, obs}]
+
+        for delta in range(15):
+            d_g = hoje + timedelta(days=delta)
+            aba_g = d_g.strftime("%d-%m")
+            if aba_g not in abas_existentes_g:
+                continue
+            try:
+                vals_g = sh_gest.worksheet(aba_g).get_all_values()
+                for i, row_g in enumerate(vals_g):
+                    if len(row_g) < 2:
+                        continue
+                    serv_g = norm(str(row_g[1]))
+                    if 'svç remunerado' in serv_g or 'svc remunerado' in serv_g or 'remunerado' in serv_g:
+                        tabela_g = 'A' if 'tabela a' in serv_g else ('B' if 'tabela b' in serv_g else '?')
+                        remunerados_lista.append({
+                            'data': d_g.strftime("%d/%m/%Y"),
+                            'data_obj': d_g,
+                            'aba': aba_g,
+                            'linha_idx': i,  # 0-based
+                            'ids': str(row_g[0]).strip(),
+                            'horario': str(row_g[2]).strip() if len(row_g) > 2 else '',
+                            'tabela': tabela_g,
+                            'obs': str(row_g[6]).strip() if len(row_g) > 6 else '',
+                            'row_raw': row_g,
+                        })
+            except:
+                continue
+
+        if not remunerados_lista:
+            st.info("Não há remunerados nomeados nos próximos 15 dias.")
+        else:
+            for rem_g in remunerados_lista:
+                nomes_g = []
+                for mid_g in rem_g['ids'].replace(';', ',').split(','):
+                    mid_g = mid_g.strip()
+                    if mid_g:
+                        nomes_g.append(f"{get_nome_curto(df_util, mid_g)} ({mid_g})")
+                label_g = f"📅 {rem_g['data']} | Tabela {rem_g['tabela']} | {rem_g['horario']} | {', '.join(nomes_g)}"
+                if rem_g['obs']:
+                    label_g += f" | {rem_g['obs']}"
+
+                with st.expander(label_g):
+                    st.markdown(f"**Militares:** {', '.join(nomes_g)}")
+                    st.markdown(f"**Horário:** {rem_g['horario']} | **Tabela:** {rem_g['tabela']}")
+                    if rem_g['obs']:
+                        st.markdown(f"**Obs:** {rem_g['obs']}")
+
+                    col_ga, col_gb = st.columns(2)
+                    chave_base = f"{rem_g['aba']}_{rem_g['linha_idx']}"
+
+                    with col_ga:
+                        if st.button("🗑️ Cancelar remunerado", key=f"canc_{chave_base}", use_container_width=True):
+                            st.session_state[f'gest_acao_{chave_base}'] = 'cancelar'
+
+                    with col_gb:
+                        if st.button("🔄 Substituir militar", key=f"subs_{chave_base}", use_container_width=True):
+                            st.session_state[f'gest_acao_{chave_base}'] = 'substituir'
+
+                    acao_g = st.session_state.get(f'gest_acao_{chave_base}')
+
+                    # ── CANCELAR ──
+                    if acao_g == 'cancelar':
+                        st.warning("Tens a certeza que queres cancelar este remunerado? As horas serão subtraídas.")
+                        if st.button("✅ Confirmar cancelamento", key=f"conf_canc_{chave_base}", use_container_width=True, type="primary"):
+                            try:
+                                sh_c = get_sheet()
+                                ws_c = sh_c.worksheet(rem_g['aba'])
+                                # Apagar linha (substituir por linha vazia ou delete)
+                                ws_c.delete_rows(rem_g['linha_idx'] + 1)  # sheets é 1-based
+
+                                # Subtrair horas
+                                is_fds_c = rem_g['data_obj'].weekday() >= 5
+                                if rem_g['tabela'] == 'B':
+                                    col_tot_c = 'total_ano_b'
+                                elif is_fds_c:
+                                    col_tot_c = 'total_ano_a_fds'
+                                else:
+                                    col_tot_c = 'total_ano_a_semana'
+
+                                horas_c = 0
+                                if '-' in rem_g['horario']:
+                                    try:
+                                        hi_c = int(rem_g['horario'].split('-')[0].strip())
+                                        hf_c = int(rem_g['horario'].split('-')[1].strip())
+                                        horas_c = hf_c - hi_c if hf_c > hi_c else (24 - hi_c + hf_c)
+                                    except:
+                                        pass
+
+                                ws_ord_c = sh_c.worksheet("ordem_remunerados")
+                                vals_ord_c = ws_ord_c.get_all_values()
+                                import unicodedata as _ud2
+                                hdrs_c = [_ud2.normalize('NFD', h).encode('ascii','ignore').decode('ascii').strip().lower() for h in vals_ord_c[0]]
+                                col_id_c = hdrs_c.index('id') if 'id' in hdrs_c else 0
+                                col_tot_c_idx = hdrs_c.index(col_tot_c) if col_tot_c in hdrs_c else None
+                                ids_c = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
+                                upds_c = []
+                                for i_c, row_c in enumerate(vals_ord_c[1:], start=2):
+                                    mid_c = str(row_c[col_id_c]).strip() if col_id_c < len(row_c) else ''
+                                    if mid_c in ids_c and col_tot_c_idx is not None:
+                                        tot_c = max(0, int(str(row_c[col_tot_c_idx]).strip() or 0) - horas_c)
+                                        cl_c = chr(ord('A') + col_tot_c_idx)
+                                        upds_c.append({'range': f'{cl_c}{i_c}', 'values': [[tot_c]]})
+                                if upds_c:
+                                    ws_ord_c.batch_update(upds_c)
+
+                                load_data.clear()
+                                del st.session_state[f'gest_acao_{chave_base}']
+                                st.success("✅ Remunerado cancelado e horas subtraídas.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
+
+                    # ── SUBSTITUIR ──
+                    elif acao_g == 'substituir':
+                        ids_atuais = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
+                        nomes_atuais = {mid: get_nome_curto(df_util, mid) for mid in ids_atuais}
+
+                        mid_sair = st.selectbox(
+                            "Militar que sai:",
+                            ids_atuais,
+                            format_func=lambda x: f"{nomes_atuais.get(x, x)} ({x})",
+                            key=f"sair_{chave_base}"
+                        )
+
+                        # Calcular elegíveis para substituição (mesma lógica da nomeação)
+                        is_fds_s = rem_g['data_obj'].weekday() >= 5
+                        if rem_g['tabela'] == 'B':
+                            col_tot_s = 'total_ano_b'
+                        elif is_fds_s:
+                            col_tot_s = 'total_ano_a_fds'
+                        else:
+                            col_tot_s = 'total_ano_a_semana'
+
+                        # Carregar dados do dia para verificar elegibilidade
+                        df_dia_s = load_data(rem_g['aba'])
+                        _IMP_S = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
+                        ausentes_s = set()
+                        militares_folga_s = set()
+                        servicos_s = {}
+                        militares_servico_s = set()
+                        if not df_dia_s.empty:
+                            for _, rs in df_dia_s.iterrows():
+                                mid_s = str(rs['id']).strip()
+                                if not mid_s:
+                                    continue
+                                sn = norm(str(rs.get('serviço', '')))
+                                if re.search(_IMP_S, sn):
+                                    ausentes_s.add(mid_s)
+                                elif 'folga semanal' in sn or 'folga complementar' in sn:
+                                    militares_folga_s.add(mid_s)
+                                elif not re.search(r'remu|grat', sn):
+                                    hs = str(rs.get('horário', '')).strip()
+                                    hi_s2, hf_s2 = None, None
+                                    if '-' in hs:
+                                        try:
+                                            hi_s2 = int(hs.split('-')[0])
+                                            hf_s2 = int(hs.split('-')[1])
+                                        except:
+                                            pass
+                                    servicos_s.setdefault(mid_s, []).append((hi_s2, hf_s2, str(rs.get('serviço',''))))
+                                    militares_servico_s.add(mid_s)
+
+                        hi_rem_s, hf_rem_s = None, None
+                        if '-' in rem_g['horario']:
+                            try:
+                                hi_rem_s = int(rem_g['horario'].split('-')[0].strip())
+                                hf_rem_s = int(rem_g['horario'].split('-')[1].strip())
+                            except:
+                                pass
+
+                        # Reutilizar df_ord_rem já carregado
+                        elegiveis_s = []
+                        df_disp_s = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
+                        df_disp_s[col_tot_s] = pd.to_numeric(df_disp_s[col_tot_s], errors='coerce').fillna(0)
+                        df_disp_s = df_disp_s.sort_values(col_tot_s, ascending=True)
+
+                        for _, row_s in df_disp_s.iterrows():
+                            mid_s2 = str(row_s.get('id', '')).strip()
+                            if not mid_s2 or mid_s2 in ids_atuais:
+                                continue  # já está nomeado
+                            if mid_s2 in ausentes_s:
+                                continue
+                            is_vol_s = bool(row_s['voluntario'])
+                            aceita_folga_s = bool(row_s['folga'])
+                            if mid_s2 in militares_folga_s:
+                                if not is_vol_s or not aceita_folga_s:
+                                    continue
+                            # Verificar sobreposição
+                            sobreposto_s = False
+                            for hi_x, hf_x, _ in servicos_s.get(mid_s2, []):
+                                if hi_rem_s and hf_rem_s and hi_x and hf_x:
+                                    def _sm(h, b=0): return h*60+(1440 if h<b else 0)
+                                    if _sm(hi_rem_s) < _sm(hf_rem_s, hi_rem_s) and _sm(hi_x) < _sm(hf_x, hi_x):
+                                        if _sm(hi_rem_s) < _sm(hf_x, hi_x) and _sm(hi_x) < _sm(hf_rem_s, hi_rem_s):
+                                            sobreposto_s = True
+                                            break
+                            if sobreposto_s:
+                                continue
+                            elegiveis_s.append({
+                                'id': mid_s2,
+                                'nome': get_nome_curto(df_util, mid_s2),
+                                'voluntario': is_vol_s,
+                                'total': int(row_s[col_tot_s]),
+                            })
+
+                        if elegiveis_s:
+                            sugerido = elegiveis_s[0]
+                            st.info(f"💡 Sugerido: **{sugerido['nome']} ({sugerido['id']})** — {sugerido['total']}h acumuladas")
+                            opcoes_s = [f"{e['nome']} ({e['id']}) — {e['total']}h" for e in elegiveis_s]
+                            escolha_s = st.selectbox("Confirmar ou escolher outro:", opcoes_s, key=f"esc_{chave_base}")
+                            mid_entra = elegiveis_s[opcoes_s.index(escolha_s)]['id']
+                        else:
+                            st.warning("Não há substitutos elegíveis disponíveis.")
+                            mid_entra = None
+
+                        if mid_entra and st.button("✅ Confirmar substituição", key=f"conf_subs_{chave_base}", use_container_width=True, type="primary"):
+                            try:
+                                sh_s = get_sheet()
+                                ws_s = sh_s.worksheet(rem_g['aba'])
+                                vals_s = ws_s.get_all_values()
+                                linha_s = rem_g['linha_idx'] + 1  # 1-based
+
+                                # Atualizar IDs na linha
+                                ids_novos = [mid_entra if x == mid_sair else x for x in ids_atuais]
+                                ws_s.update_cell(linha_s, 1, ', '.join(ids_novos))
+
+                                # Atualizar horas
+                                horas_s = 0
+                                if '-' in rem_g['horario']:
+                                    try:
+                                        hi_ss = int(rem_g['horario'].split('-')[0].strip())
+                                        hf_ss = int(rem_g['horario'].split('-')[1].strip())
+                                        horas_s = hf_ss - hi_ss if hf_ss > hi_ss else (24 - hi_ss + hf_ss)
+                                    except:
+                                        pass
+
+                                ws_ord_s = sh_s.worksheet("ordem_remunerados")
+                                vals_ord_s = ws_ord_s.get_all_values()
+                                import unicodedata as _ud3
+                                hdrs_s = [_ud3.normalize('NFD', h).encode('ascii','ignore').decode('ascii').strip().lower() for h in vals_ord_s[0]]
+                                col_id_s = hdrs_s.index('id') if 'id' in hdrs_s else 0
+                                col_tot_s_idx = hdrs_s.index(col_tot_s) if col_tot_s in hdrs_s else None
+                                upds_s = []
+                                for i_s, row_ss in enumerate(vals_ord_s[1:], start=2):
+                                    mid_ss = str(row_ss[col_id_s]).strip() if col_id_s < len(row_ss) else ''
+                                    if col_tot_s_idx is None:
+                                        continue
+                                    tot_ss = int(str(row_ss[col_tot_s_idx]).strip() or 0) if col_tot_s_idx < len(row_ss) else 0
+                                    cl_s = chr(ord('A') + col_tot_s_idx)
+                                    if mid_ss == mid_sair:
+                                        upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[max(0, tot_ss - horas_s)]]})
+                                    elif mid_ss == mid_entra:
+                                        upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[tot_ss + horas_s]]})
+                                if upds_s:
+                                    ws_ord_s.batch_update(upds_s)
+
+                                load_data.clear()
+                                del st.session_state[f'gest_acao_{chave_base}']
+                                st.success(f"✅ {nomes_atuais.get(mid_sair, mid_sair)} substituído por {get_nome_curto(df_util, mid_entra)}.")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro: {e}")
 
     # --- 🏥 LICENÇAS (ADMIN) ---
     elif menu == "🏥 Dispensas":
