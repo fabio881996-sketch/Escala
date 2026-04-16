@@ -5252,13 +5252,13 @@ else:
                          'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Tiro']
             _hdrs_e = list(set(s for servs in _mil_servicos.values() for s in servs))
             todos_servicos_e = [''] + sorted(set(_hdrs_e + _extras_e))
-            opts_hor_e = _listas.get('Horário', ['', '00-08', '08-16', '16-24'])
-            opts_rad_e = _listas.get('Rádio', [''])
-            opts_ind_e = _listas.get('Indicativo', [''])
-            opts_vtr_e = _listas.get('Viatura', [''])
-            opts_gir_e = _listas.get('Giro', [''])
+            opts_hor_e = [''] + sorted(set(str(s) for s in _listas.get('Horário', ['00-08', '08-16', '16-24']) if str(s).strip()))
+            opts_rad_e = [''] + sorted(set(str(s) for s in _listas.get('Rádio', []) if str(s).strip()))
+            opts_ind_e = [''] + sorted(set(str(s) for s in _listas.get('Indicativo', []) if str(s).strip()))
+            opts_vtr_e = [''] + sorted(set(str(s) for s in _listas.get('Viatura', []) if str(s).strip()))
+            opts_gir_e = [''] + sorted(set(str(s) for s in _listas.get('Giro', []) if str(s).strip()))
             opts_sv_e  = _listas.get('Serviço', todos_servicos_e) or todos_servicos_e
-            # Garantir que horário tem sempre as opções base
+            opts_sv_e  = [''] + sorted(set(str(s) for s in opts_sv_e if str(s).strip()))
             if len(opts_hor_e) <= 1:
                 opts_hor_e = ['', '00-08', '08-16', '16-24']
 
