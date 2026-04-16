@@ -5910,6 +5910,10 @@ else:
                                         upds_ord.append({'range': f'{cl2}{i}', 'values': [[dados_rem['data']]]})
                             if upds_ord:
                                 ws_ord.batch_update(upds_ord)
+                            # Registar no histórico
+                            ws_hist = sh_conf.worksheet("historico_remunerados")
+                            for mid_h in ids_nomeados:
+                                ws_hist.append_row([mid_h, dados_rem['data'], dados_rem['col_ultimo']])
                             load_data.clear()
                             del st.session_state['rem_nomeados']
                             st.success("✅ Nomeação confirmada e escala atualizada!")
@@ -5918,6 +5922,50 @@ else:
                             st.error(f"Erro: {e}")
 
     # --- GESTÃO DE REMUNERADOS NOMEADOS ---
+
+        def _repor_data_ultimo(ws_ord_r, hdrs_r, ws_hist_r, mid_r, col_ult_r, col_data_cancelada):
+            """Após cancelar/substituir, repõe a data do último remunerado do histórico."""
+            hist_vals = ws_hist_r.get_all_values()
+            if len(hist_vals) <= 1:
+                data_repor = ''
+            else:
+                # Filtrar linhas deste militar e deste tipo
+                tipo_r = col_ult_r  # ex: ultimo_a_fds
+                linhas_mil = [
+                    row for row in hist_vals[1:]
+                    if len(row) >= 3 and str(row[0]).strip() == mid_r and str(row[2]).strip() == tipo_r
+                    and str(row[1]).strip() != col_data_cancelada  # excluir a data que acabou de ser cancelada
+                ]
+                if not linhas_mil:
+                    data_repor = ''
+                else:
+                    # Ordenar por data descendente, pegar a mais recente
+                    import unicodedata as _udr
+                    datas_r = []
+                    for lr in linhas_mil:
+                        try:
+                            from datetime import datetime as _dtr
+                            datas_r.append((_dtr.strptime(lr[1].strip(), '%d/%m/%Y'), lr[1].strip()))
+                        except:
+                            pass
+                    data_repor = max(datas_r, key=lambda x: x[0])[1] if datas_r else ''
+
+            # Atualizar col_ult_r no ordem_remunerados
+            col_ult_idx_r = hdrs_r.index(col_ult_r) if col_ult_r in hdrs_r else None
+            col_id_idx_r  = hdrs_r.index('id') if 'id' in hdrs_r else 0
+            if col_ult_idx_r is None:
+                return
+            ord_vals = ws_ord_r.get_all_values()
+            upds_r = []
+            for i_r, row_r2 in enumerate(ord_vals[1:], start=2):
+                mid_r2 = str(row_r2[col_id_idx_r]).strip() if col_id_idx_r < len(row_r2) else ''
+                if mid_r2 == mid_r:
+                    cl_r = chr(ord('A') + col_ult_idx_r)
+                    upds_r.append({'range': f'{cl_r}{i_r}', 'values': [[data_repor]]})
+                    break
+            if upds_r:
+                ws_ord_r.batch_update(upds_r)
+
         st.divider()
         st.markdown("#### 📋 Remunerados Nomeados (hoje em diante)")
 
@@ -6029,6 +6077,37 @@ else:
                                         upds_c.append({'range': f'{cl_c}{i_c}', 'values': [[tot_c]]})
                                 if upds_c:
                                     ws_ord_c.batch_update(upds_c)
+
+                                # Repor data do último a partir do histórico
+                                is_fds_c2 = rem_g['data_obj'].weekday() >= 5
+                                if rem_g['tabela'] == 'B':
+                                    col_ult_c = 'ultimo_b'
+                                elif is_fds_c2:
+                                    col_ult_c = 'ultimo_a_fds'
+                                else:
+                                    col_ult_c = 'ultimo_a_semana'
+
+                                import unicodedata as _udc
+                                def _ncc(s): return _udc.normalize('NFD',s).encode('ascii','ignore').decode('ascii').strip().lower()
+                                hdrs_c2 = [_ncc(h) for h in vals_ord_c[0]]
+                                ws_hist_c = sh_c.worksheet("historico_remunerados")
+
+                                # Remover linha do histórico para cada militar cancelado
+                                hist_vals_c = ws_hist_c.get_all_values()
+                                data_cancel = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
+                                linhas_apagar = []
+                                for i_hc, row_hc in enumerate(hist_vals_c[1:], start=2):
+                                    if (len(row_hc) >= 3 and
+                                        str(row_hc[0]).strip() in ids_c and
+                                        str(row_hc[1]).strip() == data_cancel and
+                                        str(row_hc[2]).strip() == col_ult_c):
+                                        linhas_apagar.append(i_hc)
+                                for ln in reversed(linhas_apagar):
+                                    ws_hist_c.delete_rows(ln)
+
+                                # Repor data do último para cada militar
+                                for mid_c2 in ids_c:
+                                    _repor_data_ultimo(ws_ord_c, hdrs_c2, ws_hist_c, mid_c2, col_ult_c, data_cancel)
 
                                 load_data.clear()
                                 del st.session_state[f'gest_acao_{chave_base}']
@@ -6191,6 +6270,40 @@ else:
                                         upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[tot_ss + horas_s]]})
                                 if upds_s:
                                     ws_ord_s.batch_update(upds_s)
+
+                                # Histórico: remover linha do que saiu e repor data; adicionar linha ao que entrou
+                                import unicodedata as _uds2
+                                def _ncs(s): return _uds2.normalize('NFD',s).encode('ascii','ignore').decode('ascii').strip().lower()
+                                hdrs_s2 = [_ncs(h) for h in vals_ord_s[0]]
+                                ws_hist_s = sh_s.worksheet("historico_remunerados")
+                                hist_vals_s = ws_hist_s.get_all_values()
+                                data_subs = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
+
+                                # Remover linha do que saiu
+                                linhas_apagar_s = []
+                                for i_hs, row_hs in enumerate(hist_vals_s[1:], start=2):
+                                    if (len(row_hs) >= 3 and
+                                        str(row_hs[0]).strip() == mid_sair and
+                                        str(row_hs[1]).strip() == data_subs and
+                                        str(row_hs[2]).strip() == col_ult_s):
+                                        linhas_apagar_s.append(i_hs)
+                                for ln in reversed(linhas_apagar_s):
+                                    ws_hist_s.delete_rows(ln)
+
+                                # Repor data do último para o que saiu
+                                _repor_data_ultimo(ws_ord_s, hdrs_s2, ws_hist_s, mid_sair, col_ult_s, data_subs)
+
+                                # Adicionar linha ao que entrou e atualizar data
+                                ws_hist_s.append_row([mid_entra, data_subs, col_ult_s])
+                                col_ult_s_idx2 = hdrs_s2.index(col_ult_s) if col_ult_s in hdrs_s2 else None
+                                if col_ult_s_idx2 is not None:
+                                    ord_vals_s2 = ws_ord_s.get_all_values()
+                                    col_id_s2 = hdrs_s2.index('id') if 'id' in hdrs_s2 else 0
+                                    for i_s2, row_s2 in enumerate(ord_vals_s2[1:], start=2):
+                                        if str(row_s2[col_id_s2]).strip() == mid_entra:
+                                            cl_s2 = chr(ord('A') + col_ult_s_idx2)
+                                            ws_ord_s.update_cell(i_s2, col_ult_s_idx2 + 1, data_subs)
+                                            break
 
                                 load_data.clear()
                                 del st.session_state[f'gest_acao_{chave_base}']
