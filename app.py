@@ -5510,15 +5510,18 @@ else:
                         ix_vtr_g = hdrs_g.index('viatura') if 'viatura' in hdrs_g else None
                         ix_obs_g = next((i for i,h in enumerate(hdrs_g) if 'obs' in h), None)
 
-                        # Converter editor para dict id -> dados (excluir remunerados)
+                        # Converter editor para dict id -> dados
+                        # Remunerados novos (adicionados manualmente) são guardados à parte
                         editor_map = {}
+                        editor_remu_novos = []  # linhas de remunerado adicionadas no editor
                         for _, r in df_g.iterrows():
                             mid = str(r['id']).strip()
                             if not mid or mid == 'nan':
                                 continue
                             serv_r = str(r.get('serviço','') or '').strip()
-                            # Excluir remunerados e gratificados — são preservados separadamente
                             if re.search(r'remu|grat', norm(serv_r)):
+                                # Remunerado manual — guardar como linha raw para o Sheets
+                                editor_remu_novos.append(mid)
                                 continue
                             editor_map[mid] = {
                                 'serviço':     serv_r,
@@ -5581,8 +5584,31 @@ else:
                             hdrs_raw = [h.strip() for h in todas_g[0]]
                             hdrs_g_lower = [h.lower() for h in hdrs_raw]
                             ix_sv_g2 = hdrs_g_lower.index('serviço') if 'serviço' in hdrs_g_lower else 1
-                            # Guardar linhas de remunerados/gratificados
+                            # Guardar linhas de remunerados/gratificados existentes no Sheets
                             linhas_rem_g = [r for r in todas_g[1:] if any(x in norm(str(r[ix_sv_g2]).strip()) for x in ['remu','grat'])]
+                            # Construir linhas para remunerados novos adicionados no editor
+                            for _, r_novo in df_g.iterrows():
+                                mid_n = str(r_novo['id']).strip()
+                                serv_n = str(r_novo.get('serviço','') or '').strip()
+                                if mid_n and mid_n != 'nan' and re.search(r'remu|grat', norm(serv_n)):
+                                    # Só adicionar se não existir já no Sheets
+                                    ids_rem_existentes = set()
+                                    for lr in linhas_rem_g:
+                                        for x in re.split(r'[;,]', str(lr[0])):
+                                            ids_rem_existentes.add(x.strip())
+                                    if mid_n not in ids_rem_existentes:
+                                        linha_nova = [''] * len(hdrs_raw)
+                                        hdrs_nc2 = [_nc(h) for h in hdrs_raw]
+                                        for chave_n, val_n in [
+                                            ('id', mid_n),
+                                            ('servico', serv_n),
+                                            ('horario', str(r_novo.get('horário','') or '').strip()),
+                                            ('obs', str(r_novo.get('observações','') or '').strip()),
+                                        ]:
+                                            idx_n = next((i for i,h in enumerate(hdrs_nc2) if chave_n in h), None)
+                                            if idx_n is not None:
+                                                linha_nova[idx_n] = val_n
+                                        linhas_rem_g.append(linha_nova)
                             # Construir novas linhas em memória
                             hdrs_nc = [_nc(h) for h in hdrs_raw]
                             # mapa fixo por posição — mais robusto que contains
