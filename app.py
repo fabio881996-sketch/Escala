@@ -4750,8 +4750,8 @@ else:
                     if mid in mapa_existente:
                         lista_dados = mapa_existente[mid]
                         # Separar remunerados dos serviços normais
-                        servs_normais = [d for d in lista_dados if not norm(d.get('serviço','')).startswith('remu') and not norm(d.get('serviço','')).startswith('grat')]
-                        servs_rem     = [d for d in lista_dados if norm(d.get('serviço','')).startswith('remu') or norm(d.get('serviço','')).startswith('grat')]
+                        servs_normais = [d for d in lista_dados if not re.search(r'remu|grat', norm(d.get('serviço','')))]
+                        servs_rem     = [d for d in lista_dados if re.search(r'remu|grat', norm(d.get('serviço','')))]
                         # Usar o serviço normal como principal
                         if servs_normais:
                             dados = servs_normais[0]
