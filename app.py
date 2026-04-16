@@ -5611,8 +5611,12 @@ else:
             try:
                 sh_rem = get_sheet()
                 ws_ord_rem = sh_rem.worksheet("ordem_remunerados")
-                df_ord_rem = pd.DataFrame(ws_ord_rem.get_all_records())
-                df_ord_rem.columns = [c.strip().lower() for c in df_ord_rem.columns]
+                _vals_rem = ws_ord_rem.get_all_values()
+                if len(_vals_rem) > 1:
+                    _hdrs_rem = [c.strip().lower() for c in _vals_rem[0]]
+                    df_ord_rem = pd.DataFrame(_vals_rem[1:], columns=_hdrs_rem)
+                else:
+                    df_ord_rem = pd.DataFrame()
             except Exception as e:
                 st.error(f"Aba 'ordem_remunerados' não encontrada: {e}")
                 st.stop()
