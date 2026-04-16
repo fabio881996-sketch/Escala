@@ -3183,7 +3183,15 @@ else:
                             du = sum(1 for n in range((fim_d - ini_d).days + 1)
                                     if (ini_d + timedelta(days=n)).weekday() < 5
                                     and (ini_d + timedelta(days=n)) not in fer_tab)
-                            dc = (fim_d - ini_d).days + 1
+                            # Dias corridos: incluir fins de semana/feriados após o último dia
+                            fim_ext = fim_d
+                            while True:
+                                prox = fim_ext + timedelta(days=1)
+                                if prox.weekday() >= 5 or prox in fer_tab:
+                                    fim_ext = prox
+                                else:
+                                    break
+                            dc = (fim_ext - ini_d).days + 1
                             periodos_ft.append((ini_d, fim_d, du, dc))
                         total_du_ft = sum(p[2] for p in periodos_ft)
 
@@ -3358,7 +3366,14 @@ else:
                     return None
 
                 def dias_corridos_reais(ini_d, fim_d, fer_f):
-                    return (fim_d - ini_d).days + 1
+                    fim_ext = fim_d
+                    while True:
+                        proximo = fim_ext + timedelta(days=1)
+                        if proximo.weekday() >= 5 or proximo in fer_f:
+                            fim_ext = proximo
+                        else:
+                            break
+                    return (fim_ext - ini_d).days + 1
                 for ini_c, fim_c in zip(ini_cols_f, fim_cols_f):
                     ini_v = str(row_f.get(ini_c, '')).strip()
                     fim_v = str(row_f.get(fim_c, '')).strip()
