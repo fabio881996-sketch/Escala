@@ -14,6 +14,10 @@ def norm(t):
     """Normaliza texto para comparação -- remove acentos e coloca em minúsculas."""
     return unicodedata.normalize('NFKD', str(t).lower()).encode('ascii', 'ignore').decode('ascii')
 
+def _nc(s):
+    """Normaliza nome de coluna -- remove acentos, strip, lower."""
+    return unicodedata.normalize('NFD', str(s)).encode('ascii', 'ignore').decode('ascii').strip().lower()
+
 def hash_pin(pin: str, salt: str = None):
     """Gera hash+salt de um PIN. Retorna (hash, salt)."""
     if salt is None:
@@ -285,7 +289,7 @@ def _df_from_records(records) -> pd.DataFrame:
         df = df[df['id'] != ''].reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=180)
+@st.cache_data(ttl=300)
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega dados de uma aba da Google Sheet com cache de 3 minutos."""
     import time
@@ -333,6 +337,17 @@ def load_utilizadores() -> pd.DataFrame:
     return pd.DataFrame()
 
 @st.cache_data(ttl=60)
+def load_lista_abas() -> list:
+    """Devolve lista de títulos de abas do Sheets -- cache 60s."""
+    try:
+        sh = get_sheet()
+        if sh is None:
+            return []
+        return [ws.title for ws in sh.worksheets()]
+    except Exception:
+        return []
+
+@st.cache_data(ttl=60)
 def load_ordem_remunerados() -> pd.DataFrame:
     """Carrega ordem_remunerados com cache de 60s."""
     try:
@@ -343,8 +358,6 @@ def load_ordem_remunerados() -> pd.DataFrame:
         vals = ws.get_all_values()
         if len(vals) <= 1:
             return pd.DataFrame()
-        import unicodedata as _ud
-        def _nc(s): return _ud.normalize('NFD', s).encode('ascii','ignore').decode('ascii').strip().lower()
         hdrs = [_nc(c) for c in vals[0]]
         return pd.DataFrame(vals[1:], columns=hdrs)
     except Exception:
@@ -1021,7 +1034,7 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
     - Grava como ordem_escala do dia seguinte (sobrescreve se já existir)
     """
     try:
-        abas = [ws.title for ws in sh.worksheets()]
+        abas = load_lista_abas()
         aba_ord = f"ordem_escala {aba_dia}"
         aba_ord_ant = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
 
@@ -3702,7 +3715,7 @@ else:
                             sh_h = get_sheet()
                             # Ordenar abas do mais recente para o mais antigo
                             abas_h = sorted(
-                                [ws.title for ws in sh_h.worksheets() if re.match(r'^\d{2}-\d{2}$', ws.title)],
+                                [t for t in load_lista_abas() if re.match(r'^\d{2}-\d{2}$', t)],
                                 reverse=True
                             )
                             resultado_h = None
@@ -4559,7 +4572,7 @@ else:
                     # Sempre parte do ordem_escala do dia atual (que vem da geração)
                     # ignorando qualquer ordem_escala existente para o dia seguinte
                     nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
-                    abas_existentes = [ws.title for ws in sh2.worksheets()]
+                    abas_existentes = load_lista_abas()
 
                     _slots_map_r = {
                         (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
@@ -4641,7 +4654,7 @@ else:
             if st.button("📋 Carregar tabela do dia", key="btn_carregar_tabela", use_container_width=True):
                 sh_tab = get_sheet()
                 # Criar aba do dia se não existir, copiando estrutura de outra aba
-                abas_existentes_tab = [ws.title for ws in sh_tab.worksheets()]
+                abas_existentes_tab = load_lista_abas()
                 if aba_dia not in abas_existentes_tab:
                     # Encontrar aba modelo (outro dia)
                     aba_modelo = None
@@ -5030,7 +5043,7 @@ else:
                                         ws_ordem_g = sh_g.worksheet(aba_ordem_ant)
                                     except:
                                         # Listar abas disponíveis para debug
-                                        abas_disp = [ws.title for ws in sh_g.worksheets()]
+                                        abas_disp = load_lista_abas()
                                         abas_ord = [a for a in abas_disp if 'ordem' in a.lower()]
                                         st.error(f"Não encontrei ordem_escala. A procurar: '{aba_ordem}' ou '{aba_ordem_ant}'. Abas ordem disponíveis: {abas_ord}")
                                         st.stop()
@@ -5273,7 +5286,7 @@ else:
 
             if st.button("📋 Carregar dias", key="btn_carregar_editar", use_container_width=True):
                 sh_e = get_sheet()
-                abas_existentes_e = [ws.title for ws in sh_e.worksheets()]
+                abas_existentes_e = load_lista_abas()
                 # Criar abas que não existam
                 aba_modelo_e = next((ws for ws in sh_e.worksheets() if re.match(r'^\d{2}-\d{2}$', ws.title)), None)
                 hdrs_modelo_e = aba_modelo_e.row_values(1) if aba_modelo_e else ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
@@ -5893,8 +5906,6 @@ else:
                                 dados_rem['observacao'],
                             ])
                             # Atualizar horas e data último em ordem_remunerados
-                            import unicodedata as _udn
-                            def _nc(s): return _udn.normalize('NFD',s).encode('ascii','ignore').decode('ascii').strip().lower()
                             ws_ord = sh_conf.worksheet("ordem_remunerados")
                             todos_vals = ws_ord.get_all_values()
                             hdrs_ord = [_nc(h) for h in todos_vals[0]]
@@ -5921,6 +5932,7 @@ else:
                                 ws_hist.append_row([mid_h, dados_rem['data'], dados_rem['col_ultimo']])
                             load_data.clear()
                             load_ordem_remunerados.clear()
+                            load_lista_abas.clear()
                             del st.session_state['rem_nomeados']
                             st.success("✅ Nomeação confirmada e escala atualizada!")
                             st.rerun()
@@ -5946,12 +5958,10 @@ else:
                     data_repor = ''
                 else:
                     # Ordenar por data descendente, pegar a mais recente
-                    import unicodedata as _udr
                     datas_r = []
                     for lr in linhas_mil:
                         try:
-                            from datetime import datetime as _dtr
-                            datas_r.append((_dtr.strptime(lr[1].strip(), '%d/%m/%Y'), lr[1].strip()))
+                            datas_r.append((datetime.strptime(lr[1].strip(), '%d/%m/%Y'), lr[1].strip()))
                         except:
                             pass
                     data_repor = max(datas_r, key=lambda x: x[0])[1] if datas_r else ''
@@ -5975,351 +5985,355 @@ else:
         st.divider()
         st.markdown("#### 📋 Remunerados Nomeados (hoje em diante)")
 
-        hoje = date.today()
-        sh_gest = get_sheet()
-        abas_existentes_g = [ws.title for ws in sh_gest.worksheets()]
-        remunerados_lista = []  # [{data, aba, linha_idx, ids, horario, tabela, obs}]
+        col_gest1, col_gest2 = st.columns([3,1])
+        with col_gest2:
+            if st.button("🔄 Carregar lista", key="btn_carregar_gest", use_container_width=True):
+                st.session_state['gest_carregado'] = True
 
-        for delta in range(15):
-            d_g = hoje + timedelta(days=delta)
-            aba_g = d_g.strftime("%d-%m")
-            if aba_g not in abas_existentes_g:
-                continue
-            try:
-                vals_g = sh_gest.worksheet(aba_g).get_all_values()
-                for i, row_g in enumerate(vals_g):
-                    if len(row_g) < 2:
-                        continue
-                    serv_g = norm(str(row_g[1]))
-                    if 'svç remunerado' in serv_g or 'svc remunerado' in serv_g or 'remunerado' in serv_g:
-                        tabela_g = 'A' if 'tabela a' in serv_g else ('B' if 'tabela b' in serv_g else '?')
-                        remunerados_lista.append({
-                            'data': d_g.strftime("%d/%m/%Y"),
-                            'data_obj': d_g,
-                            'aba': aba_g,
-                            'linha_idx': i,  # 0-based
-                            'ids': str(row_g[0]).strip(),
-                            'horario': str(row_g[2]).strip() if len(row_g) > 2 else '',
-                            'tabela': tabela_g,
-                            'obs': str(row_g[6]).strip() if len(row_g) > 6 else '',
-                            'row_raw': row_g,
-                        })
-            except:
-                continue
-
-        if not remunerados_lista:
-            st.info("Não há remunerados nomeados nos próximos 15 dias.")
+        if not st.session_state.get('gest_carregado'):
+            st.info("Clica em **🔄 Carregar lista** para ver os remunerados nomeados.")
         else:
-            for rem_g in remunerados_lista:
-                nomes_g = []
-                for mid_g in rem_g['ids'].replace(';', ',').split(','):
-                    mid_g = mid_g.strip()
-                    if mid_g:
-                        nomes_g.append(f"{get_nome_curto(df_util, mid_g)} ({mid_g})")
-                label_g = f"📅 {rem_g['data']} | Tabela {rem_g['tabela']} | {rem_g['horario']} | {', '.join(nomes_g)}"
-                if rem_g['obs']:
-                    label_g += f" | {rem_g['obs']}"
+            hoje = date.today()
+            sh_gest = get_sheet()
+            abas_existentes_g = load_lista_abas()
+            remunerados_lista = []  # [{data, aba, linha_idx, ids, horario, tabela, obs}]
 
-                with st.expander(label_g):
-                    st.markdown(f"**Militares:** {', '.join(nomes_g)}")
-                    st.markdown(f"**Horário:** {rem_g['horario']} | **Tabela:** {rem_g['tabela']}")
+            with st.spinner("A carregar remunerados..."):
+                for delta in range(15):
+                    d_g = hoje + timedelta(days=delta)
+                    aba_g = d_g.strftime("%d-%m")
+                    if aba_g not in abas_existentes_g:
+                        continue
+                    try:
+                        vals_g = load_data(aba_g)
+                        if vals_g.empty:
+                            continue
+                        for i, row_g in vals_g.iterrows():
+                            serv_g = norm(str(row_g.get('serviço', '')))
+                            if 'remunerado' in serv_g:
+                                tabela_g = 'A' if 'tabela a' in serv_g else ('B' if 'tabela b' in serv_g else '?')
+                                remunerados_lista.append({
+                                    'data': d_g.strftime("%d/%m/%Y"),
+                                    'data_obj': d_g,
+                                    'aba': aba_g,
+                                    'linha_idx': i,
+                                    'ids': str(row_g.get('id', '')).strip(),
+                                    'horario': str(row_g.get('horário', '')).strip(),
+                                    'tabela': tabela_g,
+                                    'obs': str(row_g.get('observações', '')).strip(),
+                                })
+                    except:
+                        continue
+
+            if not remunerados_lista:
+                st.info("Não há remunerados nomeados nos próximos 15 dias.")
+            else:
+                for rem_g in remunerados_lista:
+                    nomes_g = []
+                    for mid_g in rem_g['ids'].replace(';', ',').split(','):
+                        mid_g = mid_g.strip()
+                        if mid_g:
+                            nomes_g.append(f"{get_nome_curto(df_util, mid_g)} ({mid_g})")
+                    label_g = f"📅 {rem_g['data']} | Tabela {rem_g['tabela']} | {rem_g['horario']} | {', '.join(nomes_g)}"
                     if rem_g['obs']:
-                        st.markdown(f"**Obs:** {rem_g['obs']}")
-
-                    col_ga, col_gb = st.columns(2)
-                    chave_base = f"{rem_g['aba']}_{rem_g['linha_idx']}"
-
-                    with col_ga:
-                        if st.button("🗑️ Cancelar remunerado", key=f"canc_{chave_base}", use_container_width=True):
-                            st.session_state[f'gest_acao_{chave_base}'] = 'cancelar'
-
-                    with col_gb:
-                        if st.button("🔄 Substituir militar", key=f"subs_{chave_base}", use_container_width=True):
-                            st.session_state[f'gest_acao_{chave_base}'] = 'substituir'
-
-                    acao_g = st.session_state.get(f'gest_acao_{chave_base}')
-
-                    # ── CANCELAR ──
-                    if acao_g == 'cancelar':
-                        st.warning("Tens a certeza que queres cancelar este remunerado? As horas serão subtraídas.")
-                        if st.button("✅ Confirmar cancelamento", key=f"conf_canc_{chave_base}", use_container_width=True, type="primary"):
-                            try:
-                                sh_c = get_sheet()
-                                ws_c = sh_c.worksheet(rem_g['aba'])
-                                # Apagar linha (substituir por linha vazia ou delete)
-                                ws_c.delete_rows(rem_g['linha_idx'] + 1)  # sheets é 1-based
-
-                                # Subtrair horas
-                                is_fds_c = rem_g['data_obj'].weekday() >= 5
-                                if rem_g['tabela'] == 'B':
-                                    col_tot_c = 'total_ano_b'
-                                elif is_fds_c:
-                                    col_tot_c = 'total_ano_a_fds'
-                                else:
-                                    col_tot_c = 'total_ano_a_semana'
-
-                                horas_c = 0
-                                if '-' in rem_g['horario']:
-                                    try:
-                                        hi_c = int(rem_g['horario'].split('-')[0].strip())
-                                        hf_c = int(rem_g['horario'].split('-')[1].strip())
-                                        horas_c = hf_c - hi_c if hf_c > hi_c else (24 - hi_c + hf_c)
-                                    except:
-                                        pass
-
-                                ws_ord_c = sh_c.worksheet("ordem_remunerados")
-                                vals_ord_c = ws_ord_c.get_all_values()
-                                import unicodedata as _ud2
-                                hdrs_c = [_ud2.normalize('NFD', h).encode('ascii','ignore').decode('ascii').strip().lower() for h in vals_ord_c[0]]
-                                col_id_c = hdrs_c.index('id') if 'id' in hdrs_c else 0
-                                col_tot_c_idx = hdrs_c.index(col_tot_c) if col_tot_c in hdrs_c else None
-                                ids_c = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
-                                upds_c = []
-                                for i_c, row_c in enumerate(vals_ord_c[1:], start=2):
-                                    mid_c = str(row_c[col_id_c]).strip() if col_id_c < len(row_c) else ''
-                                    if mid_c in ids_c and col_tot_c_idx is not None:
-                                        tot_c = max(0, int(str(row_c[col_tot_c_idx]).strip() or 0) - horas_c)
-                                        cl_c = chr(ord('A') + col_tot_c_idx)
-                                        upds_c.append({'range': f'{cl_c}{i_c}', 'values': [[tot_c]]})
-                                if upds_c:
-                                    ws_ord_c.batch_update(upds_c)
-
-                                # Repor data do último a partir do histórico
-                                is_fds_c2 = rem_g['data_obj'].weekday() >= 5
-                                if rem_g['tabela'] == 'B':
-                                    col_ult_c = 'ultimo_b'
-                                elif is_fds_c2:
-                                    col_ult_c = 'ultimo_a_fds'
-                                else:
-                                    col_ult_c = 'ultimo_a_semana'
-
-                                import unicodedata as _udc
-                                def _ncc(s): return _udc.normalize('NFD',s).encode('ascii','ignore').decode('ascii').strip().lower()
-                                hdrs_c2 = [_ncc(h) for h in vals_ord_c[0]]
-                                ws_hist_c = sh_c.worksheet("historico_remunerados")
-
-                                # Remover linha do histórico para cada militar cancelado
-                                hist_vals_c = ws_hist_c.get_all_values()
-                                data_cancel = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
-                                linhas_apagar = []
-                                for i_hc, row_hc in enumerate(hist_vals_c[1:], start=2):
-                                    if (len(row_hc) >= 3 and
-                                        str(row_hc[0]).strip() in ids_c and
-                                        str(row_hc[1]).strip() == data_cancel and
-                                        str(row_hc[2]).strip() == col_ult_c):
-                                        linhas_apagar.append(i_hc)
-                                for ln in reversed(linhas_apagar):
-                                    ws_hist_c.delete_rows(ln)
-
-                                # Repor data do último para cada militar
-                                for mid_c2 in ids_c:
-                                    _repor_data_ultimo(ws_ord_c, hdrs_c2, ws_hist_c, mid_c2, col_ult_c, data_cancel)
-
-                                load_data.clear()
-                                load_ordem_remunerados.clear()
-                                del st.session_state[f'gest_acao_{chave_base}']
-                                st.success("✅ Remunerado cancelado e horas subtraídas.")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro: {e}")
-
-                    # ── SUBSTITUIR ──
-                    elif acao_g == 'substituir':
-                        ids_atuais = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
-                        nomes_atuais = {mid: get_nome_curto(df_util, mid) for mid in ids_atuais}
-
-                        mid_sair = st.selectbox(
-                            "Militar que sai:",
-                            ids_atuais,
-                            format_func=lambda x: f"{nomes_atuais.get(x, x)} ({x})",
-                            key=f"sair_{chave_base}"
-                        )
-
-                        # Calcular elegíveis para substituição (mesma lógica da nomeação)
-                        is_fds_s = rem_g['data_obj'].weekday() >= 5
-                        if rem_g['tabela'] == 'B':
-                            col_tot_s = 'total_ano_b'
-                            col_ult_s = 'ultimo_b'
-                        elif is_fds_s:
-                            col_tot_s = 'total_ano_a_fds'
-                            col_ult_s = 'ultimo_a_fds'
-                        else:
-                            col_tot_s = 'total_ano_a_semana'
-                            col_ult_s = 'ultimo_a_semana'
-
-                        # Carregar dados do dia para verificar elegibilidade
-                        df_dia_s = load_data(rem_g['aba'])
-                        _IMP_S = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
-                        ausentes_s = set()
-                        militares_folga_s = set()
-                        servicos_s = {}
-                        militares_servico_s = set()
-                        if not df_dia_s.empty:
-                            for _, rs in df_dia_s.iterrows():
-                                mid_s = str(rs['id']).strip()
-                                if not mid_s:
-                                    continue
-                                sn = norm(str(rs.get('serviço', '')))
-                                if re.search(_IMP_S, sn):
-                                    ausentes_s.add(mid_s)
-                                elif 'folga semanal' in sn or 'folga complementar' in sn:
-                                    militares_folga_s.add(mid_s)
-                                elif not re.search(r'remu|grat', sn):
-                                    hs = str(rs.get('horário', '')).strip()
-                                    hi_s2, hf_s2 = None, None
-                                    if '-' in hs:
+                        label_g += f" | {rem_g['obs']}"
+    
+                    with st.expander(label_g):
+                        st.markdown(f"**Militares:** {', '.join(nomes_g)}")
+                        st.markdown(f"**Horário:** {rem_g['horario']} | **Tabela:** {rem_g['tabela']}")
+                        if rem_g['obs']:
+                            st.markdown(f"**Obs:** {rem_g['obs']}")
+    
+                        col_ga, col_gb = st.columns(2)
+                        chave_base = f"{rem_g['aba']}_{rem_g['linha_idx']}"
+    
+                        with col_ga:
+                            if st.button("🗑️ Cancelar remunerado", key=f"canc_{chave_base}", use_container_width=True):
+                                st.session_state[f'gest_acao_{chave_base}'] = 'cancelar'
+    
+                        with col_gb:
+                            if st.button("🔄 Substituir militar", key=f"subs_{chave_base}", use_container_width=True):
+                                st.session_state[f'gest_acao_{chave_base}'] = 'substituir'
+    
+                        acao_g = st.session_state.get(f'gest_acao_{chave_base}')
+    
+                        # ── CANCELAR ──
+                        if acao_g == 'cancelar':
+                            st.warning("Tens a certeza que queres cancelar este remunerado? As horas serão subtraídas.")
+                            if st.button("✅ Confirmar cancelamento", key=f"conf_canc_{chave_base}", use_container_width=True, type="primary"):
+                                try:
+                                    sh_c = get_sheet()
+                                    ws_c = sh_c.worksheet(rem_g['aba'])
+                                    # Apagar linha (substituir por linha vazia ou delete)
+                                    ws_c.delete_rows(rem_g['linha_idx'] + 1)  # sheets é 1-based
+    
+                                    # Subtrair horas
+                                    is_fds_c = rem_g['data_obj'].weekday() >= 5
+                                    if rem_g['tabela'] == 'B':
+                                        col_tot_c = 'total_ano_b'
+                                    elif is_fds_c:
+                                        col_tot_c = 'total_ano_a_fds'
+                                    else:
+                                        col_tot_c = 'total_ano_a_semana'
+    
+                                    horas_c = 0
+                                    if '-' in rem_g['horario']:
                                         try:
-                                            hi_s2 = int(hs.split('-')[0])
-                                            hf_s2 = int(hs.split('-')[1])
+                                            hi_c = int(rem_g['horario'].split('-')[0].strip())
+                                            hf_c = int(rem_g['horario'].split('-')[1].strip())
+                                            horas_c = hf_c - hi_c if hf_c > hi_c else (24 - hi_c + hf_c)
                                         except:
                                             pass
-                                    servicos_s.setdefault(mid_s, []).append((hi_s2, hf_s2, str(rs.get('serviço',''))))
-                                    militares_servico_s.add(mid_s)
-
-                        hi_rem_s, hf_rem_s = None, None
-                        if '-' in rem_g['horario']:
-                            try:
-                                hi_rem_s = int(rem_g['horario'].split('-')[0].strip())
-                                hf_rem_s = int(rem_g['horario'].split('-')[1].strip())
-                            except:
-                                pass
-
-                        # Reutilizar df_ord_rem já carregado
-                        elegiveis_s = []
-                        df_disp_s = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
-                        df_disp_s[col_tot_s] = pd.to_numeric(df_disp_s[col_tot_s], errors='coerce').fillna(0)
-                        if col_ult_s not in df_disp_s.columns:
-                            df_disp_s[col_ult_s] = pd.NaT
-                        else:
-                            df_disp_s[col_ult_s] = pd.to_datetime(df_disp_s[col_ult_s], dayfirst=True, errors='coerce')
-                        df_disp_s = df_disp_s.sort_values(
-                            [col_ult_s, col_tot_s],
-                            ascending=[True, True],
-                            na_position='first'
-                        )
-
-                        for _, row_s in df_disp_s.iterrows():
-                            mid_s2 = str(row_s.get('id', '')).strip()
-                            if not mid_s2 or mid_s2 in ids_atuais:
-                                continue  # já está nomeado
-                            if mid_s2 in ausentes_s:
-                                continue
-                            is_vol_s = bool(row_s['voluntario'])
-                            aceita_folga_s = bool(row_s['folga'])
-                            if mid_s2 in militares_folga_s:
-                                if not is_vol_s or not aceita_folga_s:
-                                    continue
-                            # Verificar sobreposição
-                            sobreposto_s = False
-                            for hi_x, hf_x, _ in servicos_s.get(mid_s2, []):
-                                if hi_rem_s and hf_rem_s and hi_x and hf_x:
-                                    def _sm(h, b=0): return h*60+(1440 if h<b else 0)
-                                    if _sm(hi_rem_s) < _sm(hf_rem_s, hi_rem_s) and _sm(hi_x) < _sm(hf_x, hi_x):
-                                        if _sm(hi_rem_s) < _sm(hf_x, hi_x) and _sm(hi_x) < _sm(hf_rem_s, hi_rem_s):
-                                            sobreposto_s = True
-                                            break
-                            if sobreposto_s:
-                                continue
-                            elegiveis_s.append({
-                                'id': mid_s2,
-                                'nome': get_nome_curto(df_util, mid_s2),
-                                'voluntario': is_vol_s,
-                                'total': int(row_s[col_tot_s]),
-                            })
-
-                        if elegiveis_s:
-                            sugerido = elegiveis_s[0]
-                            st.info(f"💡 Sugerido: **{sugerido['nome']} ({sugerido['id']})** — {sugerido['total']}h acumuladas")
-                            opcoes_s = [f"{e['nome']} ({e['id']}) — {e['total']}h" for e in elegiveis_s]
-                            escolha_s = st.selectbox("Confirmar ou escolher outro:", opcoes_s, key=f"esc_{chave_base}")
-                            mid_entra = elegiveis_s[opcoes_s.index(escolha_s)]['id']
-                        else:
-                            st.warning("Não há substitutos elegíveis disponíveis.")
-                            mid_entra = None
-
-                        if mid_entra and st.button("✅ Confirmar substituição", key=f"conf_subs_{chave_base}", use_container_width=True, type="primary"):
-                            try:
-                                sh_s = get_sheet()
-                                ws_s = sh_s.worksheet(rem_g['aba'])
-                                vals_s = ws_s.get_all_values()
-                                linha_s = rem_g['linha_idx'] + 1  # 1-based
-
-                                # Atualizar IDs na linha
-                                ids_novos = [mid_entra if x == mid_sair else x for x in ids_atuais]
-                                ws_s.update_cell(linha_s, 1, ', '.join(ids_novos))
-
-                                # Atualizar horas
-                                horas_s = 0
-                                if '-' in rem_g['horario']:
-                                    try:
-                                        hi_ss = int(rem_g['horario'].split('-')[0].strip())
-                                        hf_ss = int(rem_g['horario'].split('-')[1].strip())
-                                        horas_s = hf_ss - hi_ss if hf_ss > hi_ss else (24 - hi_ss + hf_ss)
-                                    except:
-                                        pass
-
-                                ws_ord_s = sh_s.worksheet("ordem_remunerados")
-                                vals_ord_s = ws_ord_s.get_all_values()
-                                import unicodedata as _ud3
-                                hdrs_s = [_ud3.normalize('NFD', h).encode('ascii','ignore').decode('ascii').strip().lower() for h in vals_ord_s[0]]
-                                col_id_s = hdrs_s.index('id') if 'id' in hdrs_s else 0
-                                col_tot_s_idx = hdrs_s.index(col_tot_s) if col_tot_s in hdrs_s else None
-                                upds_s = []
-                                for i_s, row_ss in enumerate(vals_ord_s[1:], start=2):
-                                    mid_ss = str(row_ss[col_id_s]).strip() if col_id_s < len(row_ss) else ''
-                                    if col_tot_s_idx is None:
+    
+                                    ws_ord_c = sh_c.worksheet("ordem_remunerados")
+                                    vals_ord_c = ws_ord_c.get_all_values()
+                                    hdrs_c = [_nc(h) for h in vals_ord_c[0]]
+                                    col_id_c = hdrs_c.index('id') if 'id' in hdrs_c else 0
+                                    col_tot_c_idx = hdrs_c.index(col_tot_c) if col_tot_c in hdrs_c else None
+                                    ids_c = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
+                                    upds_c = []
+                                    for i_c, row_c in enumerate(vals_ord_c[1:], start=2):
+                                        mid_c = str(row_c[col_id_c]).strip() if col_id_c < len(row_c) else ''
+                                        if mid_c in ids_c and col_tot_c_idx is not None:
+                                            tot_c = max(0, int(str(row_c[col_tot_c_idx]).strip() or 0) - horas_c)
+                                            cl_c = chr(ord('A') + col_tot_c_idx)
+                                            upds_c.append({'range': f'{cl_c}{i_c}', 'values': [[tot_c]]})
+                                    if upds_c:
+                                        ws_ord_c.batch_update(upds_c)
+    
+                                    # Repor data do último a partir do histórico
+                                    is_fds_c2 = rem_g['data_obj'].weekday() >= 5
+                                    if rem_g['tabela'] == 'B':
+                                        col_ult_c = 'ultimo_b'
+                                    elif is_fds_c2:
+                                        col_ult_c = 'ultimo_a_fds'
+                                    else:
+                                        col_ult_c = 'ultimo_a_semana'
+    
+                                    hdrs_c2 = [_nc(h) for h in vals_ord_c[0]]
+                                    ws_hist_c = sh_c.worksheet("historico_remunerados")
+    
+                                    # Remover linha do histórico para cada militar cancelado
+                                    hist_vals_c = ws_hist_c.get_all_values()
+                                    data_cancel = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
+                                    linhas_apagar = []
+                                    for i_hc, row_hc in enumerate(hist_vals_c[1:], start=2):
+                                        if (len(row_hc) >= 3 and
+                                            str(row_hc[0]).strip() in ids_c and
+                                            str(row_hc[1]).strip() == data_cancel and
+                                            str(row_hc[2]).strip() == col_ult_c):
+                                            linhas_apagar.append(i_hc)
+                                    for ln in reversed(linhas_apagar):
+                                        ws_hist_c.delete_rows(ln)
+    
+                                    # Repor data do último para cada militar
+                                    for mid_c2 in ids_c:
+                                        _repor_data_ultimo(ws_ord_c, hdrs_c2, ws_hist_c, mid_c2, col_ult_c, data_cancel)
+    
+                                    load_data.clear()
+                                    load_ordem_remunerados.clear()
+                                    load_lista_abas.clear()
+                                    del st.session_state[f'gest_acao_{chave_base}']
+                                    st.success("✅ Remunerado cancelado e horas subtraídas.")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro: {e}")
+    
+                        # ── SUBSTITUIR ──
+                        elif acao_g == 'substituir':
+                            ids_atuais = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
+                            nomes_atuais = {mid: get_nome_curto(df_util, mid) for mid in ids_atuais}
+    
+                            mid_sair = st.selectbox(
+                                "Militar que sai:",
+                                ids_atuais,
+                                format_func=lambda x: f"{nomes_atuais.get(x, x)} ({x})",
+                                key=f"sair_{chave_base}"
+                            )
+    
+                            # Calcular elegíveis para substituição (mesma lógica da nomeação)
+                            is_fds_s = rem_g['data_obj'].weekday() >= 5
+                            if rem_g['tabela'] == 'B':
+                                col_tot_s = 'total_ano_b'
+                                col_ult_s = 'ultimo_b'
+                            elif is_fds_s:
+                                col_tot_s = 'total_ano_a_fds'
+                                col_ult_s = 'ultimo_a_fds'
+                            else:
+                                col_tot_s = 'total_ano_a_semana'
+                                col_ult_s = 'ultimo_a_semana'
+    
+                            # Carregar dados do dia para verificar elegibilidade
+                            df_dia_s = load_data(rem_g['aba'])
+                            _IMP_S = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
+                            ausentes_s = set()
+                            militares_folga_s = set()
+                            servicos_s = {}
+                            militares_servico_s = set()
+                            if not df_dia_s.empty:
+                                for _, rs in df_dia_s.iterrows():
+                                    mid_s = str(rs['id']).strip()
+                                    if not mid_s:
                                         continue
-                                    tot_ss = int(str(row_ss[col_tot_s_idx]).strip() or 0) if col_tot_s_idx < len(row_ss) else 0
-                                    cl_s = chr(ord('A') + col_tot_s_idx)
-                                    if mid_ss == mid_sair:
-                                        upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[max(0, tot_ss - horas_s)]]})
-                                    elif mid_ss == mid_entra:
-                                        upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[tot_ss + horas_s]]})
-                                if upds_s:
-                                    ws_ord_s.batch_update(upds_s)
-
-                                # Histórico: remover linha do que saiu e repor data; adicionar linha ao que entrou
-                                import unicodedata as _uds2
-                                def _ncs(s): return _uds2.normalize('NFD',s).encode('ascii','ignore').decode('ascii').strip().lower()
-                                hdrs_s2 = [_ncs(h) for h in vals_ord_s[0]]
-                                ws_hist_s = sh_s.worksheet("historico_remunerados")
-                                hist_vals_s = ws_hist_s.get_all_values()
-                                data_subs = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
-
-                                # Remover linha do que saiu
-                                linhas_apagar_s = []
-                                for i_hs, row_hs in enumerate(hist_vals_s[1:], start=2):
-                                    if (len(row_hs) >= 3 and
-                                        str(row_hs[0]).strip() == mid_sair and
-                                        str(row_hs[1]).strip() == data_subs and
-                                        str(row_hs[2]).strip() == col_ult_s):
-                                        linhas_apagar_s.append(i_hs)
-                                for ln in reversed(linhas_apagar_s):
-                                    ws_hist_s.delete_rows(ln)
-
-                                # Repor data do último para o que saiu
-                                _repor_data_ultimo(ws_ord_s, hdrs_s2, ws_hist_s, mid_sair, col_ult_s, data_subs)
-
-                                # Adicionar linha ao que entrou e atualizar data
-                                ws_hist_s.append_row([mid_entra, data_subs, col_ult_s])
-                                col_ult_s_idx2 = hdrs_s2.index(col_ult_s) if col_ult_s in hdrs_s2 else None
-                                if col_ult_s_idx2 is not None:
-                                    ord_vals_s2 = ws_ord_s.get_all_values()
-                                    col_id_s2 = hdrs_s2.index('id') if 'id' in hdrs_s2 else 0
-                                    for i_s2, row_s2 in enumerate(ord_vals_s2[1:], start=2):
-                                        if str(row_s2[col_id_s2]).strip() == mid_entra:
-                                            cl_s2 = chr(ord('A') + col_ult_s_idx2)
-                                            ws_ord_s.update_cell(i_s2, col_ult_s_idx2 + 1, data_subs)
-                                            break
-
-                                load_data.clear()
-                                load_ordem_remunerados.clear()
-                                del st.session_state[f'gest_acao_{chave_base}']
-                                st.success(f"✅ {nomes_atuais.get(mid_sair, mid_sair)} substituído por {get_nome_curto(df_util, mid_entra)}.")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro: {e}")
-
+                                    sn = norm(str(rs.get('serviço', '')))
+                                    if re.search(_IMP_S, sn):
+                                        ausentes_s.add(mid_s)
+                                    elif 'folga semanal' in sn or 'folga complementar' in sn:
+                                        militares_folga_s.add(mid_s)
+                                    elif not re.search(r'remu|grat', sn):
+                                        hs = str(rs.get('horário', '')).strip()
+                                        hi_s2, hf_s2 = None, None
+                                        if '-' in hs:
+                                            try:
+                                                hi_s2 = int(hs.split('-')[0])
+                                                hf_s2 = int(hs.split('-')[1])
+                                            except:
+                                                pass
+                                        servicos_s.setdefault(mid_s, []).append((hi_s2, hf_s2, str(rs.get('serviço',''))))
+                                        militares_servico_s.add(mid_s)
+    
+                            hi_rem_s, hf_rem_s = None, None
+                            if '-' in rem_g['horario']:
+                                try:
+                                    hi_rem_s = int(rem_g['horario'].split('-')[0].strip())
+                                    hf_rem_s = int(rem_g['horario'].split('-')[1].strip())
+                                except:
+                                    pass
+    
+                            # Reutilizar df_ord_rem já carregado
+                            elegiveis_s = []
+                            df_disp_s = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
+                            df_disp_s[col_tot_s] = pd.to_numeric(df_disp_s[col_tot_s], errors='coerce').fillna(0)
+                            if col_ult_s not in df_disp_s.columns:
+                                df_disp_s[col_ult_s] = pd.NaT
+                            else:
+                                df_disp_s[col_ult_s] = pd.to_datetime(df_disp_s[col_ult_s], dayfirst=True, errors='coerce')
+                            df_disp_s = df_disp_s.sort_values(
+                                [col_ult_s, col_tot_s],
+                                ascending=[True, True],
+                                na_position='first'
+                            )
+    
+                            for _, row_s in df_disp_s.iterrows():
+                                mid_s2 = str(row_s.get('id', '')).strip()
+                                if not mid_s2 or mid_s2 in ids_atuais:
+                                    continue  # já está nomeado
+                                if mid_s2 in ausentes_s:
+                                    continue
+                                is_vol_s = bool(row_s['voluntario'])
+                                aceita_folga_s = bool(row_s['folga'])
+                                if mid_s2 in militares_folga_s:
+                                    if not is_vol_s or not aceita_folga_s:
+                                        continue
+                                # Verificar sobreposição
+                                sobreposto_s = False
+                                for hi_x, hf_x, _ in servicos_s.get(mid_s2, []):
+                                    if hi_rem_s and hf_rem_s and hi_x and hf_x:
+                                        def _sm(h, b=0): return h*60+(1440 if h<b else 0)
+                                        if _sm(hi_rem_s) < _sm(hf_rem_s, hi_rem_s) and _sm(hi_x) < _sm(hf_x, hi_x):
+                                            if _sm(hi_rem_s) < _sm(hf_x, hi_x) and _sm(hi_x) < _sm(hf_rem_s, hi_rem_s):
+                                                sobreposto_s = True
+                                                break
+                                if sobreposto_s:
+                                    continue
+                                elegiveis_s.append({
+                                    'id': mid_s2,
+                                    'nome': get_nome_curto(df_util, mid_s2),
+                                    'voluntario': is_vol_s,
+                                    'total': int(row_s[col_tot_s]),
+                                })
+    
+                            if elegiveis_s:
+                                sugerido = elegiveis_s[0]
+                                st.info(f"💡 Sugerido: **{sugerido['nome']} ({sugerido['id']})** — {sugerido['total']}h acumuladas")
+                                opcoes_s = [f"{e['nome']} ({e['id']}) — {e['total']}h" for e in elegiveis_s]
+                                escolha_s = st.selectbox("Confirmar ou escolher outro:", opcoes_s, key=f"esc_{chave_base}")
+                                mid_entra = elegiveis_s[opcoes_s.index(escolha_s)]['id']
+                            else:
+                                st.warning("Não há substitutos elegíveis disponíveis.")
+                                mid_entra = None
+    
+                            if mid_entra and st.button("✅ Confirmar substituição", key=f"conf_subs_{chave_base}", use_container_width=True, type="primary"):
+                                try:
+                                    sh_s = get_sheet()
+                                    ws_s = sh_s.worksheet(rem_g['aba'])
+                                    vals_s = ws_s.get_all_values()
+                                    linha_s = rem_g['linha_idx'] + 1  # 1-based
+    
+                                    # Atualizar IDs na linha
+                                    ids_novos = [mid_entra if x == mid_sair else x for x in ids_atuais]
+                                    ws_s.update_cell(linha_s, 1, ', '.join(ids_novos))
+    
+                                    # Atualizar horas
+                                    horas_s = 0
+                                    if '-' in rem_g['horario']:
+                                        try:
+                                            hi_ss = int(rem_g['horario'].split('-')[0].strip())
+                                            hf_ss = int(rem_g['horario'].split('-')[1].strip())
+                                            horas_s = hf_ss - hi_ss if hf_ss > hi_ss else (24 - hi_ss + hf_ss)
+                                        except:
+                                            pass
+    
+                                    ws_ord_s = sh_s.worksheet("ordem_remunerados")
+                                    vals_ord_s = ws_ord_s.get_all_values()
+                                    hdrs_s = [_nc(h) for h in vals_ord_s[0]]
+                                    col_id_s = hdrs_s.index('id') if 'id' in hdrs_s else 0
+                                    col_tot_s_idx = hdrs_s.index(col_tot_s) if col_tot_s in hdrs_s else None
+                                    upds_s = []
+                                    for i_s, row_ss in enumerate(vals_ord_s[1:], start=2):
+                                        mid_ss = str(row_ss[col_id_s]).strip() if col_id_s < len(row_ss) else ''
+                                        if col_tot_s_idx is None:
+                                            continue
+                                        tot_ss = int(str(row_ss[col_tot_s_idx]).strip() or 0) if col_tot_s_idx < len(row_ss) else 0
+                                        cl_s = chr(ord('A') + col_tot_s_idx)
+                                        if mid_ss == mid_sair:
+                                            upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[max(0, tot_ss - horas_s)]]})
+                                        elif mid_ss == mid_entra:
+                                            upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[tot_ss + horas_s]]})
+                                    if upds_s:
+                                        ws_ord_s.batch_update(upds_s)
+    
+                                    # Histórico: remover linha do que saiu e repor data; adicionar linha ao que entrou
+                                    hdrs_s2 = [_nc(h) for h in vals_ord_s[0]]
+                                    ws_hist_s = sh_s.worksheet("historico_remunerados")
+                                    hist_vals_s = ws_hist_s.get_all_values()
+                                    data_subs = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
+    
+                                    # Remover linha do que saiu
+                                    linhas_apagar_s = []
+                                    for i_hs, row_hs in enumerate(hist_vals_s[1:], start=2):
+                                        if (len(row_hs) >= 3 and
+                                            str(row_hs[0]).strip() == mid_sair and
+                                            str(row_hs[1]).strip() == data_subs and
+                                            str(row_hs[2]).strip() == col_ult_s):
+                                            linhas_apagar_s.append(i_hs)
+                                    for ln in reversed(linhas_apagar_s):
+                                        ws_hist_s.delete_rows(ln)
+    
+                                    # Repor data do último para o que saiu
+                                    _repor_data_ultimo(ws_ord_s, hdrs_s2, ws_hist_s, mid_sair, col_ult_s, data_subs)
+    
+                                    # Adicionar linha ao que entrou e atualizar data
+                                    ws_hist_s.append_row([mid_entra, data_subs, col_ult_s])
+                                    col_ult_s_idx2 = hdrs_s2.index(col_ult_s) if col_ult_s in hdrs_s2 else None
+                                    if col_ult_s_idx2 is not None:
+                                        ord_vals_s2 = ws_ord_s.get_all_values()
+                                        col_id_s2 = hdrs_s2.index('id') if 'id' in hdrs_s2 else 0
+                                        for i_s2, row_s2 in enumerate(ord_vals_s2[1:], start=2):
+                                            if str(row_s2[col_id_s2]).strip() == mid_entra:
+                                                cl_s2 = chr(ord('A') + col_ult_s_idx2)
+                                                ws_ord_s.update_cell(i_s2, col_ult_s_idx2 + 1, data_subs)
+                                                break
+    
+                                    load_data.clear()
+                                    load_ordem_remunerados.clear()
+                                    load_lista_abas.clear()
+                                    del st.session_state[f'gest_acao_{chave_base}']
+                                    st.success(f"✅ {nomes_atuais.get(mid_sair, mid_sair)} substituído por {get_nome_curto(df_util, mid_entra)}.")
+                                    st.rerun()
+                                except Exception as e:
+                                    st.error(f"Erro: {e}")
+    
     # --- 🏥 LICENÇAS (ADMIN) ---
     elif menu == "🏥 Dispensas":
         st.title("🏥 Dispensas")
