@@ -5605,6 +5605,10 @@ else:
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} -- {dias_pt[d_e.weekday()]}**")
                     st.caption("💡 O campo ID aceita vários militares separados por `;` (ex: `507;1185`). Podes adicionar ou remover linhas.")
                     df_s = pd.DataFrame(info_e['linhas'])
+                    _ord_s = st.selectbox("🔃 Ordenar por:", ['ID', 'Nome', 'Serviço', 'Horário'], key='ord_s', label_visibility='collapsed')
+                    _ord_col_s = {'ID': 'id', 'Nome': 'nome', 'Serviço': 'serviço', 'Horário': 'horário'}.get(_ord_s, 'id')
+                    if _ord_col_s in df_s.columns:
+                        df_s = df_s.sort_values(_ord_col_s, key=lambda x: x.astype(str).str.lower()).reset_index(drop=True)
                     df_editado_s = st.data_editor(
                         df_s,
                         column_config={
