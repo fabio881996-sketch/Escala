@@ -2662,23 +2662,26 @@ else:
                 st.caption(f"Toda a escala disponível a partir de hoje para **{u_nome}**")
                 hj = datetime.now()
                 dias_publicados = _dias_pub_global
-
-                # Percorre dias a partir de hoje até não encontrar mais abas com dados
-                dias_sem_dados = 0
-                i = 0
                 encontrou_algum = False
 
-                while dias_sem_dados < 5:  # Para após 5 dias consecutivos sem dados
-                    dt  = hj + timedelta(days=i)
+                # Só iterar dias que estão publicados, ordenados a partir de hoje
+                dias_a_mostrar = []
+                for delta in range(90):
+                    dt_c = hj + timedelta(days=delta)
+                    aba_c = dt_c.strftime('%d-%m')
+                    if is_admin or aba_c in dias_publicados:
+                        dias_a_mostrar.append(dt_c)
+                    if len(dias_a_mostrar) >= 30:
+                        break
+
+                dias_sem_dados = 0
+                for dt in dias_a_mostrar:
+                    if dias_sem_dados >= 5:
+                        break
+                    i = (dt - hj).days
                     d_s = dt.strftime('%d/%m/%Y')
                     aba_dt = dt.strftime('%d-%m')
                     lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
-
-                    # Para não-admins: só mostrar dias publicados
-                    if not is_admin and aba_dt not in dias_publicados:
-                        i += 1
-                        if i > 60: break
-                        continue
 
                     # Verificar trocas aprovadas (excluindo matar remunerado)
                     if not df_trocas.empty:
@@ -3131,8 +3134,6 @@ else:
                             dias_sem_dados = 0
                         else:
                             dias_sem_dados += 1
-
-                    i += 1
 
                 if not encontrou_algum:
                     st.info("Não foram encontrados serviços escalados a partir de hoje.")
