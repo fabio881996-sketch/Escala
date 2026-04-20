@@ -5537,9 +5537,8 @@ else:
                     for r in linhas_e_raw:
                         sv = r['serviço']
                         hr = r['horário']
-                        obs = r['observações']
                         if sv and hr:
-                            chave = (sv, hr, obs)
+                            chave = (sv, hr, r['indicativo'], r['rádio'], r['giro'], r['viatura'], r['observações'])
                             if chave in grupos_e:
                                 idx = grupos_e[chave]
                                 linhas_e[idx]['id']   += ';' + r['id']
@@ -5666,14 +5665,10 @@ else:
                                 sv = dados['serviço']
                                 if not sv: continue
                                 hr = dados['horário']
-                                obs = dados['observações']
-                                chave = (sv, hr, obs)
+                                chave = (sv, hr, dados['indicativo'], dados['rádio'], dados['giro'], dados['viatura'], dados['observações'])
                                 if chave not in grupos:
-                                    grupos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': obs}
+                                    grupos[chave] = {'ids': [], 'indicativo': dados['indicativo'], 'rádio': dados['rádio'], 'giro': dados['giro'], 'viatura': dados['viatura'], 'observações': dados['observações']}
                                 grupos[chave]['ids'].append(mid)
-                                for campo in ['indicativo','rádio','giro','viatura']:
-                                    if dados[campo] and not grupos[chave][campo]:
-                                        grupos[chave][campo] = dados[campo]
                             hdrs_l = [_nc(h) for h in hdrs_raw]
                             mapa_c = {
                                 'id':        next((i for i,h in enumerate(hdrs_l) if h == 'id'), 0),
@@ -5686,7 +5681,7 @@ else:
                                 'obs':       next((i for i,h in enumerate(hdrs_l) if 'obs' in h), None),
                             }
                             nova_data = []
-                            for (sv, hr, obs_g), d in grupos.items():
+                            for (sv, hr, ind_g, rad_g, gir_g, vtr_g, obs_g), d in grupos.items():
                                 linha = [''] * len(hdrs_raw)
                                 for chave_c, val in [
                                     ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
@@ -5762,16 +5757,12 @@ else:
                                 sv = dados['serviço']
                                 if not sv: continue
                                 hr = dados['horário']
-                                obs = dados['observações']
-                                chave = (sv, hr, obs)
+                                chave = (sv, hr, dados['indicativo'], dados['rádio'], dados['giro'], dados['viatura'], dados['observações'])
                                 if chave not in grupos_novos:
-                                    grupos_novos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': obs}
+                                    grupos_novos[chave] = {'ids': [], 'indicativo': dados['indicativo'], 'rádio': dados['rádio'], 'giro': dados['giro'], 'viatura': dados['viatura'], 'observações': dados['observações']}
                                 grupos_novos[chave]['ids'].append(mid)
-                                for campo in ['indicativo','rádio','giro','viatura']:
-                                    if dados[campo] and not grupos_novos[chave][campo]:
-                                        grupos_novos[chave][campo] = dados[campo]
                             novas_linhas = []
-                            for (sv, hr, obs_g), d in grupos_novos.items():
+                            for (sv, hr, ind_g, rad_g, gir_g, vtr_g, obs_g), d in grupos_novos.items():
                                 linha = [''] * len(hdrs_raw)
                                 for chave_mc, val in [
                                     ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
