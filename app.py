@@ -2943,9 +2943,6 @@ else:
                                         lambda x: u_id in re.split(r'[;,]+', x)
                                     )]
                                     rem_mil = rem_mil[rem_mil['serviço'].apply(norm).str.contains('remu|grat', na=False)]
-                                    # DEBUG TEMP
-                                    if len(rem_mil) > 0:
-                                        st.caption(f"DEBUG rem_mil: {len(rem_mil)} linhas — {rem_mil[['serviço','horário','viatura','observações']].to_dict('records') if 'viatura' in rem_mil.columns else rem_mil[['serviço','horário']].to_dict('records')}")
                                     # Remover duplicados por serviço+horário+viatura+obs (manter primeiro)
                                     dedup_cols = ['serviço','horário']
                                     for _dc in ['viatura','observações']:
@@ -2990,18 +2987,25 @@ else:
                                     for _, rr in rem_mil.iterrows():
                                         obs_r = str(rr.get('observações', '') or '').strip()
                                         obs_r_html = f'<p>📝 {obs_r}</p>' if obs_r else ''
-                                        # Colegas no mesmo remunerado
-                                        # Substituir IDs tendo em conta matar remunerado aprovado
+                                        # Colegas no mesmo remunerado — filtrar por serviço+horário+viatura+obs
                                         serv_rr = str(rr['serviço']).strip().lower()
                                         hor_rr  = str(rr['horário']).strip()
                                         obs_rr  = str(rr.get('observações','')).strip().lower()
-                                        colegas_rem = df_rem_dia[
+                                        vtr_rr  = str(rr.get('viatura','')).strip().lower()
+                                        mask_colegas = (
                                             (df_rem_dia['serviço'].astype(str).str.strip().str.lower() == serv_rr) &
                                             (df_rem_dia['horário'].astype(str).str.strip() == hor_rr) &
                                             (df_rem_dia['id'].astype(str).str.strip() != u_id) &
                                             (df_rem_dia['id'].astype(str).str.strip() != '') &
                                             (df_rem_dia['id'].astype(str).str.strip() != 'nan')
-                                        ]
+                                        )
+                                        # Se há viatura definida, filtrar também por viatura
+                                        if vtr_rr:
+                                            mask_colegas = mask_colegas & (df_rem_dia['viatura'].astype(str).str.strip().str.lower() == vtr_rr)
+                                        # Se há obs definida, filtrar também por obs
+                                        if obs_rr:
+                                            mask_colegas = mask_colegas & (df_rem_dia['observações'].astype(str).str.strip().str.lower() == obs_rr)
+                                        colegas_rem = df_rem_dia[mask_colegas]
                                         # Se não encontrou, tentar sem horário (fallback)
                                         if colegas_rem.empty:
                                             colegas_rem = df_rem_dia[
