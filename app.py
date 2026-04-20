@@ -5939,15 +5939,12 @@ else:
                         col_total  = "total_ano_a_semana"
                         col_ultimo = "ultimo_a_semana"
 
-                    # Calcular horas do remunerado a nomear
+                    # Calcular horas do remunerado a nomear (em minutos para _sobreposicao)
                     hi_rem, hf_rem, horas_rem = None, None, 0
                     if hor_rem and '-' in hor_rem:
-                        try:
-                            hi_rem = int(hor_rem.split('-')[0].strip())
-                            hf_rem = int(hor_rem.split('-')[1].strip())
-                            horas_rem = hf_rem - hi_rem if hf_rem > hi_rem else (24 - hi_rem + hf_rem)
-                        except:
-                            pass
+                        hi_rem, hf_rem = _parse_horario(hor_rem)
+                        if hi_rem is not None and hf_rem is not None:
+                            horas_rem = round((hf_rem - hi_rem) / 60, 1) if hf_rem > hi_rem else round((1440 - hi_rem + hf_rem) / 60, 1)
 
                     # Garantir colunas existem
                     for col in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso', col_total, col_ultimo]:
@@ -5967,26 +5964,23 @@ else:
                     # Converter data do último — vazio fica NaT (vai primeiro na ordenação)
                     df_ord_rem[col_ultimo] = pd.to_datetime(df_ord_rem[col_ultimo], dayfirst=True, errors='coerce')
 
-                    # Funções auxiliares
+                    # Funções auxiliares — valores já em minutos (output de _parse_horario)
                     def _sobreposicao(h1_ini, h1_fim, h2_ini, h2_fim):
                         if None in (h1_ini, h1_fim, h2_ini, h2_fim):
                             return False
-                        def to_min(h, base=0):
-                            return h * 60 + (1440 if h < base else 0)
-                        s1 = to_min(h1_ini); e1 = to_min(h1_fim, h1_ini)
-                        s2 = to_min(h2_ini); e2 = to_min(h2_fim, h2_ini)
-                        return s1 < e2 and s2 < e1
+                        # Ajustar fim se passa meia-noite
+                        e1 = h1_fim if h1_fim > h1_ini else h1_fim + 1440
+                        e2 = h2_fim if h2_fim > h2_ini else h2_fim + 1440
+                        return h1_ini < e2 and h2_ini < e1
 
                     def _verif_descanso(hi_serv, hf_serv, hi_novo, hf_novo):
                         if None in (hi_serv, hf_serv, hi_novo, hf_novo):
                             return True
-                        def to_min(h, base=0):
-                            return h * 60 + (1440 if h < base else 0)
-                        fim_serv = to_min(hf_serv, hi_serv)
-                        ini_novo = to_min(hi_novo)
-                        ini_serv = to_min(hi_serv)
-                        fim_novo = to_min(hf_novo, hi_novo)
-                        return (abs(ini_novo - fim_serv) >= 480) and (abs(ini_serv - fim_novo) >= 480)
+                        fim_serv = hf_serv if hf_serv > hi_serv else hf_serv + 1440
+                        fim_novo = hf_novo if hf_novo > hi_novo else hf_novo + 1440
+                        descanso_1 = (hi_novo + 1440 - fim_serv) % 1440
+                        descanso_2 = (hi_serv + 1440 - fim_novo) % 1440
+                        return descanso_1 >= 480 and descanso_2 >= 480
 
                     # Classificar militares do dia
                     # militares_com_servico: têm serviço real (não folga, não ausência, não remunerado)
@@ -6010,13 +6004,7 @@ else:
                                 pass
                             elif not re.search(r'remu|grat', serv_norm):
                                 hor_sd = str(row_sd.get('horário', '')).strip()
-                                hi_sd, hf_sd = None, None
-                                if '-' in hor_sd:
-                                    try:
-                                        hi_sd = int(hor_sd.split('-')[0].strip())
-                                        hf_sd = int(hor_sd.split('-')[1].strip())
-                                    except:
-                                        pass
+                                hi_sd, hf_sd = _parse_horario(hor_sd)
                                 servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
                                 militares_com_servico.add(mid_sd)
 
