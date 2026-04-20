@@ -5558,15 +5558,20 @@ else:
                                              'observações': r['observações']})
                     dados_editar[aba_e] = {'linhas': linhas_e, 'data': d_e}
 
-                    # Adicionar remunerados manuais agrupados por serviço+horário
-                    grupos_rem_e = {}  # (serviço, horário) -> {ids, nomes, ...}
+                    # Adicionar remunerados manuais agrupados por serviço+horário+campos distintivos
+                    grupos_rem_e = {}
                     for mid_rem, lista_rem in mapa_e.items():
                         for d_rem in lista_rem:
                             if not re.search(r'remu|grat', norm(d_rem.get('serviço',''))):
                                 continue
                             sv_r = d_rem['serviço']
                             hr_r = d_rem['horário']
-                            chave_r = (sv_r, hr_r)
+                            ind_r = d_rem.get('indicativo','')
+                            rad_r = d_rem.get('rádio','')
+                            gir_r = d_rem.get('giro','')
+                            vtr_r = d_rem.get('viatura','')
+                            obs_r = d_rem.get('observações','')
+                            chave_r = (sv_r, hr_r, ind_r, rad_r, gir_r, vtr_r, obs_r)
                             apelido_rem = ''
                             row_u_rem = df_util[df_util['id'].astype(str).str.strip() == mid_rem]
                             if not row_u_rem.empty:
@@ -5576,17 +5581,14 @@ else:
                             if chave_r not in grupos_rem_e:
                                 grupos_rem_e[chave_r] = {
                                     'ids': [mid_rem], 'nomes': [apelido_rem],
-                                    'indicativo': d_rem.get('indicativo',''),
-                                    'rádio': d_rem.get('rádio',''),
-                                    'giro': d_rem.get('giro',''),
-                                    'viatura': d_rem.get('viatura',''),
-                                    'observações': d_rem.get('observações',''),
+                                    'indicativo': ind_r, 'rádio': rad_r,
+                                    'giro': gir_r, 'viatura': vtr_r, 'observações': obs_r,
                                 }
                             else:
                                 if mid_rem not in grupos_rem_e[chave_r]['ids']:
                                     grupos_rem_e[chave_r]['ids'].append(mid_rem)
                                     grupos_rem_e[chave_r]['nomes'].append(apelido_rem)
-                    for (sv_r, hr_r), g_r in grupos_rem_e.items():
+                    for (sv_r, hr_r, ind_r, rad_r, gir_r, vtr_r, obs_r), g_r in grupos_rem_e.items():
                         linhas_e.append({
                             'id': ';'.join(g_r['ids']), 'nome': ', '.join(g_r['nomes']),
                             'serviço': sv_r, 'horário': hr_r,
