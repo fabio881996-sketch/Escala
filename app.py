@@ -5288,26 +5288,27 @@ else:
                                 if not todas_linhas_c:
                                     ws_dia_c.update('A1', [hdrs_c_raw])
 
-                                # Agrupar militares por serviço+horário
-                                grupos_sv = {}  # (serviço, horário) -> {ids, indicativo, rádio, giro, viatura, observações}
+                                # Agrupar militares por serviço+horário+observações
+                                grupos_sv = {}  # (serviço, horário, obs) -> {ids, indicativo, rádio, giro, viatura, observações}
                                 for _, row_e in df_editado.iterrows():
                                     sv_e = str(row_e.get('serviço','')).strip()
                                     if not sv_e or sv_e == 'nan': continue
                                     mid_e = str(row_e['id']).strip()
                                     if not mid_e or mid_e == 'nan': continue
                                     hr_e  = str(row_e.get('horário','')).strip()
-                                    chave = (sv_e, hr_e)
+                                    obs_e = str(row_e.get('observações','')).strip()
+                                    chave = (sv_e, hr_e, obs_e)
                                     if chave not in grupos_sv:
-                                        grupos_sv[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                                        grupos_sv[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': obs_e}
                                     grupos_sv[chave]['ids'].append(mid_e)
                                     # Guardar outros campos do primeiro militar
-                                    for campo in ['indicativo','rádio','giro','viatura','observações']:
+                                    for campo in ['indicativo','rádio','giro','viatura']:
                                         val = str(row_e.get(campo,'')).strip()
                                         if val and val != 'nan' and not grupos_sv[chave][campo]:
                                             grupos_sv[chave][campo] = val
 
                                 nova_data = []
-                                for (sv_e, hr_e), dados_g in grupos_sv.items():
+                                for (sv_e, hr_e, obs_e), dados_g in grupos_sv.items():
                                     linha_nova = [''] * len(hdrs_c_raw)
                                     for col_nome, val in [
                                         ('id', ';'.join(dados_g['ids'])),
@@ -5536,8 +5537,9 @@ else:
                     for r in linhas_e_raw:
                         sv = r['serviço']
                         hr = r['horário']
+                        obs = r['observações']
                         if sv and hr:
-                            chave = (sv, hr)
+                            chave = (sv, hr, obs)
                             if chave in grupos_e:
                                 idx = grupos_e[chave]
                                 linhas_e[idx]['id']   += ';' + r['id']
@@ -5548,7 +5550,7 @@ else:
                                                  'serviço': sv, 'horário': hr,
                                                  'indicativo': r['indicativo'], 'rádio': r['rádio'],
                                                  'giro': r['giro'], 'viatura': r['viatura'],
-                                                 'observações': r['observações']})
+                                                 'observações': obs})
                         else:
                             linhas_e.append({'id': r['id'], 'nome': r['apelido'],
                                              'serviço': sv, 'horário': hr,
@@ -5664,11 +5666,12 @@ else:
                                 sv = dados['serviço']
                                 if not sv: continue
                                 hr = dados['horário']
-                                chave = (sv, hr)
+                                obs = dados['observações']
+                                chave = (sv, hr, obs)
                                 if chave not in grupos:
-                                    grupos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                                    grupos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': obs}
                                 grupos[chave]['ids'].append(mid)
-                                for campo in ['indicativo','rádio','giro','viatura','observações']:
+                                for campo in ['indicativo','rádio','giro','viatura']:
                                     if dados[campo] and not grupos[chave][campo]:
                                         grupos[chave][campo] = dados[campo]
                             hdrs_l = [_nc(h) for h in hdrs_raw]
@@ -5759,11 +5762,12 @@ else:
                                 sv = dados['serviço']
                                 if not sv: continue
                                 hr = dados['horário']
-                                chave = (sv, hr)
+                                obs = dados['observações']
+                                chave = (sv, hr, obs)
                                 if chave not in grupos_novos:
-                                    grupos_novos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                                    grupos_novos[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': obs}
                                 grupos_novos[chave]['ids'].append(mid)
-                                for campo in ['indicativo','rádio','giro','viatura','observações']:
+                                for campo in ['indicativo','rádio','giro','viatura']:
                                     if dados[campo] and not grupos_novos[chave][campo]:
                                         grupos_novos[chave][campo] = dados[campo]
                             novas_linhas = []
