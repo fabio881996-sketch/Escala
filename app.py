@@ -5549,7 +5549,7 @@ else:
                                                  'serviço': sv, 'horário': hr,
                                                  'indicativo': r['indicativo'], 'rádio': r['rádio'],
                                                  'giro': r['giro'], 'viatura': r['viatura'],
-                                                 'observações': obs})
+                                                 'observações': r['observações']})
                         else:
                             linhas_e.append({'id': r['id'], 'nome': r['apelido'],
                                              'serviço': sv, 'horário': hr,
