@@ -2943,6 +2943,9 @@ else:
                                         lambda x: u_id in re.split(r'[;,]+', x)
                                     )]
                                     rem_mil = rem_mil[rem_mil['serviço'].apply(norm).str.contains('remu|grat', na=False)]
+                                    # DEBUG TEMP
+                                    if len(rem_mil) > 0:
+                                        st.caption(f"DEBUG rem_mil: {len(rem_mil)} linhas — {rem_mil[['serviço','horário','viatura','observações']].to_dict('records') if 'viatura' in rem_mil.columns else rem_mil[['serviço','horário']].to_dict('records')}")
                                     # Remover duplicados por serviço+horário+viatura+obs (manter primeiro)
                                     dedup_cols = ['serviço','horário']
                                     for _dc in ['viatura','observações']:
