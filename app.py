@@ -1954,12 +1954,10 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
     st.markdown(_sec_header(titulo), unsafe_allow_html=True)
     if mostrar_extras:
         cols_ag = ['serviço', 'horário']
-        for col in ['indicativo rádio', 'rádio', 'viatura', 'giro']:
+        for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
             if col in df_sec.columns and col not in excluir_cols:
                 cols_ag.append(col)
         agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
-        if 'observações' in df_sec.columns:
-            agg_dict['observações'] = lambda x: ', '.join(v for v in x.dropna().unique() if str(v).strip())
         ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
         col_order = ['serviço', 'horário', 'id_disp']
         for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
@@ -3672,15 +3670,22 @@ else:
                 # 5. Remunerados -- obs igual com rowspan (células fundidas)
                 if not df_remu.empty:
                     st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
-                    # Preparar linhas por horário
+                    # Agrupar por horário + viatura + obs (campos distintivos)
+                    cols_rem = ['horário']
+                    for c in ['viatura', 'observações']:
+                        if c in df_remu.columns:
+                            cols_rem.append(c)
                     rows_rem = []
-                    for hor, grp in df_remu.groupby('horário', sort=False):
-                        ids = ', '.join(grp['id_disp'].tolist())
-                        obs = str(grp['observações'].iloc[0]).strip() if 'observações' in grp.columns else ''
-                        if obs == 'nan': obs = ''
-                        vtr = str(grp['viatura'].iloc[0]).strip() if 'viatura' in grp.columns else ''
-                        if vtr == 'nan': vtr = ''
-                        rows_rem.append({'horário': hor, 'militares': ids, 'vtr': vtr, 'obs': obs})
+                    for chave_rem, grp_rem in df_remu.sort_values('horário').groupby(cols_rem, sort=False):
+                        if not isinstance(chave_rem, tuple):
+                            chave_rem = (chave_rem,)
+                        hor = chave_rem[0]
+                        vtr = chave_rem[1] if len(chave_rem) > 1 else ''
+                        obs = chave_rem[2] if len(chave_rem) > 2 else ''
+                        if str(vtr) == 'nan': vtr = ''
+                        if str(obs) == 'nan': obs = ''
+                        ids = ', '.join(grp_rem['id_disp'].tolist())
+                        rows_rem.append({'horário': hor, 'militares': ids, 'vtr': str(vtr), 'obs': str(obs)})
 
                     # Calcular rowspans por obs
                     obs_spans = {}
