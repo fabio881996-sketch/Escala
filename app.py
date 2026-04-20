@@ -14,6 +14,14 @@ def norm(t):
     """Normaliza texto para comparação -- remove acentos e coloca em minúsculas."""
     return unicodedata.normalize('NFKD', str(t).lower()).encode('ascii', 'ignore').decode('ascii')
 
+def norm_servico(s: str) -> str:
+    """Normaliza nome de serviço para apresentação -- substitui termos antigos."""
+    s = str(s).strip()
+    for antigo, novo in [('Baixa', 'Convalescença'), ('Doente', 'Convalescença'),
+                          ('baixa', 'convalescença'), ('doente', 'convalescença')]:
+        s = s.replace(antigo, novo)
+    return s
+
 def _nc(s):
     """Normaliza nome de coluna -- remove acentos, strip, lower."""
     return unicodedata.normalize('NFD', str(s)).encode('ascii', 'ignore').decode('ascii').strip().lower()
@@ -281,6 +289,9 @@ def _df_from_records(records) -> pd.DataFrame:
     df = pd.DataFrame(records).astype(str)
     df.columns = [str(c).strip().lower() for c in df.columns]
     df = df.fillna("")
+    # Normalizar nomes de serviço (substituir termos antigos)
+    if 'serviço' in df.columns:
+        df['serviço'] = df['serviço'].apply(norm_servico)
     if 'id' in df.columns:
         # Expandir linhas com múltiplos IDs (ex: "1089, 1162" → duas linhas)
         df['id'] = df['id'].str.split(r'[,;]')
@@ -416,7 +427,12 @@ def load_licencas(ano: int) -> pd.DataFrame:
         if not vals or len(vals) < 2: return pd.DataFrame()
         hdrs = [h.strip() for h in vals[0]]
         df = pd.DataFrame(vals[1:], columns=hdrs)
-        return df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+        df = df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
+        # Normalizar tipo (substituir Baixa/Doente por Convalescença)
+        col_tipo = next((c for c in df.columns if 'tipo' in c.lower()), None)
+        if col_tipo:
+            df[col_tipo] = df[col_tipo].apply(norm_servico)
+        return df
     except:
         return pd.DataFrame()
 
