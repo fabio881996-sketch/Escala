@@ -243,7 +243,7 @@ hr { border-color: #E2E8F0 !important; }
 # 3. CONSTANTES
 # ============================================================
 ADMINS = ["ferreira.fr@gnr.pt", "carmo.haf@gnr.pt", "veiga.hfp@gnr.pt"]
-IMPEDIMENTOS = ["férias", "licença", "doente", "baixa", "diligência", "tribunal", "pronto", "secretaria", "inquérito", "outras licenças", "fcaa"]
+IMPEDIMENTOS = ["férias", "licença", "convalescença", "diligência", "tribunal", "pronto", "secretaria", "inquérito", "outras licenças", "fcaa"]
 IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 
 # ============================================================
@@ -710,7 +710,7 @@ def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
                 continue
             try:
                 dados = aba.get_all_records()
-                df_aba = pd.DataFrame(dados)
+                df_aba = _df_from_records(dados)
                 if df_aba.empty or 'id' not in df_aba.columns:
                     continue
                 mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
@@ -2146,7 +2146,7 @@ else:
     is_admin  = st.session_state.get("is_admin", False)
 
     # Carregar dias publicados uma vez (não-admins precisam disto em vários menus)
-    _dias_pub_global = load_dias_publicados() if not is_admin else set()
+    _dias_pub_global = load_dias_publicados()
 
     # --- Sidebar ---
     with st.sidebar:
@@ -3605,7 +3605,7 @@ else:
                 df_at = _limpar_sem_militar(df_at)
 
                 # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
-                df_aus, df_res = filtrar_secao(["férias", "licença", "doente", "baixa"], df_at)
+                df_aus, df_res = filtrar_secao(["férias", "licença", "convalescença"], df_at)
 
                 # Extrair cada grupo do df_res por ordem
                 df_cmd,  df_res = filtrar_secao(["pronto", "secretaria", "inquérito", "diligência"],    df_res)
@@ -4012,7 +4012,7 @@ else:
                         st.info(f"📋 O teu remunerado: **{rem_serv} ({rem_hor})**")
 
                         # Mostrar militares disponíveis para ceder
-                        _imp_dar = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|pronto'
+                        _imp_dar = r'ferias|licen|convalesc|dilig|tribunal|inquer|secretaria|pronto'
                         outros_dar = df_d[
                             (df_d['id'].astype(str).str.strip() != u_id) &
                             (df_d['id'].astype(str).str.strip() != '') &
@@ -4049,7 +4049,7 @@ else:
 
                 # ── Fazer Remunerado ──
                 elif tipo_troca == "💶 Fazer Remunerado":
-                    _imp_rem = r'ferias|licen|doente|dilig|tribunal|pronto|secretaria|inquer'
+                    _imp_rem = r'ferias|licen|convalesc|dilig|tribunal|pronto|secretaria|inquer'
                     _motivo_imp = ''
                     if not meu.empty and re.search(_imp_rem, norm(meu.iloc[0]['serviço'])):
                         _motivo_imp = meu.iloc[0]['serviço']
@@ -5332,7 +5332,7 @@ else:
             _listas = load_listas()
             _mil_servicos = load_servicos()
             _extras_e = ['Férias', 'Folga Semanal', 'Folga Complementar', 'Outras Licenças',
-                         'Doente', 'Baixa', 'Diligência', 'Inquéritos', 'Secretaria',
+                         'Convalescença', 'Diligência', 'Inquéritos', 'Secretaria',
                          'Pronto', 'Tribunal', 'Disponível',
                          'Patrulha Auto', 'Patrulha Apeada', 'EG', 'Tiro']
             _hdrs_e = list(set(s for servs in _mil_servicos.values() for s in servs))
@@ -5907,7 +5907,8 @@ else:
 
                 if st.button("🔍 Calcular Nomeação", use_container_width=True, key="btn_calc_rem"):
                     aba_rem = d_rem.strftime("%d-%m")
-                    df_dia_rem = load_data(aba_rem)
+                    sh_rem_dia = get_sheet()
+                    df_dia_rem = load_data_direto(sh_rem_dia, aba_rem)
                     data_str_rem = d_rem.strftime("%d/%m/%Y")
 
                     # Determinar colunas corretas: A fds / A semana / B
@@ -5974,7 +5975,7 @@ else:
                     # Classificar militares do dia
                     # militares_com_servico: têm serviço real (não folga, não ausência, não remunerado)
                     # Padrão de impedimento — qualquer serviço que não seja operacional normal
-                    _IMP = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
+                    _IMP = r'ferias|licen|convalesc|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
 
                     # militares_de_folga: têm Folga Semanal ou Folga Complementar
                     servicos_dia = {}
@@ -6421,7 +6422,7 @@ else:
             
                                     # Carregar dados do dia para verificar elegibilidade
                                     df_dia_s = load_data(rem_g['aba'])
-                                    _IMP_S = r'ferias|licen|doente|baixa|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
+                                    _IMP_S = r'ferias|licen|convalesc|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
                                     ausentes_s = set()
                                     militares_folga_s = set()
                                     servicos_s = {}
@@ -6631,7 +6632,7 @@ else:
             mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
                           for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
             mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
-            tipo_l = st.selectbox("Tipo:", ["Baixa", "Licença", "Outras Licenças", "Diligência", "Tribunal", "FCAA CTer", "Folga Complementar"], key="lic_tipo")
+            tipo_l = st.selectbox("Tipo:", ["Convalescença", "Licença", "Outras Licenças", "Diligência", "Tribunal", "FCAA CTer", "Folga Complementar"], key="lic_tipo")
         with col_l2:
             ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
             fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
