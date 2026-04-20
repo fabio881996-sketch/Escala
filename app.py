@@ -2943,8 +2943,12 @@ else:
                                         lambda x: u_id in re.split(r'[;,]+', x)
                                     )]
                                     rem_mil = rem_mil[rem_mil['serviço'].apply(norm).str.contains('remu|grat', na=False)]
-                                    # Remover duplicados por serviço+horário (manter primeiro)
-                                    rem_mil = rem_mil.drop_duplicates(subset=['serviço','horário'], keep='first').reset_index(drop=True)
+                                    # Remover duplicados por serviço+horário+viatura+obs (manter primeiro)
+                                    dedup_cols = ['serviço','horário']
+                                    for _dc in ['viatura','observações']:
+                                        if _dc in rem_mil.columns:
+                                            dedup_cols.append(_dc)
+                                    rem_mil = rem_mil.drop_duplicates(subset=dedup_cols, keep='first').reset_index(drop=True)
                                     # Excluir remunerados que foram cedidos (matar remunerado aprovado onde sou o cedente)
                                     if not df_trocas.empty:
                                         cedidos = df_trocas[
