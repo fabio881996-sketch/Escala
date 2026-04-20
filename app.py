@@ -5686,7 +5686,7 @@ else:
                                 'obs':       next((i for i,h in enumerate(hdrs_l) if 'obs' in h), None),
                             }
                             nova_data = []
-                            for (sv, hr), d in grupos.items():
+                            for (sv, hr, obs_g), d in grupos.items():
                                 linha = [''] * len(hdrs_raw)
                                 for chave_c, val in [
                                     ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
@@ -5771,7 +5771,7 @@ else:
                                     if dados[campo] and not grupos_novos[chave][campo]:
                                         grupos_novos[chave][campo] = dados[campo]
                             novas_linhas = []
-                            for (sv, hr), d in grupos_novos.items():
+                            for (sv, hr, obs_g), d in grupos_novos.items():
                                 linha = [''] * len(hdrs_raw)
                                 for chave_mc, val in [
                                     ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
