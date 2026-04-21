@@ -1400,14 +1400,25 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         return y - box_h - 2*mm
 
     def sec_title(y, label, x=LM, w=TW):
-        # Borda simples com texto a negrito -- sem fundo escuro (poupa toner)
+        # Título sem linha inferior -- funde com conteúdo para bloco unificado
         c.setStrokeColor(black)
         c.setLineWidth(0.8)
-        c.rect(x, y-5.5*mm, w, 5.5*mm, fill=0, stroke=1)
+        # Desenhar apenas topo + laterais (sem linha inferior)
+        c.line(x, y, x+w, y)            # topo
+        c.line(x, y, x, y-5.5*mm)       # esquerda
+        c.line(x+w, y, x+w, y-5.5*mm)   # direita
         c.setFillColor(black)
         c.setFont("Helvetica-Bold", 9)
         c.drawString(x+2*mm, y-4*mm, f"  {label.upper()}")
         return y - 6.5*mm
+
+    def close_section(y_top, y_bottom, x=LM, w=TW):
+        """Fecha o bloco da secção com borda exterior completa (título + conteúdo)."""
+        c.setStrokeColor(black)
+        c.setLineWidth(0.8)
+        c.line(x, y_bottom, x+w, y_bottom)   # linha de fecho em baixo
+        c.line(x, y_top, x, y_bottom)          # esquerda
+        c.line(x+w, y_top, x+w, y_bottom)      # direita
 
     def tbl_header(y, cols, widths, x=LM):
         # Fundo cinza claro com texto escuro
@@ -1497,7 +1508,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # Títulos das duas colunas
     y_col = y
+    y_aus_top = y_col
     sec_title(y_col, "Ausências, Folgas e Licenças", x=LM, w=CW_ESQ)
+    y_adm_top = y_col
     if grupos_adm:
         sec_title(y_col, "Outras Situações / ADM", x=LM+CW_ESQ+GAP, w=CW_DIR)
     y_col -= 6.5*mm
@@ -1571,12 +1584,19 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y_dir -= 5*mm
         idx_adm += 1
 
+    # Fechar blocos Ausências e ADM
+    y_aus_bottom = min(y_esq, y_dir)
+    close_section(y_aus_top, y_aus_bottom, x=LM, w=CW_ESQ)
+    if grupos_adm:
+        close_section(y_adm_top, y_aus_bottom, x=LM+CW_ESQ+GAP, w=CW_DIR)
+
     # Avançar y para o máximo das duas colunas
-    y = min(y_esq, y_dir) - 2*mm
+    y = y_aus_bottom - 2*mm
 
     # ---- ATENDIMENTO e APOIO lado a lado ----
     if not df_at.empty or not df_ap.empty:
         y_at = y
+        y_at_top = y_at
         # Títulos
         if not df_at.empty:
             sec_title(y_at, "Atendimento", x=LM, w=CW2)
@@ -1609,10 +1629,16 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 y_dir2 = tbl_row(y_dir2, [hor, ids], wids_at_r, fill, x=x_dir2)
                 fill = not fill
 
-        y = min(y_esq2, y_dir2) - 2*mm
+        y_at_bottom = min(y_esq2, y_dir2)
+        if not df_at.empty:
+            close_section(y_at_top, y_at_bottom, x=LM, w=CW2)
+        if not df_ap.empty:
+            close_section(y_at_top, y_at_bottom, x=LM+CW2+GAP, w=CW2)
+        y = y_at_bottom - 2*mm
 
     # ---- PATRULHA OCORRÊNCIAS ----
     if not df_ocorr.empty:
+        y_sec_top = y
         y = sec_title(y, "Patrulha Ocorrências")
         cols_oc = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
         _w = TW - 16*mm - 32*mm - 40*mm
@@ -1628,10 +1654,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
+        close_section(y_sec_top, y)
         y -= 2*mm
 
     # ---- PATRULHAS E POLICIAMENTO ----
     if not df_outras_pat.empty:
+        y_sec_top = y
         y = sec_title(y, "Patrulhas e Policiamento")
         cols_pp = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura", "Giro"]
         _wp = TW - 16*mm - 32*mm - 34*mm - 14*mm
@@ -1648,10 +1676,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
+        close_section(y_sec_top, y)
         y -= 2*mm
 
     # ---- OUTROS SERVIÇOS ----
     if not df_outros.empty:
+        y_sec_top = y
         y = sec_title(y, "Outros Serviços")
         cols_ot = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
         _wo = TW - 16*mm - 32*mm - 40*mm
@@ -1666,6 +1696,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
+        close_section(y_sec_top, y)
         y -= 2*mm
 
     # ---- helper wrap ----
@@ -1686,6 +1717,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     # ---- REMUNERADOS ----
     if not df_rem.empty:
+        y_sec_top = y
         y = sec_title(y, "Serviços Remunerados / Gratificados")
         _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
         wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
@@ -1797,6 +1829,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             # Borda da célula fundida
             c.setStrokeColor(CINZA_LN)
             c.rect(x_obs_col, y_ini-span_h, _obs_w, span_h, fill=0, stroke=1)
+        close_section(y_sec_top, y)
         y -= 2*mm
 
     # ---- OBSERVAÇÕES (todos exceto remunerados) ----
@@ -1832,6 +1865,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
 
     if obs_lista:
         if y < 40*mm: y = new_page()
+        y_sec_top = y
         y = sec_title(y, "Observações")
         cols_ob = ["Indicativo / Serviço", "Detalhe"]
         wids_ob = [35*mm, TW-35*mm]
@@ -1857,6 +1891,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.line(LM+wids_ob[0], y, LM+wids_ob[0], y-row_h)
             y -= row_h
             fill = not fill
+        close_section(y_sec_top, y)
         y -= 2*mm
 
     rodape()
