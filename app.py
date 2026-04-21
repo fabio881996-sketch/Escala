@@ -1261,7 +1261,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         mask = df["servico_col"].str.contains(pat, na=False)
         return df[mask].copy(), df[~mask].copy()
 
-    df_aus,  df_rest = filtrar(r"ferias|licen|doente|folga|baixa", df_raw_com)
+    df_aus,  df_rest = filtrar(r"ferias|licen|doente|folga|baixa|convalesc", df_raw_com)
     df_adm,  df_rest = filtrar(r"pronto|secretaria|inquer|comando|dilig", df_rest)
     df_ap,   df_rest = filtrar(r"apoio", df_rest)
     df_at,   df_rest = filtrar(r"atendimento", df_rest)
@@ -1410,6 +1410,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.setFillColor(black)
         c.setFont("Helvetica-Bold", 9)
         c.drawString(x+2*mm, y-4*mm, f"  {label.upper()}")
+        # Linha subtil a separar título do conteúdo
+        c.setStrokeColor(HexColor("#999999"))
+        c.setLineWidth(0.4)
+        c.line(x, y-5.5*mm, x+w, y-5.5*mm)
         return y - 6.5*mm
 
     def close_section(y_top, y_bottom, x=LM, w=TW):
