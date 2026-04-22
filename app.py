@@ -5385,6 +5385,27 @@ else:
                                 if linhas_rem_preservar:
                                     ws_dia_c.append_rows(linhas_rem_preservar)
 
+                                # Gravar "Disponível" para militares do efetivo sem serviço escalado
+                                ids_escalados = set()
+                                for (sv_e, hr_e, obs_e), dados_g in grupos_sv.items():
+                                    for mid_e in dados_g['ids']:
+                                        ids_escalados.add(str(mid_e).strip())
+                                linhas_disp = []
+                                for _, row_u_c in df_util.iterrows():
+                                    mid_u_c = str(row_u_c.get('id', '')).strip()
+                                    if not mid_u_c or mid_u_c == 'nan':
+                                        continue
+                                    if mid_u_c in ids_escalados:
+                                        continue
+                                    linha_disp = [''] * len(hdrs_c_raw)
+                                    idx_id_c = next((i for i,h in enumerate(hdrs_c) if 'id' in h), None)
+                                    idx_sv_c = next((i for i,h in enumerate(hdrs_c) if 'servi' in h), None)
+                                    if idx_id_c is not None: linha_disp[idx_id_c] = mid_u_c
+                                    if idx_sv_c is not None: linha_disp[idx_sv_c] = 'Disponível'
+                                    linhas_disp.append(linha_disp)
+                                if linhas_disp:
+                                    ws_dia_c.append_rows(linhas_disp)
+
                                 # Atualizar ordem_escala
                                 _atualizar_ordem_escala_dia(sh_c, aba_dia, d_gerar)
 
