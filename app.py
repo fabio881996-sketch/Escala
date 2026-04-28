@@ -2708,7 +2708,7 @@ else:
                 for delta in range(90):
                     dt_c = hj + timedelta(days=delta)
                     aba_c = dt_c.strftime('%d-%m')
-                    if is_admin or aba_c in dias_publicados:
+                    if aba_c in dias_publicados:
                         dias_a_mostrar.append(dt_c)
                     if len(dias_a_mostrar) >= 30:
                         break
@@ -3512,8 +3512,8 @@ else:
             d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
             aba_sel = d_sel.strftime("%d-%m")
 
-        # Não-admins: só ver dias publicados
-        if not is_admin and aba_sel not in _dias_pub_global:
+        # Só ver dias publicados (admins incluídos)
+        if aba_sel not in _dias_pub_global:
             st.info("A escala para este dia ainda não foi publicada.")
         else:
             df_dia = load_data(aba_sel)
