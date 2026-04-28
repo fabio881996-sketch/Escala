@@ -5386,6 +5386,7 @@ else:
                                     ws_dia_c.append_rows(linhas_rem_preservar)
 
                                 # Gravar "Disponível" para militares do efetivo sem serviço escalado
+                                # Gravar "Férias" ou tipo de licença para quem está ausente
                                 ids_escalados = set()
                                 for (sv_e, hr_e, obs_e), dados_g in grupos_sv.items():
                                     for mid_e in dados_g['ids']:
@@ -5397,11 +5398,20 @@ else:
                                         continue
                                     if mid_u_c in ids_escalados:
                                         continue
+                                    # Determinar serviço a registar
+                                    if militar_de_ferias(mid_u_c, d_gerar, df_ferias, feriados):
+                                        sv_reg = 'Férias'
+                                    else:
+                                        lic_raw = militar_de_licenca(mid_u_c, d_gerar, df_licencas)
+                                        if lic_raw:
+                                            sv_reg = lic_raw.split('|')[0] if '|' in lic_raw else lic_raw
+                                        else:
+                                            sv_reg = 'Disponível'
                                     linha_disp = [''] * len(hdrs_c_raw)
                                     idx_id_c = next((i for i,h in enumerate(hdrs_c) if 'id' in h), None)
                                     idx_sv_c = next((i for i,h in enumerate(hdrs_c) if 'servi' in h), None)
                                     if idx_id_c is not None: linha_disp[idx_id_c] = mid_u_c
-                                    if idx_sv_c is not None: linha_disp[idx_sv_c] = 'Disponível'
+                                    if idx_sv_c is not None: linha_disp[idx_sv_c] = sv_reg
                                     linhas_disp.append(linha_disp)
                                 if linhas_disp:
                                     ws_dia_c.append_rows(linhas_disp)
