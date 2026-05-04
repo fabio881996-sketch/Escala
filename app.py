@@ -1098,6 +1098,9 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
         ix_sv = hdrs_dia.index('serviço') if 'serviço' in hdrs_dia else 1
         ix_hr = hdrs_dia.index('horário') if 'horário' in hdrs_dia else 2
 
+        # IDs excluídos permanentemente do ordem_escala
+        IDS_EXCLUIR_ORDEM = {'812', '868'}
+
         # Recolher todos os escalados por slot
         escalados_por_slot = {}
         for row in vals_dia[1:]:
@@ -1109,7 +1112,7 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
                 continue
             for mid in re.split(r'[;,]+', ids):
                 mid = mid.strip()
-                if mid:
+                if mid and mid not in IDS_EXCLUIR_ORDEM:
                     escalados_por_slot.setdefault(col_key, []).append(mid)
 
         # Mover escalados para o fim da fila -- por slot
