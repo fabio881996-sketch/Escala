@@ -1143,6 +1143,31 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
     except Exception as e:
         st.error(f"Erro ao atualizar ordem_escala: {e}")
 
+def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=30):
+    """
+    Após guardar o dia X, recalcula o ordem_escala em cadeia para todos os
+    dias seguintes que já têm aba de escala, parando quando encontra um dia sem aba.
+    """
+    import time as _tc
+    abas = load_lista_abas()
+    d_atual = d_gerar
+    aba_atual = aba_dia
+    for _ in range(max_dias):
+        d_prox = d_atual + timedelta(days=1)
+        aba_prox = d_prox.strftime('%d-%m')
+        # Parar se o dia seguinte não tiver aba de escala
+        if aba_prox not in abas:
+            break
+        # Actualizar ordem_escala com base no dia actual
+        _atualizar_ordem_escala_dia(sh, aba_atual, d_atual)
+        _tc.sleep(1)  # evitar quota 429
+        # Avançar para o dia seguinte
+        d_atual = d_prox
+        aba_atual = aba_prox
+        # Recarregar abas (pode ter sido criada nova aba ordem_escala)
+        load_lista_abas.clear()
+        abas = load_lista_abas()
+
 # ============================================================
 # 5. FUNÇÕES PDF
 # ============================================================
@@ -5419,8 +5444,8 @@ else:
                                 if linhas_disp:
                                     ws_dia_c.append_rows(linhas_disp)
 
-                                # Atualizar ordem_escala
-                                _atualizar_ordem_escala_dia(sh_c, aba_dia, d_gerar)
+                                # Atualizar ordem_escala em cadeia
+                                _atualizar_ordem_escala_em_cadeia(sh_c, aba_dia, d_gerar)
 
                                 load_data.clear()
                                 del st.session_state['tabela_escala']
@@ -5870,12 +5895,12 @@ else:
                             ws_g.clear()
                             ws_g.update('A1', tudo)
 
-                        # Atualizar ordem_escala (com delay para evitar 429)
+                        # Atualizar ordem_escala em cadeia (com delay para evitar 429)
                         try:
                             import time as _t
                             _t.sleep(2)
                             aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
-                            _atualizar_ordem_escala_dia(sh_gc, aba_g, aba_data_g)
+                            _atualizar_ordem_escala_em_cadeia(sh_gc, aba_g, aba_data_g)
                         except:
                             pass
 
