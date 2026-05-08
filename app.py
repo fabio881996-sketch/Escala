@@ -633,7 +633,8 @@ def load_listas() -> dict:
             idx = hdrs.index(h)
             result[h] = [''] + [str(row[idx]).strip() for row in vals[1:] if idx < len(row) and str(row[idx]).strip()]
         return result
-    except:
+    except Exception as e:
+        st.warning(f"⚠️ Erro ao carregar listas: {e}")
         return {}
 
 @st.cache_data(ttl=86400)
