@@ -9,6 +9,7 @@ import re
 import unicodedata
 import hashlib
 import secrets
+import time
 
 def norm(t):
     """Normaliza texto para comparação -- remove acentos e coloca em minúsculas."""
@@ -289,11 +290,32 @@ def _df_from_records(records) -> pd.DataFrame:
     df = pd.DataFrame(records).astype(str)
     df.columns = [str(c).strip().lower() for c in df.columns]
     df = df.fillna("")
-    # Normalizar nomes de serviço (substituir termos antigos)
     if 'serviço' in df.columns:
         df['serviço'] = df['serviço'].apply(norm_servico)
     if 'id' in df.columns:
-        # Expandir linhas com múltiplos IDs (ex: "1089, 1162" → duas linhas)
+        df['id'] = df['id'].str.split(r'[,;]')
+        df = df.explode('id')
+        df['id'] = df['id'].str.strip()
+        df = df[df['id'] != ''].reset_index(drop=True)
+    return df
+
+def _df_from_values(vals) -> pd.DataFrame:
+    """Converte get_all_values() para DataFrame normalizado -- mais rápido que get_all_records()."""
+    if not vals or len(vals) < 2:
+        return pd.DataFrame()
+    hdrs = [str(h).strip().lower() for h in vals[0]]
+    rows = []
+    for row in vals[1:]:
+        # Preencher colunas em falta com string vazia
+        row_ext = list(row) + [''] * (len(hdrs) - len(row))
+        rows.append({hdrs[i]: str(row_ext[i]).strip() for i in range(len(hdrs))})
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame(rows)
+    df = df.fillna("")
+    if 'serviço' in df.columns:
+        df['serviço'] = df['serviço'].apply(norm_servico)
+    if 'id' in df.columns:
         df['id'] = df['id'].str.split(r'[,;]')
         df = df.explode('id')
         df['id'] = df['id'].str.strip()
@@ -302,17 +324,15 @@ def _df_from_records(records) -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 3 minutos."""
-    import time
+    """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
     for tentativa in range(3):
         try:
             sh = get_sheet()
             if sh is None:
                 return pd.DataFrame()
-            return _df_from_records(sh.worksheet(aba_nome).get_all_records())
+            return _df_from_values(sh.worksheet(aba_nome).get_all_values())
         except Exception as e:
             err_str = str(e).lower()
-            # Se a aba não existe, não tentar mais
             if 'not found' in err_str or 'worksheet' in err_str:
                 return pd.DataFrame()
             if tentativa < 2:
@@ -321,10 +341,9 @@ def load_data(aba_nome: str) -> pd.DataFrame:
 
 def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
     """Lê aba diretamente do Sheets SEM cache -- para uso na geração de escala."""
-    import time
     for tentativa in range(3):
         try:
-            return _df_from_records(sh.worksheet(aba_nome).get_all_records())
+            return _df_from_values(sh.worksheet(aba_nome).get_all_values())
         except Exception as e:
             if '429' in str(e) and tentativa < 2:
                 time.sleep(20)
@@ -335,18 +354,20 @@ def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
 @st.cache_data(ttl=300)
 def load_utilizadores() -> pd.DataFrame:
     """Carrega utilizadores com cache de 5min e retry automático."""
-    import time
     for tentativa in range(3):
         try:
             sh = get_sheet()
             if sh is None:
                 return pd.DataFrame()
-            records = sh.worksheet("utilizadores").get_all_records()
-            if not records:
+            vals = sh.worksheet("utilizadores").get_all_values()
+            if not vals or len(vals) < 2:
                 return pd.DataFrame()
-            df = pd.DataFrame(records).astype(str)
-            df.columns = [str(c).strip().lower() for c in df.columns]
-            df = df.fillna("")
+            hdrs = [str(h).strip().lower() for h in vals[0]]
+            rows = []
+            for row in vals[1:]:
+                row_ext = list(row) + [''] * (len(hdrs) - len(row))
+                rows.append({hdrs[i]: str(row_ext[i]).strip() for i in range(len(hdrs))})
+            df = pd.DataFrame(rows).fillna("")
             return df
         except Exception:
             if tentativa < 2:
@@ -381,15 +402,15 @@ def load_ordem_remunerados() -> pd.DataFrame:
         return pd.DataFrame()
 
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=120)
 def load_trocas() -> pd.DataFrame:
-    """Carrega registos_trocas com cache curto de 30s."""
+    """Carrega registos_trocas com cache de 120s."""
     for tentativa in range(3):
         try:
             sh = get_sheet()
             if sh is None:
                 return pd.DataFrame()
-            return _df_from_records(sh.worksheet("registos_trocas").get_all_records())
+            return _df_from_values(sh.worksheet("registos_trocas").get_all_values())
         except Exception:
             if tentativa == 2:
                 return pd.DataFrame()
@@ -565,7 +586,6 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
                 return tipo
     return ''
 
-@st.cache_data(ttl=86400)
 @st.cache_data(ttl=120)
 def load_dias_publicados() -> set:
     """Carrega datas publicadas da aba 'escala_publicada' -- formato DD-MM."""
@@ -616,6 +636,7 @@ def load_listas() -> dict:
     except:
         return {}
 
+@st.cache_data(ttl=86400)
 def load_feriados(ano: int) -> list:
     """Carrega feriados de um ano da aba 'feriados' -- cache 24h."""
     try:
@@ -712,7 +733,6 @@ def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: l
 @st.cache_data(ttl=86400)
 def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
     """Conta serviços históricos de um militar -- cache 24h."""
-    def _n3(t): return norm(t)
     try:
         client = get_gsheet_client()
         sh = client.open_by_key(sheet_id_c)
@@ -725,8 +745,8 @@ def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
             if len(partes) != 2 or not all(p.isdigit() for p in partes):
                 continue
             try:
-                dados = aba.get_all_records()
-                df_aba = _df_from_records(dados)
+                vals = aba.get_all_values()
+                df_aba = _df_from_values(vals)
                 if df_aba.empty or 'id' not in df_aba.columns:
                     continue
                 mil_rows = df_aba[df_aba['id'].astype(str).str.strip() == alvo_id_c]
@@ -740,7 +760,7 @@ def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
                         'data': f"{partes[0]}/{partes[1]}/{ano}",
                         'mes': f"{partes[1]:>02}/{ano}",
                         'serviço': serv,
-                        'tipo': _n3(serv)
+                        'tipo': norm(serv)
                     })
             except Exception:
                 continue
@@ -948,14 +968,24 @@ def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str 
 
                     if dia_o and dia_d:
                         ano_f = datetime.now().year
-                        ws_f = sh.worksheet(f"folgas_{ano_f}")
-                        vals_f = ws_f.get_all_values()
-                        hdrs_f = [h.strip().lower() for h in vals_f[0]]
-                        ix_id_f   = hdrs_f.index('id') if 'id' in hdrs_f else 0
-                        ix_grp_f  = hdrs_f.index('grupo') if 'grupo' in hdrs_f else None
+                        # Leitura via cache
+                        df_folgas_troca = load_folgas(ano_f)
+                        grupos_folga_troca = load_grupos_folga()
+
+                        # Reconstruir vals_f para compatibilidade com código abaixo
+                        if not df_folgas_troca.empty:
+                            vals_f = [list(df_folgas_troca.columns)] + df_folgas_troca.astype(str).values.tolist()
+                        else:
+                            vals_f = [[]]
+                        hdrs_f   = [h.strip().lower() for h in vals_f[0]]
+                        ix_id_f  = hdrs_f.index('id') if 'id' in hdrs_f else 0
+                        ix_grp_f = hdrs_f.index('grupo') if 'grupo' in hdrs_f else None
+
+                        # Para escrita ainda precisamos das worksheets
+                        ws_f   = sh.worksheet(f"folgas_{ano_f}")
                         ws_grp = sh.worksheet("grupos_folga")
-                        vals_grp = ws_grp.get_all_values()
-                        hdrs_grp = [h.strip() for h in vals_grp[0]]
+                        vals_grp  = ws_grp.get_all_values()
+                        hdrs_grp  = [h.strip() for h in vals_grp[0]]
                         tipos_grp = [h for h in hdrs_grp if h != 'grupo']
 
                         # Encontrar grupo do militar
@@ -1080,8 +1110,7 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
                 if v: ordem[h].append(v)
 
         # Ler aba do dia para saber quem ficou escalado
-        import time as _t2
-        _t2.sleep(1)
+        time.sleep(1)
         for _tentativa in range(3):
             try:
                 ws_dia = sh.worksheet(aba_dia)
@@ -1089,7 +1118,7 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
                 break
             except Exception as _ex:
                 if '429' in str(_ex) and _tentativa < 2:
-                    _t2.sleep(20)
+                    time.sleep(20)
                 else:
                     return
         if not vals_dia: return
@@ -1143,12 +1172,11 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
     except Exception as e:
         st.error(f"Erro ao atualizar ordem_escala: {e}")
 
-def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=10):
+def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=7):
     """
     Após guardar o dia X, recalcula o ordem_escala em cadeia para todos os
     dias seguintes que já têm aba de escala, parando quando encontra um dia sem aba.
     """
-    import time as _tc
     abas = load_lista_abas()
     d_atual = d_gerar
     aba_atual = aba_dia
@@ -1160,7 +1188,7 @@ def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=10):
             break
         # Actualizar ordem_escala com base no dia actual
         _atualizar_ordem_escala_dia(sh, aba_atual, d_atual)
-        _tc.sleep(1)  # evitar quota 429
+        time.sleep(1)  # evitar quota 429
         # Avançar para o dia seguinte
         d_atual = d_prox
         aba_atual = aba_prox
@@ -4688,8 +4716,7 @@ else:
                 for idx_res, res in enumerate(resultados_c):
                     # Pausa entre dias para evitar quota
                     if idx_res > 0:
-                        import time as _time
-                        _time.sleep(8)
+                        time.sleep(8)
                     aba_r = res['aba']
                     escalados_r = res['escalados']
                     ordem_r = res['ordem_atualizada']
@@ -4702,7 +4729,7 @@ else:
                             break
                         except Exception as _e:
                             if _t < 2:
-                                import time as _time2; _time2.sleep(20)
+                                time.sleep(20)
                             else:
                                 raise _e
                     todas_linhas_r = ws_dia_r.get_all_values()
@@ -5727,7 +5754,6 @@ else:
                 abas_lista = list(dados_editar.items())
 
                 def _guardar_sheets(editados_dict):
-                    import time
                     sh_gc = get_sheet()
                     for aba_g, df_g in editados_dict.items():
                         # Retry em caso de 429
@@ -5897,8 +5923,7 @@ else:
 
                         # Atualizar ordem_escala em cadeia (com delay para evitar 429)
                         try:
-                            import time as _t
-                            _t.sleep(2)
+                            time.sleep(2)
                             aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
                             _atualizar_ordem_escala_em_cadeia(sh_gc, aba_g, aba_data_g)
                         except:
