@@ -1804,9 +1804,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 vtr = " / ".join(vtr_vals) if vtr_vals else ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
 
-        # Calcular largura viatura dinamicamente -- 42mm se houver dupla viatura, 20mm caso contrário
+        # Largura fixa para viatura -- viaturas múltiplas aparecem em linhas separadas
         _tem_dupla_vtr = any(' / ' in r['vtr'] for r in linhas_rem)
-        _vtr_w = (42*mm if _tem_dupla_vtr else 20*mm) if 'viatura' in df_rem.columns else 0
+        _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
         wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
         _obs_w = wids_rm[3]
         cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
