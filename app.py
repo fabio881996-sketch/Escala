@@ -1792,25 +1792,28 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         max_pts_rm  = x_obs_end - x_obs_start
         x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w
 
-        # Agrupar linhas por obs para fundir célula -- preservar ordem original
+        # Agrupar linhas por (horário+obs) para fundir célula -- preservar ordem original
         linhas_rem = []
-        vistos = {}  # hor -> já processado
+        vistos = {}  # (hor, obs) -> já processado
+        col_vtr = next((c for c in df_rem.columns if norm(c) == 'viatura'), None)
         for _, row in df_rem.iterrows():
             hor = str(row.get('horário', '')).strip()
-            if hor in vistos:
-                continue
-            vistos[hor] = True
-            grp = df_rem[df_rem['horário'] == hor]
-            ids = ", ".join(grp["id_fmt"].tolist())
             obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
             if obs == 'nan': obs = ""
-            # Viatura -- procurar coluna independentemente de maiúsculas/minúsculas
+            chave = (hor, obs)
+            if chave in vistos:
+                continue
+            vistos[chave] = True
+            grp = df_rem[(df_rem['horário'] == hor)]
+            if "observações" in df_rem.columns:
+                grp = grp[grp['observações'].astype(str).str.strip().replace('nan','') == obs]
+            ids = ", ".join(grp["id_fmt"].tolist())
+            # Viatura -- concatenar viaturas distintas se houver mais que uma
             vtr = ""
-            col_vtr = next((c for c in df_rem.columns if norm(c) == 'viatura'), None)
             if col_vtr:
-                vtr_vals = grp[col_vtr].dropna().astype(str)
-                vtr_vals = vtr_vals[vtr_vals.str.strip().str.len() > 0]
-                vtr = vtr_vals.iloc[0].strip() if not vtr_vals.empty else ""
+                vtr_vals = grp[col_vtr].dropna().astype(str).str.strip()
+                vtr_vals = vtr_vals[vtr_vals.str.len() > 0].unique().tolist()
+                vtr = " / ".join(vtr_vals) if vtr_vals else ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
 
         # Calcular alturas e grupos de obs
