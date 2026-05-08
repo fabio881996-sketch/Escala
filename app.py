@@ -1780,18 +1780,6 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_rem.empty:
         y_sec_top = y
         y = sec_title(y, "Serviços Remunerados / Gratificados")
-        _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
-        wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
-        _obs_w = wids_rm[3]  # largura real da coluna obs
-        cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
-        y = tbl_header(y, cols_rm, wids_rm)
-        fill = False
-
-        x_obs_start = LM + wids_rm[0] + wids_rm[1] + _vtr_w + 2*mm
-        x_obs_end   = LM + TW - 2*mm
-        max_pts_rm  = x_obs_end - x_obs_start
-        x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w
-
         # Agrupar linhas por (horário+obs) para fundir célula -- preservar ordem original
         linhas_rem = []
         vistos = {}  # (hor, obs) -> já processado
@@ -1815,6 +1803,20 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 vtr_vals = vtr_vals[vtr_vals.str.len() > 0].unique().tolist()
                 vtr = " / ".join(vtr_vals) if vtr_vals else ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
+
+        # Calcular largura viatura dinamicamente -- 35mm se houver dupla viatura, 20mm caso contrário
+        _tem_dupla_vtr = any(' / ' in r['vtr'] for r in linhas_rem)
+        _vtr_w = (35*mm if _tem_dupla_vtr else 20*mm) if 'viatura' in df_rem.columns else 0
+        wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
+        _obs_w = wids_rm[3]
+        cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
+        y = tbl_header(y, cols_rm, wids_rm)
+        fill = False
+
+        x_obs_start = LM + wids_rm[0] + wids_rm[1] + _vtr_w + 2*mm
+        x_obs_end   = LM + TW - 2*mm
+        max_pts_rm  = x_obs_end - x_obs_start
+        x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w
 
         # Calcular alturas e grupos de obs
         alturas = []
