@@ -1804,9 +1804,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 vtr = " / ".join(vtr_vals) if vtr_vals else ""
             linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
 
-        # Calcular largura viatura dinamicamente -- 35mm se houver dupla viatura, 20mm caso contrário
+        # Calcular largura viatura dinamicamente -- 42mm se houver dupla viatura, 20mm caso contrário
         _tem_dupla_vtr = any(' / ' in r['vtr'] for r in linhas_rem)
-        _vtr_w = (35*mm if _tem_dupla_vtr else 20*mm) if 'viatura' in df_rem.columns else 0
+        _vtr_w = (42*mm if _tem_dupla_vtr else 20*mm) if 'viatura' in df_rem.columns else 0
         wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
         _obs_w = wids_rm[3]
         cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
@@ -1823,7 +1823,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         for r in linhas_rem:
             obs_lines = wrap_text(r['obs'], max_pts_rm) if r['obs'] else [""]
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
-            alturas.append(max(5*mm, max(len(obs_lines), len(ids_lines)) * 5*mm))
+            vtr_lines = r['vtr'].split(' / ') if ' / ' in r['vtr'] else [r['vtr']]
+            alturas.append(max(5*mm, max(len(obs_lines), len(ids_lines), len(vtr_lines)) * 5*mm))
 
         # Identificar spans de obs iguais CONSECUTIVAS
         obs_spans = {}  # idx_inicio -> (obs, count, altura_total)
@@ -1866,9 +1867,16 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y_ids_start = y - (row_h_real - total_ids_h) / 2 - 3.5*mm
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y_ids_start - (li*5*mm), id_l)
-            # Viatura centrada verticalmente
+            # Viatura -- uma por linha se dupla
             if _vtr_w:
-                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_vtr_w/2, y_centro, r.get('vtr', ''))
+                vtr_txt = r.get('vtr', '')
+                vtr_lines = vtr_txt.split(' / ') if ' / ' in vtr_txt else [vtr_txt]
+                c.setFont("Helvetica", 8.5)
+                total_vtr_h = len(vtr_lines) * 5*mm
+                y_vtr = y - (row_h_real - total_vtr_h) / 2 - 3.5*mm
+                for li, vl in enumerate(vtr_lines):
+                    c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_vtr_w/2, y_vtr - (li*5*mm), vl)
+                c.setFont("Helvetica", 8.5)
             c.setStrokeColor(CINZA_LN)
             c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_vtr_w, row_h, fill=0, stroke=1)
             c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
