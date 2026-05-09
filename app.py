@@ -1967,9 +1967,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.setFont("Helvetica", 8.5)
             for li, obs_l in enumerate(obs_lines_span):
                 c.drawString(x_obs_start, y_texto - (li * 5*mm), obs_l)
-            # Linha vertical de separação + topo e fundo do grupo (sem horizontais internas)
+            # Só topo e fundo do grupo -- sem linha vertical nem divisões internas
             c.setStrokeColor(CINZA_LN)
-            c.line(x_obs_col, y_ini, x_obs_col, y_ini-span_h)          # vertical esquerda
             c.line(x_obs_col, y_ini, LM+TW, y_ini)                      # topo
             c.line(x_obs_col, y_ini-span_h, LM+TW, y_ini-span_h)        # fundo
         close_section(y_sec_top, y)
