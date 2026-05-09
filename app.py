@@ -1941,11 +1941,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                     c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_vtr_w/2, y_vtr - (li*5*mm), vl)
                 c.setFont("Helvetica", 8.5)
             c.setStrokeColor(CINZA_LN)
-            # Desenhar só a borda da área horário+militares+viatura (sem linha direita -- a obs fecha)
-            c.line(LM, y, LM+wids_rm[0]+wids_rm[1]+_vtr_w, y)            # topo
-            c.line(LM, y-row_h, LM+wids_rm[0]+wids_rm[1]+_vtr_w, y-row_h)  # fundo
-            c.line(LM, y, LM, y-row_h)                                      # esquerda
-            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)               # sep horário|militares
+            x_fim_esq = LM + wids_rm[0] + wids_rm[1] + _vtr_w
+            # Linhas horizontais só até ao limite da área esquerda (não invadem a obs)
+            c.line(LM, y, x_fim_esq, y)              # topo
+            c.line(LM, y-row_h, x_fim_esq, y-row_h)  # fundo
+            c.line(LM, y, LM, y-row_h)               # esquerda
+            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)  # sep horário|militares
             if _vtr_w:
                 c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)  # sep militares|viatura
             y -= row_h
@@ -1956,7 +1957,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 continue
             y_ini = y_grupo[idx]
             obs_lines_span = wrap_text(obs_txt, max_pts_rm) if obs_txt else [""]
-            # Fundo branco da célula obs
+            # Fundo branco da célula obs (apaga o que ficou por baixo)
             c.setFillColor(white)
             c.rect(x_obs_col, y_ini-span_h, _obs_w, span_h, fill=1, stroke=0)
             # Centrar texto verticalmente na célula fundida
@@ -1966,9 +1967,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.setFont("Helvetica", 8.5)
             for li, obs_l in enumerate(obs_lines_span):
                 c.drawString(x_obs_start, y_texto - (li * 5*mm), obs_l)
-            # Borda da célula fundida
+            # Só linha vertical de separação -- sem bordas horizontais (evita divisões)
             c.setStrokeColor(CINZA_LN)
-            c.rect(x_obs_col, y_ini-span_h, _obs_w, span_h, fill=0, stroke=1)
+            c.line(x_obs_col, y_ini, x_obs_col, y_ini-span_h)
         close_section(y_sec_top, y)
         y -= 2*mm
 
