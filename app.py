@@ -1765,10 +1765,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         fill = False
         for hor, grp in df_ocorr.assign(_hor_sort=df_ocorr["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
+            def _v(col): return str(grp[col].iloc[0]).strip() if col in grp.columns else ""
+            def _clean(v): return "" if v in ("nan", "None", "NaN") else v
             serv = grp["serviço"].iloc[0]
-            ind  = grp["indicativo rádio"].iloc[0] if "indicativo rádio" in grp.columns else ""
-            rad  = grp["rádio"].iloc[0] if "rádio" in grp.columns else ""
-            vtr  = grp["viatura"].iloc[0] if "viatura" in grp.columns else ""
+            ind  = _clean(_v("indicativo rádio"))
+            rad  = _clean(_v("rádio"))
+            vtr  = _clean(_v("viatura"))
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
@@ -1787,10 +1789,12 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         for hor, grp in df_outras_pat.assign(_hor_sort=df_outras_pat["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
             serv = grp["serviço"].iloc[0]
-            ind  = grp["indicativo rádio"].iloc[0] if "indicativo rádio" in grp.columns else ""
-            rad  = grp["rádio"].iloc[0] if "rádio" in grp.columns else ""
-            vtr  = grp["viatura"].iloc[0] if "viatura" in grp.columns else ""
-            giro = grp["giro"].iloc[0] if "giro" in grp.columns else ""
+            def _v(col): return str(grp[col].iloc[0]).strip() if col in grp.columns else ""
+            def _clean(v): return "" if v in ("nan", "None", "NaN") else v
+            ind  = _clean(_v("indicativo rádio"))
+            rad  = _clean(_v("rádio"))
+            vtr  = _clean(_v("viatura"))
+            giro = _clean(_v("giro"))
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
@@ -1808,9 +1812,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         fill = False
         for (hor, serv), grp in df_outros.assign(_hor_sort=df_outros["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values(["_hor_sort","serviço"]).groupby(["horário", "serviço"], sort=False):
             ids = ", ".join(grp["id_fmt"].tolist())
-            ind = str(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
-            rad = str(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
-            vtr = str(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
+            def _clean(v): return "" if str(v).strip() in ("nan", "None", "NaN") else str(v).strip()
+            ind = _clean(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
+            rad = _clean(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
+            vtr = _clean(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill)
             fill = not fill
             if y < 20*mm: y = new_page()
@@ -1864,7 +1869,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         # Largura fixa para viatura -- viaturas múltiplas aparecem em linhas separadas
         _tem_dupla_vtr = any(' / ' in r['vtr'] for r in linhas_rem)
         _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
-        wids_rm = [15*mm, 35*mm, _vtr_w, TW-50*mm-_vtr_w]
+        _hor_w = 22*mm  # suficiente para 08:30-12:30
+        wids_rm = [_hor_w, 35*mm, _vtr_w, TW-_hor_w-35*mm-_vtr_w]
         _obs_w = wids_rm[3]
         cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
@@ -1935,10 +1941,13 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                     c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_vtr_w/2, y_vtr - (li*5*mm), vl)
                 c.setFont("Helvetica", 8.5)
             c.setStrokeColor(CINZA_LN)
-            c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_vtr_w, row_h, fill=0, stroke=1)
-            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
+            # Desenhar só a borda da área horário+militares+viatura (sem linha direita -- a obs fecha)
+            c.line(LM, y, LM+wids_rm[0]+wids_rm[1]+_vtr_w, y)            # topo
+            c.line(LM, y-row_h, LM+wids_rm[0]+wids_rm[1]+_vtr_w, y-row_h)  # fundo
+            c.line(LM, y, LM, y-row_h)                                      # esquerda
+            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)               # sep horário|militares
             if _vtr_w:
-                c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)
+                c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)  # sep militares|viatura
             y -= row_h
 
         # Agora desenhar as células de observação fundidas por cima
