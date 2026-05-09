@@ -1173,7 +1173,7 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
     except Exception as e:
         st.error(f"Erro ao atualizar ordem_escala: {e}")
 
-def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=7):
+def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=9):
     """
     Após guardar o dia X, recalcula o ordem_escala em cadeia para todos os
     dias seguintes que já têm aba de escala, parando quando encontra um dia sem aba.
