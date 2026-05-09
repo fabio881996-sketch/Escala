@@ -2058,6 +2058,10 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         return
     # Ordenar cronologicamente pelo início do horário
     df_sec = df_sec.copy()
+    # Limpar 'nan' nas colunas extras antes de agrupar
+    for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
+        if col in df_sec.columns:
+            df_sec[col] = df_sec[col].astype(str).replace({'nan': '', 'None': ''}).str.strip()
     df_sec['_hor_sort'] = pd.to_numeric(df_sec['horário'].str.extract(r'^(\d+)')[0], errors='coerce').fillna(99)
     df_sec = df_sec.sort_values(['_hor_sort', 'serviço'])
     st.markdown(_sec_header(titulo), unsafe_allow_html=True)
@@ -3791,6 +3795,11 @@ else:
                 # 5. Remunerados -- obs igual com rowspan (células fundidas)
                 if not df_remu.empty:
                     st.markdown(_sec_header("Serviços Remunerados / Gratificados"), unsafe_allow_html=True)
+                    # Limpar nan nas colunas antes de agrupar
+                    df_remu = df_remu.copy()
+                    for col in ['viatura', 'observações', 'giro']:
+                        if col in df_remu.columns:
+                            df_remu[col] = df_remu[col].astype(str).replace({'nan': '', 'None': ''}).str.strip()
                     # Agrupar por horário + viatura + obs (campos distintivos)
                     cols_rem = ['horário']
                     for c in ['viatura', 'observações']:
@@ -3808,14 +3817,18 @@ else:
                         ids = ', '.join(grp_rem['id_disp'].tolist())
                         rows_rem.append({'horário': hor, 'militares': ids, 'vtr': str(vtr), 'obs': str(obs)})
 
-                    # Calcular rowspans por obs
+                    # Calcular rowspans por obs -- apenas blocos CONSECUTIVOS
                     obs_spans = {}
-                    for i, r in enumerate(rows_rem):
-                        obs = r['obs']
-                        if obs not in obs_spans:
-                            obs_spans[obs] = {'start': i, 'count': 0}
-                        obs_spans[obs]['count'] += 1
-                    obs_first = {v['start']: (k, v['count']) for k, v in obs_spans.items()}
+                    i = 0
+                    while i < len(rows_rem):
+                        obs_atual = rows_rem[i]['obs']
+                        j = i + 1
+                        if obs_atual:  # só fundir se obs não vazia
+                            while j < len(rows_rem) and rows_rem[j]['obs'] == obs_atual:
+                                j += 1
+                        obs_spans[i] = (obs_atual, j - i)
+                        i = j
+                    obs_first = obs_spans  # {idx_inicio: (obs, count)}
 
                     th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;border-bottom:2px solid {AZUL};"
                     td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-bottom:1px solid #dde6f7;"
