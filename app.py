@@ -3833,6 +3833,10 @@ else:
                     th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;border-bottom:2px solid {AZUL};"
                     td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-bottom:1px solid #dde6f7;"
                     td_a = td_s + f"background:{AZUL_CLARO};"
+                    td_hor = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-bottom:1px solid #dde6f7;white-space:nowrap;"
+                    td_hor_a = td_hor + f"background:{AZUL_CLARO};"
+                    # Célula obs sem border-bottom para não criar divisões dentro do rowspan
+                    td_obs = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;vertical-align:middle;border-left:2px solid {AZUL_MED};"
 
                     html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
                     html += "<table style='width:100%;border-collapse:collapse;'><thead><tr>"
@@ -3840,13 +3844,14 @@ else:
                     html += "</tr></thead><tbody>"
                     for i, r in enumerate(rows_rem):
                         td = td_a if i % 2 == 0 else td_s
+                        td_h = td_hor_a if i % 2 == 0 else td_hor
                         html += "<tr>"
-                        html += f"<td style='{td}'>{r['horário']}</td>"
+                        html += f"<td style='{td_h}'>{r['horário']}</td>"
                         html += f"<td style='{td}'>{r['militares']}</td>"
                         html += f"<td style='{td}'>{r.get('vtr', '')}</td>"
                         if i in obs_first:
                             obs_txt, span = obs_first[i]
-                            html += f"<td style='{td}border-left:2px solid {AZUL_MED};' rowspan='{span}'>{obs_txt}</td>"
+                            html += f"<td style='{td_obs}' rowspan='{span}'>{obs_txt}</td>"
                         html += "</tr>"
                     html += "</tbody></table></div>"
                     st.markdown(html, unsafe_allow_html=True)
