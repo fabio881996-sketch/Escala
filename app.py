@@ -1232,25 +1232,30 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
 
 def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=9):
     """
-    Após guardar o dia X, recalcula o ordem_escala em cadeia para todos os
-    dias seguintes que já têm aba de escala, parando quando encontra um dia sem aba.
+    Após guardar o dia X, gera sempre o ordem_escala X+1.
+    Continua em cadeia para dias seguintes que já têm aba de escala, parando quando não encontra.
     """
     abas = load_lista_abas()
-    d_atual = d_gerar
-    aba_atual = aba_dia
-    for _ in range(max_dias):
+
+    # Passo 1: sempre gerar ordem_escala do dia seguinte (obrigatório)
+    _atualizar_ordem_escala_dia(sh, aba_dia, d_gerar)
+    time.sleep(1)
+    load_lista_abas.clear()
+    abas = load_lista_abas()
+
+    # Passo 2: continuar em cadeia para dias seguintes que já têm aba de escala
+    d_atual = d_gerar + timedelta(days=1)
+    for _ in range(max_dias - 1):
+        aba_atual = d_atual.strftime('%d-%m')
         d_prox = d_atual + timedelta(days=1)
         aba_prox = d_prox.strftime('%d-%m')
-        # Parar se o dia seguinte não tiver aba de escala
-        if aba_prox not in abas:
+        # Parar se o dia actual não tiver aba de escala
+        if aba_atual not in abas:
             break
         # Actualizar ordem_escala com base no dia actual
         _atualizar_ordem_escala_dia(sh, aba_atual, d_atual)
-        time.sleep(1)  # evitar quota 429
-        # Avançar para o dia seguinte
+        time.sleep(1)
         d_atual = d_prox
-        aba_atual = aba_prox
-        # Recarregar abas (pode ter sido criada nova aba ordem_escala)
         load_lista_abas.clear()
         abas = load_lista_abas()
 
