@@ -1232,32 +1232,33 @@ def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
 
 def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=9):
     """
-    Após guardar o dia X, gera sempre o ordem_escala X+1.
-    Continua em cadeia para dias seguintes que já têm aba de escala, parando quando não encontra.
+    Usado ao EDITAR escala existente.
+    Actualiza em cadeia os ordem_escala dos dias seguintes que já têm aba de escala.
     """
     abas = load_lista_abas()
 
-    # Passo 1: sempre gerar ordem_escala do dia seguinte (obrigatório)
+    # Sempre gerar ordem_escala do dia seguinte
     _atualizar_ordem_escala_dia(sh, aba_dia, d_gerar)
     time.sleep(1)
-    load_lista_abas.clear()
-    abas = load_lista_abas()
 
-    # Passo 2: continuar em cadeia para dias seguintes que já têm aba de escala
+    # Continuar em cadeia apenas para dias que já têm aba de escala criada
     d_atual = d_gerar + timedelta(days=1)
     for _ in range(max_dias - 1):
         aba_atual = d_atual.strftime('%d-%m')
-        d_prox = d_atual + timedelta(days=1)
-        aba_prox = d_prox.strftime('%d-%m')
-        # Parar se o dia actual não tiver aba de escala
         if aba_atual not in abas:
             break
-        # Actualizar ordem_escala com base no dia actual
         _atualizar_ordem_escala_dia(sh, aba_atual, d_atual)
         time.sleep(1)
-        d_atual = d_prox
+        d_atual = d_atual + timedelta(days=1)
         load_lista_abas.clear()
         abas = load_lista_abas()
+
+def _gerar_ordem_escala_dia_seguinte(sh, aba_dia: str, d_gerar):
+    """
+    Usado ao CONFIRMAR escala nova.
+    Gera apenas o ordem_escala do dia seguinte — sem cadeia.
+    """
+    _atualizar_ordem_escala_dia(sh, aba_dia, d_gerar)
 
 # ============================================================
 # 5. FUNÇÕES PDF
@@ -5578,8 +5579,8 @@ else:
                                 if linhas_disp:
                                     ws_dia_c.append_rows(linhas_disp)
 
-                                # Atualizar ordem_escala em cadeia
-                                _atualizar_ordem_escala_em_cadeia(sh_c, aba_dia, d_gerar)
+                                # Gerar ordem_escala do dia seguinte
+                                _gerar_ordem_escala_dia_seguinte(sh_c, aba_dia, d_gerar)
 
                                 load_data.clear()
                                 del st.session_state['tabela_escala']
