@@ -107,8 +107,12 @@ def _render_tabela(df: pd.DataFrame, esconder_servico: bool = False,
     grupos = df.groupby(group_cols, sort=False)
     for i, (chave, grp) in enumerate(grupos):
         td = td_a if i % 2 == 0 else td_s
-        hor = chave if esconder_servico else chave[0]
-        serv = "" if esconder_servico else chave[1]
+        if esconder_servico:
+            hor = str(chave)
+            serv = ""
+        else:
+            hor = str(chave[0])
+            serv = str(chave[1])
         ids = ", ".join(grp.get("id_disp", grp["id"]).astype(str).str.strip().tolist())
         html += f"<tr><td style='{td}'>{hor}</td>"
         html += f"<td style='{td}'>{ids}</td>"
