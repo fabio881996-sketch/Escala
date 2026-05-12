@@ -66,39 +66,59 @@ def _render_ids_linha(grupos: Dict[str, list]) -> str:
 
 def _render_tabela(df: pd.DataFrame, esconder_servico: bool = False,
                    mostrar_extras: bool = False, excluir_cols: list = None) -> str:
-    """Renderiza DataFrame como tabela HTML estilizada."""
+    """Renderiza DataFrame como tabela HTML estilizada, agrupando por horário+serviço."""
     if df.empty:
         return ""
     excluir = set(excluir_cols or [])
-    cols = []
-    for c in df.columns:
-        if c in excluir or c == "id":
-            continue
-        if c == "serviço" and esconder_servico:
-            continue
-        cols.append(c)
+    # Colunas extras a mostrar (indicativo, rádio, viatura, giro, observações)
+    extras = ["indicativo rádio", "rádio", "viatura", "giro", "observações"]
+    cols_extra = [c for c in extras if c in df.columns and c not in excluir] if mostrar_extras else []
 
     th_s = f"background:{AZUL_MED};color:{AZUL};padding:5px 8px;text-align:left;font-size:0.78rem;font-weight:700;border-bottom:2px solid {AZUL};"
     td_s = f"padding:5px 8px;font-size:0.8rem;color:#1E293B;border-bottom:1px solid #dde6f7;"
     td_a = td_s + f"background:{AZUL_CLARO};"
 
+    # Cabeçalhos
     html = f"<div style='overflow-x:auto;border:1px solid {AZUL_MED};border-radius:0 0 4px 4px;margin-bottom:2px'>"
     html += "<table style='width:100%;border-collapse:collapse'><thead><tr>"
-    # Sempre mostrar id_disp como "Militar"
-    html += f"<th style='{th_s}'>Militar</th>"
-    for c in cols:
-        label = c.replace("_", " ").title()
-        html += f"<th style='{th_s}'>{label}</th>"
+    html += f"<th style='{th_s}'>Horário</th>"
+    html += f"<th style='{th_s}'>Militar(es)</th>"
+    if not esconder_servico:
+        html += f"<th style='{th_s}'>Serviço</th>"
+    for c in cols_extra:
+        html += f"<th style='{th_s}'>{c.replace('_',' ').title()}</th>"
     html += "</tr></thead><tbody>"
 
-    for i, (_, row) in enumerate(df.iterrows()):
+    # Agrupar por horário + serviço
+    df = df.copy()
+    for col in ["nan", "None"]:
+        df = df.replace(col, "")
+    for c in ["indicativo rádio", "rádio", "viatura", "giro", "observações"]:
+        if c in df.columns:
+            df[c] = df[c].astype(str).replace({"nan": "", "None": ""}).str.strip()
+
+    group_cols = ["horário"] if esconder_servico else ["horário", "serviço"]
+    try:
+        df["_hor_sort"] = pd.to_numeric(df["horário"].str.extract(r"^(\d+)")[0], errors="coerce").fillna(99)
+        df = df.sort_values(["_hor_sort"] + ([] if esconder_servico else ["serviço"]))
+    except Exception:
+        pass
+
+    grupos = df.groupby(group_cols, sort=False)
+    for i, (chave, grp) in enumerate(grupos):
         td = td_a if i % 2 == 0 else td_s
-        mid = str(row.get("id_disp", row.get("id", ""))).strip()
-        html += f"<tr><td style='{td}'>{mid}</td>"
-        for c in cols:
-            val = str(row.get(c, "")).replace("nan", "").strip()
+        hor = chave if esconder_servico else chave[0]
+        serv = "" if esconder_servico else chave[1]
+        ids = ", ".join(grp.get("id_disp", grp["id"]).astype(str).str.strip().tolist())
+        html += f"<tr><td style='{td}'>{hor}</td>"
+        html += f"<td style='{td}'>{ids}</td>"
+        if not esconder_servico:
+            html += f"<td style='{td}'>{serv}</td>"
+        for c in cols_extra:
+            val = str(grp[c].iloc[0]).strip() if c in grp.columns else ""
             html += f"<td style='{td}'>{val}</td>"
         html += "</tr>"
+
     html += "</tbody></table></div>"
     return html
 
