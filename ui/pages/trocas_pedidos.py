@@ -228,11 +228,14 @@ def _render_tab_solicitar(
                     st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
         return
 
-    dt_s = st.date_input("Data:", format="DD/MM/YYYY")
-    try:
-        df_d = loader.carregar_escala(dt_s)
-    except Exception:
-        df_d = pd.DataFrame()
+    dt_s = None
+    df_d = pd.DataFrame()
+    if tipo_troca not in ("📅 Mudar Folga", "😴 Trocar Folga"):
+        dt_s = st.date_input("Data:", format="DD/MM/YYYY")
+        try:
+            df_d = loader.carregar_escala(dt_s)
+        except Exception:
+            df_d = pd.DataFrame()
 
     if df_d.empty:
         st.info("Não existem dados para esta data.")
