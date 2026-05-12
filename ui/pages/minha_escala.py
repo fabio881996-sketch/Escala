@@ -474,18 +474,20 @@ def _render_proximos_servicos(
     hj = datetime.now()
     encontrou_algum = False
 
-    # Carregar folgas para mostrar mesmo sem escala publicada
-    ano_atual = hj.year
-    df_folgas_me = loader.carregar_folgas(ano_atual)
-    grupos_me = loader.carregar_grupos_folga()
-    feriados_me = feriados
+    dias_a_mostrar = []
+    for delta in range(90):
+        dt_c = hj + timedelta(days=delta)
+        aba_c = dt_c.strftime('%d-%m')
+        if aba_c in dias_publicados:
+            dias_a_mostrar.append(dt_c)
+        if len(dias_a_mostrar) >= 20:
+            break
 
     dias_sem_dados = 0
-    for delta in range(20):
+    for dt in dias_a_mostrar:
         if dias_sem_dados >= 5:
             break
-        dt = hj + timedelta(days=delta)
-        i = delta
+        i = (dt - hj).days
         d_s = dt.strftime('%d/%m/%Y')
         lbl = "🟢 HOJE" if i == 0 else ("🔵 AMANHÃ" if i == 1 else dt.strftime("%d/%m (%a)").upper())
 
@@ -699,23 +701,7 @@ def _render_proximos_servicos(
                         )
                 dias_sem_dados = 0
             else:
-                # Escala não publicada -- verificar folgas no mapa
-                tipo_folga_me = DataLoader.militar_de_folga(
-                    u_id, dt.date(), df_folgas_me, grupos_me, feriados_me
-                )
-                if tipo_folga_me:
-                    icone_folga = '😴'
-                    st.markdown(
-                        f'<div class="card-servico card-folga">'
-                        f'<p><b>{lbl}</b></p>'
-                        f'<h3>{icone_folga} {tipo_folga_me}</h3>'
-                        f'</div>',
-                        unsafe_allow_html=True,
-                    )
-                    encontrou_algum = True
-                    dias_sem_dados = 0
-                else:
-                    dias_sem_dados += 1
+                dias_sem_dados += 1
 
     if not encontrou_algum:
         st.info("Não foram encontrados serviços escalados a partir de hoje.")

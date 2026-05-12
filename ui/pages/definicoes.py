@@ -267,19 +267,32 @@ def render_publicar_escala(
         st.warning("Acesso restrito a administradores.")
         st.stop()
 
-    abas = data_loader.carregar_lista_abas()
-    abas_dia = sorted([a for a in abas if re.match(r"^\d{2}-\d{2}$", a)])
     dias_pub = data_loader.carregar_dias_publicados()
-
     st.markdown(f"**{len(dias_pub)} dia(s) publicado(s)** atualmente.")
 
-    # Seleccionar dias a publicar
-    dias_disponiveis = [a for a in abas_dia if a not in dias_pub]
-    if not dias_disponiveis:
-        st.info("Todas as escalas disponíveis já estão publicadas.")
+    dia_sel = st.date_input("Selecionar dia:", format="DD/MM/YYYY", key="pub_dia_sel")
+    aba_sel = dia_sel.strftime("%d-%m")
+    ja_publicado = aba_sel in dias_pub
+
+    if ja_publicado:
+        st.success(f"✅ **{dia_sel.strftime('%d/%m/%Y')}** já está publicado.")
+        if st.button("🔒 Despublicar", use_container_width=True, key="btn_despub"):
+            try:
+                sh = get_sheet()
+                ws_pub = sh.worksheet("escala_publicada")
+                vals = ws_pub.get_all_values()
+                for i, row in enumerate(vals[1:], start=2):
+                    if str(row[0]).strip() == aba_sel:
+                        ws_pub.delete_rows(i)
+                        break
+                data_loader.limpar_cache()
+                st.success(f"✅ {dia_sel.strftime('%d/%m/%Y')} despublicado.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro: {e}")
     else:
-        sel_dias = st.multiselect("Selecionar dias a publicar:", dias_disponiveis)
-        if sel_dias and st.button("📢 Publicar", use_container_width=True, type="primary"):
+        st.warning(f"⚠️ **{dia_sel.strftime('%d/%m/%Y')}** ainda não está publicado.")
+        if st.button("📢 Publicar", use_container_width=True, type="primary", key="btn_pub"):
             try:
                 sh = get_sheet()
                 try:
@@ -287,34 +300,9 @@ def render_publicar_escala(
                 except Exception:
                     ws_pub = sh.add_worksheet(title="escala_publicada", rows=100, cols=1)
                     ws_pub.update("A1", [["data"]])
-
-                for dia in sel_dias:
-                    ws_pub.append_row([dia])
-
+                ws_pub.append_row([aba_sel])
                 data_loader.limpar_cache()
-                st.success(f"✅ {len(sel_dias)} dia(s) publicado(s)!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro: {e}")
-
-    # Despublicar
-    if dias_pub:
-        st.divider()
-        st.markdown("#### 🔒 Despublicar dias")
-        sel_despub = st.multiselect("Dias a despublicar:", sorted(dias_pub))
-        if sel_despub and st.button("🔒 Despublicar", use_container_width=True):
-            try:
-                sh = get_sheet()
-                ws_pub = sh.worksheet("escala_publicada")
-                vals = ws_pub.get_all_values()
-                linhas_apagar = []
-                for i, row in enumerate(vals[1:], start=2):
-                    if str(row[0]).strip() in sel_despub:
-                        linhas_apagar.append(i)
-                for ln in reversed(linhas_apagar):
-                    ws_pub.delete_rows(ln)
-                data_loader.limpar_cache()
-                st.success(f"✅ {len(sel_despub)} dia(s) despublicado(s)!")
+                st.success(f"✅ {dia_sel.strftime('%d/%m/%Y')} publicado!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro: {e}")

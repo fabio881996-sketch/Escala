@@ -237,9 +237,9 @@ def _render_tab_solicitar(
         except Exception:
             df_d = pd.DataFrame()
 
-    if df_d.empty:
-        st.info("Não existem dados para esta data.")
-        return
+        if df_d.empty:
+            st.info("Não existem dados para esta data.")
+            return
 
     df_d = df_d.copy()
     try:
