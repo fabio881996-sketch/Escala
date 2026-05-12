@@ -87,6 +87,51 @@ def _cached_lista_abas() -> list[str]:
         return []
 
 
+@st.cache_data(ttl=300)
+def _cached_load_servicos() -> dict:
+    """Carrega matriz de serviços com cache de 5 minutos."""
+    try:
+        sh = GoogleSheetsClient().get_sheet()
+        ws = sh.worksheet("serviços")
+        vals = ws.get_all_values()
+        if not vals:
+            return {}
+        headers = [str(h).strip() for h in vals[0]]
+        result: dict = {}
+        for col in headers:
+            idx = headers.index(col)
+            for row in vals[1:]:
+                mid = str(row[idx]).strip() if idx < len(row) else ""
+                if mid and mid != "nan":
+                    result.setdefault(mid, []).append(col)
+        return result
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=300)
+def _cached_load_listas() -> dict:
+    """Carrega aba listas com cache de 5 minutos."""
+    try:
+        sh = GoogleSheetsClient().get_sheet()
+        ws = sh.worksheet("listas")
+        vals = ws.get_all_values()
+        if not vals:
+            return {}
+        hdrs = [str(h).strip() for h in vals[0]]
+        result: dict = {}
+        for h in hdrs:
+            idx = hdrs.index(h)
+            result[h] = [""] + [
+                str(row[idx]).strip()
+                for row in vals[1:]
+                if idx < len(row) and str(row[idx]).strip()
+            ]
+        return result
+    except Exception:
+        return {}
+
+
 @dataclass(slots=True)
 class DataLoader:
     """Camada de leitura de dados a partir do Google Sheets.
@@ -130,17 +175,71 @@ class DataLoader:
         return {d.strftime("%d-%m"): self.carregar_escala(d) for d in datas}
 
     def carregar_escalas_batch(self, datas: list[date]) -> dict[str, pd.DataFrame]:
-        """Carrega múltiplas escalas usando cache por aba."""
+        """Carrega múltiplas escalas numa única chamada HTTP à API.
+
+        Usa ``values_batch_get`` do gspread para reduzir drasticamente
+        o número de round-trips ao Google Sheets.
+        Fallback para leituras individuais em caso de erro.
+        """
         if not datas:
             return {}
-        resultado: dict[str, pd.DataFrame] = {}
-        for d in datas:
-            aba = d.strftime("%d-%m")
-            try:
-                resultado[aba] = _cached_load(aba)
-            except Exception as exc:
-                logger.warning("Falha a carregar aba '%s': %s", aba, exc)
-                resultado[aba] = pd.DataFrame()
+
+        abas_pedidas = [d.strftime("%d-%m") for d in datas]
+        resultado: dict[str, pd.DataFrame] = {aba: pd.DataFrame() for aba in abas_pedidas}
+
+        try:
+            sh = self.sheets_client.get_sheet()
+
+            # Verificar quais abas existem (usa cache de 1 min)
+            abas_existentes = set(_cached_lista_abas())
+            abas_validas = [a for a in abas_pedidas if a in abas_existentes]
+
+            if not abas_validas:
+                return resultado
+
+            # Batch get — uma única chamada HTTP para todas as abas
+            # Formato: "NomeAba!A:Z" para ler todas as colunas
+            ranges = [f"'{aba}'!A:Z" for aba in abas_validas]
+
+            # Dividir em chunks de 100 (limite da API)
+            chunk_size = 100
+            for i in range(0, len(ranges), chunk_size):
+                chunk_ranges = ranges[i:i + chunk_size]
+                chunk_abas = abas_validas[i:i + chunk_size]
+
+                try:
+                    resp = sh.values_batch_get(
+                        ranges=chunk_ranges,
+                        params={"valueRenderOption": "FORMATTED_VALUE"},
+                    )
+                    value_ranges = resp.get("valueRanges", [])
+
+                    for aba, vr in zip(chunk_abas, value_ranges):
+                        values = vr.get("values", [])
+                        if values and len(values) >= 2:
+                            from core.database import df_from_values
+                            resultado[aba] = df_from_values(values)
+                        else:
+                            resultado[aba] = pd.DataFrame()
+
+                except Exception as exc:
+                    logger.warning("Batch get falhou para chunk, fallback individual: %s", exc)
+                    # Fallback para leituras individuais
+                    for aba in chunk_abas:
+                        try:
+                            resultado[aba] = _cached_load(aba)
+                        except Exception:
+                            resultado[aba] = pd.DataFrame()
+
+        except Exception as exc:
+            logger.exception("Erro no carregamento batch: %s", exc)
+            # Fallback completo
+            for aba in abas_pedidas:
+                try:
+                    resultado[aba] = _cached_load(aba)
+                except Exception:
+                    resultado[aba] = pd.DataFrame()
+
         return resultado
 
     def carregar_usuarios(self) -> pd.DataFrame:
@@ -243,32 +342,16 @@ class DataLoader:
 
     def carregar_servicos(self) -> dict[str, list[str]]:
         """Carrega a matriz de serviços por militar ({id: [serviços]})."""
-        try:
-            ws = self.sheets_client.get_worksheet("serviços")
-            vals = ws.get_all_values()
-            if not vals:
-                return {}
-            headers = [str(h).strip() for h in vals[0]]
-            result: dict[str, list[str]] = {}
-            for col in headers:
-                idx = headers.index(col)
-                for row in vals[1:]:
-                    mid = str(row[idx]).strip() if idx < len(row) else ""
-                    if mid and mid != "nan":
-                        result.setdefault(mid, []).append(col)
-            return result
-        except Exception as exc:
-            logger.warning("Falha a carregar serviços: %s", exc)
-            return {}
+        return _cached_load_servicos()
 
     def carregar_feriados(self, ano: int) -> list[date]:
-        """Carrega feriados de um ano a partir da aba `feriados`."""
+        """Carrega feriados de um ano — estrutura especial por colunas."""
         try:
-            ws = self.sheets_client.get_worksheet("feriados")
+            sh = self.sheets_client.get_sheet()
+            ws = sh.worksheet("feriados")
             valores = ws.get_all_values()
             if not valores:
                 return []
-
             feriados: list[date] = []
             num_cols = max(len(r) for r in valores)
             for ci in range(num_cols):
@@ -293,24 +376,7 @@ class DataLoader:
 
     def carregar_listas(self) -> dict[str, list[str]]:
         """Carrega aba `listas` no formato `{coluna: [valores]}`."""
-        try:
-            ws = self.sheets_client.get_worksheet("listas")
-            vals = ws.get_all_values()
-            if not vals:
-                return {}
-            hdrs = [str(h).strip() for h in vals[0]]
-            result: dict[str, list[str]] = {}
-            for h in hdrs:
-                idx = hdrs.index(h)
-                result[h] = [""] + [
-                    str(row[idx]).strip()
-                    for row in vals[1:]
-                    if idx < len(row) and str(row[idx]).strip()
-                ]
-            return result
-        except Exception as exc:
-            logger.warning("Erro ao carregar listas: %s", exc)
-            return {}
+        return _cached_load_listas()
 
     def limpar_cache(self) -> None:
         """Limpa todos os caches de leitura."""
@@ -324,6 +390,8 @@ class DataLoader:
             _cached_load_licencas,
             _cached_load_dias_publicados,
             _cached_lista_abas,
+            _cached_load_servicos,
+            _cached_load_listas,
         ]:
             try:
                 fn.clear()
