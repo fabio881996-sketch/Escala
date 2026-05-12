@@ -174,6 +174,60 @@ def _render_tab_solicitar(
     )
     st.markdown("---")
 
+    # ── TROCAR FOLGA -- não precisa de data nem escala publicada ──
+    if tipo_troca == "😴 Trocar Folga":
+        ano_tf2 = datetime.now().year
+        df_folgas_tf2 = loader.carregar_folgas(ano_tf2)
+        grupos_tf2 = loader.carregar_grupos_folga()
+
+        meus_dias_folga2 = []
+        for i_tf2 in range(60):
+            dt_tf2 = datetime.now().date() + timedelta(days=i_tf2)
+            tipo_tf2 = DataLoader.militar_de_folga(u_id, dt_tf2, df_folgas_tf2, grupos_tf2, feriados)
+            if tipo_tf2:
+                meus_dias_folga2.append((dt_tf2, tipo_tf2))
+
+        if not meus_dias_folga2:
+            st.warning("Não tens dias de folga nos próximos 60 dias.")
+            return
+
+        opts_meus2 = {f"{d.strftime('%d/%m/%Y')} -- {t}": (d, t) for d, t in meus_dias_folga2}
+        meu_dia_sel2 = st.selectbox("A tua folga que queres trocar:", list(opts_meus2.keys()), key="tf2_meu_dia")
+        meu_dia_tf2, meu_tipo_tf2 = opts_meus2[meu_dia_sel2]
+
+        mil_opts_tf2 = {
+            f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
+            for _, r in df_util.iterrows()
+            if str(r.get('id','')).strip() and str(r.get('id','')).strip() != u_id
+        }
+        mil_sel_tf2 = st.selectbox("Militar com quem queres trocar:", list(mil_opts_tf2.keys()), key="tf2_mil")
+        id_dest_tf2 = mil_opts_tf2[mil_sel_tf2]
+
+        dias_folga_dest = []
+        for i_tf2d in range(60):
+            dt_tf2d = datetime.now().date() + timedelta(days=i_tf2d)
+            tipo_tf2d = DataLoader.militar_de_folga(id_dest_tf2, dt_tf2d, df_folgas_tf2, grupos_tf2, feriados)
+            if tipo_tf2d:
+                dias_folga_dest.append((dt_tf2d, tipo_tf2d))
+
+        if not dias_folga_dest:
+            st.warning("Este militar não tem dias de folga nos próximos 60 dias.")
+        else:
+            opts_dest = {f"{d.strftime('%d/%m/%Y')} -- {t}": (d, t) for d, t in dias_folga_dest}
+            dest_dia_sel = st.selectbox("Folga dele que queres receber:", list(opts_dest.keys()), key="tf2_dest_dia")
+            dest_dia_tf2, dest_tipo_tf2 = opts_dest[dest_dia_sel]
+
+            st.info(
+                f"📋 Trocar a tua folga de **{meu_dia_tf2.strftime('%d/%m/%Y')}** ({meu_tipo_tf2}) "
+                f"pela folga de **{dest_dia_tf2.strftime('%d/%m/%Y')}** ({dest_tipo_tf2}) de **{mil_sel_tf2}**"
+            )
+            if st.button("😴 ENVIAR PEDIDO DE TROCA DE FOLGA", use_container_width=True, key="btn_tf2"):
+                serv_orig_tf2 = f"Folga {meu_dia_tf2.strftime('%d/%m/%Y')} ({meu_tipo_tf2})"
+                serv_dest_tf2 = f"Folga {dest_dia_tf2.strftime('%d/%m/%Y')} ({dest_tipo_tf2})"
+                if _salvar_troca_gsheet([meu_dia_tf2.strftime('%d/%m/%Y'), u_id, serv_orig_tf2, id_dest_tf2, serv_dest_tf2, "Pendente_Militar", ""]):
+                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
+        return
+
     dt_s = st.date_input("Data:", format="DD/MM/YYYY")
     try:
         df_d = loader.carregar_escala(dt_s)
@@ -497,63 +551,6 @@ def _render_tab_solicitar(
                 serv_dest_tf = f"Folga {novo_dia_tf.strftime('%d/%m/%Y')} ({meu_tipo_tf})"
                 if _salvar_troca_gsheet([meu_dia_tf.strftime('%d/%m/%Y'), u_id, serv_orig_tf, u_id, serv_dest_tf, "Pendente_Admin", ""]):
                     st.success("✅ Pedido enviado para validação!")
-
-    # ── TROCAR FOLGA ──
-    elif tipo_troca == "😴 Trocar Folga":
-        ano_tf2 = datetime.now().year
-        df_folgas_tf2 = loader.carregar_folgas(ano_tf2)
-        grupos_tf2 = loader.carregar_grupos_folga()
-
-        # Folgas do próprio
-        meus_dias_folga2 = []
-        for i_tf2 in range(60):
-            dt_tf2 = datetime.now().date() + timedelta(days=i_tf2)
-            tipo_tf2 = DataLoader.militar_de_folga(u_id, dt_tf2, df_folgas_tf2, grupos_tf2, feriados)
-            if tipo_tf2:
-                meus_dias_folga2.append((dt_tf2, tipo_tf2))
-
-        if not meus_dias_folga2:
-            st.warning("Não tens dias de folga nos próximos 60 dias.")
-            return
-
-        opts_meus2 = {f"{d.strftime('%d/%m/%Y')} -- {t}": (d, t) for d, t in meus_dias_folga2}
-        meu_dia_sel2 = st.selectbox("A tua folga que queres trocar:", list(opts_meus2.keys()), key="tf2_meu_dia")
-        meu_dia_tf2, meu_tipo_tf2 = opts_meus2[meu_dia_sel2]
-
-        # Seleccionar militar destino
-        mil_opts_tf2 = {
-            f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
-            for _, r in df_util.iterrows()
-            if str(r.get('id','')).strip() and str(r.get('id','')).strip() != u_id
-        }
-        mil_sel_tf2 = st.selectbox("Militar com quem queres trocar:", list(mil_opts_tf2.keys()), key="tf2_mil")
-        id_dest_tf2 = mil_opts_tf2[mil_sel_tf2]
-
-        # Folgas do militar destino
-        dias_folga_dest = []
-        for i_tf2 in range(60):
-            dt_tf2d = datetime.now().date() + timedelta(days=i_tf2)
-            tipo_tf2d = DataLoader.militar_de_folga(id_dest_tf2, dt_tf2d, df_folgas_tf2, grupos_tf2, feriados)
-            if tipo_tf2d:
-                dias_folga_dest.append((dt_tf2d, tipo_tf2d))
-
-        if not dias_folga_dest:
-            st.warning(f"Este militar não tem dias de folga nos próximos 60 dias.")
-        else:
-            opts_dest = {f"{d.strftime('%d/%m/%Y')} -- {t}": (d, t) for d, t in dias_folga_dest}
-            dest_dia_sel = st.selectbox("Folga dele que queres receber:", list(opts_dest.keys()), key="tf2_dest_dia")
-            dest_dia_tf2, dest_tipo_tf2 = opts_dest[dest_dia_sel]
-
-            st.info(
-                f"📋 Trocar a tua folga de **{meu_dia_tf2.strftime('%d/%m/%Y')}** ({meu_tipo_tf2}) "
-                f"pela folga de **{dest_dia_tf2.strftime('%d/%m/%Y')}** ({dest_tipo_tf2}) de **{mil_sel_tf2}**"
-            )
-
-            if st.button("😴 ENVIAR PEDIDO DE TROCA DE FOLGA", use_container_width=True, key="btn_tf2"):
-                serv_orig_tf2 = f"Folga {meu_dia_tf2.strftime('%d/%m/%Y')} ({meu_tipo_tf2})"
-                serv_dest_tf2 = f"Folga {dest_dia_tf2.strftime('%d/%m/%Y')} ({dest_tipo_tf2})"
-                if _salvar_troca_gsheet([meu_dia_tf2.strftime('%d/%m/%Y'), u_id, serv_orig_tf2, id_dest_tf2, serv_dest_tf2, "Pendente_Militar", ""]):
-                    st.success("✅ Pedido enviado! Aguarda aceitação do militar.")
 
 
 # ───────────────────────────────────────
