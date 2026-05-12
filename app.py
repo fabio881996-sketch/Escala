@@ -382,7 +382,7 @@ def _render_app() -> None:
     # Construir objecto Usuario
     u_row = df_util[df_util["id"].astype(str).str.strip() == u_id]
     if not u_row.empty:
-        usuario = Usuario.from_row(u_row.iloc[0].to_dict())
+        usuario = Usuario.from_row(u_row.iloc[0].to_dict(), admin_emails={a.lower() for a in ADMINS})
     else:
         usuario = Usuario(
             id=u_id,
