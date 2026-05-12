@@ -181,8 +181,16 @@ def _render_tab_solicitar(
         df_d = pd.DataFrame()
 
     if df_d.empty:
-        st.info("Não existem dados para esta data.")
-        return
+        # Verificar se está de folga mesmo sem escala publicada
+        ano_atual = datetime.now().year
+        _df_folgas_early = loader.carregar_folgas(ano_atual)
+        _grupos_early = loader.carregar_grupos_folga()
+        _folga_early = DataLoader.militar_de_folga(u_id, dt_s, _df_folgas_early, _grupos_early, feriados)
+        if not _folga_early:
+            st.info("Não existem dados para esta data.")
+            return
+        # Tem folga -- criar df_d sintético para continuar
+        df_d = pd.DataFrame([{"id": u_id, "serviço": _folga_early, "horário": ""}])
 
     df_d = df_d.copy()
     try:
