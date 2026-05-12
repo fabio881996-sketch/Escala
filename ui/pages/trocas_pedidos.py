@@ -139,7 +139,7 @@ def _verificar_descanso_troca(
     """
     erros = []
     try:
-        vs = ValidationService(loader=DataLoader(db=GoogleSheetsClient()))
+        vs = ValidationService(data_loader=DataLoader(sheets_client=GoogleSheetsClient()))
         erros = vs.validar_descanso_troca(
             u_id, id_d, dt_s,
             meu_serv_nome, meu_hor_val,
@@ -684,7 +684,7 @@ def render_trocas_pedidos(usuario: Usuario) -> None:
     try:
         u_id = str(usuario.id)
 
-        loader = DataLoader(db=GoogleSheetsClient())
+        loader = DataLoader(sheets_client=GoogleSheetsClient())
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
         ano_atual = datetime.now().year
