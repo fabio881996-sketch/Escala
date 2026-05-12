@@ -87,56 +87,169 @@ def render_dispensas(
         st.warning("Acesso restrito a administradores.")
         st.stop()
 
-    df_licencas = data_loader.carregar_licencas()
-    if df_licencas.empty:
-        st.info("Não há dispensas registadas.")
-        return
+    ano_atual = datetime.now().year
+    tab_geral, tab_slot = st.tabs(["📋 Dispensas Gerais", "🔒 Serviços/Horários"])
 
-    # ── Dispensas gerais ──
-    st.markdown("#### 📋 Dispensas Gerais")
-    cols_lic = df_licencas.columns.tolist()
-    id_col = "id" if "id" in cols_lic else cols_lic[0]
+    # ── Tab Dispensas Gerais ──
+    with tab_geral:
+        df_licencas = data_loader.carregar_licencas()
+        hoje_lic = datetime.now().date()
 
-    # Adicionar nome
-    df_show = df_licencas.copy()
-    df_show["nome"] = df_show[id_col].astype(str).str.strip().apply(lambda x: _get_nome_militar(df_util, x))
-    cols_display = ["nome"] + [c for c in cols_lic if c != id_col]
-    st.dataframe(df_show[cols_display], use_container_width=True, hide_index=True)
+        if not df_licencas.empty:
+            cols_lic = df_licencas.columns.tolist()
+            id_col = "id" if "id" in cols_lic else cols_lic[0]
+            col_fim_l = next((c for c in cols_lic if "fim" in c.lower()), None)
+            col_tp_l = "tipo" if "tipo" in cols_lic else None
 
-    # ── Dispensas por slot ──
-    st.divider()
-    st.markdown("#### 🎯 Dispensas por Slot (Serviço + Horário)")
-    st.caption("Militares dispensados de serviços específicos em determinados horários.")
-
-    # ── Dispensas por slot ──
-    st.divider()
-    st.markdown("#### 🎯 Dispensas por Slot (Serviço + Horário)")
-    st.caption("Militares dispensados de serviços específicos em determinados horários.")
-
-    col_tp_disp = next((c for c in cols_lic if "tipo" in str(c).lower()), None)
-    if col_tp_disp and not df_licencas.empty:
-        def _is_slot_row(tipo_str):
-            codigos = [c.strip().upper() for c in str(tipo_str).replace(";", ",").split(",")]
-            return any(c in DISPENSA_SLOTS for c in codigos if c)
-
-        df_slots = df_licencas[df_licencas[col_tp_disp].apply(_is_slot_row)].copy()
-        if df_slots.empty:
-            st.info("Sem dispensas de slot activas.")
-        else:
-            def _desc_slots(tipo_str):
+            def _is_slot(tipo_str):
                 codigos = [c.strip().upper() for c in str(tipo_str).replace(";", ",").split(",")]
-                descs = []
-                for c in codigos:
-                    if c in DISPENSA_SLOTS:
-                        sv, hr = DISPENSA_SLOTS[c]
-                        descs.append(f"{c} ({sv} {hr})")
-                return ", ".join(descs)
-            df_slots["slots"] = df_slots[col_tp_disp].apply(_desc_slots)
-            df_slots["nome"] = df_slots[id_col].astype(str).str.strip().apply(lambda x: _get_nome_militar(df_util, x))
-            st.dataframe(df_slots[["nome", id_col, "slots"] + [c for c in cols_lic if c not in [id_col, col_tp_disp]]],
-                        use_container_width=True, hide_index=True)
-    else:
-        st.info("Sem dispensas de slot activas.")
+                return all(c in DISPENSA_SLOTS for c in codigos if c)
+
+            df_lic_geral = df_licencas.copy()
+            if col_tp_l:
+                df_lic_geral = df_lic_geral[~df_lic_geral[col_tp_l].apply(_is_slot)]
+
+            def _em_vigor(fim_str):
+                try:
+                    if "/" in str(fim_str):
+                        return datetime.strptime(str(fim_str).strip(), "%d/%m/%Y").date() >= hoje_lic
+                    else:
+                        return datetime.strptime(f"{fim_str.strip()}-{hoje_lic.year}", "%d-%m-%Y").date() >= hoje_lic
+                except Exception:
+                    return True
+
+            if col_fim_l:
+                df_show = df_lic_geral[df_lic_geral[col_fim_l].apply(_em_vigor)]
+            else:
+                df_show = df_lic_geral
+
+            if not df_show.empty:
+                df_show = df_show.copy()
+                df_show["nome"] = df_show[id_col].astype(str).str.strip().apply(lambda x: _get_nome_militar(df_util, x))
+                st.dataframe(df_show[["nome"] + [c for c in cols_lic if c != id_col]], use_container_width=True, hide_index=True)
+            else:
+                st.info("Sem licenças em vigor.")
+
+        st.divider()
+        st.markdown("#### ➕ Adicionar registo")
+        mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
+                      for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
+        col_l1, col_l2 = st.columns(2)
+        with col_l1:
+            mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
+            tipo_l = st.selectbox("Tipo:", ["Convalescença", "Licença", "Outras Licenças", "Diligência", "Tribunal", "FCAA CTer"], key="lic_tipo")
+        with col_l2:
+            ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
+            fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
+        obs_l = st.text_input("Observações:", key="lic_obs")
+        if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_lic"):
+            try:
+                sh_l = get_sheet()
+                ws_l = sh_l.worksheet("Licenças")
+                ws_l.append_row([mil_opts_l[mil_sel_l], tipo_l, ini_l.strftime("%d/%m/%Y"), fim_l.strftime("%d/%m/%Y"), obs_l.strip()])
+                data_loader.limpar_cache()
+                st.success("✅ Registo adicionado!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro: {e}")
+
+        if not df_licencas.empty and not df_lic_geral.empty:
+            st.divider()
+            st.markdown("#### 🗑️ Remover registo")
+            id_col_r = "id" if "id" in df_lic_geral.columns else df_lic_geral.columns[0]
+            col_tp_r = "tipo" if "tipo" in df_lic_geral.columns else None
+            col_in_r = next((c for c in df_lic_geral.columns if "ini" in c.lower()), None)
+            opts_rem = {f"{r[id_col_r]} -- {r.get(col_tp_r,'')} {r.get(col_in_r,'')}": i
+                        for i, (_, r) in enumerate(df_lic_geral.iterrows())}
+            if opts_rem:
+                rem_sel = st.selectbox("Registo:", list(opts_rem.keys()), key="lic_rem")
+                if st.button("🗑️ Remover", use_container_width=True, key="btn_rem_lic"):
+                    try:
+                        sh_l = get_sheet()
+                        ws_l = sh_l.worksheet("Licenças")
+                        ws_l.delete_rows(opts_rem[rem_sel] + 2)
+                        data_loader.limpar_cache()
+                        st.success("✅ Removido!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
+
+    # ── Tab Serviços/Horários ──
+    with tab_slot:
+        st.markdown("#### 🔒 Dispensa de Serviço/Horário")
+        st.caption("O militar é ignorado pelo gerar escala automático apenas para os slots seleccionados.")
+
+        df_licencas_s = data_loader.carregar_licencas()
+        if not df_licencas_s.empty and "tipo" in df_licencas_s.columns:
+            def _is_slot2(tipo_str):
+                codigos = [c.strip().upper() for c in str(tipo_str).replace(";", ",").split(",")]
+                return any(c in DISPENSA_SLOTS for c in codigos if c)
+            df_slot_show = df_licencas_s[df_licencas_s["tipo"].apply(_is_slot2)].copy()
+            col_fim_s = next((c for c in df_licencas_s.columns if "fim" in c.lower()), None)
+            if col_fim_s:
+                df_slot_show = df_slot_show[df_slot_show[col_fim_s].apply(_em_vigor)]
+            if not df_slot_show.empty:
+                def _desc_slots(tipo_str):
+                    codigos = [c.strip().upper() for c in str(tipo_str).replace(";", ",").split(",")]
+                    return ", ".join(f"{c} ({DISPENSA_SLOTS[c][0]} {DISPENSA_SLOTS[c][1]})" for c in codigos if c in DISPENSA_SLOTS)
+                df_slot_show["slots"] = df_slot_show["tipo"].apply(_desc_slots)
+                df_slot_show["nome"] = df_slot_show["id"].astype(str).str.strip().apply(lambda x: _get_nome_militar(df_util, x))
+                st.dataframe(df_slot_show[["nome", "id", "slots"]], use_container_width=True, hide_index=True)
+            else:
+                st.info("Sem dispensas de slot activas.")
+        else:
+            st.info("Sem dispensas de slot activas.")
+
+        st.divider()
+        st.markdown("#### ➕ Adicionar dispensa de slot")
+        mil_opts_sl = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
+                       for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
+        col_s1, col_s2 = st.columns(2)
+        slots_opts = {
+            "A1 — Atendimento 00-08": "A1", "A2 — Atendimento 08-16": "A2", "A3 — Atendimento 16-24": "A3",
+            "PO1 — Patrulha Ocorrências 00-08": "PO1", "PO2 — Patrulha Ocorrências 08-16": "PO2", "PO3 — Patrulha Ocorrências 16-24": "PO3",
+            "AA2 — Apoio Atendimento 08-16": "AA2", "AA3 — Apoio Atendimento 16-24": "AA3",
+        }
+        with col_s1:
+            mil_sel_sl = st.selectbox("Militar:", list(mil_opts_sl.keys()), key="slot_mil")
+            slots_sel = st.multiselect("Slots:", list(slots_opts.keys()), key="slot_sel")
+        with col_s2:
+            ini_sl = st.date_input("Data início:", format="DD/MM/YYYY", key="slot_ini")
+            fim_sl = st.date_input("Data fim:", format="DD/MM/YYYY", key="slot_fim")
+        if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_slot"):
+            if not slots_sel:
+                st.warning("Selecciona pelo menos um slot.")
+            else:
+                try:
+                    sh_sl = get_sheet()
+                    ws_sl = sh_sl.worksheet("Licenças")
+                    codigos_sl = ",".join(slots_opts[s] for s in slots_sel)
+                    ws_sl.append_row([mil_opts_sl[mil_sel_sl], codigos_sl, ini_sl.strftime("%d/%m/%Y"), fim_sl.strftime("%d/%m/%Y"), ""])
+                    data_loader.limpar_cache()
+                    st.success(f"✅ Dispensa adicionada: {codigos_sl}")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+
+        if not df_licencas_s.empty and "tipo" in df_licencas_s.columns:
+            df_slot_rem = df_licencas_s[df_licencas_s["tipo"].apply(_is_slot2)]
+            if not df_slot_rem.empty:
+                st.divider()
+                st.markdown("#### 🗑️ Remover dispensa de slot")
+                col_in_sl = next((c for c in df_slot_rem.columns if "ini" in c.lower()), None)
+                opts_rem_sl = {f"{r['id']} -- {r['tipo']} {r.get(col_in_sl,'')}": i
+                               for i, (_, r) in enumerate(df_slot_rem.iterrows())}
+                rem_sel_sl = st.selectbox("Registo:", list(opts_rem_sl.keys()), key="slot_rem")
+                if st.button("🗑️ Remover", use_container_width=True, key="btn_rem_slot"):
+                    try:
+                        sh_sl = get_sheet()
+                        ws_sl = sh_sl.worksheet("Licenças")
+                        ws_sl.delete_rows(opts_rem_sl[rem_sel_sl] + 2)
+                        data_loader.limpar_cache()
+                        st.success("✅ Removido!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro: {e}")
 
 
 # ─────────────────────────────────────────
@@ -170,10 +283,10 @@ def render_publicar_escala(
             try:
                 sh = get_sheet()
                 try:
-                    ws_pub = sh.worksheet("dias_publicados")
+                    ws_pub = sh.worksheet("escala_publicada")
                 except Exception:
-                    ws_pub = sh.add_worksheet(title="dias_publicados", rows=100, cols=1)
-                    ws_pub.update("A1", [["dia"]])
+                    ws_pub = sh.add_worksheet(title="escala_publicada", rows=100, cols=1)
+                    ws_pub.update("A1", [["data"]])
 
                 for dia in sel_dias:
                     ws_pub.append_row([dia])
@@ -192,7 +305,7 @@ def render_publicar_escala(
         if sel_despub and st.button("🔒 Despublicar", use_container_width=True):
             try:
                 sh = get_sheet()
-                ws_pub = sh.worksheet("dias_publicados")
+                ws_pub = sh.worksheet("escala_publicada")
                 vals = ws_pub.get_all_values()
                 linhas_apagar = []
                 for i, row in enumerate(vals[1:], start=2):

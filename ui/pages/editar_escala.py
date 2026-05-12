@@ -213,7 +213,7 @@ def render_escala_geral(
             df_at = _adicionar_ferias(df_at, df_ferias, df_util, data_loader, d_sel, feriados)
 
             # PDF
-            pdf_bytes = EscalaPDF.gerar_pdf_escala(d_sel.strftime("%d/%m/%Y"), df_at, df_util)
+            pdf_bytes = EscalaPDF().gerar_pdf_escala(d_sel.strftime("%d/%m/%Y"), df_at, df_util)
             col_pdf, col_full, _ = st.columns([1, 1, 3])
             with col_pdf:
                 st.download_button(
@@ -362,7 +362,7 @@ def _gerar_escala_completa(data_loader, df_trocas, df_ferias, df_util, feriados,
             if not df_d.empty:
                 df_d = _aplicar_trocas_df(df_d.copy(), df_trocas, dt.strftime("%d/%m/%Y"))
                 df_d = _adicionar_ferias(df_d, df_ferias, df_util, data_loader, dt.date(), feriados)
-                pb = EscalaPDF.gerar_pdf_escala(dt.strftime("%d/%m/%Y"), df_d, df_util)
+                pb = EscalaPDF().gerar_pdf_escala(dt.strftime("%d/%m/%Y"), df_d, df_util)
                 reader = PdfReader(io.BytesIO(pb))
                 for pg in reader.pages:
                     writer.add_page(pg)
