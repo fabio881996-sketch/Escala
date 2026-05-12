@@ -229,6 +229,18 @@ class DataLoader:
                 result[grupo][tipo] = [d.strip() for d in re.split(r"[;,]+", dias_str) if d.strip()]
         return result
 
+    def carregar_dias_publicados(self) -> set[str]:
+        """Carrega datas publicadas."""
+        df = _cached_load_dias_publicados()
+        if df.empty:
+            return set()
+        col = df.columns[0]
+        return {str(v).strip() for v in df[col] if str(v).strip() and str(v).strip() != "data"}
+
+    def carregar_lista_abas(self) -> list[str]:
+        """Lista abas da spreadsheet com cache."""
+        return _cached_lista_abas()
+
     def carregar_servicos(self) -> dict[str, list[str]]:
         """Carrega a matriz de serviços por militar ({id: [serviços]})."""
         try:
@@ -279,18 +291,6 @@ class DataLoader:
             logger.warning("Falha a carregar feriados: %s", exc)
             return []
 
-    def carregar_lista_abas(self) -> list[str]:
-        """Lista títulos de worksheets (com cache de 1 minuto)."""
-        result = _cached_lista_abas()
-        if result:
-            return result
-        # Fallback sem cache
-        try:
-            return [ws.title for ws in self.sheets_client.get_sheet().worksheets()]
-        except Exception as exc:
-            logger.warning("Falha a carregar lista de abas: %s", exc)
-            return []
-
     def carregar_listas(self) -> dict[str, list[str]]:
         """Carrega aba `listas` no formato `{coluna: [valores]}`."""
         try:
@@ -311,37 +311,6 @@ class DataLoader:
         except Exception as exc:
             logger.warning("Erro ao carregar listas: %s", exc)
             return {}
-
-    def carregar_dias_publicados(self) -> set[str]:
-        """Carrega dias publicados no formato ``DD-MM``.
-
-        Tenta primeiro o cache rápido; se vazio, usa fallback por worksheet.
-        """
-        # Tentativa rápida via cache
-        df = _cached_load_dias_publicados()
-        if not df.empty:
-            col = df.columns[0]
-            dias = {str(v).strip() for v in df[col] if str(v).strip() and str(v).strip() != "data"}
-            if dias:
-                return dias
-
-        # Fallback: procurar em múltiplas abas
-        for worksheet_name in ("dias_publicados", "escala_publicada"):
-            try:
-                ws = self.sheets_client.get_worksheet(worksheet_name)
-                vals = ws.get_all_values()
-                dias_set: set[str] = set()
-                for row in vals:
-                    if not row:
-                        continue
-                    val = str(row[0]).strip()
-                    if re.match(r"^\d{2}-\d{2}$", val):
-                        dias_set.add(val)
-                if dias_set:
-                    return dias_set
-            except Exception:
-                continue
-        return set()
 
     def limpar_cache(self) -> None:
         """Limpa todos os caches de leitura."""
