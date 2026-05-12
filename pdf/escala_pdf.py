@@ -533,7 +533,12 @@ class EscalaPDF(BasePDF):
                 ids = ", ".join(grp["id_fmt"].tolist())
                 ind = self._clean(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
                 rad = self._clean(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
-                vtr = self._clean(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
+                if "viatura" in grp.columns:
+                    vtr_vals = grp["viatura"].dropna().astype(str).str.strip()
+                    vtr_vals = vtr_vals[vtr_vals.str.len() > 0].unique().tolist()
+                    vtr = " / ".join(vtr_vals) if vtr_vals else ""
+                else:
+                    vtr = ""
                 y = self.tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill, x=self._LM)
                 fill = not fill
                 if y < 20 * mm:

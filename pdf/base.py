@@ -300,18 +300,22 @@ class BasePDF:
         for val, cw in zip(vals, widths):
             txt = str(val)
             max_pts = cw - 3 * mm
-            words = txt.split(", ")
-            curr, linhas = "", []
-            for word in words:
-                test = (curr + ", " + word).strip(", ") if curr else word
-                if c.stringWidth(test, self.FONT_NORMAL, self.FONT_SIZE_TABLE) < max_pts:
-                    curr = test
-                else:
-                    if curr:
-                        linhas.append(curr)
-                    curr = word
-            if curr:
-                linhas.append(curr)
+            # Suporte a quebra de linha explícita com " / "
+            if " / " in txt:
+                linhas = txt.split(" / ")
+            else:
+                words = txt.split(", ")
+                curr, linhas = "", []
+                for word in words:
+                    test = (curr + ", " + word).strip(", ") if curr else word
+                    if c.stringWidth(test, self.FONT_NORMAL, self.FONT_SIZE_TABLE) < max_pts:
+                        curr = test
+                    else:
+                        if curr:
+                            linhas.append(curr)
+                        curr = word
+                if curr:
+                    linhas.append(curr)
             linhas_por_cel.append(linhas if linhas else [""])
 
         row_h = h if h else max(5 * mm, max(len(l) for l in linhas_por_cel) * 5 * mm)
