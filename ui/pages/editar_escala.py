@@ -204,7 +204,7 @@ def render_escala_geral(
     if aba_sel not in dias_publicados:
         st.info("A escala para este dia ainda não foi publicada.")
     else:
-        df_dia = data_loader.carregar_data(aba_sel)
+        df_dia = data_loader.carregar_escala(aba_sel)
         if df_dia.empty:
             st.info("Não existem dados para esta data.")
         else:
@@ -358,7 +358,7 @@ def _gerar_escala_completa(data_loader, df_trocas, df_ferias, df_util, feriados,
 
         while dias_sem < 5:
             dt = hj + timedelta(days=j)
-            df_d = data_loader.carregar_data(dt.strftime("%d-%m"))
+            df_d = data_loader.carregar_escala(dt.strftime("%d-%m"))
             if not df_d.empty:
                 df_d = _aplicar_trocas_df(df_d.copy(), df_trocas, dt.strftime("%d/%m/%Y"))
                 df_d = _adicionar_ferias(df_d, df_ferias, df_util, data_loader, dt.date(), feriados)
@@ -428,7 +428,7 @@ def _render_historial_servico(data_loader, df_util) -> None:
             )
             resultado = None
             for aba_h in abas_h:
-                df_h = data_loader.carregar_data(aba_h)
+                df_h = data_loader.carregar_escala(aba_h)
                 if df_h.empty:
                     continue
                 mask_mil = df_h["id"].astype(str).str.strip() == mid_h

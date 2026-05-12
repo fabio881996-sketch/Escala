@@ -108,22 +108,35 @@ def render_dispensas(
     st.markdown("#### 🎯 Dispensas por Slot (Serviço + Horário)")
     st.caption("Militares dispensados de serviços específicos em determinados horários.")
 
-    # Detectar colunas de slot
-    slot_tokens = list(DISPENSA_SLOTS.keys()) + [sv for sv, _ in DISPENSA_SLOTS.values()]
-    slot_cols = [c for c in cols_lic if any(tok.lower() in c.lower() for tok in slot_tokens)] if DISPENSA_SLOTS else []
+    # ── Dispensas por slot ──
+    st.divider()
+    st.markdown("#### 🎯 Dispensas por Slot (Serviço + Horário)")
+    st.caption("Militares dispensados de serviços específicos em determinados horários.")
 
-    if slot_cols:
-        for slot_c in slot_cols:
-            with st.expander(f"📌 {slot_c}"):
-                df_slot = df_licencas[df_licencas[slot_c].astype(str).str.strip().str.lower().isin(["sim", "yes", "true", "1", "x"])]
-                if df_slot.empty:
-                    st.info("Nenhum militar com esta dispensa.")
-                else:
-                    for _, row in df_slot.iterrows():
-                        mid = str(row.get(id_col, "")).strip()
-                        st.markdown(f"- {_get_nome_militar(df_util, mid)} ({mid})")
+    col_tp_disp = next((c for c in cols_lic if "tipo" in str(c).lower()), None)
+    if col_tp_disp and not df_licencas.empty:
+        def _is_slot_row(tipo_str):
+            codigos = [c.strip().upper() for c in str(tipo_str).replace(";", ",").split(",")]
+            return any(c in DISPENSA_SLOTS for c in codigos if c)
+
+        df_slots = df_licencas[df_licencas[col_tp_disp].apply(_is_slot_row)].copy()
+        if df_slots.empty:
+            st.info("Sem dispensas de slot activas.")
+        else:
+            def _desc_slots(tipo_str):
+                codigos = [c.strip().upper() for c in str(tipo_str).replace(";", ",").split(",")]
+                descs = []
+                for c in codigos:
+                    if c in DISPENSA_SLOTS:
+                        sv, hr = DISPENSA_SLOTS[c]
+                        descs.append(f"{c} ({sv} {hr})")
+                return ", ".join(descs)
+            df_slots["slots"] = df_slots[col_tp_disp].apply(_desc_slots)
+            df_slots["nome"] = df_slots[id_col].astype(str).str.strip().apply(lambda x: _get_nome_militar(df_util, x))
+            st.dataframe(df_slots[["nome", id_col, "slots"] + [c for c in cols_lic if c not in [id_col, col_tp_disp]]],
+                        use_container_width=True, hide_index=True)
     else:
-        st.info("Não foram encontradas colunas de dispensa por slot.")
+        st.info("Sem dispensas de slot activas.")
 
 
 # ─────────────────────────────────────────
@@ -250,7 +263,7 @@ def render_alertas(
         while dias_sem < 2 and j < 10:
             dt_a = hoje + timedelta(days=j)
             aba_a = dt_a.strftime("%d-%m")
-            df_a = data_loader.carregar_data(aba_a)
+            df_a = data_loader.carregar_escala(aba_a)
             j += 1
             if df_a.empty:
                 dias_sem += 1
@@ -270,7 +283,7 @@ def render_alertas(
             # Alerta: descanso
             aba_ant = (dt_a - timedelta(days=1)).strftime("%d-%m")
             if aba_ant not in df_ant_cache:
-                df_ant_cache[aba_ant] = data_loader.carregar_data(aba_ant)
+                df_ant_cache[aba_ant] = data_loader.carregar_escala(aba_ant)
             df_ant_a = df_ant_cache[aba_ant]
             if not df_ant_a.empty:
                 df_ant_serv = df_ant_a[~df_ant_a["serviço"].apply(norm).str.contains("remu|grat|folga|ferias|licen|doente", na=False)]

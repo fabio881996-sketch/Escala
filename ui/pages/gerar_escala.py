@@ -504,7 +504,7 @@ def _gerar_auto(data_loader, df_util, df_editado, d_gerar, aba_dia, militares_se
                     if val:
                         ordem_g[h].append(val)
 
-            df_ant = data_loader.carregar_data_direto(sh_g, (d_gerar - timedelta(days=1)).strftime("%d-%m"))
+            df_ant = data_loader.carregar_escala((d_gerar - timedelta(days=1)).strftime("%d-%m"))
 
             # Contar slots preenchidos
             slots_preenchidos: Dict = {}
@@ -1225,7 +1225,7 @@ def _render_tab_remunerados(
     """Renderiza a tab de gestão de remunerados."""
     st.markdown("#### 💶 Remunerados")
 
-    df_ord_rem = data_loader.carregar_ordem_remunerados()
+    df_ord_rem = data_loader.carregar_escala("ordem_remunerados")
     if df_ord_rem.empty:
         st.error("Aba 'ordem_remunerados' não encontrada ou vazia.")
         st.stop()
@@ -1258,7 +1258,7 @@ def _calcular_nomeacao(data_loader, df_util, df_ferias, feriados, df_ord_rem, d_
     """Calcula a nomeação de militares para remunerado."""
     aba_rem = d_rem.strftime("%d-%m")
     sh_rem = get_sheet()
-    df_dia_rem = data_loader.carregar_data_direto(sh_rem, aba_rem)
+    df_dia_rem = data_loader.carregar_escala(aba_rem)
     data_str = d_rem.strftime("%d/%m/%Y")
 
     is_fds = d_rem.weekday() >= 5
@@ -1702,7 +1702,7 @@ def _substituir_remunerado(data_loader, df_util, df_ferias, feriados, df_ord_rem
     else:
         col_tot, col_ult = "total_ano_a_semana", "ultimo_a_semana"
 
-    df_dia_s = data_loader.carregar_data(rem_g["aba"])
+    df_dia_s = data_loader.carregar_escala(rem_g["aba"])
     _IMP = r"ferias|licen|convalesc|dilig|tribunal|inquer|secretaria|fcaa|cter|adm"
     ausentes: set = set()
     militares_folga: set = set()

@@ -79,7 +79,7 @@ def render_trocas_admin(usuario: Usuario) -> None:
             return
 
         u_nome = usuario.nome
-        loader = DataLoader(db=GoogleSheetsClient())
+        loader = DataLoader(sheets_client=GoogleSheetsClient())
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
 
@@ -164,7 +164,7 @@ def render_trocas_validadas(usuario: Usuario) -> None:
         usuario: Objecto :class:`Usuario` autenticado.
     """
     try:
-        loader = DataLoader(db=GoogleSheetsClient())
+        loader = DataLoader(sheets_client=GoogleSheetsClient())
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
 

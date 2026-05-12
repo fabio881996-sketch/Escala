@@ -174,7 +174,7 @@ def _render_tab_adicionar(df_util: pd.DataFrame) -> None:
                 ws_util_add.append_row(nova_linha_add)
 
                 # Adicionar ao topo do ordem_escala mais recente
-                loader = DataLoader(sheets_client=None)  # type: ignore[arg-type]
+                loader = DataLoader(sheets_client=GoogleSheetsClient())  # type: ignore[arg-type]
                 abas_todas = loader.carregar_lista_abas()
                 abas_ordem = sorted(
                     [a for a in abas_todas if a.startswith("ordem_escala ")],
@@ -255,7 +255,7 @@ def _render_tab_remover(df_util: pd.DataFrame) -> None:
                 ws_util_rem.delete_rows(linha_rem)
 
             # Remover do ordem_escala mais recente
-            loader = DataLoader(sheets_client=None)  # type: ignore[arg-type]
+            loader = DataLoader(sheets_client=GoogleSheetsClient())  # type: ignore[arg-type]
             abas_todas_rem = loader.carregar_lista_abas()
             abas_ordem_rem = sorted(
                 [a for a in abas_todas_rem if a.startswith("ordem_escala ")],

@@ -125,7 +125,7 @@ def render_dashboard(usuario: Usuario) -> None:
         u_nome = usuario.nome
         is_admin = usuario.is_admin
 
-        loader = DataLoader(db=GoogleSheetsClient())
+        loader = DataLoader(sheets_client=GoogleSheetsClient())
         df_util = loader.carregar_usuarios()
         df_trocas = loader.carregar_trocas()
 
