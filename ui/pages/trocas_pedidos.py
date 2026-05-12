@@ -253,15 +253,16 @@ def _render_tab_solicitar(
 
     # ── TROCA SIMPLES ──
     if tipo_troca == "🔄 Troca Simples":
-        # Se não há escala publicada, verificar folga no mapa
+        # Verificar folga no mapa quando não há escala publicada ou serviço é Disponível
         _folga_mapa_tr = ''
-        if meu.empty:
+        _servico_disponivel = not meu.empty and meu.iloc[0]['serviço'].strip().lower() == 'disponível'
+        if meu.empty or _servico_disponivel:
             ano_atual = datetime.now().year
             _df_folgas_tr = loader.carregar_folgas(ano_atual)
             _grupos_tr = loader.carregar_grupos_folga()
             _feriados_tr = feriados
             _folga_mapa_tr = DataLoader.militar_de_folga(u_id, dt_s, _df_folgas_tr, _grupos_tr, _feriados_tr)
-            if not _folga_mapa_tr:
+            if not _folga_mapa_tr and meu.empty:
                 st.warning("Não tens serviço escalado neste dia.")
                 return
         if not meu.empty or _folga_mapa_tr:

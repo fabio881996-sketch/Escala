@@ -104,24 +104,29 @@ def _render_tabela(df: pd.DataFrame, esconder_servico: bool = False,
     except Exception:
         pass
 
-    grupos = df.groupby(group_cols, sort=False)
-    for i, (chave, grp) in enumerate(grupos):
-        td = td_a if i % 2 == 0 else td_s
-        if esconder_servico:
-            hor = str(chave)
-            serv = ""
-        else:
-            hor = str(chave[0])
-            serv = str(chave[1])
-        ids = ", ".join(grp.get("id_disp", grp["id"]).astype(str).str.strip().tolist())
-        html += f"<tr><td style='{td}'>{hor}</td>"
-        html += f"<td style='{td}'>{ids}</td>"
-        if not esconder_servico:
+    if esconder_servico:
+        grupos = df.groupby("horário", sort=False)
+        for i, (hor, grp) in enumerate(grupos):
+            td = td_a if i % 2 == 0 else td_s
+            ids = ", ".join(grp.get("id_disp", grp["id"]).astype(str).str.strip().tolist())
+            html += f"<tr><td style='{td}'>{hor}</td>"
+            html += f"<td style='{td}'>{ids}</td>"
+            for c in cols_extra:
+                val = str(grp[c].iloc[0]).strip() if c in grp.columns else ""
+                html += f"<td style='{td}'>{val}</td>"
+            html += "</tr>"
+    else:
+        grupos = df.groupby(["horário", "serviço"], sort=False)
+        for i, ((hor, serv), grp) in enumerate(grupos):
+            td = td_a if i % 2 == 0 else td_s
+            ids = ", ".join(grp.get("id_disp", grp["id"]).astype(str).str.strip().tolist())
+            html += f"<tr><td style='{td}'>{hor}</td>"
+            html += f"<td style='{td}'>{ids}</td>"
             html += f"<td style='{td}'>{serv}</td>"
-        for c in cols_extra:
-            val = str(grp[c].iloc[0]).strip() if c in grp.columns else ""
-            html += f"<td style='{td}'>{val}</td>"
-        html += "</tr>"
+            for c in cols_extra:
+                val = str(grp[c].iloc[0]).strip() if c in grp.columns else ""
+                html += f"<td style='{td}'>{val}</td>"
+            html += "</tr>"
 
     html += "</tbody></table></div>"
     return html
