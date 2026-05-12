@@ -328,8 +328,11 @@ class BasePDF:
         c.setFont(self.FONT_NORMAL, self.FONT_SIZE_TABLE)
         xi = x
         for linhas, cw in zip(linhas_por_cel, widths):
+            # Centrar verticalmente: offset = (altura_row - altura_conteudo) / 2
+            cel_h = len(linhas) * 5 * mm
+            v_offset = (row_h - cel_h) / 2
             for li, ln in enumerate(linhas):
-                c.drawCentredString(xi + cw / 2, y - (li * 5 * mm) - 3.5 * mm, ln)
+                c.drawCentredString(xi + cw / 2, y - v_offset - (li * 5 * mm) - 3.5 * mm, ln)
             xi += cw
 
         c.setStrokeColor(CINZA_BORDA)
