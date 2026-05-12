@@ -372,7 +372,7 @@ def _render_remunerados_secao(df_remu: pd.DataFrame) -> None:
 
 
 def _gerar_escala_completa(data_loader, df_trocas, df_ferias, df_util, feriados, col_full) -> None:
-    """Gera PDF com todas as escalas disponíveis."""
+    """Gera PDF com todas as escalas disponíveis usando batch."""
     with st.spinner("A gerar PDF com todas as escalas disponíveis..."):
         try:
             from pypdf import PdfWriter, PdfReader
@@ -381,17 +381,22 @@ def _gerar_escala_completa(data_loader, df_trocas, df_ferias, df_util, feriados,
 
         writer = PdfWriter()
         hj = datetime.now()
-        dias_sem = 0
-        j = 0
-        paginas = 0
 
-        while dias_sem < 5:
-            dt = hj + timedelta(days=j)
-            df_d = data_loader.carregar_escala(dt.strftime("%d-%m"))
+        # Carregar todas as abas em batch -- uma única chamada HTTP
+        datas = [hj.date() + timedelta(days=j) for j in range(30)]
+        escalas = data_loader.carregar_escalas_batch(datas)
+
+        paginas = 0
+        dias_sem = 0
+        for data in datas:
+            if dias_sem >= 5:
+                break
+            aba = data.strftime("%d-%m")
+            df_d = escalas.get(aba, pd.DataFrame())
             if not df_d.empty:
-                df_d = _aplicar_trocas_df(df_d.copy(), df_trocas, dt.strftime("%d/%m/%Y"))
-                df_d = _adicionar_ferias(df_d, df_ferias, df_util, data_loader, dt.date(), feriados)
-                pb = EscalaPDF().gerar_pdf_escala(dt.strftime("%d/%m/%Y"), df_d, df_util)
+                df_d = _aplicar_trocas_df(df_d.copy(), df_trocas, data.strftime("%d/%m/%Y"))
+                df_d = _adicionar_ferias(df_d, df_ferias, df_util, data_loader, data, feriados)
+                pb = EscalaPDF().gerar_pdf_escala(data.strftime("%d/%m/%Y"), df_d, df_util)
                 reader = PdfReader(io.BytesIO(pb))
                 for pg in reader.pages:
                     writer.add_page(pg)
@@ -399,7 +404,6 @@ def _gerar_escala_completa(data_loader, df_trocas, df_ferias, df_util, feriados,
                 dias_sem = 0
             else:
                 dias_sem += 1
-            j += 1
 
         if paginas > 0:
             buf = io.BytesIO()
