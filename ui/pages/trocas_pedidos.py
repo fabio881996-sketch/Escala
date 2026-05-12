@@ -241,22 +241,23 @@ def _render_tab_solicitar(
             st.info("Não existem dados para esta data.")
             return
 
-    df_d = df_d.copy()
-    try:
-        df_ant = loader.carregar_escala(dt_s - timedelta(days=1))
-        df_ant = df_ant.copy() if not df_ant.empty else df_ant
-    except Exception:
-        df_ant = pd.DataFrame()
-    try:
-        df_seg = loader.carregar_escala(dt_s + timedelta(days=1))
-        df_seg = df_seg.copy() if not df_seg.empty else df_seg
-    except Exception:
-        df_seg = pd.DataFrame()
+    if dt_s is not None and not df_d.empty:
+        df_d = df_d.copy()
+        try:
+            df_ant = loader.carregar_escala(dt_s - timedelta(days=1))
+            df_ant = df_ant.copy() if not df_ant.empty else df_ant
+        except Exception:
+            df_ant = pd.DataFrame()
+        try:
+            df_seg = loader.carregar_escala(dt_s + timedelta(days=1))
+            df_seg = df_seg.copy() if not df_seg.empty else df_seg
+        except Exception:
+            df_seg = pd.DataFrame()
 
-    # Aplicar trocas aprovadas
-    servico_override = None
-    if not df_trocas.empty:
-        data_str_d = dt_s.strftime('%d/%m/%Y')
+        # Aplicar trocas aprovadas
+        servico_override = None
+        if not df_trocas.empty:
+            data_str_d = dt_s.strftime('%d/%m/%Y')
         data_str_ant = (dt_s - timedelta(days=1)).strftime('%d/%m/%Y')
         data_str_seg = (dt_s + timedelta(days=1)).strftime('%d/%m/%Y')
         df_d = _aplicar_trocas_df(df_d, data_str_d, df_trocas)
@@ -273,11 +274,11 @@ def _render_tab_solicitar(
             elif str(t['id_destino']).strip() == u_id.strip():
                 servico_override = t['servico_origem']
 
-    meu = df_d[df_d['id'].astype(str) == u_id]
+    meu = df_d[df_d['id'].astype(str) == u_id] if not df_d.empty else pd.DataFrame()
 
     # IDs com troca pendente nesse dia
     ids_com_troca: set = set()
-    if not df_trocas.empty:
+    if not df_trocas.empty and dt_s is not None:
         tr_ocupados = df_trocas[
             (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
             (df_trocas['status'].isin(['Pendente_Militar', 'Pendente_Admin']))
@@ -290,7 +291,7 @@ def _render_tab_solicitar(
 
     # IDs sem remunerado (cedentes aprovados)
     ids_sem_remunerado: set = set()
-    if not df_trocas.empty:
+    if not df_trocas.empty and dt_s is not None:
         rem_apr = df_trocas[
             (df_trocas['data'] == dt_s.strftime('%d/%m/%Y')) &
             (df_trocas['status'] == 'Aprovada') &

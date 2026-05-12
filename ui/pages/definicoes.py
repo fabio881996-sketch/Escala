@@ -268,7 +268,6 @@ def render_publicar_escala(
         st.stop()
 
     dias_pub = data_loader.carregar_dias_publicados()
-    st.markdown(f"**{len(dias_pub)} dia(s) publicado(s)** atualmente.")
 
     dia_sel = st.date_input("Selecionar dia:", format="DD/MM/YYYY", key="pub_dia_sel")
     aba_sel = dia_sel.strftime("%d-%m")

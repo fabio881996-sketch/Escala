@@ -729,7 +729,7 @@ def render_minha_escala(usuario: Usuario) -> None:
         df_ferias = loader.carregar_ferias(ano_atual)
         feriados = loader.carregar_feriados(ano_atual)
         df_licencas = loader.carregar_licencas()
-        dias_publicados = loader.carregar_listas().get('dias_publicados', set())
+        dias_publicados = loader.carregar_dias_publicados()
 
         st.title("📅 A Minha Escala")
 
