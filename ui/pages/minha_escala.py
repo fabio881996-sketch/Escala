@@ -481,7 +481,7 @@ def _render_proximos_servicos(
     feriados_me = feriados
 
     dias_sem_dados = 0
-    for delta in range(30):
+    for delta in range(20):
         if dias_sem_dados >= 5:
             break
         dt = hj + timedelta(days=delta)
