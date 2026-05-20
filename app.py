@@ -7075,26 +7075,42 @@ else:
             st.stop()
         dias_pub = load_dias_publicados()
 
-        # Selector de data mais visual
-        st.markdown("#### 📅 Seleciona o dia")
-        col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
-        with col_nav2:
-            d_pub = st.date_input("", format="DD/MM/YYYY", key="d_pub", label_visibility="collapsed")
+        # Navegação dia a dia
+        if 'pub_data_offset' not in st.session_state:
+            st.session_state['pub_data_offset'] = 0
 
+        d_pub = (datetime.now() + timedelta(days=st.session_state['pub_data_offset'])).date()
         aba_pub = d_pub.strftime("%d-%m")
         ja_publicado = aba_pub in dias_pub
         dia_semana = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"][d_pub.weekday()]
 
-        # Card de estado
+        # Barra de navegação
+        col_ant, col_data, col_prox = st.columns([1, 3, 1])
+        with col_ant:
+            if st.button("◀", use_container_width=True, key="pub_ant"):
+                st.session_state['pub_data_offset'] -= 1
+                st.rerun()
+        with col_data:
+            st.markdown(
+                f"<div style='text-align:center;padding:10px;background:white;border-radius:10px;"
+                f"border:1.5px solid #E2E8F0;font-weight:700;font-size:1rem;color:#1A2B4A'>"
+                f"{dia_semana}, {d_pub.strftime('%d/%m/%Y')}</div>",
+                unsafe_allow_html=True
+            )
+        with col_prox:
+            if st.button("▶", use_container_width=True, key="pub_prox"):
+                st.session_state['pub_data_offset'] += 1
+                st.rerun()
+
         st.markdown("<br>", unsafe_allow_html=True)
+
+        # Card de estado
         if ja_publicado:
             st.markdown(
                 f"<div style='background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:2px solid #059669;"
                 f"border-radius:16px;padding:24px;text-align:center;margin-bottom:20px'>"
                 f"<div style='font-size:2.5rem'>✅</div>"
-                f"<div style='font-size:1.2rem;font-weight:800;color:#065F46;margin:8px 0'>"
-                f"{dia_semana}, {d_pub.strftime('%d/%m/%Y')}</div>"
-                f"<div style='font-size:0.88rem;color:#059669;font-weight:600'>Escala publicada</div>"
+                f"<div style='font-size:1.1rem;font-weight:800;color:#065F46;margin:8px 0'>Escala publicada</div>"
                 f"</div>",
                 unsafe_allow_html=True
             )
@@ -7115,9 +7131,7 @@ else:
                 f"<div style='background:linear-gradient(135deg,#FFF7ED,#FED7AA);border:2px solid #F97316;"
                 f"border-radius:16px;padding:24px;text-align:center;margin-bottom:20px'>"
                 f"<div style='font-size:2.5rem'>📋</div>"
-                f"<div style='font-size:1.2rem;font-weight:800;color:#9A3412;margin:8px 0'>"
-                f"{dia_semana}, {d_pub.strftime('%d/%m/%Y')}</div>"
-                f"<div style='font-size:0.88rem;color:#EA580C;font-weight:600'>Escala não publicada</div>"
+                f"<div style='font-size:1.1rem;font-weight:800;color:#9A3412;margin:8px 0'>Escala não publicada</div>"
                 f"</div>",
                 unsafe_allow_html=True
             )
