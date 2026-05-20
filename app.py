@@ -7074,12 +7074,31 @@ else:
             st.warning("Acesso restrito a administradores.")
             st.stop()
         dias_pub = load_dias_publicados()
-        d_pub = st.date_input("Data:", format="DD/MM/YYYY", key="d_pub")
+
+        # Selector de data mais visual
+        st.markdown("#### 📅 Seleciona o dia")
+        col_nav1, col_nav2, col_nav3 = st.columns([1, 2, 1])
+        with col_nav2:
+            d_pub = st.date_input("", format="DD/MM/YYYY", key="d_pub", label_visibility="collapsed")
+
         aba_pub = d_pub.strftime("%d-%m")
         ja_publicado = aba_pub in dias_pub
+        dia_semana = ["Segunda","Terça","Quarta","Quinta","Sexta","Sábado","Domingo"][d_pub.weekday()]
+
+        # Card de estado
+        st.markdown("<br>", unsafe_allow_html=True)
         if ja_publicado:
-            st.info(f"✅ Escala de **{d_pub.strftime('%d/%m/%Y')}** já está publicada.")
-            if st.button("🔒 Despublicar", key="btn_despub", use_container_width=True):
+            st.markdown(
+                f"<div style='background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:2px solid #059669;"
+                f"border-radius:16px;padding:24px;text-align:center;margin-bottom:20px'>"
+                f"<div style='font-size:2.5rem'>✅</div>"
+                f"<div style='font-size:1.2rem;font-weight:800;color:#065F46;margin:8px 0'>"
+                f"{dia_semana}, {d_pub.strftime('%d/%m/%Y')}</div>"
+                f"<div style='font-size:0.88rem;color:#059669;font-weight:600'>Escala publicada</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+            if st.button("🔒 Despublicar este dia", key="btn_despub", use_container_width=True):
                 try:
                     sh_p = get_sheet()
                     ws_p = sh_p.worksheet("escala_publicada")
@@ -7092,6 +7111,16 @@ else:
                 except Exception as e:
                     st.error(f"Erro: {e}")
         else:
+            st.markdown(
+                f"<div style='background:linear-gradient(135deg,#FFF7ED,#FED7AA);border:2px solid #F97316;"
+                f"border-radius:16px;padding:24px;text-align:center;margin-bottom:20px'>"
+                f"<div style='font-size:2.5rem'>📋</div>"
+                f"<div style='font-size:1.2rem;font-weight:800;color:#9A3412;margin:8px 0'>"
+                f"{dia_semana}, {d_pub.strftime('%d/%m/%Y')}</div>"
+                f"<div style='font-size:0.88rem;color:#EA580C;font-weight:600'>Escala não publicada</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
             if st.button("📢 PUBLICAR ESCALA", key="btn_pub", use_container_width=True, type="primary"):
                 try:
                     sh_p = get_sheet()
