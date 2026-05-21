@@ -1,14 +1,12 @@
 """Configurações centralizadas da aplicação GNR.
 
-Este módulo concentra constantes e leitura de segredos para reduzir
-strings mágicas espalhadas no código.
+Compatível com Streamlit (st.secrets) e FastAPI (variáveis de ambiente).
 """
 
 from __future__ import annotations
 
+import os
 from typing import Any
-
-import streamlit as st
 
 
 # ---------------------------
@@ -44,8 +42,6 @@ IMPEDIMENTOS_PATTERN: str = "|".join(IMPEDIMENTOS).lower()
 
 ATENDIMENTO_PATTERN: str = r"atendimento|apoio"
 
-# Mapa canónico de dispensas por slot (código -> (serviço, horário)).
-# Mantém compatibilidade com o monólito e com DataLoader.militar_tem_dispensa_slot.
 DISPENSA_SLOTS: dict[str, tuple[str, str]] = {
     "A1": ("atendimento", "00-08"),
     "A2": ("atendimento", "08-16"),
@@ -81,7 +77,7 @@ CACHE_TTL_DAY: int = 86400
 
 
 # ---------------------------
-# Session keys
+# Session keys (Streamlit)
 # ---------------------------
 SESSION_LOGGED_IN: str = "logged_in"
 SESSION_USER_ID: str = "user_id"
@@ -96,33 +92,30 @@ SESSION_LOGIN_MODE: str = "login_modo"
 
 
 def get_secret(key: str, default: Any | None = None) -> Any:
-    """Obtém um valor de ``st.secrets`` com fallback.
+    """Obtém segredo — tenta st.secrets (Streamlit) e depois variáveis de ambiente.
 
-    Args:
-        key: Nome da chave em ``st.secrets``.
-        default: Valor a devolver quando a chave não existe.
-
-    Returns:
-        O valor guardado em ``st.secrets`` ou ``default``.
+    Compatível com Streamlit Cloud e FastAPI/produção.
     """
+    # Tentar st.secrets primeiro (quando a correr no Streamlit)
     try:
+        import streamlit as st
         return st.secrets[key]
     except Exception:
-        return default
+        pass
+
+    # Fallback: variável de ambiente
+    val = os.environ.get(key) or os.environ.get(key.upper())
+    if val is not None:
+        return val
+
+    return default
 
 
 def get_sheet_url() -> str:
-    """Devolve a URL da Google Sheet principal.
-
-    Returns:
-        URL da spreadsheet configurada.
-
-    Raises:
-        ValueError: Quando ``gsheet_url`` não está configurado.
-    """
+    """Devolve a URL da Google Sheet principal."""
     url = get_secret("gsheet_url")
     if not url:
-        raise ValueError("Chave 'gsheet_url' não encontrada em st.secrets")
+        raise ValueError("Chave 'gsheet_url' não encontrada em st.secrets nem em variáveis de ambiente")
     return str(url)
 
 

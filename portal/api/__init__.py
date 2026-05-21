@@ -1,0 +1,1 @@
+"""Portal GNR — FastAPI PWA."""

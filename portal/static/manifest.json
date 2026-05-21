@@ -1,0 +1,25 @@
+{
+    "name": "Portal de Escalas GNR",
+    "short_name": "Escalas GNR",
+    "description": "Portal de gestão de escalas do Posto Territorial de Famalicão",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#1A2B4A",
+    "theme_color": "#1A2B4A",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/static/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/static/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "categories": ["productivity", "utilities"]
+}

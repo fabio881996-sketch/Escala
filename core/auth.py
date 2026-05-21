@@ -15,7 +15,9 @@ import secrets
 from typing import Any
 
 import pandas as pd
-import streamlit as st
+def _st():
+    import streamlit as st
+    return st
 
 from config.settings import (
     ADMINS,
