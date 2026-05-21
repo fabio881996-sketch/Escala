@@ -34,6 +34,11 @@ def _build_gspread_client() -> gspread.Client:
     if not service_account_info:
         raise RuntimeError("'gcp_service_account' não encontrado")
 
+    # Se vier como string JSON (variável de ambiente), fazer parse
+    if isinstance(service_account_info, str):
+        import json
+        service_account_info = json.loads(service_account_info)
+
     creds = Credentials.from_service_account_info(
         service_account_info,
         scopes=SHEETS_SCOPES,
