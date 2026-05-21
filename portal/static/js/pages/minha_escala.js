@@ -50,6 +50,7 @@ const MinhaEscalaPage = {
         if (s.horario) extras += `<div class="card-row">🕒 ${s.horario}</div>`;
         if (s.viatura && s.viatura !== 'nan') extras += `<div class="card-row">🚔 ${s.viatura}</div>`;
         if (s.radio && s.radio !== 'nan') extras += `<div class="card-row">📻 ${s.radio}</div>`;
+        if (s.colegas && s.colegas.length > 0) extras += `<div class="card-row">👥 ${s.colegas.join(', ')}</div>`;
         if (s.observacoes && s.observacoes !== 'nan') extras += `<div class="card-row">📝 ${s.observacoes}</div>`;
 
         return `
