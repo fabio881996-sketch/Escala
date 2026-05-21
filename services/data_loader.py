@@ -10,9 +10,10 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 import logging
 import re
+import time
+from threading import Lock
 
 import pandas as pd
-import streamlit as st
 
 from config.settings import ADMINS, DISPENSA_SLOTS, EXCHANGES_SHEET_NAME, USERS_SHEET_NAME
 from core.database import GoogleSheetsClient
@@ -24,112 +25,171 @@ logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Funções standalone com @st.cache_data
-# Streamlit só cacheia funções de topo — métodos de instância não são cacheados.
-# O DataLoader chama estas funções para beneficiar do cache.
+# Cache universal — funciona no FastAPI e no Streamlit sem dependência de st
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300)
+class _Cache:
+    """Cache em memória thread-safe com TTL."""
+    def __init__(self):
+        self._store: dict = {}
+        self._lock = Lock()
+
+    def get(self, key: str):
+        with self._lock:
+            entry = self._store.get(key)
+            if entry and time.time() < entry["expires"]:
+                return entry["value"], True
+            return None, False
+
+    def set(self, key: str, value, ttl: int):
+        with self._lock:
+            self._store[key] = {"value": value, "expires": time.time() + ttl}
+
+    def delete(self, key: str):
+        with self._lock:
+            self._store.pop(key, None)
+
+    def clear(self, prefix: str = ""):
+        with self._lock:
+            if prefix:
+                keys = [k for k in self._store if k.startswith(prefix)]
+            else:
+                keys = list(self._store.keys())
+            for k in keys:
+                del self._store[k]
+
+
+_cache = _Cache()
+
+
 def _cached_load(aba_nome: str) -> pd.DataFrame:
     """Carrega aba do Sheets com cache de 5 minutos."""
-    return GoogleSheetsClient().load_data(aba_nome)
+    key = f"load:{aba_nome}"
+    val, hit = _cache.get(key)
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data(aba_nome)
+    _cache.set(key, result, 300)
+    return result
 
-
-@st.cache_data(ttl=120)
 def _cached_load_trocas() -> pd.DataFrame:
-    """Carrega trocas com cache de 2 minutos."""
-    return GoogleSheetsClient().load_data(EXCHANGES_SHEET_NAME)
+    val, hit = _cache.get("trocas")
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data(EXCHANGES_SHEET_NAME)
+    _cache.set("trocas", result, 120)
+    return result
 
-
-@st.cache_data(ttl=300)
 def _cached_load_usuarios() -> pd.DataFrame:
-    """Carrega utilizadores com cache de 5 minutos."""
-    return GoogleSheetsClient().load_data(USERS_SHEET_NAME)
+    val, hit = _cache.get("utilizadores")
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data(USERS_SHEET_NAME)
+    _cache.set("utilizadores", result, 300)
+    return result
 
-
-@st.cache_data(ttl=86400)
 def _cached_load_feriados(aba_nome: str) -> pd.DataFrame:
-    """Carrega feriados com cache de 24 horas."""
-    return GoogleSheetsClient().load_data(aba_nome)
+    key = f"feriados:{aba_nome}"
+    val, hit = _cache.get(key)
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data(aba_nome)
+    _cache.set(key, result, 86400)
+    return result
 
-
-@st.cache_data(ttl=3600)
 def _cached_load_grupos_folga() -> pd.DataFrame:
-    """Carrega grupos de folga com cache de 1 hora."""
-    return GoogleSheetsClient().load_data("grupos_folga")
+    val, hit = _cache.get("grupos_folga")
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data("grupos_folga")
+    _cache.set("grupos_folga", result, 3600)
+    return result
 
-
-@st.cache_data(ttl=3600)
 def _cached_load_folgas(aba_nome: str) -> pd.DataFrame:
-    """Carrega folgas com cache de 1 hora."""
-    return GoogleSheetsClient().load_data(aba_nome)
+    key = f"folgas:{aba_nome}"
+    val, hit = _cache.get(key)
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data(aba_nome)
+    _cache.set(key, result, 3600)
+    return result
 
-
-@st.cache_data(ttl=300)
 def _cached_load_licencas() -> pd.DataFrame:
-    """Carrega licenças com cache de 5 minutos."""
-    return GoogleSheetsClient().load_data("Licenças")
+    val, hit = _cache.get("licencas")
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data("Licenças")
+    _cache.set("licencas", result, 300)
+    return result
 
-
-@st.cache_data(ttl=120)
 def _cached_load_dias_publicados() -> pd.DataFrame:
-    """Carrega dias publicados com cache de 2 minutos."""
-    return GoogleSheetsClient().load_data("escala_publicada")
+    val, hit = _cache.get("dias_publicados")
+    if hit:
+        return val
+    result = GoogleSheetsClient().load_data("escala_publicada")
+    _cache.set("dias_publicados", result, 120)
+    return result
 
-
-@st.cache_data(ttl=60)
 def _cached_lista_abas() -> list[str]:
-    """Lista abas da spreadsheet com cache de 1 minuto."""
+    val, hit = _cache.get("lista_abas")
+    if hit:
+        return val
     try:
         sh = GoogleSheetsClient().get_sheet()
-        return [ws.title for ws in sh.worksheets()]
+        result = [ws.title for ws in sh.worksheets()]
     except Exception:
-        return []
+        result = []
+    _cache.set("lista_abas", result, 60)
+    return result
 
-
-@st.cache_data(ttl=300)
 def _cached_load_servicos() -> dict:
-    """Carrega matriz de serviços com cache de 5 minutos."""
+    val, hit = _cache.get("servicos")
+    if hit:
+        return val
     try:
         sh = GoogleSheetsClient().get_sheet()
         ws = sh.worksheet("serviços")
         vals = ws.get_all_values()
         if not vals:
-            return {}
-        headers = [str(h).strip() for h in vals[0]]
-        result: dict = {}
-        for col in headers:
-            idx = headers.index(col)
-            for row in vals[1:]:
-                mid = str(row[idx]).strip() if idx < len(row) else ""
-                if mid and mid != "nan":
-                    result.setdefault(mid, []).append(col)
-        return result
+            result = {}
+        else:
+            headers = [str(h).strip() for h in vals[0]]
+            result: dict = {}
+            for col in headers:
+                idx = headers.index(col)
+                for row in vals[1:]:
+                    mid = str(row[idx]).strip() if idx < len(row) else ""
+                    if mid and mid != "nan":
+                        result.setdefault(mid, []).append(col)
     except Exception:
-        return {}
+        result = {}
+    _cache.set("servicos", result, 300)
+    return result
 
-
-@st.cache_data(ttl=300)
 def _cached_load_listas() -> dict:
-    """Carrega aba listas com cache de 5 minutos."""
+    val, hit = _cache.get("listas")
+    if hit:
+        return val
     try:
         sh = GoogleSheetsClient().get_sheet()
         ws = sh.worksheet("listas")
         vals = ws.get_all_values()
         if not vals:
-            return {}
-        hdrs = [str(h).strip() for h in vals[0]]
-        result: dict = {}
-        for h in hdrs:
-            idx = hdrs.index(h)
-            result[h] = [""] + [
-                str(row[idx]).strip()
-                for row in vals[1:]
-                if idx < len(row) and str(row[idx]).strip()
-            ]
-        return result
+            result = {}
+        else:
+            hdrs = [str(h).strip() for h in vals[0]]
+            result: dict = {}
+            for h in hdrs:
+                idx = hdrs.index(h)
+                result[h] = [""] + [
+                    str(row[idx]).strip()
+                    for row in vals[1:]
+                    if idx < len(row) and str(row[idx]).strip()
+                ]
     except Exception:
-        return {}
+        result = {}
+    _cache.set("listas", result, 300)
+    return result
 
 
 @dataclass(slots=True)
@@ -175,71 +235,17 @@ class DataLoader:
         return {d.strftime("%d-%m"): self.carregar_escala(d) for d in datas}
 
     def carregar_escalas_batch(self, datas: list[date]) -> dict[str, pd.DataFrame]:
-        """Carrega múltiplas escalas numa única chamada HTTP à API.
-
-        Usa ``values_batch_get`` do gspread para reduzir drasticamente
-        o número de round-trips ao Google Sheets.
-        Fallback para leituras individuais em caso de erro.
-        """
+        """Carrega múltiplas escalas usando cache por aba."""
         if not datas:
             return {}
-
-        abas_pedidas = [d.strftime("%d-%m") for d in datas]
-        resultado: dict[str, pd.DataFrame] = {aba: pd.DataFrame() for aba in abas_pedidas}
-
-        try:
-            sh = self.sheets_client.get_sheet()
-
-            # Verificar quais abas existem (usa cache de 1 min)
-            abas_existentes = set(_cached_lista_abas())
-            abas_validas = [a for a in abas_pedidas if a in abas_existentes]
-
-            if not abas_validas:
-                return resultado
-
-            # Batch get — uma única chamada HTTP para todas as abas
-            # Formato: "NomeAba!A:Z" para ler todas as colunas
-            ranges = [f"'{aba}'!A:Z" for aba in abas_validas]
-
-            # Dividir em chunks de 100 (limite da API)
-            chunk_size = 100
-            for i in range(0, len(ranges), chunk_size):
-                chunk_ranges = ranges[i:i + chunk_size]
-                chunk_abas = abas_validas[i:i + chunk_size]
-
-                try:
-                    resp = sh.values_batch_get(
-                        ranges=chunk_ranges,
-                        params={"valueRenderOption": "FORMATTED_VALUE"},
-                    )
-                    value_ranges = resp.get("valueRanges", [])
-
-                    for aba, vr in zip(chunk_abas, value_ranges):
-                        values = vr.get("values", [])
-                        if values and len(values) >= 2:
-                            from core.database import df_from_values
-                            resultado[aba] = df_from_values(values)
-                        else:
-                            resultado[aba] = pd.DataFrame()
-
-                except Exception as exc:
-                    logger.warning("Batch get falhou para chunk, fallback individual: %s", exc)
-                    # Fallback para leituras individuais
-                    for aba in chunk_abas:
-                        try:
-                            resultado[aba] = _cached_load(aba)
-                        except Exception:
-                            resultado[aba] = pd.DataFrame()
-
-        except Exception as exc:
-            logger.exception("Erro no carregamento batch: %s", exc)
-            # Fallback completo
-            for aba in abas_pedidas:
-                try:
-                    resultado[aba] = _cached_load(aba)
-                except Exception:
-                    resultado[aba] = pd.DataFrame()
-
+        resultado: dict[str, pd.DataFrame] = {}
+        for d in datas:
+            aba = d.strftime("%d-%m")
+            try:
+                resultado[aba] = _cached_load(aba)
+            except Exception as exc:
+                logger.warning("Falha a carregar aba '%s': %s", aba, exc)
+                resultado[aba] = pd.DataFrame()
         return resultado
 
     def carregar_usuarios(self) -> pd.DataFrame:
@@ -342,16 +348,32 @@ class DataLoader:
 
     def carregar_servicos(self) -> dict[str, list[str]]:
         """Carrega a matriz de serviços por militar ({id: [serviços]})."""
-        return _cached_load_servicos()
+        try:
+            ws = self.sheets_client.get_worksheet("serviços")
+            vals = ws.get_all_values()
+            if not vals:
+                return {}
+            headers = [str(h).strip() for h in vals[0]]
+            result: dict[str, list[str]] = {}
+            for col in headers:
+                idx = headers.index(col)
+                for row in vals[1:]:
+                    mid = str(row[idx]).strip() if idx < len(row) else ""
+                    if mid and mid != "nan":
+                        result.setdefault(mid, []).append(col)
+            return result
+        except Exception as exc:
+            logger.warning("Falha a carregar serviços: %s", exc)
+            return {}
 
     def carregar_feriados(self, ano: int) -> list[date]:
-        """Carrega feriados de um ano — estrutura especial por colunas."""
+        """Carrega feriados de um ano a partir da aba `feriados`."""
         try:
-            sh = self.sheets_client.get_sheet()
-            ws = sh.worksheet("feriados")
+            ws = self.sheets_client.get_worksheet("feriados")
             valores = ws.get_all_values()
             if not valores:
                 return []
+
             feriados: list[date] = []
             num_cols = max(len(r) for r in valores)
             for ci in range(num_cols):
@@ -376,35 +398,36 @@ class DataLoader:
 
     def carregar_listas(self) -> dict[str, list[str]]:
         """Carrega aba `listas` no formato `{coluna: [valores]}`."""
-        return _cached_load_listas()
+        try:
+            ws = self.sheets_client.get_worksheet("listas")
+            vals = ws.get_all_values()
+            if not vals:
+                return {}
+            hdrs = [str(h).strip() for h in vals[0]]
+            result: dict[str, list[str]] = {}
+            for h in hdrs:
+                idx = hdrs.index(h)
+                result[h] = [""] + [
+                    str(row[idx]).strip()
+                    for row in vals[1:]
+                    if idx < len(row) and str(row[idx]).strip()
+                ]
+            return result
+        except Exception as exc:
+            logger.warning("Erro ao carregar listas: %s", exc)
+            return {}
 
     def limpar_cache(self) -> None:
         """Limpa todos os caches de leitura."""
-        for fn in [
-            _cached_load,
-            _cached_load_trocas,
-            _cached_load_usuarios,
-            _cached_load_feriados,
-            _cached_load_grupos_folga,
-            _cached_load_folgas,
-            _cached_load_licencas,
-            _cached_load_dias_publicados,
-            _cached_lista_abas,
-            _cached_load_servicos,
-            _cached_load_listas,
-        ]:
-            try:
-                fn.clear()
-            except Exception as exc:
-                logger.debug("Falha ao limpar cache (ignorado): %s", exc)
+        _cache.clear()
+        logger.debug("Cache limpo")
 
+    
     def limpar_cache_escala(self) -> None:
         """Limpa só o cache de escalas diárias."""
-        try:
-            _cached_load.clear()
-        except Exception:
-            pass
+        _cache.clear(prefix="load:")
 
+    
     def _atualizar_ordem_escala_dia(self, sh, aba_dia: str, d_gerar: date | datetime) -> None:
         """Atualiza o ``ordem_escala`` do dia seguinte com base na escala do dia atual."""
         slots_auto = {

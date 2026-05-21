@@ -52,14 +52,14 @@ const API = {
     },
 
     // Login
-    async login(email, pin) {
+    async login(pin) {
         const form = new URLSearchParams();
-        form.append('username', email);
+        form.append('username', pin);
         form.append('password', pin);
         const res = await fetch('/api/auth/login', { method: 'POST', body: form });
         if (!res.ok) {
             const err = await res.json();
-            throw new Error(err.detail || 'Erro no login');
+            throw new Error(err.detail || 'PIN incorreto');
         }
         const data = await res.json();
         this.setToken(data.access_token);

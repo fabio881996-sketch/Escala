@@ -1,10 +1,9 @@
 """Router de escala."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from core.database import GoogleSheetsClient
 from services.data_loader import DataLoader
@@ -12,14 +11,18 @@ from portal.api.auth import obter_user_atual, obter_admin
 
 router = APIRouter()
 
+_loader: DataLoader | None = None
+
 
 def get_loader() -> DataLoader:
-    return DataLoader(sheets_client=GoogleSheetsClient())
+    global _loader
+    if _loader is None:
+        _loader = DataLoader(sheets_client=GoogleSheetsClient())
+    return _loader
 
 
 @router.get("/dia/{data_str}")
 async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atual)):
-    """Devolve escala de um dia no formato DD-MM."""
     try:
         loader = get_loader()
         df = loader.carregar_escala(data_str)
@@ -32,55 +35,82 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
 
 @router.get("/minha")
 async def minha_escala(current_user: dict = Depends(obter_user_atual)):
-    """Devolve os próximos serviços do utilizador autenticado."""
+    """Batch optimizado — uma chamada HTTP para todos os dias."""
     u_id = current_user.get("sub")
     try:
         loader = get_loader()
-        dias_pub = loader.carregar_dias_publicados()
-        ano = datetime.now().year
-        feriados = loader.carregar_feriados(ano)
-        df_trocas = loader.carregar_trocas()
-
-        servicos = []
         hj = datetime.now()
 
-        dias_a_mostrar = []
+        dias_pub = loader.carregar_dias_publicados()
+        df_trocas = loader.carregar_trocas()
+
+        dias_a_mostrar: list[date] = []
         for delta in range(90):
-            dt = hj.date() + __import__("datetime").timedelta(days=delta)
-            aba = dt.strftime("%d-%m")
-            if aba in dias_pub:
+            dt = hj.date() + timedelta(days=delta)
+            if dt.strftime("%d-%m") in dias_pub:
                 dias_a_mostrar.append(dt)
             if len(dias_a_mostrar) >= 20:
                 break
 
+        if not dias_a_mostrar:
+            return {"servicos": []}
+
+        # BATCH — todas as escalas numa única chamada ao Sheets
+        escalas = loader.carregar_escalas_batch(dias_a_mostrar)
+
+        servicos = []
         dias_sem = 0
+
         for dt in dias_a_mostrar:
             if dias_sem >= 5:
                 break
-            df_d = loader.carregar_escala(dt.strftime("%d-%m"))
-            if df_d.empty:
+
+            aba = dt.strftime("%d-%m")
+            df_d = escalas.get(aba)
+
+            if df_d is None or df_d.empty:
                 dias_sem += 1
                 continue
 
-            meu = df_d[df_d["id"].astype(str) == str(u_id)]
+            meu = df_d[df_d["id"].astype(str).str.strip() == str(u_id).strip()]
             if meu.empty:
                 dias_sem += 1
                 continue
 
             dias_sem = 0
             row = meu.iloc[0]
+            d_s = dt.strftime("%d/%m/%Y")
+            servico = str(row.get("serviço", ""))
+            horario = str(row.get("horário", ""))
+
+            if not df_trocas.empty:
+                tr = df_trocas[
+                    (df_trocas["data"] == d_s) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                ]
+                for _, t in tr.iterrows():
+                    if str(t["id_origem"]).strip() == str(u_id).strip():
+                        s = str(t["servico_destino"])
+                        servico = s.rsplit("(", 1)[0].strip()
+                        horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                    elif str(t["id_destino"]).strip() == str(u_id).strip():
+                        s = str(t["servico_origem"])
+                        servico = s.rsplit("(", 1)[0].strip()
+                        horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+
             servicos.append({
-                "data": dt.strftime("%d/%m/%Y"),
-                "aba": dt.strftime("%d-%m"),
-                "servico": str(row.get("serviço", "")),
-                "horario": str(row.get("horário", "")),
-                "viatura": str(row.get("viatura", "")),
-                "radio": str(row.get("rádio", "")),
-                "indicativo": str(row.get("indicativo rádio", "")),
-                "giro": str(row.get("giro", "")),
-                "observacoes": str(row.get("observações", "")),
+                "data": d_s,
+                "aba": aba,
+                "servico": servico,
+                "horario": horario,
+                "viatura": str(row.get("viatura", "") or "").replace("nan", ""),
+                "radio": str(row.get("rádio", "") or "").replace("nan", ""),
+                "indicativo": str(row.get("indicativo rádio", "") or "").replace("nan", ""),
+                "giro": str(row.get("giro", "") or "").replace("nan", ""),
+                "observacoes": str(row.get("observações", "") or "").replace("nan", ""),
                 "is_hoje": dt == hj.date(),
-                "is_amanha": dt == (hj.date() + __import__("datetime").timedelta(days=1)),
+                "is_amanha": dt == (hj.date() + timedelta(days=1)),
             })
 
         return {"servicos": servicos}
@@ -90,7 +120,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
 
 @router.get("/publicados")
 async def dias_publicados(current_user: dict = Depends(obter_user_atual)):
-    """Devolve lista de dias publicados."""
     try:
         loader = get_loader()
         dias = sorted(loader.carregar_dias_publicados())
@@ -101,9 +130,8 @@ async def dias_publicados(current_user: dict = Depends(obter_user_atual)):
 
 @router.post("/publicar/{aba}")
 async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
-    """Publica um dia de escala."""
     try:
-        from core.database import GoogleSheetsClient, get_sheet
+        from core.database import get_sheet
         sh = get_sheet()
         try:
             ws = sh.worksheet("escala_publicada")
@@ -111,7 +139,7 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
             ws = sh.add_worksheet(title="escala_publicada", rows=100, cols=1)
             ws.update("A1", [["data"]])
         ws.append_row([aba])
-        _cached_load_dias_publicados.clear()
+        get_loader().limpar_cache()
         return {"ok": True, "aba": aba}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -119,7 +147,6 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
 
 @router.delete("/publicar/{aba}")
 async def despublicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
-    """Despublica um dia de escala."""
     try:
         from core.database import get_sheet
         sh = get_sheet()
@@ -129,6 +156,7 @@ async def despublicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
             if str(row[0]).strip() == aba:
                 ws.delete_rows(i)
                 break
+        get_loader().limpar_cache()
         return {"ok": True, "aba": aba}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

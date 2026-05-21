@@ -67,7 +67,7 @@ def obter_admin(current_user: dict = Depends(obter_user_atual)) -> dict:
 
 @router.post("/login", response_model=Token)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Login com email + PIN."""
+    """Login só por PIN — percorre todos os utilizadores e encontra o match."""
     try:
         loader = DataLoader(sheets_client=GoogleSheetsClient())
         df_util = loader.carregar_usuarios()
@@ -75,27 +75,26 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=503, detail="Erro ao ligar ao servidor")
 
     if df_util.empty:
-        raise HTTPException(status_code=401, detail="Utilizador não encontrado")
+        raise HTTPException(status_code=503, detail="Erro ao carregar utilizadores")
 
-    # Procurar por email
-    email = form_data.username.strip().lower()
-    user_row = df_util[df_util["email"].astype(str).str.strip().str.lower() == email]
+    pin_input = form_data.username.strip() or form_data.password.strip()
 
-    if user_row.empty:
-        raise HTTPException(status_code=401, detail="Email não encontrado")
+    # Percorrer todos os utilizadores e verificar o PIN
+    row_match = None
+    for _, row in df_util.iterrows():
+        pin_hash = str(row.get("pin", "")).strip()
+        if not pin_hash or pin_hash == "nan":
+            continue
+        if verify_pin(pin_input, pin_hash):
+            row_match = row
+            break
 
-    row = user_row.iloc[0]
-    pin_hash = str(row.get("pin", "")).strip()
-
-    if not pin_hash or pin_hash == "nan":
-        raise HTTPException(status_code=401, detail="PIN não definido")
-
-    if not verify_pin(form_data.password, pin_hash):
+    if row_match is None:
         raise HTTPException(status_code=401, detail="PIN incorreto")
 
-    user_id = str(row.get("id", "")).strip()
-    user_nome = str(row.get("nome", "")).strip()
-    user_email = str(row.get("email", "")).strip()
+    user_id = str(row_match.get("id", "")).strip()
+    user_nome = str(row_match.get("nome", "")).strip()
+    user_email = str(row_match.get("email", "")).strip()
     is_admin = user_email.lower() in {a.lower() for a in ADMINS}
 
     token = criar_token({
