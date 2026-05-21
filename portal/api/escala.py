@@ -111,6 +111,15 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "observacoes": str(row.get("observações", "") or "").replace("nan", ""),
                 "is_hoje": dt == hj.date(),
                 "is_amanha": dt == (hj.date() + timedelta(days=1)),
+                "colegas": [
+                    str(r["id"]).strip()
+                    for _, r in df_d[
+                        (df_d["serviço"].astype(str).str.strip() == servico.strip()) &
+                        (df_d["horário"].astype(str).str.strip() == horario.strip()) &
+                        (df_d["id"].astype(str).str.strip() != str(u_id).strip())
+                    ].iterrows()
+                    if str(r["id"]).strip()
+                ],
             })
 
         return {"servicos": servicos}
