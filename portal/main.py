@@ -20,9 +20,11 @@ app.include_router(utilizadores.router, prefix="/api/utilizadores", tags=["utili
 
 # Servir o frontend
 @app.get("/")
+@app.head("/")
 async def root():
     return FileResponse("portal/templates/index.html")
 
 @app.get("/{full_path:path}")
+@app.head("/{full_path:path}")
 async def catch_all(full_path: str):
     return FileResponse("portal/templates/index.html")
