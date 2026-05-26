@@ -1,4 +1,4 @@
-/* escala_geral.js v4 */
+/* escala_geral.js v5 */
 
 const EscalaGeralPage = {
     async render() {
@@ -28,7 +28,7 @@ const EscalaGeralPage = {
     async carregar() {
         const inp = document.getElementById('eg-data');
         if (!inp) return;
-        const dt = new Date(inp.value);
+        const dt = new Date(inp.value + 'T00:00:00');
         const aba = `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}`;
         const diaSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'][dt.getDay()];
         const el = document.getElementById('eg-content');
@@ -41,12 +41,15 @@ const EscalaGeralPage = {
         }
     },
 
+    // Ordena linhas cronologicamente pelo horário (ex: "08-16" → hora de início)
     sortHorario(linhas) {
-        const ordem = {'00': 0, '08': 1, '09': 2, '07': 3, '16': 4, '15': 5};
-        return linhas.sort((a, b) => {
-            const ha = (a['horário'] || '').substring(0,2);
-            const hb = (b['horário'] || '').substring(0,2);
-            return (ordem[ha] ?? 99) - (ordem[hb] ?? 99);
+        return [...linhas].sort((a, b) => {
+            const ha = parseInt((a['horário'] || '99').substring(0,2), 10);
+            const hb = parseInt((b['horário'] || '99').substring(0,2), 10);
+            // 00 (meia-noite) vai para o fim dentro do dia
+            const fa = ha === 0 ? 24 : ha;
+            const fb = hb === 0 ? 24 : hb;
+            return fa - fb;
         });
     },
 
@@ -63,7 +66,7 @@ const EscalaGeralPage = {
         const adm = {};
         const atendimento = [];
         const apoio = [];
-        const patOcorr = [];
+        const patrulhas = [];   // Patrulha Ocorrências + Patrulha Auto + Patrulha Apeada
         const outros = [];
 
         const AUSENCIA = ['folga semanal','folga complementar','férias','licença','convalescença','outras licenças','doente'];
@@ -85,8 +88,8 @@ const EscalaGeralPage = {
                 apoio.push(e);
             } else if (sv === 'atendimento' || (sv.includes('atendimento') && !sv.startsWith('apoio'))) {
                 atendimento.push(e);
-            } else if (sv.includes('patrulha ocorr')) {
-                patOcorr.push(e);
+            } else if (sv.includes('patrulha')) {
+                patrulhas.push(e);
             } else {
                 outros.push(e);
             }
@@ -122,7 +125,7 @@ const EscalaGeralPage = {
 
         const renderTabela = (titulo, linhasOrig, comServico = false) => {
             if (!linhasOrig.length) return '';
-            const linhas = this.sortHorario([...linhasOrig]);
+            const linhas = this.sortHorario(linhasOrig);
             const mapa = {};
             for (const e of linhas) {
                 const h = e['horário'] || '';
@@ -165,7 +168,7 @@ const EscalaGeralPage = {
 
         html += renderTabela('Atendimento', atendimento);
         html += renderTabela('Apoio ao Atendimento', apoio);
-        html += renderTabela('Patrulha Ocorrências', patOcorr);
+        html += renderTabela('Patrulhas', patrulhas, true);
         if (outros.length) html += renderTabela('Outros Serviços', outros, true);
 
         el.innerHTML = html;
