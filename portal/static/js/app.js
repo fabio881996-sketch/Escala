@@ -1,16 +1,11 @@
-/* ============================================
-   app.js — Inicialização da app
-   ============================================ */
+/* app.js v2 */
 
 const App = {
     init() {
-        // Esconder splash após carregar
         setTimeout(() => {
-            const splash = document.getElementById('splash');
-            if (splash) splash.classList.add('hidden');
-            setTimeout(() => { if (splash) splash.remove(); }, 400);
-        }, 800);
-
+            const s = document.getElementById('splash');
+            if (s) { s.classList.add('hidden'); setTimeout(() => s.remove(), 400); }
+        }, 700);
         Router.init();
     },
 
@@ -18,15 +13,17 @@ const App = {
         const user = API.getUser();
         if (!user) return;
 
-        // Navbar
         document.getElementById('app').innerHTML = `
             <div id="navbar">
-                <div>
-                    <div class="nav-title">🛡️ Portal de Escalas</div>
-                    <div class="nav-subtitle">Posto de Famalicão</div>
+                <div class="nav-left">
+                    <span class="nav-logo">🛡️</span>
+                    <div>
+                        <div class="nav-title">Portal de Escalas</div>
+                        <div class="nav-sub">Posto de Famalicão</div>
+                    </div>
                 </div>
-                <div class="nav-user">
-                    ${user.is_admin ? '<span class="nav-badge">⭐ Admin</span>' : ''}
+                <div class="nav-right">
+                    ${user.is_admin ? '<span class="nav-badge">⭐ ADMIN</span>' : ''}
                     <button class="nav-btn" onclick="App.logout()" title="Sair">🚪</button>
                 </div>
             </div>
@@ -41,40 +38,32 @@ const App = {
                     <span>Escala Geral</span>
                 </button>
                 <button class="tab-item" data-page="trocas" onclick="Router.go('trocas')">
-                    <div class="tab-badge">
+                    <div class="tab-badge-wrap">
                         <span class="tab-icon">🔄</span>
-                        <span id="badge-trocas" class="tab-badge-count" style="display:none">0</span>
+                        <span id="tab-dot-trocas" class="tab-dot" style="display:none"></span>
                     </div>
                     <span>Trocas</span>
                 </button>
-            </div>
-        `;
+            </div>`;
 
-        // Verificar trocas pendentes
         App.checkPendentes();
     },
 
     async checkPendentes() {
         try {
             const data = await API.trocas_pendentes();
-            if (data && data.trocas && data.trocas.length > 0) {
-                const badge = document.getElementById('badge-trocas');
-                if (badge) {
-                    badge.textContent = data.trocas.length;
-                    badge.style.display = 'flex';
-                }
+            if (data?.trocas?.length > 0) {
+                const dot = document.getElementById('tab-dot-trocas');
+                if (dot) dot.style.display = 'block';
             }
-        } catch (e) { /* silencioso */ }
+        } catch(e) {}
     },
 
     logout() {
         if (confirm('Tens a certeza que queres sair?')) {
-            API.clearToken();
-            API.clearCache();
-            location.reload();
+            API.clearToken(); API.clearCache(); location.reload();
         }
     }
 };
 
-// Iniciar quando o DOM estiver pronto
 document.addEventListener('DOMContentLoaded', () => App.init());
