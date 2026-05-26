@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from portal.api import auth, escala, trocas, utilizadores
+from portal.api import auth, escala, trocas, utilizadores, notificacoes
 
 logger = logging.getLogger(__name__)
 
@@ -18,10 +18,11 @@ app = FastAPI(title="Portal de Escalas GNR", version="2.0.0")
 app.mount("/static", StaticFiles(directory="portal/static"), name="static")
 
 # Registar routers
-app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(escala.router, prefix="/api/escala", tags=["escala"])
-app.include_router(trocas.router, prefix="/api/trocas", tags=["trocas"])
-app.include_router(utilizadores.router, prefix="/api/utilizadores", tags=["utilizadores"])
+app.include_router(auth.router,           prefix="/api/auth",          tags=["auth"])
+app.include_router(escala.router,         prefix="/api/escala",        tags=["escala"])
+app.include_router(trocas.router,         prefix="/api/trocas",        tags=["trocas"])
+app.include_router(utilizadores.router,   prefix="/api/utilizadores",  tags=["utilizadores"])
+app.include_router(notificacoes.router,   prefix="/api/notificacoes",  tags=["notificacoes"])
 
 
 @app.on_event("startup")
