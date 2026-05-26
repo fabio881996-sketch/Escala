@@ -66,7 +66,8 @@ const EscalaGeralPage = {
         const adm = {};
         const atendimento = [];
         const apoio = [];
-        const patrulhas = [];   // Patrulha Ocorrências + Patrulha Auto + Patrulha Apeada
+        const patOcorr = [];
+        const patrulhas = [];
         const outros = [];
 
         const AUSENCIA = ['folga semanal','folga complementar','férias','licença','convalescença','outras licenças','doente'];
@@ -88,6 +89,8 @@ const EscalaGeralPage = {
                 apoio.push(e);
             } else if (sv === 'atendimento' || (sv.includes('atendimento') && !sv.startsWith('apoio'))) {
                 atendimento.push(e);
+            } else if (sv.includes('patrulha ocorr')) {
+                patOcorr.push(e);
             } else if (sv.includes('patrulha')) {
                 patrulhas.push(e);
             } else {
@@ -168,6 +171,7 @@ const EscalaGeralPage = {
 
         html += renderTabela('Atendimento', atendimento);
         html += renderTabela('Apoio ao Atendimento', apoio);
+        html += renderTabela('Patrulha Ocorrências', patOcorr);
         html += renderTabela('Patrulhas', patrulhas, true);
         if (outros.length) html += renderTabela('Outros Serviços', outros, true);
 
