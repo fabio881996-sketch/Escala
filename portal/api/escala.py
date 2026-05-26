@@ -43,6 +43,17 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
 
         dias_pub = loader.carregar_dias_publicados()
         df_trocas = loader.carregar_trocas()
+        df_util = loader.carregar_usuarios()
+
+        # Mapa id -> nome+posto para lookup rápido
+        id_para_nome = {}
+        if not df_util.empty:
+            for _, r in df_util.iterrows():
+                uid = str(r.get("id", "")).strip()
+                posto = str(r.get("posto", "")).strip()
+                nome = str(r.get("nome", "")).strip()
+                if uid:
+                    id_para_nome[uid] = f"{posto} {nome}".strip() if posto else nome
 
         dias_a_mostrar: list[date] = []
         for delta in range(90):
@@ -112,7 +123,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "is_hoje": dt == hj.date(),
                 "is_amanha": dt == (hj.date() + timedelta(days=1)),
                 "colegas": [
-                    str(r["id"]).strip()
+                    id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
                     for _, r in df_d[
                         (df_d["serviço"].astype(str).str.strip() == servico.strip()) &
                         (df_d["horário"].astype(str).str.strip() == horario.strip()) &
