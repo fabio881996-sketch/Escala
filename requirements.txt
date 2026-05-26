@@ -1,7 +1,7 @@
-streamlit
+fastapi
+uvicorn[standard]
 pandas
 gspread
 google-auth
-fpdf==1.7.2
-pypdf
 reportlab
+pywebpush>=2.0.0
