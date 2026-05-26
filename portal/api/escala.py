@@ -181,6 +181,22 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
             ws.update("A1", [["data"]])
         ws.append_row([aba])
         get_loader().limpar_cache()
+        # Notificar todos os utilizadores
+        try:
+            from portal.api.notificacoes import enviar_push
+            df_util = get_loader().carregar_usuarios()
+            todos_ids = df_util["id"].astype(str).str.strip().tolist()
+            # Formatar data para exibição (DD-MM → DD/MM)
+            data_fmt = aba.replace("-", "/")
+            enviar_push(
+                u_ids=todos_ids,
+                titulo="📅 Nova escala publicada",
+                corpo=f"A escala de {data_fmt} foi publicada.",
+                url="/escala-geral",
+                tag="escala-publicada",
+            )
+        except Exception:
+            pass
         return {"ok": True, "aba": aba}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

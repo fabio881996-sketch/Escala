@@ -326,6 +326,17 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
             pedido.id_destino, pedido.servico_destino,
             "Pendente_Militar", pedido.observacoes or ""
         ])
+        # Notificar o destinatário
+        try:
+            from portal.api.notificacoes import enviar_push
+            enviar_push(
+                u_ids=[pedido.id_destino],
+                titulo="🔄 Novo pedido de troca",
+                corpo=f"Tens um pedido de troca para {pedido.data}.",
+                url="/trocas",
+            )
+        except Exception:
+            pass
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -360,6 +371,19 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         # Coluna status = coluna F = índice 6 (1-based para gspread)
         col_status = 6
         ws.update_cell(resposta.row_index + 1, col_status, novo_status)
+        # Notificar o autor original
+        try:
+            from portal.api.notificacoes import enviar_push
+            id_origem = str(row[1]).strip()
+            emoji = "✅" if novo_status == "Aprovada" else "❌"
+            enviar_push(
+                u_ids=[id_origem],
+                titulo=f"{emoji} Troca {novo_status.lower()}",
+                corpo=f"A tua troca de {row[0]} foi {novo_status.lower()}.",
+                url="/trocas",
+            )
+        except Exception:
+            pass
         return {"ok": True, "status": novo_status}
     except HTTPException:
         raise
