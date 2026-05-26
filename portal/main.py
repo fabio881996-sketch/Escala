@@ -1,15 +1,20 @@
 """Portal de Escalas GNR — FastAPI entry point."""
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+import asyncio
+import logging
+
+from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from portal.api import auth, escala, trocas, utilizadores
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="Portal de Escalas GNR", version="2.0.0")
 
-# Servir ficheiros estáticos (CSS, JS, ícones)
+# Servir ficheiros estáticos
 app.mount("/static", StaticFiles(directory="portal/static"), name="static")
 
 # Registar routers
@@ -17,6 +22,24 @@ app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(escala.router, prefix="/api/escala", tags=["escala"])
 app.include_router(trocas.router, prefix="/api/trocas", tags=["trocas"])
 app.include_router(utilizadores.router, prefix="/api/utilizadores", tags=["utilizadores"])
+
+
+@app.on_event("startup")
+async def warmup():
+    """Pré-carregar dados críticos no arranque para resposta imediata."""
+    async def _load():
+        try:
+            from core.database import GoogleSheetsClient
+            from services.data_loader import DataLoader
+            loader = DataLoader(sheets_client=GoogleSheetsClient())
+            loader.carregar_usuarios()
+            loader.carregar_dias_publicados()
+            loader.carregar_trocas()
+            logger.info("Warm-up completo")
+        except Exception as e:
+            logger.warning(f"Warm-up falhou (ignorado): {e}")
+    asyncio.create_task(_load())
+
 
 # Servir o frontend
 @app.get("/")
