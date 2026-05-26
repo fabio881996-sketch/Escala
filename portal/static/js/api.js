@@ -77,8 +77,15 @@ const API = {
     utilizadores: () => API.get('/api/utilizadores/'),
 
     solicitar_troca: (dados) => API.post('/api/trocas/solicitar', dados),
+    trocas_disponiveis: (aba, tipo = 'simples') => API.get(`/api/trocas/disponíveis?data=${aba}&tipo=${tipo}`, false),
+    responder_troca: (dados) => API.post('/api/trocas/responder', dados),
     publicar_dia: (aba) => API.post(`/api/escala/publicar/${aba}`, {}),
     despublicar_dia: (aba) => API.delete(`/api/escala/publicar/${aba}`),
+
+    // Push / notificações
+    vapid_public_key: () => API.get('/api/notificacoes/vapid-public-key'),
+    push_subscribe: (dados) => API.post('/api/notificacoes/subscribe', dados),
+    push_unsubscribe: () => API.delete('/api/notificacoes/unsubscribe'),
 
     // Limpar cache da sessão
     clearCache() { Object.keys(sessionStorage).filter(k => k.startsWith('api_')).forEach(k => sessionStorage.removeItem(k)); },
