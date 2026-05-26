@@ -1,22 +1,22 @@
 /* ============================================
-   pages/trocas.js — Trocas
+   pages/trocas.js — Trocas de Serviço v2
    ============================================ */
 
 const TrocasPage = {
-    activeTab: 'pendentes',
+    activeTab: 'solicitar',
 
     async render() {
         const content = document.getElementById('content');
         content.innerHTML = `
             <div class="section-header">🔄 Trocas de Serviço</div>
             <div class="tabs">
-                <button class="tab-btn active" onclick="TrocasPage.setTab('pendentes', this)">📥 Pendentes</button>
+                <button class="tab-btn" onclick="TrocasPage.setTab('pendentes', this)">📥 Pendentes</button>
                 <button class="tab-btn" onclick="TrocasPage.setTab('historico', this)">📋 Histórico</button>
-                <button class="tab-btn" onclick="TrocasPage.setTab('solicitar', this)">➕ Solicitar</button>
+                <button class="tab-btn active" onclick="TrocasPage.setTab('solicitar', this)">➕ Solicitar</button>
             </div>
             <div id="trocas-content">${Components.loading()}</div>
         `;
-        await this.loadPendentes();
+        await this.renderSolicitar();
     },
 
     setTab(tab, btn) {
@@ -25,9 +25,10 @@ const TrocasPage = {
         btn.classList.add('active');
         if (tab === 'pendentes') this.loadPendentes();
         else if (tab === 'historico') this.loadHistorico();
-        else if (tab === 'solicitar') this.renderSolicitar();
+        else this.renderSolicitar();
     },
 
+    // ── PENDENTES ────────────────────────────────────────────
     async loadPendentes() {
         const el = document.getElementById('trocas-content');
         el.innerHTML = Components.loading();
@@ -38,14 +39,15 @@ const TrocasPage = {
                 el.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><p>Sem pedidos pendentes.</p></div>`;
                 return;
             }
-            el.innerHTML = trocas.map(t => `
+            el.innerHTML = trocas.map((t, i) => `
                 <div class="card card-amber">
                     <div class="card-label">📥 Pedido de troca • ${t.data}</div>
                     <div class="card-title">🔄 ${t.servico_origem}</div>
-                    <div class="card-subtitle">De: ${t.id_origem}</div>
+                    <div class="card-subtitle">De: ${t.nome_origem || t.id_origem}</div>
+                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__index || 0}, 'aceitar')">✅ Aceitar</button>
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__index || 0}, 'rejeitar')">❌ Recusar</button>
+                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'aceitar')">✅ Aceitar</button>
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'rejeitar')">❌ Recusar</button>
                     </div>
                 </div>`).join('');
         } catch (e) {
@@ -53,23 +55,44 @@ const TrocasPage = {
         }
     },
 
+    async responder(rowIndex, acao) {
+        const label = acao === 'aceitar' ? 'Aceitar' : 'Recusar';
+        if (!confirm(`Tens a certeza que queres ${label.toLowerCase()} esta troca?`)) return;
+        try {
+            await API.responder_troca({ row_index: rowIndex, acao });
+            await this.loadPendentes();
+            // Actualizar badge
+            App.checkPendentes();
+        } catch (e) {
+            alert(`❌ Erro: ${e.message}`);
+        }
+    },
+
+    // ── HISTÓRICO ────────────────────────────────────────────
     async loadHistorico() {
         const el = document.getElementById('trocas-content');
         el.innerHTML = Components.loading();
         try {
             const data = await API.minhas_trocas();
-            const trocas = (data?.trocas || []).slice(0, 20);
+            const trocas = (data?.trocas || []).slice(0, 30);
             if (!trocas.length) {
                 el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>Sem histórico de trocas.</p></div>`;
                 return;
             }
             el.innerHTML = trocas.map(t => {
-                const statusColor = t.status === 'Aprovada' ? 'verde' : t.status === 'Rejeitada' ? 'vermelho' : 'amber';
+                const user = API.getUser();
+                const souOrigem = String(t.id_origem) === String(user?.id);
+                const cor = t.status === 'Aprovada' ? 'verde' : t.status === 'Rejeitada' ? 'vermelho' : 'amber';
+                const contraparte = souOrigem
+                    ? (t.nome_destino || t.id_destino)
+                    : (t.nome_origem || t.id_origem);
+                const direcao = souOrigem ? '→' : '←';
                 return `
-                    <div class="card card-${statusColor}">
+                    <div class="card card-${cor}">
                         <div class="card-label">${t.data} • ${t.status}</div>
                         <div class="card-title">🔄 ${t.servico_origem}</div>
-                        <div class="card-subtitle">Com: ${t.id_destino}</div>
+                        <div class="card-subtitle">${direcao} ${contraparte}</div>
+                        ${t.observacoes ? `<div class="card-subtitle" style="margin-top:2px">📝 ${t.observacoes}</div>` : ''}
                     </div>`;
             }).join('');
         } catch (e) {
@@ -77,68 +100,134 @@ const TrocasPage = {
         }
     },
 
+    // ── SOLICITAR ────────────────────────────────────────────
     renderSolicitar() {
+        const hoje = new Date().toISOString().slice(0, 10);
         const el = document.getElementById('trocas-content');
         el.innerHTML = `
             <div class="alert alert-info">ℹ️ Seleciona o dia e o militar para solicitar uma troca.</div>
+
             <div class="form-group">
                 <label class="form-label">📅 Data</label>
-                <input type="date" id="troca-data" class="form-input" value="${new Date().toISOString().slice(0,10)}">
+                <input type="date" id="troca-data" class="form-input" value="${hoje}">
             </div>
-            <button class="btn btn-primary" onclick="TrocasPage.carregarDia()">🔍 Ver escala do dia</button>
-            <div id="troca-escala-dia" style="margin-top:16px"></div>
+
+            <div class="form-group">
+                <label class="form-label">🔄 Tipo de troca</label>
+                <select id="troca-tipo" class="form-input form-select">
+                    <option value="simples">🔄 Troca Simples</option>
+                    <option value="folga">📅 Troca de Folga</option>
+                    <option value="dar_remunerado">💶 Dar Remunerado</option>
+                    <option value="fazer_remunerado">💶 Fazer Remunerado</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%" onclick="TrocasPage.carregarDia()">🔍 Ver escala do dia</button>
+            <div id="troca-resultado" style="margin-top:16px"></div>
         `;
     },
 
     async carregarDia() {
         const dataInput = document.getElementById('troca-data');
-        const dt = new Date(dataInput.value);
+        const tipoInput = document.getElementById('troca-tipo');
+        if (!dataInput || !tipoInput) return;
+
+        const dt = new Date(dataInput.value + 'T00:00:00');
         const aba = `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}`;
-        const el = document.getElementById('troca-escala-dia');
+        const tipo = tipoInput.value;
+        const el = document.getElementById('troca-resultado');
         el.innerHTML = Components.loading();
+
         try {
-            const data = await API.escala_dia(aba);
-            const entradas = data?.entradas || [];
-            const user = API.getUser();
-            const outros = entradas.filter(e => String(e.id) !== String(user?.id));
-            if (!outros.length) {
-                el.innerHTML = `<div class="alert alert-warning">⚠️ Sem militares disponíveis neste dia.</div>`;
+            const data = await API.trocas_disponiveis(aba, tipo);
+            const { meu_servico, meu_horario, disponiveis } = data;
+
+            // Mensagem se não tenho serviço relevante para este tipo
+            let alertaMeuServico = '';
+            if (tipo === 'simples' && !meu_servico) {
+                alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens serviço escalado neste dia.</div>`;
+            } else if (tipo === 'folga' && meu_servico && !meu_servico.toLowerCase().includes('folga')) {
+                alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens folga neste dia (tens: ${meu_servico}).</div>`;
+            } else if ((tipo === 'dar_remunerado') && meu_servico && !/(remun|gratif)/i.test(meu_servico)) {
+                alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens remunerado neste dia.</div>`;
+            }
+
+            const meuServicoHTML = meu_servico
+                ? `<div class="card" style="margin-bottom:12px;background:var(--bg-card)">
+                       <div class="card-label">O teu serviço</div>
+                       <div class="card-title">📋 ${meu_servico}</div>
+                       ${meu_horario ? `<div class="card-subtitle">🕐 ${meu_horario}</div>` : ''}
+                   </div>`
+                : `<div class="alert alert-warning">⚠️ Não tens serviço escalado neste dia.</div>`;
+
+            if (!disponiveis.length) {
+                el.innerHTML = meuServicoHTML + alertaMeuServico +
+                    `<div class="alert alert-warning">⚠️ Sem militares disponíveis para este tipo de troca.</div>`;
                 return;
             }
+
+            const opcoesHTML = disponiveis.map(d =>
+                `<option value="${d.id}" data-servico="${d.servico}" data-horario="${d.horario}">
+                    ${d.nome} — ${d.servico} ${d.horario ? `(${d.horario})` : ''}
+                </option>`
+            ).join('');
+
             el.innerHTML = `
+                ${meuServicoHTML}
+                ${alertaMeuServico}
                 <div class="form-group">
                     <label class="form-label">👤 Trocar com</label>
                     <select id="troca-mil" class="form-input form-select">
-                        ${outros.map(e => `<option value="${e.id}">${e.id} — ${e['serviço'] || ''} (${e['horário'] || ''})</option>`).join('')}
+                        ${opcoesHTML}
                     </select>
                 </div>
-                <button class="btn btn-primary" onclick="TrocasPage.enviar('${dataInput.value}')">📨 Enviar Pedido</button>
+                <div class="form-group">
+                    <label class="form-label">📝 Observações (opcional)</label>
+                    <input type="text" id="troca-obs" class="form-input" placeholder="ex: problema pessoal">
+                </div>
+                <button class="btn btn-primary" style="width:100%"
+                    onclick="TrocasPage.enviar('${dataInput.value}', '${aba}', '${tipo}', '${meu_servico || ''}', '${meu_horario || ''}')">
+                    📨 Enviar Pedido
+                </button>
             `;
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
         }
     },
 
-    async enviar(dataStr) {
+    async enviar(dataStr, aba, tipo, meuServico, meuHorario) {
         const milSel = document.getElementById('troca-mil');
+        const obsEl = document.getElementById('troca-obs');
         if (!milSel) return;
+
+        const opt = milSel.options[milSel.selectedIndex];
+        const servicoDestino = opt.dataset.servico || '';
+        const horarioDestino = opt.dataset.horario || '';
+        const idDestino = milSel.value;
+        const obs = obsEl?.value || '';
+
+        // Formatar data DD/MM/YYYY
+        const dt = new Date(dataStr + 'T00:00:00');
+        const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
+
+        // Serviço origem: para dar_remunerado usar marcador especial
+        let servicoOrigem = meuServico || 'auto';
+        if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
+
+        const el = document.getElementById('troca-resultado');
         try {
             await API.solicitar_troca({
-                tipo: 'Troca Simples',
-                data: dataStr,
-                id_destino: milSel.value,
-                servico_origem: 'auto',
-                servico_destino: 'auto',
+                tipo,
+                data: dataFmt,
+                id_destino: idDestino,
+                servico_origem: servicoOrigem,
+                servico_destino: servicoDestino,
+                observacoes: obs,
             });
-            document.getElementById('trocas-content').innerHTML = `<div class="alert alert-success">✅ Pedido enviado com sucesso!</div>`;
+            el.innerHTML = `<div class="alert alert-success">✅ Pedido enviado com sucesso!</div>`;
             setTimeout(() => this.render(), 2000);
         } catch (e) {
-            document.getElementById('trocas-content').innerHTML += `<div class="alert alert-error">❌ ${e.message}</div>`;
+            el.innerHTML += `<div class="alert alert-error">❌ ${e.message}</div>`;
         }
     },
-
-    async responder(idx, acao) {
-        // TODO: implementar resposta a pedido de troca
-        alert(`${acao === 'aceitar' ? '✅ Aceite' : '❌ Recusado'} — em desenvolvimento`);
-    }
 };
