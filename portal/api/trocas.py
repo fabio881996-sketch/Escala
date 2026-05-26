@@ -19,7 +19,7 @@ router = APIRouter()
 IMPEDIMENTOS = [
     "férias", "ferias", "licença", "licenca", "doente",
     "diligência", "diligencia", "tribunal", "pronto",
-    "secretaria", "inquérito", "inquerito", "baixa",
+    "secretaria", "inquérito", "inquerito", "baixa", "convalescença", "convalescenca",
 ]
 IMPEDIMENTOS_RE = re.compile("|".join(IMPEDIMENTOS), re.IGNORECASE)
 
