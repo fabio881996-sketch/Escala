@@ -23,12 +23,32 @@ def get_loader() -> DataLoader:
 
 @router.get("/dia/{data_str}")
 async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atual)):
+    """Devolve escala de um dia com nomes formatados."""
     try:
         loader = get_loader()
         df = loader.carregar_escala(data_str)
         if df.empty:
             return {"data": data_str, "entradas": []}
-        return {"data": data_str, "entradas": df.fillna("").to_dict(orient="records")}
+
+        df_util = loader.carregar_usuarios()
+        id_nome = {}
+        if not df_util.empty:
+            for _, r in df_util.iterrows():
+                uid = str(r.get("id", "")).strip()
+                posto = str(r.get("posto", "")).strip()
+                nomes = str(r.get("nome", "")).strip().split()
+                inicial = f"{nomes[0][0]}." if nomes else ""
+                apelido = nomes[-1] if len(nomes) > 1 else ""
+                nome_fmt = f"{uid} {posto} {inicial} {apelido}".strip() if posto else uid
+                if uid:
+                    id_nome[uid] = nome_fmt
+
+        entradas = df.fillna("").to_dict(orient="records")
+        for e in entradas:
+            uid = str(e.get("id", "")).strip()
+            e["nome_fmt"] = id_nome.get(uid, uid)
+
+        return {"data": data_str, "entradas": entradas}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -45,15 +65,16 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
 
-        # Mapa id -> nome+posto para lookup rápido
+        # Mapa id -> formato "ID Posto PrimeiroNome Apelido"
         id_para_nome = {}
         if not df_util.empty:
             for _, r in df_util.iterrows():
                 uid = str(r.get("id", "")).strip()
                 posto = str(r.get("posto", "")).strip()
-                nome = str(r.get("nome", "")).strip()
+                nomes = str(r.get("nome", "")).strip().split()
+                nome_curto = f"{nomes[0]} {nomes[-1]}" if len(nomes) > 1 else " ".join(nomes)
                 if uid:
-                    id_para_nome[uid] = f"{posto} {nome}".strip() if posto else nome
+                    id_para_nome[uid] = f"{uid} {posto} {nome_curto}".strip()
 
         dias_a_mostrar: list[date] = []
         for delta in range(90):
