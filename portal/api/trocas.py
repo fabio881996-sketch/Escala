@@ -61,7 +61,7 @@ def _verificar_descanso(u_id: str, data_str: str, novo_horario: str, loader: Dat
         dt_adj = dt + timedelta(days=delta_days)
         aba_adj = dt_adj.strftime("%d-%m")
         try:
-            df_adj = loader.carregar_escala_dia(aba_adj)
+            df_adj = loader.carregar_escala(aba_adj)
             if df_adj.empty:
                 continue
             linhas = df_adj[df_adj["id"].astype(str).str.strip() == str(u_id)]
@@ -161,7 +161,7 @@ async def disponiveis(
     u_id = str(current_user.get("sub"))
     try:
         loader = get_loader()
-        df_dia = loader.carregar_escala_dia(data)
+        df_dia = loader.carregar_escala(data)
         df_util = loader.carregar_usuarios()
         df_trocas = loader.carregar_trocas()
 
