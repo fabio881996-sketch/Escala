@@ -73,7 +73,7 @@ def _now() -> str:
 
 # ── Enviar push (interno, chamado por outros routers) ─────────
 
-def enviar_push(u_ids: list[str], titulo: str, corpo: str, url: str = "/") -> None:
+def enviar_push(u_ids: list[str], titulo: str, corpo: str, url: str = "/", tag: str = "gnr-notif") -> None:
     """Envia notificação push a uma lista de u_ids. Falhas são ignoradas silenciosamente."""
     if not VAPID_PRIVATE or not VAPID_PUBLIC:
         logger.warning("VAPID keys não configuradas — push não enviado")
@@ -85,7 +85,7 @@ def enviar_push(u_ids: list[str], titulo: str, corpo: str, url: str = "/") -> No
         return
 
     subs = _get_subscriptions(u_ids)
-    payload = json.dumps({"title": titulo, "body": corpo, "url": url})
+    payload = json.dumps({"title": titulo, "body": corpo, "url": url, "tag": tag})
 
     for entry in subs:
         try:
