@@ -1,4 +1,4 @@
-/* escala_geral.js v3 — layout igual ao Streamlit */
+/* escala_geral.js v4 */
 
 const EscalaGeralPage = {
     async render() {
@@ -41,6 +41,15 @@ const EscalaGeralPage = {
         }
     },
 
+    sortHorario(linhas) {
+        const ordem = {'00': 0, '08': 1, '09': 2, '07': 3, '16': 4, '15': 5};
+        return linhas.sort((a, b) => {
+            const ha = (a['horário'] || '').substring(0,2);
+            const hb = (b['horário'] || '').substring(0,2);
+            return (ordem[ha] ?? 99) - (ordem[hb] ?? 99);
+        });
+    },
+
     renderEscala(data, dt, diaSemana) {
         const el = document.getElementById('eg-content');
         const entradas = data?.entradas || [];
@@ -50,7 +59,6 @@ const EscalaGeralPage = {
             return;
         }
 
-        // Classificar entradas
         const ausencias = {};
         const adm = {};
         const atendimento = [];
@@ -58,25 +66,25 @@ const EscalaGeralPage = {
         const patOcorr = [];
         const outros = [];
 
-        const AUSENCIA_TIPOS = ['folga semanal','folga complementar','férias','licença','convalescença','outras licenças','doente'];
-        const ADM_TIPOS = ['diligência','tribunal','pronto','secretaria','inquérito','fcaa','instrução','remunerado'];
+        const AUSENCIA = ['folga semanal','folga complementar','férias','licença','convalescença','outras licenças','doente'];
+        const ADM = ['diligência','tribunal','pronto','secretaria','inquérito','fcaa','instrução','remunerado'];
 
         for (const e of entradas) {
             const sv = (e['serviço'] || '').toLowerCase().trim();
             const nome = e['nome_fmt'] || e['id'] || '';
 
-            if (AUSENCIA_TIPOS.some(t => sv.includes(t))) {
-                const tipo = e['serviço'] || sv;
+            if (AUSENCIA.some(t => sv.includes(t))) {
+                const tipo = (e['serviço'] || sv).trim();
                 if (!ausencias[tipo]) ausencias[tipo] = [];
                 ausencias[tipo].push(nome);
-            } else if (ADM_TIPOS.some(t => sv.includes(t))) {
-                const tipo = e['serviço'] || sv;
+            } else if (ADM.some(t => sv.includes(t))) {
+                const tipo = (e['serviço'] || sv).trim();
                 if (!adm[tipo]) adm[tipo] = [];
                 adm[tipo].push(nome);
-            } else if (sv.includes('atendimento') && !sv.includes('apoio')) {
-                atendimento.push(e);
-            } else if (sv.includes('apoio')) {
+            } else if (sv.startsWith('apoio') || sv === 'apoio ao atendimento') {
                 apoio.push(e);
+            } else if (sv === 'atendimento' || (sv.includes('atendimento') && !sv.startsWith('apoio'))) {
+                atendimento.push(e);
             } else if (sv.includes('patrulha ocorr')) {
                 patOcorr.push(e);
             } else {
@@ -84,76 +92,74 @@ const EscalaGeralPage = {
             }
         }
 
-        let html = `<div style="font-size:.82rem;color:var(--cinza-txt);margin-bottom:12px;font-weight:500">${diaSemana}, ${dt.getDate().toString().padStart(2,'0')}/${(dt.getMonth()+1).toString().padStart(2,'0')}/${dt.getFullYear()}</div>`;
+        let html = `<div style="font-size:.82rem;color:var(--cinza-txt);margin-bottom:12px;font-weight:600">${diaSemana}, ${dt.getDate().toString().padStart(2,'0')}/${(dt.getMonth()+1).toString().padStart(2,'0')}/${dt.getFullYear()}</div>`;
 
-        // AUSÊNCIAS
+        // AUSÊNCIAS + ADM lado a lado
         if (Object.keys(ausencias).length || Object.keys(adm).length) {
-            html += `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">`;
-
+            html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">`;
             if (Object.keys(ausencias).length) {
                 html += `<div class="card" style="padding:12px">
-                    <div style="font-size:.68rem;font-weight:800;color:#fff;background:var(--azul);padding:5px 10px;border-radius:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Ausências</div>`;
+                    <div style="font-size:.66rem;font-weight:800;color:#fff;background:var(--azul);padding:5px 10px;border-radius:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Ausências</div>`;
                 for (const [tipo, ids] of Object.entries(ausencias)) {
-                    html += `<div style="margin-bottom:6px"><span style="font-size:.75rem;font-weight:700;color:#374151">${tipo}:</span> <span style="font-size:.75rem;color:#475569">${ids.join(', ')}</span></div>`;
+                    html += `<div style="margin-bottom:5px"><div style="font-size:.72rem;font-weight:700;color:#374151">${tipo}</div><div style="font-size:.72rem;color:#475569">${ids.join(', ')}</div></div>`;
                 }
                 html += `</div>`;
             }
-
             if (Object.keys(adm).length) {
                 html += `<div class="card" style="padding:12px">
-                    <div style="font-size:.68rem;font-weight:800;color:#fff;background:var(--azul);padding:5px 10px;border-radius:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">ADM / Outras</div>`;
+                    <div style="font-size:.66rem;font-weight:800;color:#fff;background:var(--azul);padding:5px 10px;border-radius:6px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">ADM / Outras</div>`;
                 for (const [tipo, ids] of Object.entries(adm)) {
-                    html += `<div style="margin-bottom:6px"><span style="font-size:.75rem;font-weight:700;color:#374151">${tipo}:</span> <span style="font-size:.75rem;color:#475569">${ids.join(', ')}</span></div>`;
+                    html += `<div style="margin-bottom:5px"><div style="font-size:.72rem;font-weight:700;color:#374151">${tipo}</div><div style="font-size:.72rem;color:#475569">${ids.join(', ')}</div></div>`;
                 }
                 html += `</div>`;
             }
-
             html += `</div>`;
         }
 
-        // Tabela genérica
-        const renderTabela = (titulo, linhas, comServico = false) => {
-            if (!linhas.length) return '';
-            // Agrupar por horário+serviço
+        const temInd = (linhas) => linhas.some(e => e['indicativo rádio'] && e['indicativo rádio'] !== 'nan');
+        const temRad = (linhas) => linhas.some(e => e['rádio'] && e['rádio'] !== 'nan');
+        const temVtr = (linhas) => linhas.some(e => e['viatura'] && e['viatura'] !== 'nan');
+
+        const renderTabela = (titulo, linhasOrig, comServico = false) => {
+            if (!linhasOrig.length) return '';
+            const linhas = this.sortHorario([...linhasOrig]);
             const mapa = {};
             for (const e of linhas) {
                 const h = e['horário'] || '';
                 const sv = e['serviço'] || '';
-                const key = comServico ? `${h}|${sv}` : h;
+                const key = comServico ? `${h}||${sv}` : h;
                 if (!mapa[key]) mapa[key] = { h, sv, nomes:[], vtr:'', rad:'', ind:'' };
                 mapa[key].nomes.push(e['nome_fmt'] || e['id'] || '');
                 if (e['viatura'] && e['viatura'] !== 'nan') mapa[key].vtr = e['viatura'];
                 if (e['rádio'] && e['rádio'] !== 'nan') mapa[key].rad = e['rádio'];
                 if (e['indicativo rádio'] && e['indicativo rádio'] !== 'nan') mapa[key].ind = e['indicativo rádio'];
             }
-
+            const hasInd = temInd(linhas), hasRad = temRad(linhas), hasVtr = temVtr(linhas);
             let t = `<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">
-                <div style="font-size:.7rem;font-weight:800;color:#fff;background:var(--azul);padding:8px 14px;text-transform:uppercase;letter-spacing:.06em">${titulo}</div>
-                <table style="width:100%;border-collapse:collapse">
+                <div style="font-size:.68rem;font-weight:800;color:#fff;background:var(--azul);padding:7px 14px;text-transform:uppercase;letter-spacing:.06em">${titulo}</div>
+                <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:280px">
                 <thead><tr style="background:#EFF6FF">
-                    <th style="padding:7px 10px;font-size:.7rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Horário</th>
-                    <th style="padding:7px 10px;font-size:.7rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Militares</th>
-                    ${comServico ? '<th style="padding:7px 10px;font-size:.7rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Serviço</th>' : ''}
-                    ${linhas.some(e => e['indicativo rádio']) ? '<th style="padding:7px 10px;font-size:.7rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Indicativo</th>' : ''}
-                    ${linhas.some(e => e['rádio']) ? '<th style="padding:7px 10px;font-size:.7rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Rádio</th>' : ''}
-                    ${linhas.some(e => e['viatura']) ? '<th style="padding:7px 10px;font-size:.7rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Viatura</th>' : ''}
+                    <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Horário</th>
+                    <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Militares</th>
+                    ${comServico ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Serviço</th>' : ''}
+                    ${hasInd ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Indicativo</th>' : ''}
+                    ${hasRad ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Rádio</th>' : ''}
+                    ${hasVtr ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Viatura</th>' : ''}
                 </tr></thead><tbody>`;
-
             let alt = false;
             for (const { h, sv, nomes, vtr, rad, ind } of Object.values(mapa)) {
                 const bg = alt ? '#F8FAFC' : '#fff';
                 t += `<tr style="background:${bg};border-bottom:1px solid #F1F5F9">
                     <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:var(--azul);white-space:nowrap">${h || '—'}</td>
-                    <td style="padding:8px 10px;font-size:.78rem;color:#1E293B">${nomes.join(', ')}</td>
-                    ${comServico ? `<td style="padding:8px 10px;font-size:.75rem;color:var(--azul-vivo)">${sv}</td>` : ''}
-                    ${linhas.some(e => e['indicativo rádio']) ? `<td style="padding:8px 10px;font-size:.78rem;color:#475569">${ind}</td>` : ''}
-                    ${linhas.some(e => e['rádio']) ? `<td style="padding:8px 10px;font-size:.78rem;color:#475569">${rad}</td>` : ''}
-                    ${linhas.some(e => e['viatura']) ? `<td style="padding:8px 10px;font-size:.78rem;color:#475569">${vtr}</td>` : ''}
+                    <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join(', ')}</td>
+                    ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : ''}
+                    ${hasInd ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${ind}</td>` : ''}
+                    ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rad}</td>` : ''}
+                    ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtr}</td>` : ''}
                 </tr>`;
                 alt = !alt;
             }
-            t += `</tbody></table></div>`;
+            t += `</tbody></table></div></div>`;
             return t;
         };
 
