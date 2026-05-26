@@ -1,97 +1,89 @@
-/* ============================================
-   pages/escala_geral.js — Escala Geral
-   ============================================ */
+/* escala_geral.js v2 */
 
 const EscalaGeralPage = {
     async render() {
         const content = document.getElementById('content');
-
         content.innerHTML = `
-            <div class="section-header">🔍 Escala Geral</div>
+            <div class="section-h">🔍 Escala Geral</div>
             <div class="form-group">
-                <label class="form-label">Selecionar dia</label>
-                <input type="date" id="escala-data" class="form-input"
+                <input type="date" id="eg-data" class="form-input"
                     value="${new Date().toISOString().slice(0,10)}"
-                    onchange="EscalaGeralPage.carregar()">
+                    onchange="EscalaGeralPage.carregar()" style="font-size:.95rem;font-weight:600">
             </div>
-            <div id="escala-geral-content">
-                ${Components.skeleton(2)}
-            </div>
-        `;
-
+            <div id="eg-content">${Components.skeleton(2)}</div>`;
         await this.carregar();
     },
 
     async carregar() {
-        const dataInput = document.getElementById('escala-data');
-        if (!dataInput) return;
-        const dt = new Date(dataInput.value);
+        const inp = document.getElementById('eg-data');
+        if (!inp) return;
+        const dt = new Date(inp.value);
         const aba = `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}`;
-        const el = document.getElementById('escala-geral-content');
+        const el = document.getElementById('eg-content');
         el.innerHTML = Components.loading();
-
         try {
             const data = await API.escala_dia(aba);
-            this.renderEscala(data);
+            this.render_escala(data, dt);
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
         }
     },
 
-    renderEscala(data) {
-        const el = document.getElementById('escala-geral-content');
+    render_escala(data, dt) {
+        const el = document.getElementById('eg-content');
         const entradas = data?.entradas || [];
 
         if (!entradas.length) {
-            el.innerHTML = `<div class="empty-state"><div class="empty-icon">📅</div><p>Sem escala para este dia.</p></div>`;
+            el.innerHTML = `<div class="empty"><div class="empty-icon">📅</div><div class="empty-txt">Sem escala publicada para este dia.</div></div>`;
             return;
         }
 
-        // Agrupar por tipo de serviço
-        const grupos = {};
+        const grupos = {
+            'Atendimento': [],
+            'Apoio ao Atendimento': [],
+            'Patrulha Ocorrências': [],
+            'Patrulhas / Outros': [],
+            'Ausências': [],
+            'ADM': [],
+        };
+
         for (const e of entradas) {
-            const sv = e['serviço'] || e['servico'] || '';
-            const sv_n = sv.toLowerCase();
-            let grupo = 'Outros';
-            if (sv_n.includes('atendimento')) grupo = 'Atendimento';
-            else if (sv_n.includes('apoio')) grupo = 'Apoio ao Atendimento';
-            else if (sv_n.includes('patrulha ocorr')) grupo = 'Patrulha Ocorrências';
-            else if (sv_n.includes('patrulha') || sv_n.includes('ronda')) grupo = 'Patrulhas';
-            else if (sv_n.includes('folga') || sv_n.includes('férias') || sv_n.includes('licen') || sv_n.includes('conval') || sv_n.includes('doente')) grupo = 'Ausências';
-            else if (sv_n.includes('dilig') || sv_n.includes('tribunal') || sv_n.includes('pronto') || sv_n.includes('secret') || sv_n.includes('inquer')) grupo = 'ADM / Outras';
-            grupos[grupo] = grupos[grupo] || [];
-            grupos[grupo].push(e);
+            const sv = (e['serviço'] || e['servico'] || '').toLowerCase();
+            if (sv.includes('atendimento') && !sv.includes('apoio')) grupos['Atendimento'].push(e);
+            else if (sv.includes('apoio')) grupos['Apoio ao Atendimento'].push(e);
+            else if (sv.includes('patrulha ocorr')) grupos['Patrulha Ocorrências'].push(e);
+            else if (sv.includes('folga') || sv.includes('férias') || sv.includes('licen') || sv.includes('conval') || sv.includes('doente')) grupos['Ausências'].push(e);
+            else if (sv.includes('dilig') || sv.includes('tribunal') || sv.includes('pronto') || sv.includes('secret') || sv.includes('inquer') || sv.includes('fcaa')) grupos['ADM'].push(e);
+            else grupos['Patrulhas / Outros'].push(e);
         }
 
-        const ordem = ['Atendimento', 'Apoio ao Atendimento', 'Patrulha Ocorrências', 'Patrulhas', 'Ausências', 'ADM / Outras', 'Outros'];
         let html = '';
+        for (const [grupo, items] of Object.entries(grupos)) {
+            if (!items.length) continue;
+            html += `<div class="eg-section">${grupo}</div>`;
 
-        for (const g of ordem) {
-            if (!grupos[g]) continue;
-            html += `<div class="section-header">${g}</div>`;
-            // Agrupar por horário
-            const porHorario = {};
-            for (const e of grupos[g]) {
+            // Agrupar por horário+serviço
+            const mapa = {};
+            for (const e of items) {
                 const h = e['horário'] || e['horario'] || '';
-                porHorario[h] = porHorario[h] || [];
-                porHorario[h].push(e);
+                const sv = e['serviço'] || e['servico'] || '';
+                const key = `${h}|${sv}`;
+                if (!mapa[key]) mapa[key] = { h, sv, ids:[], vtr:'', rad:'' };
+                mapa[key].ids.push(e['id'] || '');
+                if (e['viatura'] && e['viatura'] !== 'nan') mapa[key].vtr = e['viatura'];
+                if (e['rádio'] && e['rádio'] !== 'nan') mapa[key].rad = e['rádio'];
             }
-            for (const [hor, items] of Object.entries(porHorario)) {
-                const ids = items.map(i => i['id'] || '').filter(Boolean).join(', ');
-                const sv = items[0]['serviço'] || items[0]['servico'] || '';
-                const vtr = items[0]['viatura'] || '';
-                const rad = items[0]['rádio'] || items[0]['radio'] || '';
-                const mostrarSv = !['Atendimento','Apoio ao Atendimento'].includes(g);
 
+            for (const { h, sv, ids, vtr, rad } of Object.values(mapa)) {
+                const mostrarSv = !['Atendimento','Apoio ao Atendimento'].includes(grupo);
                 html += `
-                    <div class="card" style="padding:12px">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                            <span style="font-size:0.78rem;font-weight:700;color:var(--cinza-texto)">🕒 ${hor || '—'}</span>
-                            ${mostrarSv && sv ? `<span style="font-size:0.75rem;color:var(--azul-forte)">${sv}</span>` : ''}
+                    <div class="eg-card">
+                        <div class="eg-hora">${h || '—'}</div>
+                        <div class="eg-info">
+                            ${mostrarSv && sv ? `<div class="eg-servico">${sv}</div>` : ''}
+                            <div class="eg-ids">${ids.filter(Boolean).join(', ')}</div>
+                            ${vtr || rad ? `<div class="eg-extra">${[vtr,rad].filter(Boolean).join(' · ')}</div>` : ''}
                         </div>
-                        <div style="font-size:0.88rem;font-weight:600">👤 ${ids}</div>
-                        ${vtr && vtr !== 'nan' ? `<div class="card-row">🚔 ${vtr}</div>` : ''}
-                        ${rad && rad !== 'nan' ? `<div class="card-row">📻 ${rad}</div>` : ''}
                     </div>`;
             }
         }
