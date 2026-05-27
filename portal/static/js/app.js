@@ -74,6 +74,55 @@ const App = {
 
     // ── Push ────────────────────────────────────────────────────
     async initPush() {
+        // Detectar se está no APK Capacitor
+        const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
+
+        if (isCapacitor) {
+            await App._initPushCapacitor();
+        } else {
+            await App._initPushWeb();
+        }
+    },
+
+    async _initPushCapacitor() {
+        try {
+            const { PushNotifications } = window.Capacitor.Plugins;
+            if (!PushNotifications) return;
+
+            // Pedir permissão
+            const result = await PushNotifications.requestPermissions();
+            if (result.receive !== 'granted') return;
+
+            // Registar para receber token FCM
+            await PushNotifications.register();
+
+            // Token recebido — enviar ao servidor
+            PushNotifications.addListener('registration', async (token) => {
+                try {
+                    await API.push_subscribe({ fcm_token: token.value });
+                } catch (e) {
+                    console.warn('FCM subscribe falhou:', e);
+                }
+            });
+
+            // Notificação recebida em foreground
+            PushNotifications.addListener('pushNotificationReceived', (notification) => {
+                console.log('Push recebida:', notification);
+                App.checkPendentes();
+            });
+
+            // Clique na notificação
+            PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+                const url = action.notification.data?.url;
+                if (url) Router.go(url.replace('/', '') || 'home');
+            });
+
+        } catch (e) {
+            console.warn('Capacitor push init falhou:', e);
+        }
+    },
+
+    async _initPushWeb() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
         try {
@@ -82,12 +131,11 @@ const App = {
             // Verificar se já está subscrito
             const existing = await reg.pushManager.getSubscription();
             if (existing) {
-                // Já subscrito — garantir que o servidor tem a subscription actual
                 await API.push_subscribe({ subscription: existing.toJSON() });
                 return;
             }
 
-            // Pedir permissão (só na primeira vez, sem popup intrusivo)
+            // Pedir permissão
             const permission = await Notification.requestPermission();
             if (permission !== 'granted') return;
 
@@ -103,7 +151,7 @@ const App = {
 
             await API.push_subscribe({ subscription: subscription.toJSON() });
         } catch (e) {
-            console.warn('Push init falhou:', e);
+            console.warn('Web push init falhou:', e);
         }
     },
 
