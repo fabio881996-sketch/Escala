@@ -2347,7 +2347,16 @@ else:
     u_nome    = st.session_state['user_nome']
     is_admin  = st.session_state.get("is_admin", False)
 
-    # Carregar dias publicados uma vez (não-admins precisam disto em vários menus)
+    # Bloquear acesso a não-admins
+    if not is_admin:
+        st.error("⛔ Acesso restrito a administradores.")
+        st.info("📱 Aceda via Portal da Escala.")
+        if st.button("🚪 Sair"):
+            st.session_state.clear()
+            st.rerun()
+        st.stop()
+
+    # Carregar dias publicados
     _dias_pub_global = load_dias_publicados()
 
     # --- Sidebar ---
@@ -2387,26 +2396,19 @@ else:
 
         st.markdown("---")
 
-        menu_geral = [
-            "📅 Minha Escala",
-            "🔄 Trocas",
-            "🔍 Escala Geral",
-            "🔄 Giros",
-            "👥 Efetivo",
-        ]
-        menu_admin = ["🏖️ Férias", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "👤 Gerir Utilizadores"]
-
         st.markdown("<p style='font-size:0.75rem;letter-spacing:0.08em;color:#94A3B8;margin:0 0 4px 0;'>MENU</p>", unsafe_allow_html=True)
 
         menu_opt = [
-            "📅 Minha Escala",
-            "🔄 Trocas",
             "🔍 Escala Geral",
-            "🔄 Giros",
-            "👥 Efetivo",
+            "🏥 Dispensas",
+            "📊 Estatísticas",
+            "⚖️ Validar Trocas",
+            "📜 Trocas Validadas",
+            "🚨 Alertas",
+            "⚙️ Gerar Escala",
+            "📢 Publicar Escala",
+            "👤 Gerir Utilizadores",
         ]
-        if is_admin:
-            menu_opt += ["", "🏖️ Férias", "🏥 Dispensas", "📊 Estatísticas", "⚖️ Validar Trocas", "📜 Trocas Validadas", "🚨 Alertas", "⚙️ Gerar Escala", "📢 Publicar Escala", "👤 Gerir Utilizadores"]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
                         format_func=lambda x: "──────────" if x == "" else x)
