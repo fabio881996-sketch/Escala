@@ -38,7 +38,8 @@ const MinhaEscalaPage = {
         if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;
         if (s.viatura && s.viatura !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">🚔</span>${s.viatura}</div>`;
         if (s.radio && s.radio !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📻</span>${s.radio}</div>`;
-        if (s.colegas && s.colegas.length > 0) {
+        const isAusencia = /folga|férias|ferias|licen|doente|conval|dilig|tribunal|pronto|secretaria|inquér|inquer|baixa/i.test(s.servico);
+        if (!isAusencia && s.colegas && s.colegas.length > 0) {
             rows += `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${s.colegas.join(' · ')}</span></div>`;
         }
         if (s.observacoes && s.observacoes !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📝</span>${s.observacoes}</div>`;
