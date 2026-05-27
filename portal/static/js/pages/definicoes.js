@@ -22,7 +22,7 @@ const DefinicoesPage = {
             <div class="card" style="margin-bottom:12px;padding:16px">
                 <div style="font-size:.68rem;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Notificações</div>
                 <div id="notif-status" style="font-size:.78rem;color:#64748b;margin-bottom:12px">A verificar...</div>
-                <button id="notif-btn" class="btn btn-primary" style="width:100%" onclick="alert('clicou'); Notification.requestPermission().then(p => alert('perm: ' + p)).catch(e => alert('erro: ' + e))">
+                <button id="notif-btn" class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.toggleNotificacoes()">
                     🔔 Ativar Notificações
                 </button>
             </div>
@@ -86,13 +86,15 @@ const DefinicoesPage = {
     },
 
     async toggleNotificacoes() {
-        try {
-            alert('Notification: ' + ('Notification' in window) + ' | SW: ' + ('serviceWorker' in navigator) + ' | PushManager: ' + ('PushManager' in window));
-            const perm = await Notification.requestPermission();
-            alert('Permissão: ' + perm);
-        } catch(e) {
-            alert('Erro: ' + e.message);
+        const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
+
+        if (isCapacitor) {
+            await App._initPushCapacitor();
+        } else {
+            await App._initPushWeb();
         }
+
+        // Actualizar estado após tentativa
         setTimeout(() => this.verificarEstadoNotificacoes(), 500);
     },
 };
