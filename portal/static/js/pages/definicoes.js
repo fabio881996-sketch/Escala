@@ -86,15 +86,13 @@ const DefinicoesPage = {
     },
 
     async toggleNotificacoes() {
-        const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
-
-        if (isCapacitor) {
-            await App._initPushCapacitor();
-        } else {
-            await App._initPushWeb();
+        try {
+            alert('Notification: ' + ('Notification' in window) + ' | SW: ' + ('serviceWorker' in navigator) + ' | PushManager: ' + ('PushManager' in window));
+            const perm = await Notification.requestPermission();
+            alert('Permissão: ' + perm);
+        } catch(e) {
+            alert('Erro: ' + e.message);
         }
-
-        // Actualizar estado após tentativa
         setTimeout(() => this.verificarEstadoNotificacoes(), 500);
     },
 };
