@@ -195,6 +195,44 @@ class GoogleSheetsClient:
         headers = self._with_retry(lambda: worksheet.row_values(1))
         return [normalizar_coluna(h) for h in headers]
 
+    def batch_load_sheets(self, worksheet_names: list[str]) -> dict[str, pd.DataFrame]:
+        """Carrega múltiplas abas numa única chamada HTTP (batch_get).
+        Abas inexistentes devolvem DataFrame vazio silenciosamente.
+        """
+        if not worksheet_names:
+            return {}
+
+        sh = self.get_sheet()
+
+        # Mapear título -> worksheet (evita N chamadas worksheet())
+        try:
+            ws_map: dict = {ws.title: ws for ws in sh.worksheets()}
+        except Exception:
+            return {name: self.load_data(name) for name in worksheet_names}
+
+        existentes = [n for n in worksheet_names if n in ws_map]
+        resultado: dict[str, pd.DataFrame] = {n: pd.DataFrame() for n in worksheet_names}
+
+        if not existentes:
+            return resultado
+
+        # Uma única chamada HTTP com todas as ranges
+        ranges = [f"\'{n}\'!A:Z" for n in existentes]
+        try:
+            response = self._with_retry(lambda: sh.values_batch_get(ranges))
+            value_ranges = response.get("valueRanges", [])
+            for i, name in enumerate(existentes):
+                values = value_ranges[i].get("values", []) if i < len(value_ranges) else []
+                resultado[name] = df_from_values(values)
+        except Exception:
+            for name in existentes:
+                try:
+                    resultado[name] = self.load_data(name)
+                except Exception:
+                    resultado[name] = pd.DataFrame()
+
+        return resultado
+
 
 # --- Wrappers de compatibilidade ---
 def get_gsheet_client() -> gspread.Client:
