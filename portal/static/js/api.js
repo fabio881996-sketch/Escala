@@ -77,6 +77,7 @@ const API = {
     utilizadores: () => API.get('/api/utilizadores/'),
 
     solicitar_troca: (dados) => API.post('/api/trocas/solicitar', dados),
+    minhas_ferias: () => API.get('/api/ferias/meu', false),
     trocas_disponiveis: (aba, tipo = 'simples') => API.get(`/api/trocas/disponíveis?data=${aba}&tipo=${tipo}`, false),
     responder_troca: (dados) => API.post('/api/trocas/responder', dados),
     publicar_dia: (aba) => API.post(`/api/escala/publicar/${aba}`, {}),

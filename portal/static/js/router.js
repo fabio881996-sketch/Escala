@@ -9,6 +9,7 @@ const Router = {
         'login':        () => LoginPage.render(),
         'home':         () => MinhaEscalaPage.render(),
         'escala-geral': () => EscalaGeralPage.render(),
+        'ferias':       () => FeriasPage.render(),
         'trocas':       () => TrocasPage.render(),
     },
 

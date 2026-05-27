@@ -37,6 +37,10 @@ const App = {
                     <span class="tab-icon">🔍</span>
                     <span>Escala Geral</span>
                 </button>
+                <button class="tab-item" data-page="ferias" onclick="Router.go('ferias')">
+                    <span class="tab-icon">🏖️</span>
+                    <span>Férias</span>
+                </button>
                 <button class="tab-item" data-page="trocas" onclick="Router.go('trocas')">
                     <div class="tab-badge-wrap">
                         <span class="tab-icon">🔄</span>
