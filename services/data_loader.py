@@ -235,17 +235,45 @@ class DataLoader:
         return {d.strftime("%d-%m"): self.carregar_escala(d) for d in datas}
 
     def carregar_escalas_batch(self, datas: list[date]) -> dict[str, pd.DataFrame]:
-        """Carrega múltiplas escalas usando cache por aba."""
+        """Carrega múltiplas escalas — usa batch HTTP para abas não cacheadas."""
         if not datas:
             return {}
+
+        abas = [d.strftime("%d-%m") for d in datas]
         resultado: dict[str, pd.DataFrame] = {}
-        for d in datas:
-            aba = d.strftime("%d-%m")
+
+        # Separar abas já em cache das que precisam de ir ao Sheets
+        em_cache: list[str] = []
+        sem_cache: list[str] = []
+        for aba in abas:
+            val, hit = _cache.get(f"load:{aba}")
+            if hit:
+                resultado[aba] = val
+                em_cache.append(aba)
+            else:
+                sem_cache.append(aba)
+
+        if em_cache:
+            logger.debug("Cache hit para %d abas", len(em_cache))
+
+        if sem_cache:
+            logger.debug("Batch fetch para %d abas: %s", len(sem_cache), sem_cache)
             try:
-                resultado[aba] = _cached_load(aba)
+                # Uma única chamada HTTP para todas as abas em falta
+                batch_result = self.sheets_client.batch_load_sheets(sem_cache)
+                for aba, df in batch_result.items():
+                    _cache.set(f"load:{aba}", df, 300)
+                    resultado[aba] = df
             except Exception as exc:
-                logger.warning("Falha a carregar aba '%s': %s", aba, exc)
-                resultado[aba] = pd.DataFrame()
+                logger.warning("Batch fetch falhou, fallback individual: %s", exc)
+                for aba in sem_cache:
+                    try:
+                        df = _cached_load(aba)
+                        resultado[aba] = df
+                    except Exception as exc2:
+                        logger.warning("Falha a carregar aba '%s': %s", aba, exc2)
+                        resultado[aba] = pd.DataFrame()
+
         return resultado
 
     def carregar_usuarios(self) -> pd.DataFrame:
