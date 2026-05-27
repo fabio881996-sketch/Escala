@@ -130,10 +130,15 @@ async def trocas_pendentes(current_user: dict = Depends(obter_user_atual)):
         df = loader.carregar_trocas()
         if df.empty:
             return {"trocas": []}
-        pendentes = df[
-            (df["status"] == "Pendente_Militar") &
-            (df["id_destino"].astype(str) == str(u_id))
-        ]
+        # Adicionar índice real da linha na sheet (1-based, incluindo cabeçalho)
+        df_reset = df.reset_index(drop=True)
+        mask = (
+            (df_reset["status"] == "Pendente_Militar") &
+            (df_reset["id_destino"].astype(str) == str(u_id))
+        )
+        pendentes = df_reset[mask].copy()
+        # índice na sheet = posição no df + 2 (1 para cabeçalho, 1 para base-1)
+        pendentes["__row_index"] = pendentes.index + 2
         trocas = pendentes.fillna("").to_dict(orient="records")
         df_util = loader.carregar_usuarios()
         nomes = {str(r["id"]).strip(): str(r.get("nome", r.get("id", ""))).strip()
