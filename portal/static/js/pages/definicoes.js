@@ -105,22 +105,26 @@ const DefinicoesPage = {
 
         try {
             const ativas = Notification.permission === 'granted';
-            alert('permission: ' + Notification.permission + ' | ativas: ' + ativas);
             if (isCapacitor) {
                 await App._initPushCapacitor();
             } else if (ativas) {
-                // Já ativas — desativar (remover do servidor)
+                // Permissão já concedida — verificar se tem subscription activa
                 if ('serviceWorker' in navigator && 'PushManager' in window) {
                     const reg = await navigator.serviceWorker.ready;
                     const existing = await reg.pushManager.getSubscription();
                     if (existing) {
+                        // Tem subscription — desativar
                         await existing.unsubscribe();
                         await API.push_unsubscribe();
                         if (statusEl) statusEl.innerHTML = '❌ Notificações desactivadas';
+                    } else {
+                        // Permissão mas sem subscription — registar
+                        await App._initPushWeb();
+                        if (statusEl) statusEl.innerHTML = '✅ Notificações activas';
                     }
                 }
             } else {
-                // Ativar
+                // Sem permissão — pedir
                 await App._initPushWeb();
             }
         } catch(e) {
