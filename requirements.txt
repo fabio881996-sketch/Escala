@@ -6,3 +6,6 @@ google-auth
 reportlab
 pywebpush>=2.0.0
 firebase-admin>=7.0.0
+fpdf==1.7.2
+requests
+streamlit
