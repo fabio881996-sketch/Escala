@@ -105,6 +105,7 @@ const DefinicoesPage = {
 
         try {
             const ativas = Notification.permission === 'granted';
+            alert('permission: ' + Notification.permission + ' | ativas: ' + ativas);
             if (isCapacitor) {
                 await App._initPushCapacitor();
             } else if (ativas) {
