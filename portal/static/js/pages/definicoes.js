@@ -22,7 +22,7 @@ const DefinicoesPage = {
             <div class="card" style="margin-bottom:12px;padding:16px">
                 <div style="font-size:.68rem;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Notificações</div>
                 <div id="notif-status" style="font-size:.78rem;color:#64748b;margin-bottom:12px">A verificar...</div>
-                <button id="notif-btn" class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.toggleNotificacoes()">
+                <button id="notif-btn" class="btn btn-primary" style="width:100%" onclick="Notification.requestPermission().then(p => { if(p==='granted') App._initPushWeb().then(() => DefinicoesPage.verificarEstadoNotificacoes()); else DefinicoesPage.verificarEstadoNotificacoes(); })">
                     🔔 Ativar Notificações
                 </button>
             </div>
