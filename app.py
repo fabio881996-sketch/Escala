@@ -7144,6 +7144,17 @@ else:
                     ws_p.append_row([aba_pub])
                     load_dias_publicados.clear()
                     st.success(f"✅ Escala de **{d_pub.strftime('%d/%m/%Y')}** publicada!")
+                    # Notificar via Railway (push notifications)
+                    try:
+                        import requests as _req
+                        import os as _os
+                        _req.post(
+                            "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/publicar-escala",
+                            json={"aba": aba_pub, "secret": _os.environ.get("RAILWAY_NOTIFY_SECRET", "")},
+                            timeout=5
+                        )
+                    except Exception:
+                        pass
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro: {e}")
