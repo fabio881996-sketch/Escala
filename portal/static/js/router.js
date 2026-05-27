@@ -11,6 +11,7 @@ const Router = {
         'escala-geral': () => EscalaGeralPage.render(),
         'ferias':       () => FeriasPage.render(),
         'trocas':       () => TrocasPage.render(),
+        'definicoes':   () => DefinicoesPage.render(),
     },
 
     go(page, params = {}) {

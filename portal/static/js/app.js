@@ -24,7 +24,7 @@ const App = {
                 </div>
                 <div class="nav-right">
                     ${user.is_admin ? '<span class="nav-badge">⭐ ADMIN</span>' : ''}
-                    <button class="nav-btn" onclick="App.logout()" title="Sair">🚪</button>
+
                 </div>
             </div>
             <div id="content"></div>
@@ -47,6 +47,10 @@ const App = {
                         <span id="tab-dot-trocas" class="tab-dot" style="display:none"></span>
                     </div>
                     <span>Trocas</span>
+                </button>
+                <button class="tab-item" data-page="definicoes" onclick="Router.go('definicoes')">
+                    <span class="tab-icon">⚙️</span>
+                    <span>Definições</span>
                 </button>
             </div>`;
 
