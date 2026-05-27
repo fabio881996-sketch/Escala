@@ -43,6 +43,11 @@ async def warmup():
     asyncio.create_task(_load())
 
 
+# Servir sw.js na raiz (necessário para o scope correcto do Service Worker)
+@app.get("/sw.js")
+async def sw():
+    return FileResponse("portal/static/sw.js", media_type="application/javascript")
+
 # Servir o frontend
 @app.get("/")
 @app.head("/")
