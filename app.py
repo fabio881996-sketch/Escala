@@ -7147,10 +7147,9 @@ else:
                     # Notificar via Railway (push notifications)
                     try:
                         import requests as _req
-                        _secret = st.secrets.get("RAILWAY_NOTIFY_SECRET", "")
                         _req.post(
                             "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/publicar-escala",
-                            json={"aba": aba_pub, "secret": _secret},
+                            json={"aba": aba_pub, "secret": "gnr-famalicao-2026"},
                             timeout=5
                         )
                     except Exception:
