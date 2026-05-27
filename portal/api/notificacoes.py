@@ -17,7 +17,7 @@ router = APIRouter()
 # ── VAPID (Web Push / PWA) ────────────────────────────────────
 VAPID_PRIVATE = os.environ.get("VAPID_PRIVATE_KEY", "")
 VAPID_PUBLIC  = os.environ.get("VAPID_PUBLIC_KEY", "")
-VAPID_CLAIMS  = {"sub": "mailto:admin@gnr-famalicao.pt"}
+VAPID_CLAIMS  = {"sub": "https://portal-escalas-gnr-production.up.railway.app"}
 
 # ── Firebase Admin (FCM V1 / APK) ────────────────────────────
 _firebase_app = None
