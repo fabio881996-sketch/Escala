@@ -27,6 +27,18 @@ const DefinicoesPage = {
                 </button>
             </div>
 
+            <!-- Exportar -->
+            <div class="card" style="margin-bottom:12px;padding:16px">
+                <div style="font-size:.68rem;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Exportar para Calendário</div>
+                <div style="font-size:.78rem;color:#64748b;margin-bottom:12px">Exporta os teus serviços ou folgas para o calendário do telemóvel (.ics)</div>
+                <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="DefinicoesPage.exportarEscala()">
+                    📅 Exportar Escala
+                </button>
+                <button class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.exportarFolgas()">
+                    😴 Exportar Folgas
+                </button>
+            </div>
+
             <!-- Sair -->
             <div class="card" style="padding:16px">
                 <button class="btn btn-danger" style="width:100%" onclick="App.logout()">
@@ -114,5 +126,92 @@ const DefinicoesPage = {
 
         if (btnEl) btnEl.disabled = false;
         setTimeout(() => this.verificarEstadoNotificacoes(), 500);
+    },
+    async exportarEscala() {
+        try {
+            const data = await API.minha_escala();
+            const servicos = (data?.servicos || []).filter(s => {
+                const l = s.servico.toLowerCase();
+                return !l.includes('folga') && !l.includes('férias') && !l.includes('ferias')
+                    && !l.includes('licen') && !l.includes('doente') && !l.includes('conval');
+            });
+            if (!servicos.length) { alert('Sem serviços para exportar.'); return; }
+            const user = API.getUser();
+            this._downloadICS(servicos, `escala_${user?.id || 'gnr'}.ics`, false);
+        } catch(e) { alert('❌ Erro: ' + e.message); }
+    },
+
+    async exportarFolgas() {
+        try {
+            const data = await API.minha_escala();
+            const folgas = (data?.servicos || []).filter(s =>
+                /folga|férias|ferias/i.test(s.servico)
+            );
+            if (!folgas.length) { alert('Sem folgas para exportar.'); return; }
+            const user = API.getUser();
+            this._downloadICS(folgas, `folgas_${user?.id || 'gnr'}.ics`, true);
+        } catch(e) { alert('❌ Erro: ' + e.message); }
+    },
+
+    _downloadICS(servicos, filename, isDia) {
+        const user = API.getUser();
+        const linhas = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//GNR Famalicão//Escala//PT',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            'X-WR-CALNAME:Escala GNR Famalicão',
+        ];
+
+        for (const s of servicos) {
+            const [d, m, y] = s.data.split('/');
+            const dt = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+
+            if (isDia || !s.horario) {
+                // Evento de dia inteiro
+                const dtStr = `${y}${m}${d}`;
+                const dtEnd = new Date(dt); dtEnd.setDate(dtEnd.getDate() + 1);
+                const dtEndStr = `${dtEnd.getFullYear()}${String(dtEnd.getMonth()+1).padStart(2,'0')}${String(dtEnd.getDate()).padStart(2,'0')}`;
+                linhas.push(
+                    'BEGIN:VEVENT',
+                    `UID:gnr-${user?.id}-${dtStr}@gnr`,
+                    `DTSTART;VALUE=DATE:${dtStr}`,
+                    `DTEND;VALUE=DATE:${dtEndStr}`,
+                    `SUMMARY:${s.servico}`,
+                    'END:VEVENT'
+                );
+            } else {
+                // Evento com horário
+                const partes = s.horario.split('-').map(h => h.trim());
+                const hIniH = parseInt((partes[0] || '00').substring(0,2));
+                const hFimH = parseInt((partes[1] || '00').substring(0,2));
+                const hFimM = parseInt((partes[1] || '00').substring(2) || '0');
+
+                const dtIni = new Date(dt);
+                dtIni.setHours(hIniH, 0, 0);
+                const dtFim = new Date(dt);
+                dtFim.setHours(hFimH, hFimM, 0);
+                if (dtFim <= dtIni) dtFim.setDate(dtFim.getDate() + 1);
+
+                const fmt = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z/,'Z');
+                linhas.push(
+                    'BEGIN:VEVENT',
+                    `UID:gnr-${user?.id}-${fmt(dtIni)}@gnr`,
+                    `DTSTART:${fmt(dtIni)}`,
+                    `DTEND:${fmt(dtFim)}`,
+                    `SUMMARY:${s.servico}`,
+                    'END:VEVENT'
+                );
+            }
+        }
+        linhas.push('END:VCALENDAR');
+
+        const blob = new Blob([linhas.join('
+')], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
     },
 };

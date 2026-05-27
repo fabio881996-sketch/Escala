@@ -43,12 +43,12 @@ const EscalaGeralPage = {
 
     // Ordena linhas cronologicamente pelo horário (ex: "08-16" → hora de início)
     sortHorario(linhas) {
+        const ordem = { '00': 0, '07': 1, '08': 2, '09': 3, '15': 4, '16': 5, '20': 6 };
         return [...linhas].sort((a, b) => {
-            const ha = parseInt((a['horário'] || '99').substring(0,2), 10);
-            const hb = parseInt((b['horário'] || '99').substring(0,2), 10);
-            // 00 (meia-noite) vai para o fim dentro do dia
-            const fa = ha === 0 ? 24 : ha;
-            const fb = hb === 0 ? 24 : hb;
+            const ha = (a['horário'] || '').substring(0, 2);
+            const hb = (b['horário'] || '').substring(0, 2);
+            const fa = ordem[ha] !== undefined ? ordem[ha] : 99;
+            const fb = ordem[hb] !== undefined ? ordem[hb] : 99;
             return fa - fb;
         });
     },
