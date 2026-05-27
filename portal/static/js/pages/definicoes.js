@@ -104,21 +104,23 @@ const DefinicoesPage = {
         if (btnEl) btnEl.disabled = true;
 
         try {
+            const ativas = Notification.permission === 'granted';
             if (isCapacitor) {
                 await App._initPushCapacitor();
-            } else {
-                // Forçar re-registo mesmo se já subscrito
+            } else if (ativas) {
+                // Já ativas — desativar (remover do servidor)
                 if ('serviceWorker' in navigator && 'PushManager' in window) {
                     const reg = await navigator.serviceWorker.ready;
                     const existing = await reg.pushManager.getSubscription();
                     if (existing) {
-                        // Re-enviar subscription existente ao servidor
-                        await API.push_subscribe({ subscription: existing.toJSON() });
-                        if (statusEl) statusEl.innerHTML = '✅ Notificações activas';
-                    } else {
-                        await App._initPushWeb();
+                        await existing.unsubscribe();
+                        await API.push_unsubscribe();
+                        if (statusEl) statusEl.innerHTML = '❌ Notificações desactivadas';
                     }
                 }
+            } else {
+                // Ativar
+                await App._initPushWeb();
             }
         } catch(e) {
             if (statusEl) statusEl.innerHTML = '❌ Erro: ' + e.message;
