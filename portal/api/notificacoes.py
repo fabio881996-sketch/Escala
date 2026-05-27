@@ -204,6 +204,37 @@ async def unsubscribe(current_user: dict = Depends(obter_user_atual)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class PublicarEscalaPayload(BaseModel):
+    aba: str
+    secret: str
+
+
+@router.post("/publicar-escala")
+async def publicar_escala_notif(payload: PublicarEscalaPayload):
+    """Chamado pelo Streamlit após publicar escala — envia push a todos."""
+    import os
+    expected = os.environ.get("RAILWAY_NOTIFY_SECRET", "")
+    if not expected or payload.secret != expected:
+        raise HTTPException(status_code=403, detail="Não autorizado")
+    try:
+        from core.database import GoogleSheetsClient
+        from services.data_loader import DataLoader
+        loader = DataLoader(sheets_client=GoogleSheetsClient())
+        df_util = loader.carregar_usuarios()
+        todos_ids = df_util["id"].astype(str).str.strip().tolist()
+        data_fmt = payload.aba.replace("-", "/")
+        enviar_push(
+            u_ids=todos_ids,
+            titulo="📅 Nova escala publicada",
+            corpo=f"A escala de {data_fmt} foi publicada.",
+            url="/escala-geral",
+            tag="escala-publicada",
+        )
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 class TestePush(BaseModel):
     u_ids: list[str]
     titulo: str = "🛡️ Teste GNR"
