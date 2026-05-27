@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from portal.api import auth, escala, trocas, utilizadores, notificacoes
+from portal.api import auth, escala, trocas, utilizadores, notificacoes, ferias
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +22,7 @@ app.include_router(auth.router,           prefix="/api/auth",          tags=["au
 app.include_router(escala.router,         prefix="/api/escala",        tags=["escala"])
 app.include_router(trocas.router,         prefix="/api/trocas",        tags=["trocas"])
 app.include_router(utilizadores.router,   prefix="/api/utilizadores",  tags=["utilizadores"])
+app.include_router(ferias.router,         prefix="/api/ferias",        tags=["ferias"])
 app.include_router(notificacoes.router,   prefix="/api/notificacoes",  tags=["notificacoes"])
 
 
