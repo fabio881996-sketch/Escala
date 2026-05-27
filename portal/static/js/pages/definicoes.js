@@ -194,7 +194,7 @@ const DefinicoesPage = {
                 dtFim.setHours(hFimH, hFimM, 0);
                 if (dtFim <= dtIni) dtFim.setDate(dtFim.getDate() + 1);
 
-                const fmt = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z/,'Z');
+                const fmt = d => d.toISOString().replace(/[-:]/g,'').replace(/\.\d{3}Z/,'');
                 linhas.push(
                     'BEGIN:VEVENT',
                     `UID:gnr-${user?.id}-${fmt(dtIni)}@gnr`,
@@ -207,8 +207,7 @@ const DefinicoesPage = {
         }
         linhas.push('END:VCALENDAR');
 
-        const blob = new Blob([linhas.join('
-')], { type: 'text/calendar;charset=utf-8' });
+        const blob = new Blob([linhas.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = filename; a.click();
