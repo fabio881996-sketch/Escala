@@ -1,7 +1,8 @@
 """Router de férias — plano do utilizador autenticado."""
 from __future__ import annotations
 
-from datetime import datetime
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -112,5 +113,65 @@ async def minhas_ferias(current_user: dict = Depends(obter_user_atual)):
             "total_dias_uteis": total_uteis,
         }
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/folgas-ics")
+async def folgas_ics(current_user: dict = Depends(obter_user_atual)):
+    """Devolve todas as folgas do ano em formato ICS."""
+    u_id = str(current_user.get("sub"))
+    ano = datetime.now().year
+    try:
+        loader = get_loader()
+        df_folgas = loader.carregar_folgas(ano)
+        grupos_folga = loader.carregar_grupos_folga()
+
+        # Feriados
+        feriados = []
+        try:
+            df_fer = loader.carregar_feriados(ano)
+            if not df_fer.empty:
+                for _, r in df_fer.iterrows():
+                    try:
+                        feriados.append(datetime.strptime(str(r.get("data", "")), "%d-%m").replace(year=ano).date())
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        linhas = [
+            "BEGIN:VCALENDAR", "VERSION:2.0",
+            "PRODID:-//GNR Famalicao//Folgas//PT",
+            "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+            "X-WR-CALNAME:Folgas GNR Famalicao",
+        ]
+
+        for m in range(1, 13):
+            _, n_dias = monthrange(ano, m)
+            for d in range(1, n_dias + 1):
+                dt = date(ano, m, d)
+                tipo = loader.militar_de_folga(u_id, dt, df_folgas, grupos_folga, feriados)
+                if not tipo:
+                    continue
+                dtstr = dt.strftime("%Y%m%d")
+                dtend = (dt + timedelta(days=1)).strftime("%Y%m%d")
+                emoji = "\U0001f634" if "Semanal" in tipo else "\U0001f33f"
+                linhas += [
+                    "BEGIN:VEVENT",
+                    f"UID:folga-{u_id}-{dtstr}@gnr",
+                    f"DTSTART;VALUE=DATE:{dtstr}",
+                    f"DTEND;VALUE=DATE:{dtend}",
+                    f"SUMMARY:{emoji} {tipo}",
+                    "END:VEVENT",
+                ]
+
+        linhas.append("END:VCALENDAR")
+        from fastapi.responses import Response
+        return Response(
+            content="\r\n".join(linhas).encode("utf-8"),
+            media_type="text/calendar",
+            headers={"Content-Disposition": f"attachment; filename=folgas_{u_id}_{ano}.ics"},
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
