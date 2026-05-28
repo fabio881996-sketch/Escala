@@ -133,34 +133,33 @@ const DefinicoesPage = {
         setTimeout(() => this.verificarEstadoNotificacoes(), 500);
     },
     async exportarEscala() {
-        try {
-            const data = await API.minha_escala();
-            const servicos = (data?.servicos || []).filter(s => {
-                const l = s.servico.toLowerCase();
-                return !l.includes('folga') && !l.includes('férias') && !l.includes('ferias')
-                    && !l.includes('licen') && !l.includes('doente') && !l.includes('conval');
-            });
-            if (!servicos.length) { alert('Sem serviços para exportar.'); return; }
-            const user = API.getUser();
-            this._downloadICS(servicos, `escala_${user?.id || 'gnr'}.ics`, false);
-        } catch(e) { alert('❌ Erro: ' + e.message); }
+        await this._exportarICS('/api/ferias/escala-ics', `escala_${API.getUser()?.id || 'gnr'}.ics`);
     },
 
     async exportarFolgas() {
-        // Usar endpoint do backend que calcula todas as folgas do ano
-        const url = '/api/ferias/folgas-ics';
+        await this._exportarICS('/api/ferias/folgas-ics', `folgas_${API.getUser()?.id || 'gnr'}.ics`);
+    },
+
+    async _exportarICS(endpoint, filename) {
         const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
         try {
-            const res = await fetch(url, { headers: API.headers() });
+            const res = await fetch(endpoint, { headers: API.headers() });
             if (!res.ok) throw new Error(await res.text());
-            const blob = await res.blob();
+            const text = await res.text();
+            const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
             const objUrl = URL.createObjectURL(blob);
             if (isCapacitor) {
-                window.open(objUrl, '_blank');
+                // APK: criar iframe oculto para forçar download
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                iframe.src = objUrl;
+                document.body.appendChild(iframe);
+                setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(objUrl); }, 3000);
+                alert('✅ Ficheiro .ics preparado. Aceita a abertura no gestor de ficheiros.');
             } else {
                 const a = document.createElement('a');
                 a.href = objUrl;
-                a.download = `folgas_${API.getUser()?.id || 'gnr'}.ics`;
+                a.download = filename;
                 a.click();
                 URL.revokeObjectURL(objUrl);
             }
