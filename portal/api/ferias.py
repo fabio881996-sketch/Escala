@@ -117,8 +117,116 @@ async def minhas_ferias(current_user: dict = Depends(obter_user_atual)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/escala-ics")
+async def escala_ics(token: str = None, current_user: dict = Depends(obter_user_atual)):
+    """Devolve os serviços publicados do utilizador em formato ICS."""
+    u_id = str(current_user.get("sub"))
+    try:
+        loader = get_loader()
+        hj = datetime.now()
+        dias_pub = loader.carregar_dias_publicados()
+        df_trocas = loader.carregar_trocas()
+
+        dias_a_mostrar = []
+        for delta in range(90):
+            dt = (hj + timedelta(days=delta)).date()
+            if dt.strftime("%d-%m") in dias_pub:
+                dias_a_mostrar.append(dt)
+            if len(dias_a_mostrar) >= 60:
+                break
+
+        escalas = loader.carregar_escalas_batch(dias_a_mostrar)
+
+        linhas = [
+            "BEGIN:VCALENDAR", "VERSION:2.0",
+            "PRODID:-//GNR Famalicao//Escala//PT",
+            "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+            "X-WR-CALNAME:Escala GNR Famalicao",
+        ]
+
+        AUSENCIAS = {"folga", "ferias", "licen", "doente", "conval", "dilig", "tribunal", "pronto"}
+
+        for dt in dias_a_mostrar:
+            aba = dt.strftime("%d-%m")
+            df_d = escalas.get(aba)
+            if df_d is None or df_d.empty:
+                continue
+            meu = df_d[df_d["id"].astype(str).str.strip() == u_id]
+            if meu.empty:
+                continue
+
+            row = meu.iloc[0]
+            d_s = dt.strftime("%d/%m/%Y")
+            servico = str(row.get("serviço", "")).strip()
+            horario = str(row.get("horário", "")).strip()
+
+            # Aplicar trocas
+            if not df_trocas.empty:
+                tr = df_trocas[
+                    (df_trocas["data"] == d_s) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                ]
+                for _, t in tr.iterrows():
+                    if str(t["id_origem"]).strip() == u_id:
+                        s = str(t["servico_destino"])
+                        servico = s.rsplit("(", 1)[0].strip()
+                        horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                    elif str(t["id_destino"]).strip() == u_id:
+                        s = str(t["servico_origem"])
+                        servico = s.rsplit("(", 1)[0].strip()
+                        horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+
+            # Excluir ausências
+            sv_norm = servico.lower()
+            if any(a in sv_norm for a in AUSENCIAS):
+                continue
+
+            dtstr = dt.strftime("%Y%m%d")
+            # Evento com horário
+            if horario and "-" in horario:
+                partes = horario.split("-")
+                try:
+                    h_ini = int(partes[0].strip()[:2])
+                    h_fim = int(partes[1].strip()[:2])
+                    dt_ini = datetime(dt.year, dt.month, dt.day, h_ini, 0)
+                    dt_fim = datetime(dt.year, dt.month, dt.day, h_fim, 0)
+                    if dt_fim <= dt_ini:
+                        dt_fim = dt_fim + timedelta(days=1)
+                    fmt = lambda d: d.strftime("%Y%m%dT%H%M%S")
+                    linhas += [
+                        "BEGIN:VEVENT",
+                        f"UID:escala-{u_id}-{dtstr}@gnr",
+                        f"DTSTART:{fmt(dt_ini)}",
+                        f"DTEND:{fmt(dt_fim)}",
+                        f"SUMMARY:{servico}",
+                        "END:VEVENT",
+                    ]
+                except Exception:
+                    pass
+            else:
+                linhas += [
+                    "BEGIN:VEVENT",
+                    f"UID:escala-{u_id}-{dtstr}@gnr",
+                    f"DTSTART;VALUE=DATE:{dtstr}",
+                    f"DTEND;VALUE=DATE:{datetime(dt.year, dt.month, dt.day + 1 if dt.day < 28 else 1).strftime('%Y%m%d')}",
+                    f"SUMMARY:{servico}",
+                    "END:VEVENT",
+                ]
+
+        linhas.append("END:VCALENDAR")
+        from fastapi.responses import Response
+        return Response(
+            content="\r\n".join(linhas).encode("utf-8"),
+            media_type="text/calendar",
+            headers={"Content-Disposition": f"attachment; filename=escala_{u_id}.ics"},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/folgas-ics")
-async def folgas_ics(current_user: dict = Depends(obter_user_atual)):
+async def folgas_ics(token: str = None, current_user: dict = Depends(obter_user_atual)):
     """Devolve todas as folgas do ano em formato ICS."""
     u_id = str(current_user.get("sub"))
     ano = datetime.now().year
