@@ -101,7 +101,6 @@ const DefinicoesPage = {
         const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
         const btnEl = document.getElementById('notif-btn');
         const statusEl = document.getElementById('notif-status');
-        if (btnEl) btnEl.disabled = true;
 
         try {
             const ativas = Notification.permission === 'granted';
@@ -131,7 +130,6 @@ const DefinicoesPage = {
             if (statusEl) statusEl.innerHTML = '❌ Erro: ' + e.message;
         }
 
-        if (btnEl) btnEl.disabled = false;
         setTimeout(() => this.verificarEstadoNotificacoes(), 500);
     },
     async exportarEscala() {
@@ -149,14 +147,23 @@ const DefinicoesPage = {
     },
 
     async exportarFolgas() {
+        // Usar endpoint do backend que calcula todas as folgas do ano
+        const url = '/api/ferias/folgas-ics';
+        const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
         try {
-            const data = await API.minha_escala();
-            const folgas = (data?.servicos || []).filter(s =>
-                /folga|férias|ferias/i.test(s.servico)
-            );
-            if (!folgas.length) { alert('Sem folgas para exportar.'); return; }
-            const user = API.getUser();
-            this._downloadICS(folgas, `folgas_${user?.id || 'gnr'}.ics`, true);
+            const res = await fetch(url, { headers: API.headers() });
+            if (!res.ok) throw new Error(await res.text());
+            const blob = await res.blob();
+            const objUrl = URL.createObjectURL(blob);
+            if (isCapacitor) {
+                window.open(objUrl, '_blank');
+            } else {
+                const a = document.createElement('a');
+                a.href = objUrl;
+                a.download = `folgas_${API.getUser()?.id || 'gnr'}.ics`;
+                a.click();
+                URL.revokeObjectURL(objUrl);
+            }
         } catch(e) { alert('❌ Erro: ' + e.message); }
     },
 
@@ -216,8 +223,14 @@ const DefinicoesPage = {
 
         const blob = new Blob([linhas.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename; a.click();
-        URL.revokeObjectURL(url);
+        // Capacitor APK não suporta a.click() — usar window.open
+        const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
+        if (isCapacitor) {
+            window.open(url, '_blank');
+        } else {
+            const a = document.createElement('a');
+            a.href = url; a.download = filename; a.click();
+            URL.revokeObjectURL(url);
+        }
     },
 };

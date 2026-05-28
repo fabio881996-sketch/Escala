@@ -133,11 +133,16 @@ const FeriasPage = {
 
             const blob = new Blob([linhas.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `ferias_${user?.id || 'gnr'}_${ano}.ics`;
-            a.click();
-            URL.revokeObjectURL(url);
+            const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
+            if (isCapacitor) {
+                window.open(url, '_blank');
+            } else {
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ferias_${user?.id || 'gnr'}_${ano}.ics`;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
         }).catch(e => alert('❌ Erro ao exportar: ' + e.message));
     },
 
