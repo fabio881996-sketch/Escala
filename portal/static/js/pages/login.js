@@ -1,88 +1,118 @@
-/* ============================================
-   pages/login.js — Página de Login (só PIN)
-   ============================================ */
+/* login.js — Teclado PIN estilo GNR */
 
 const LoginPage = {
-    pin: '',
+    _pin: '',
+    _erro: false,
 
     render() {
         const appEl = document.getElementById('app');
         appEl.innerHTML = `
-            <div id="login-page" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(160deg,#1A2B4A 0%,#243B5C 60%,#1A2B4A 100%);padding:24px">
+            <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;
+                background:linear-gradient(160deg,#0F1F38 0%,#1A2B4A 50%,#1E3A8A 100%);padding:24px">
                 <div style="width:100%;max-width:340px">
-                    <!-- Header -->
-                    <div style="text-align:center;margin-bottom:32px">
-                        <img src="/static/icons/icon-192.png" alt="GNR" style="width:100px;height:100px;margin-bottom:16px;border-radius:16px">
-                        <h1 style="color:#fff;font-size:1.4rem;font-weight:800;margin:0 0 4px 0">Portal de Escalas</h1>
-                        <p style="color:#94a3b8;font-size:.85rem;margin:0">Guarda Nacional Republicana<br>Posto Territorial de Famalicão</p>
+
+                    <div style="text-align:center;margin-bottom:36px">
+                        <img src="/static/icons/icon-192.png" alt="GNR"
+                            style="width:88px;height:88px;margin-bottom:14px;border-radius:20px;
+                                box-shadow:0 8px 32px rgba(0,0,0,0.4)">
+                        <div style="font-size:22px;font-weight:700;color:white;letter-spacing:-0.02em">Portal de Escalas</div>
+                        <div style="font-size:11px;color:rgba(255,255,255,0.5);margin-top:6px;
+                            letter-spacing:0.08em;text-transform:uppercase">Posto Territorial de Vila Nova de Famalicão</div>
                     </div>
 
-                    <!-- PIN display -->
-                    <div style="display:flex;justify-content:center;gap:12px;margin-bottom:24px">
-                        ${[0,1,2,3].map(i => `<div id="pin-dot-${i}" style="width:16px;height:16px;border-radius:50%;border:2px solid #94a3b8;background:transparent;transition:all .2s"></div>`).join('')}
+                    <div style="background:rgba(255,255,255,0.07);backdrop-filter:blur(20px);
+                        border:1px solid rgba(255,255,255,0.12);border-radius:24px;padding:28px 24px 24px">
+
+                        <!-- Dots -->
+                        <div id="pin-dots" style="display:flex;gap:20px;justify-content:center;margin-bottom:28px">
+                            ${[0,1,2,3].map(i => `
+                                <div id="dot-${i}" style="width:14px;height:14px;border-radius:50%;
+                                    background:transparent;border:2px solid rgba(255,255,255,0.3);
+                                    transition:all 0.15s ease"></div>`).join('')}
+                        </div>
+
+                        <!-- Erro -->
+                        <div id="pin-error" style="display:none;text-align:center;color:#fca5a5;
+                            font-size:.8rem;margin-bottom:16px">PIN incorreto. Tenta novamente.</div>
+
+                        <!-- Teclado -->
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                            ${[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(n => `
+                                <button onclick="LoginPage._press('${n}')"
+                                    style="aspect-ratio:1;border-radius:50%;border:none;font-size:1.4rem;font-weight:500;
+                                        cursor:${n==='' ? 'default' : 'pointer'};
+                                        background:${n==='' ? 'transparent' : 'rgba(255,255,255,0.12)'};
+                                        color:${n==='' ? 'transparent' : 'white'};
+                                        transition:background .15s;
+                                        ${n==='' ? 'pointer-events:none' : ''}
+                                        padding:0;width:100%"
+                                    onmousedown="this.style.background='${n==='' ? 'transparent' : 'rgba(255,255,255,0.25)'}'"
+                                    onmouseup="this.style.background='${n==='' ? 'transparent' : 'rgba(255,255,255,0.12)'}'">
+                                    ${n}
+                                </button>`).join('')}
+                        </div>
                     </div>
 
-                    <div id="login-error" style="display:none;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#fca5a5;padding:10px 14px;border-radius:10px;font-size:.82rem;text-align:center;margin-bottom:16px"></div>
-
-                    <!-- Teclado numérico -->
-                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
-                        ${[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(n => `
-                            <button onclick="LoginPage.press('${n}')"
-                                style="padding:18px;font-size:1.3rem;font-weight:600;border:none;border-radius:12px;
-                                    background:${n==='' ? 'transparent' : 'rgba(255,255,255,.1)'};
-                                    color:#fff;cursor:${n==='' ? 'default' : 'pointer'};
-                                    ${n==='' ? 'pointer-events:none' : ''}">
-                                ${n}
-                            </button>`).join('')}
-                    </div>
-
-                    <p style="text-align:center;color:#475569;font-size:.72rem;margin-top:24px">© 2026 fferr</p>
+                    <p style="text-align:center;color:rgba(255,255,255,0.25);font-size:.7rem;margin-top:20px">© 2026 fferr</p>
                 </div>
             </div>
         `;
-        this.pin = '';
+        this._pin = '';
+        this._erro = false;
     },
 
-    press(val) {
-        const errEl = document.getElementById('login-error');
-        if (errEl) errEl.style.display = 'none';
+    _press(val) {
+        if (val === '') return;
+        const errEl = document.getElementById('pin-error');
 
         if (val === '⌫') {
-            this.pin = this.pin.slice(0, -1);
-        } else if (val !== '' && this.pin.length < 4) {
-            this.pin += val;
+            this._pin = this._pin.slice(0, -1);
+            this._erro = false;
+            if (errEl) errEl.style.display = 'none';
+        } else if (this._pin.length < 4) {
+            this._pin += val;
         }
 
-        // Actualizar dots
-        for (let i = 0; i < 4; i++) {
-            const dot = document.getElementById(`pin-dot-${i}`);
-            if (dot) {
-                dot.style.background = i < this.pin.length ? '#fff' : 'transparent';
-                dot.style.borderColor = i < this.pin.length ? '#fff' : '#94a3b8';
-            }
-        }
+        this._updateDots();
 
-        if (this.pin.length === 4) {
-            setTimeout(() => this.submit(), 100);
+        if (this._pin.length === 4) {
+            setTimeout(() => this._submit(), 150);
         }
     },
 
-    async submit() {
-        const errEl = document.getElementById('login-error');
+    _updateDots() {
+        for (let i = 0; i < 4; i++) {
+            const dot = document.getElementById(`dot-${i}`);
+            if (!dot) continue;
+            if (this._erro) {
+                dot.style.background = '#EF4444';
+                dot.style.borderColor = '#EF4444';
+            } else if (i < this._pin.length) {
+                dot.style.background = '#fff';
+                dot.style.borderColor = '#fff';
+            } else {
+                dot.style.background = 'transparent';
+                dot.style.borderColor = 'rgba(255,255,255,0.3)';
+            }
+        }
+    },
+
+    async _submit() {
+        const errEl = document.getElementById('pin-error');
         try {
-            await API.login(this.pin, this.pin);
+            await API.login(this._pin);
             App.initUI();
             Router.go('home');
-        } catch (e) {
-            if (errEl) {
-                errEl.textContent = '❌ PIN incorreto. Tenta novamente.';
-                errEl.style.display = 'block';
-            }
-            this.pin = '';
-            for (let i = 0; i < 4; i++) {
-                const dot = document.getElementById(`pin-dot-${i}`);
-                if (dot) { dot.style.background = 'transparent'; dot.style.borderColor = '#94a3b8'; }
-            }
+        } catch(e) {
+            this._erro = true;
+            this._updateDots();
+            if (errEl) errEl.style.display = 'block';
+            setTimeout(() => {
+                this._pin = '';
+                this._erro = false;
+                this._updateDots();
+                if (errEl) errEl.style.display = 'none';
+            }, 800);
         }
     }
 };
