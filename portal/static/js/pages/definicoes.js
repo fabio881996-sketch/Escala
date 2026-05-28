@@ -146,17 +146,29 @@ const DefinicoesPage = {
             const res = await fetch(endpoint, { headers: API.headers() });
             if (!res.ok) throw new Error(await res.text());
             const text = await res.text();
-            const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
-            const objUrl = URL.createObjectURL(blob);
+
             if (isCapacitor) {
-                // APK: criar iframe oculto para forçar download
-                const iframe = document.createElement('iframe');
-                iframe.style.display = 'none';
-                iframe.src = objUrl;
-                document.body.appendChild(iframe);
-                setTimeout(() => { document.body.removeChild(iframe); URL.revokeObjectURL(objUrl); }, 3000);
-                alert('✅ Ficheiro .ics preparado. Aceita a abertura no gestor de ficheiros.');
+                // APK Android — guardar e partilhar via Share
+                const { Filesystem, Directory, Share } = window.Capacitor.Plugins;
+                await Filesystem.writeFile({
+                    path: filename,
+                    data: btoa(unescape(encodeURIComponent(text))),
+                    directory: Directory.Cache,
+                    encoding: null,
+                });
+                const fileUri = await Filesystem.getUri({
+                    path: filename,
+                    directory: Directory.Cache,
+                });
+                await Share.share({
+                    title: filename,
+                    url: fileUri.uri,
+                    dialogTitle: 'Abrir com...',
+                });
             } else {
+                // Browser / iOS PWA
+                const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
+                const objUrl = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = objUrl;
                 a.download = filename;
