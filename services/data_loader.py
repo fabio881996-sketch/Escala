@@ -85,7 +85,7 @@ def _cached_load_usuarios() -> pd.DataFrame:
     if hit:
         return val
     result = GoogleSheetsClient().load_data(USERS_SHEET_NAME)
-    _cache.set("utilizadores", result, 300)
+    _cache.set("utilizadores", result, 30)
     return result
 
 def _cached_load_feriados(aba_nome: str) -> pd.DataFrame:
