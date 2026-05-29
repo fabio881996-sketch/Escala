@@ -39,6 +39,7 @@ const MinhaEscalaPage = {
         if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
 
         let rows = '';
+        if (s.troca_aprovada && s.colegas?.length) rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.78rem;color:#92400e">c/ ${s.colegas[0]}</span></div>`;
         if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;
         if (s.viatura && s.viatura !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">🚔</span>${s.viatura}</div>`;
         if (s.radio && s.radio !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📻</span>${s.radio}</div>`;
