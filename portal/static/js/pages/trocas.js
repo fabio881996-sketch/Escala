@@ -89,7 +89,7 @@ const TrocasPage = {
                 const direcao = souOrigem ? '→' : '←';
                 return `
                     <div class="card card-${cor}">
-                        <div class="card-label">${t.data} • ${t.status}</div>
+                        <div class="card-label">${t.data} • ${statusLabel}</div>
                         <div class="card-title">🔄 ${t.servico_origem}</div>
                         <div class="card-subtitle">${direcao} ${contraparte}</div>
                         ${t.observacoes ? `<div class="card-subtitle" style="margin-top:2px">📝 ${t.observacoes}</div>` : ''}
