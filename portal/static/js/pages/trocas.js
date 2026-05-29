@@ -33,15 +33,26 @@ const TrocasPage = {
         const el = document.getElementById('trocas-content');
         el.innerHTML = Components.loading();
         try {
-            const data = await API.trocas_pendentes();
-            const trocas = data?.trocas || [];
-            if (!trocas.length) {
+            const [dataPendentes, dataMinhas] = await Promise.all([
+                API.trocas_pendentes(),
+                API.minhas_trocas(),
+            ]);
+            const user = API.getUser();
+            const pendentes = dataPendentes?.trocas || [];
+            // Os meus pedidos ainda por responder
+            const meusAtivos = (dataMinhas?.trocas || []).filter(t =>
+                String(t.id_origem) === String(user?.id) &&
+                (t.status === 'Pendente_Militar' || t.status === 'Pendente_Admin')
+            );
+
+            if (!pendentes.length && !meusAtivos.length) {
                 el.innerHTML = `<div class="empty-state"><div class="empty-icon">✅</div><p>Sem pedidos pendentes.</p></div>`;
                 return;
             }
-            el.innerHTML = trocas.map((t, i) => `
+
+            const htmlPendentes = pendentes.map((t, i) => `
                 <div class="card card-amber">
-                    <div class="card-label">📥 Pedido de troca • ${t.data}</div>
+                    <div class="card-label">📥 Pedido recebido • ${t.data}</div>
                     <div class="card-title">🔄 ${t.servico_origem}</div>
                     <div class="card-subtitle">De: ${t.nome_origem || t.id_origem}</div>
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
@@ -50,8 +61,36 @@ const TrocasPage = {
                         <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'rejeitar')">❌ Recusar</button>
                     </div>
                 </div>`).join('');
+
+            const htmlMeus = meusAtivos.map(t => {
+                const statusLabel = t.status === 'Pendente_Admin' ? '⏳ Aguarda admin' : '⏳ Aguarda resposta';
+                return `
+                <div class="card" style="border-left:4px solid #64748b">
+                    <div class="card-label">📤 Pedido enviado • ${t.data} • ${statusLabel}</div>
+                    <div class="card-title">🔄 ${t.servico_origem}</div>
+                    <div class="card-subtitle">Para: ${t.nome_destino || t.id_destino}</div>
+                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
+                    ${t.status === 'Pendente_Militar' ? `
+                    <div style="margin-top:12px">
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelar(${t.__row_index || 0})">🗑️ Cancelar pedido</button>
+                    </div>` : ''}
+                </div>`;
+            }).join('');
+
+            el.innerHTML = htmlPendentes + htmlMeus;
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
+        }
+    },
+
+    async cancelar(rowIndex) {
+        if (!confirm('Tens a certeza que queres cancelar este pedido?')) return;
+        try {
+            await API._post('/api/trocas/cancelar', { row_index: rowIndex });
+            await this.loadPendentes();
+            App.checkPendentes();
+        } catch (e) {
+            alert('❌ Erro: ' + e.message);
         }
     },
 
