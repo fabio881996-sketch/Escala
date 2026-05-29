@@ -44,6 +44,11 @@ async def warmup():
     asyncio.create_task(_load())
 
 
+# Servir sw.js na raiz (scope correcto para Push e cache)
+@app.get("/sw.js")
+async def service_worker():
+    return FileResponse("portal/static/sw.js", media_type="application/javascript")
+
 # Servir o frontend
 @app.get("/")
 @app.head("/")
