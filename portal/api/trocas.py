@@ -104,10 +104,13 @@ async def minhas_trocas(current_user: dict = Depends(obter_user_atual)):
         df = loader.carregar_trocas()
         if df.empty:
             return {"trocas": []}
-        minhas = df[
-            (df["id_origem"].astype(str) == str(u_id)) |
-            (df["id_destino"].astype(str) == str(u_id))
-        ]
+        df_reset = df.reset_index(drop=True)
+        mask = (
+            (df_reset["id_origem"].astype(str) == str(u_id)) |
+            (df_reset["id_destino"].astype(str) == str(u_id))
+        )
+        minhas = df_reset[mask].copy()
+        minhas["__row_index"] = minhas.index + 2
         trocas = minhas.fillna("").to_dict(orient="records")
         # Enriquecer com nomes
         df_util = loader.carregar_usuarios()
@@ -343,6 +346,36 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
         except Exception:
             pass
         return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Cancelar pedido (só o autor pode cancelar) ───────────────
+
+class CancelarTroca(BaseModel):
+    row_index: int
+
+
+@router.post("/cancelar")
+async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(obter_user_atual)):
+    """Cancela um pedido de troca feito pelo próprio utilizador."""
+    u_id = str(current_user.get("sub"))
+    try:
+        from core.database import get_sheet
+        sh = get_sheet()
+        ws = sh.worksheet("registos_trocas")
+        rows = ws.get_all_values()
+        row_arr_idx = payload.row_index - 1
+        if row_arr_idx < 1 or row_arr_idx >= len(rows):
+            raise HTTPException(status_code=404, detail="Linha não encontrada")
+        row = rows[row_arr_idx]
+        id_origem = str(row[1]).strip() if len(row) > 1 else ""
+        if id_origem != u_id:
+            raise HTTPException(status_code=403, detail="Só o autor pode cancelar")
+        ws.update_cell(payload.row_index, 6, "Cancelada")
+        return {"ok": True}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
