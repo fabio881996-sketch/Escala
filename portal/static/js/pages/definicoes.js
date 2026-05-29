@@ -149,16 +149,17 @@ const DefinicoesPage = {
 
             if (isCapacitor) {
                 // APK Android — guardar e partilhar via Share
-                const { Filesystem, Directory, Share } = window.Capacitor.Plugins;
+                const Filesystem = window.Capacitor.Plugins.Filesystem;
+                const Share = window.Capacitor.Plugins.Share;
                 await Filesystem.writeFile({
                     path: filename,
                     data: btoa(unescape(encodeURIComponent(text))),
-                    directory: Directory.Cache,
+                    directory: 'CACHE',
                     encoding: null,
                 });
                 const fileUri = await Filesystem.getUri({
                     path: filename,
-                    directory: Directory.Cache,
+                    directory: 'CACHE',
                 });
                 await Share.share({
                     title: filename,

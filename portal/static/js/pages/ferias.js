@@ -137,14 +137,15 @@ const FeriasPage = {
             const text = linhas.join('\r\n');
 
             if (isCapacitor) {
-                const { Filesystem, Directory, Share } = window.Capacitor.Plugins;
+                const Filesystem = window.Capacitor.Plugins.Filesystem;
+                const Share = window.Capacitor.Plugins.Share;
                 await Filesystem.writeFile({
                     path: filename,
                     data: btoa(unescape(encodeURIComponent(text))),
-                    directory: Directory.Cache,
+                    directory: 'CACHE',
                     encoding: null,
                 });
-                const fileUri = await Filesystem.getUri({ path: filename, directory: Directory.Cache });
+                const fileUri = await Filesystem.getUri({ path: filename, directory: 'CACHE' });
                 await Share.share({ title: filename, url: fileUri.uri, dialogTitle: 'Abrir com...' });
             } else {
                 const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
