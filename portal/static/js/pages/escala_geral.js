@@ -130,6 +130,7 @@ const EscalaGeralPage = {
         const temInd = (linhas) => linhas.some(e => e['indicativo rádio'] && e['indicativo rádio'] !== 'nan');
         const temRad = (linhas) => linhas.some(e => e['rádio'] && e['rádio'] !== 'nan');
         const temVtr = (linhas) => linhas.some(e => e['viatura'] && e['viatura'] !== 'nan');
+        const temObs = (linhas) => linhas.some(e => e['observacoes'] && e['observacoes'] !== 'nan' && e['observacoes'] !== '');
 
         const renderTabela = (titulo, linhasOrig, comServico = false) => {
             if (!linhasOrig.length) return '';
@@ -139,15 +140,16 @@ const EscalaGeralPage = {
                 const h = e['horário'] || '';
                 const sv = e['serviço'] || '';
                 const key = comServico ? `${h}||${sv}` : h;
-                if (!mapa[key]) mapa[key] = { h, sv, nomes:[], vtr:'', rad:'', ind:'' };
+                if (!mapa[key]) mapa[key] = { h, sv, nomes:[], vtrs:[], rads:[], ind:'', obs:'' };
                 const nomeMil = e['nome_fmt'] || e['id'] || '';
                 const trocaCom = e['troca_com'] || '';
                 mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
-                if (e['viatura'] && e['viatura'] !== 'nan') mapa[key].vtr = e['viatura'];
-                if (e['rádio'] && e['rádio'] !== 'nan') mapa[key].rad = e['rádio'];
+                if (e['viatura'] && e['viatura'] !== 'nan' && !mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']);
+                if (e['rádio'] && e['rádio'] !== 'nan' && !mapa[key].rads.includes(e['rádio'])) mapa[key].rads.push(e['rádio']);
                 if (e['indicativo rádio'] && e['indicativo rádio'] !== 'nan') mapa[key].ind = e['indicativo rádio'];
+                if (e['observacoes'] && e['observacoes'] !== 'nan' && e['observacoes'] !== '') mapa[key].obs = e['observacoes'];
             }
-            const hasInd = temInd(linhas), hasRad = temRad(linhas), hasVtr = temVtr(linhas);
+            const hasInd = temInd(linhas), hasRad = temRad(linhas), hasVtr = temVtr(linhas), hasObs = temObs(linhas);
             let t = `<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">
                 <div style="font-size:.68rem;font-weight:800;color:#fff;background:var(--azul);padding:7px 14px;text-transform:uppercase;letter-spacing:.06em">${titulo}</div>
                 <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:280px">
@@ -158,17 +160,19 @@ const EscalaGeralPage = {
                     ${hasInd ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Indicativo</th>' : ''}
                     ${hasRad ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Rádio</th>' : ''}
                     ${hasVtr ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Viatura</th>' : ''}
+                    ${hasObs ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Obs.</th>' : ''}
                 </tr></thead><tbody>`;
             let alt = false;
-            for (const { h, sv, nomes, vtr, rad, ind } of Object.values(mapa)) {
+            for (const { h, sv, nomes, vtrs, rads, ind, obs } of Object.values(mapa)) {
                 const bg = alt ? '#F8FAFC' : '#fff';
                 t += `<tr style="background:${bg};border-bottom:1px solid #F1F5F9">
                     <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:var(--azul);white-space:nowrap">${h || '—'}</td>
                     <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join('<br>')}</td>
                     ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : ''}
                     ${hasInd ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${ind}</td>` : ''}
-                    ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rad}</td>` : ''}
-                    ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtr}</td>` : ''}
+                    ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rads.join('<br>')}</td>` : ''}
+                    ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtrs.join('<br>')}</td>` : ''}
+                    ${hasObs ? `<td style="padding:8px 10px;font-size:.72rem;color:#475569">${obs}</td>` : ''}
                 </tr>`;
                 alt = !alt;
             }

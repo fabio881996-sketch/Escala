@@ -49,12 +49,31 @@ const MinhaEscalaPage = {
         }
         if (s.observacoes && s.observacoes !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📝</span>${s.observacoes}</div>`;
 
-        return `
+        let cards = `
             <div class="card ${cls}">
                 <div class="card-label">${badge}</div>
                 <div class="card-title">${icone} ${s.servico}</div>
                 ${rows}
             </div>`;
+
+        // Card extra para remunerados no mesmo dia
+        if (s.remunerados?.length) {
+            for (const r of s.remunerados) {
+                let remBadge = s.is_hoje ? '<span class="badge badge-hoje">🟢 HOJE</span>' :
+                               s.is_amanha ? '<span class="badge badge-amanha">🔵 AMANHÃ</span>' :
+                               `<span class="badge badge-neutro">📅 ${s.data}</span>`;
+                remBadge += ' <span style="background:#16a34a;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">💰 REMUNERADO</span>';
+                cards += `
+            <div class="card card-verde">
+                <div class="card-label">${remBadge}</div>
+                <div class="card-title">💰 ${r.servico}</div>
+                ${r.horario ? `<div class="card-row"><span class="card-row-icon">🕒</span>${r.horario}</div>` : ''}
+                ${r.observacoes ? `<div class="card-row"><span class="card-row-icon">📝</span>${r.observacoes}</div>` : ''}
+                ${r.colegas?.length ? `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${r.colegas.join(' · ')}</span></div>` : ''}
+            </div>`;
+            }
+        }
+        return cards;
     },
 
     cardClass(s) {
