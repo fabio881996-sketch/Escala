@@ -34,6 +34,7 @@ const MinhaEscalaPage = {
         else if (s.is_amanha) badge = '<span class="badge badge-amanha">🔵 AMANHÃ</span>';
         else badge = `<span class="badge badge-neutro">📅 ${s.data}</span>`;
         if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
+        if (s.troca_com) rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.78rem;color:#92400e">c/ ${s.troca_com}</span></div>`;
 
         let rows = '';
         if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;

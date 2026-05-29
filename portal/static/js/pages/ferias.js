@@ -85,9 +85,23 @@ const FeriasPage = {
                 <div style="font-size:.72rem;opacity:.75;margin-top:4px">${total_dias_uteis} de ${DIREITO} dias (${pct}%)</div>
             </div>
 
-            <!-- Botão exportar Google Calendar -->
-            <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="GCal.exportarFerias()">
-                📅 Exportar para Google Calendar
+            <!-- Botão exportar -->
+            <div id="modal-exportar-ferias" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:flex-end;justify-content:center">
+                <div style="background:#fff;border-radius:16px 16px 0 0;padding:24px;width:100%;max-width:480px">
+                    <div style="font-size:.9rem;font-weight:700;color:#1e293b;margin-bottom:16px">Exportar férias para...</div>
+                    <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="FeriasPage.exportarICS();document.getElementById('modal-exportar-ferias').style.display='none'">
+                        📥 Descarregar ficheiro .ics
+                    </button>
+                    <button class="btn btn-primary" style="width:100%;margin-bottom:10px;background:#fff;color:#1e293b;border:1px solid #e2e8f0" onclick="GCal.exportarFerias();document.getElementById('modal-exportar-ferias').style.display='none'">
+                        <img src="https://www.google.com/favicon.ico" style="width:14px;height:14px;vertical-align:middle;margin-right:6px">Google Calendar
+                    </button>
+                    <button class="btn" style="width:100%;background:#f1f5f9;color:#64748b" onclick="document.getElementById('modal-exportar-ferias').style.display='none'">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+            <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="document.getElementById('modal-exportar-ferias').style.display='flex'">
+                📅 Exportar para Calendário
             </button>
 
             <!-- Períodos -->
