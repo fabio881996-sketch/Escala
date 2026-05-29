@@ -85,9 +85,9 @@ const FeriasPage = {
                 <div style="font-size:.72rem;opacity:.75;margin-top:4px">${total_dias_uteis} de ${DIREITO} dias (${pct}%)</div>
             </div>
 
-            <!-- Botão exportar .ics -->
-            <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="FeriasPage.exportarICS()">
-                📥 Exportar para Calendário (.ics)
+            <!-- Botão exportar Google Calendar -->
+            <button class="btn btn-primary" style="width:100%;margin-bottom:12px" onclick="GCal.exportarFerias()">
+                📅 Exportar para Google Calendar
             </button>
 
             <!-- Períodos -->

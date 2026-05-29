@@ -31,11 +31,11 @@ const DefinicoesPage = {
             <div class="card" style="margin-bottom:12px;padding:16px">
                 <div style="font-size:.68rem;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Exportar para Calendário</div>
                 <div style="font-size:.78rem;color:#64748b;margin-bottom:12px">Exporta os teus serviços ou folgas para o calendário do telemóvel (.ics)</div>
-                <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="DefinicoesPage.exportarEscala()">
-                    📅 Exportar Escala
+                <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="GCal.exportarEscala()">
+                    📅 Exportar Escala → Google Calendar
                 </button>
-                <button class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.exportarFolgas()">
-                    😴 Exportar Folgas
+                <button class="btn btn-primary" style="width:100%" onclick="GCal.exportarFolgas()">
+                    😴 Exportar Folgas → Google Calendar
                 </button>
             </div>
 
