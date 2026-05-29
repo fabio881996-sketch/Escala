@@ -122,16 +122,24 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
 
-        # Mapa id -> formato "ID Posto PrimeiroNome Apelido"
+        # Mapa id -> formato "ID Posto Apelido"
+        _postos_abrev = {
+            "Guarda Principal": "Grd Pr", "Cabo Chefe": "Cb Ch", "Cabo": "Cb",
+            "Furriel": "Furr", "Segundo Sargento": "2Sarg", "Primeiro Sargento": "1Sarg",
+            "Sargento Ajudante": "Sarg Aj", "Sargento Chefe": "Sarg Ch",
+            "Sargento": "2Sarg", "Guarda": "Grd", "Alferes": "Alf",
+            "Tenente": "Ten", "Capitão": "Cap",
+        }
         id_para_nome = {}
         if not df_util.empty:
             for _, r in df_util.iterrows():
                 uid = str(r.get("id", "")).strip()
                 posto = str(r.get("posto", "")).strip()
+                posto_abrev = next((v for k, v in _postos_abrev.items() if k.lower() == posto.lower()), posto)
                 nomes = str(r.get("nome", "")).strip().split()
-                nome_curto = f"{nomes[0]} {nomes[-1]}" if len(nomes) > 1 else " ".join(nomes)
+                apelido = nomes[-1] if nomes else ""
                 if uid:
-                    id_para_nome[uid] = f"{uid} {posto} {nome_curto}".strip()
+                    id_para_nome[uid] = f"{uid} {posto_abrev} {apelido}".strip()
 
         dias_a_mostrar: list[date] = []
         for delta in range(90):
