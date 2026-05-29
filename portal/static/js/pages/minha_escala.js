@@ -68,6 +68,8 @@ const MinhaEscalaPage = {
                 <div class="card-label">${remBadge}</div>
                 <div class="card-title">💰 ${r.servico}</div>
                 ${r.horario ? `<div class="card-row"><span class="card-row-icon">🕒</span>${r.horario}</div>` : ''}
+                ${r.viatura ? `<div class="card-row"><span class="card-row-icon">🚔</span>${r.viatura}</div>` : ''}
+                ${r.radio ? `<div class="card-row"><span class="card-row-icon">📻</span>${r.radio}</div>` : ''}
                 ${r.observacoes ? `<div class="card-row"><span class="card-row-icon">📝</span>${r.observacoes}</div>` : ''}
                 ${r.colegas?.length ? `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${r.colegas.join(' · ')}</span></div>` : ''}
             </div>`;
