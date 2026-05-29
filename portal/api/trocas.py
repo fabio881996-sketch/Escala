@@ -366,7 +366,12 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         if resposta.row_index < 1 or resposta.row_index >= len(rows):
             raise HTTPException(status_code=404, detail="Linha não encontrada")
 
-        row = rows[resposta.row_index]
+        # row_index é 1-based incluindo cabeçalho (linha 2 = row_index 2)
+        # No array rows[], índice 0 = cabeçalho, índice 1 = linha 2
+        row_arr_idx = resposta.row_index - 1
+        if row_arr_idx < 1 or row_arr_idx >= len(rows):
+            raise HTTPException(status_code=404, detail="Linha não encontrada")
+        row = rows[row_arr_idx]
         # Colunas: data, id_origem, servico_origem, id_destino, servico_destino, status, obs
         id_destino = str(row[3]).strip() if len(row) > 3 else ""
         if id_destino != u_id:
@@ -375,7 +380,7 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
         # Coluna status = coluna F = índice 6 (1-based para gspread)
         col_status = 6
-        ws.update_cell(resposta.row_index + 1, col_status, novo_status)
+        ws.update_cell(resposta.row_index, col_status, novo_status)
         # Notificar o autor original
         try:
             from portal.api.notificacoes import enviar_push
