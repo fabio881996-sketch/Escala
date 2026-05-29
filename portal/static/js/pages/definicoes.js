@@ -30,13 +30,28 @@ const DefinicoesPage = {
             <!-- Exportar -->
             <div class="card" style="margin-bottom:12px;padding:16px">
                 <div style="font-size:.68rem;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Exportar para Calendário</div>
-                <div style="font-size:.78rem;color:#64748b;margin-bottom:12px">Exporta os teus serviços ou folgas para o calendário do telemóvel (.ics)</div>
-                <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="GCal.exportarEscala()">
-                    📅 Exportar Escala → Google Calendar
+                <div style="font-size:.78rem;color:#64748b;margin-bottom:12px">Exporta os teus serviços ou folgas para o calendário do telemóvel</div>
+                <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="DefinicoesPage.escolherExportar('escala')">
+                    📅 Exportar Escala
                 </button>
-                <button class="btn btn-primary" style="width:100%" onclick="GCal.exportarFolgas()">
-                    😴 Exportar Folgas → Google Calendar
+                <button class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.escolherExportar('folgas')">
+                    😴 Exportar Folgas
                 </button>
+            </div>
+            <!-- Modal escolha calendário -->
+            <div id="modal-exportar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;align-items:flex-end;justify-content:center">
+                <div style="background:#fff;border-radius:16px 16px 0 0;padding:24px;width:100%;max-width:480px">
+                    <div style="font-size:.9rem;font-weight:700;color:#1e293b;margin-bottom:16px">Exportar para...</div>
+                    <button class="btn btn-primary" style="width:100%;margin-bottom:10px" onclick="DefinicoesPage.confirmarExportar('ics')">
+                        📥 Descarregar ficheiro .ics
+                    </button>
+                    <button class="btn btn-primary" style="width:100%;margin-bottom:10px;background:#fff;color:#1e293b;border:1px solid #e2e8f0" onclick="DefinicoesPage.confirmarExportar('google')">
+                        <img src="https://www.google.com/favicon.ico" style="width:14px;height:14px;vertical-align:middle;margin-right:6px">Google Calendar
+                    </button>
+                    <button class="btn" style="width:100%;background:#f1f5f9;color:#64748b" onclick="DefinicoesPage.fecharModal()">
+                        Cancelar
+                    </button>
+                </div>
             </div>
 
             <!-- Sair -->
@@ -132,6 +147,31 @@ const DefinicoesPage = {
 
         setTimeout(() => this.verificarEstadoNotificacoes(), 500);
     },
+    _tipoExportar: null,
+
+    escolherExportar(tipo) {
+        this._tipoExportar = tipo;
+        const modal = document.getElementById('modal-exportar');
+        if (modal) { modal.style.display = 'flex'; }
+    },
+
+    fecharModal() {
+        const modal = document.getElementById('modal-exportar');
+        if (modal) modal.style.display = 'none';
+    },
+
+    async confirmarExportar(destino) {
+        this.fecharModal();
+        const tipo = this._tipoExportar;
+        if (destino === 'ics') {
+            if (tipo === 'escala') await this._exportarICS('/api/ferias/escala-ics', `escala_${API.getUser()?.id || 'gnr'}.ics`);
+            else await this._exportarICS('/api/ferias/folgas-ics', `folgas_${API.getUser()?.id || 'gnr'}.ics`);
+        } else {
+            if (tipo === 'escala') await GCal.exportarEscala();
+            else await GCal.exportarFolgas();
+        }
+    },
+
     async exportarEscala() {
         await this._exportarICS('/api/ferias/escala-ics', `escala_${API.getUser()?.id || 'gnr'}.ics`);
     },
