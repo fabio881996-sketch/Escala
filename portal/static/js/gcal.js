@@ -7,25 +7,25 @@ const GCal = {
     // Iniciar autenticação Google — redirect na mesma janela
     async autenticar(tipo) {
         const data = await API._get(`/api/calendar/auth?tipo=${tipo}`);
-        // Guardar intenção antes do redirect
-        sessionStorage.setItem('gcal_pending', tipo);
         window.location.href = data.auth_url;
-        // Nunca resolve — a página vai fazer redirect
         return new Promise(() => {});
     },
 
-    // Chamar no init da app após voltar do OAuth
+    // Chamar no init da app — detecta ?gcal=tipo no URL após callback
     verificarCallbackPendente() {
-        const tipo = sessionStorage.getItem('gcal_pending');
+        const params = new URLSearchParams(window.location.search);
+        const tipo = params.get('gcal');
         if (!tipo) return;
-        sessionStorage.removeItem('gcal_pending');
-        // Pequeno delay para garantir que a app carregou
+        // Limpar o parâmetro do URL sem recarregar
+        const url = new URL(window.location.href);
+        url.searchParams.delete('gcal');
+        window.history.replaceState({}, '', url.toString());
         setTimeout(() => {
             console.log('[GCal] a retomar exportação após OAuth:', tipo);
             if (tipo === 'escala') GCal.exportarEscala();
             else if (tipo === 'folgas') GCal.exportarFolgas();
             else if (tipo === 'ferias') GCal.exportarFerias();
-        }, 1000);
+        }, 800);
     },
 
     // Verificar se já está autenticado
