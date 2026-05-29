@@ -396,11 +396,8 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         sh = get_sheet()
         ws = sh.worksheet("registos_trocas")
         rows = ws.get_all_values()
-        if resposta.row_index < 1 or resposta.row_index >= len(rows):
-            raise HTTPException(status_code=404, detail="Linha não encontrada")
-
-        # row_index é 1-based incluindo cabeçalho (linha 2 = row_index 2)
-        # No array rows[], índice 0 = cabeçalho, índice 1 = linha 2
+        # row_index é 1-based incluindo cabeçalho
+        # rows[0] = cabeçalho, rows[1] = linha 2 da sheet
         row_arr_idx = resposta.row_index - 1
         if row_arr_idx < 1 or row_arr_idx >= len(rows):
             raise HTTPException(status_code=404, detail="Linha não encontrada")
@@ -456,7 +453,7 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
             raise HTTPException(status_code=404, detail="Linha não encontrada")
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
-        ws.update_cell(resposta.row_index + 1, 6, novo_status)
+        ws.update_cell(resposta.row_index, 6, novo_status)
         # Notificar ambos os militares
         try:
             from portal.api.notificacoes import enviar_push
