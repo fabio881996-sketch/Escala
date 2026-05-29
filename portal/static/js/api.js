@@ -88,6 +88,11 @@ const API = {
     push_subscribe: (dados) => API.post('/api/notificacoes/subscribe', dados),
     push_unsubscribe: () => API.delete('/api/notificacoes/unsubscribe'),
 
+    // Aliases para uso externo (GCal, etc.)
+    _get: (url) => API.get(url, false),
+    _post: (url, body) => API.post(url, body),
+    _delete: (url) => API.delete(url),
+
     // Limpar cache da sessão
     clearCache() { Object.keys(sessionStorage).filter(k => k.startsWith('api_')).forEach(k => sessionStorage.removeItem(k)); },
 };
