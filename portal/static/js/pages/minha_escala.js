@@ -33,6 +33,7 @@ const MinhaEscalaPage = {
         if (s.is_hoje) badge = '<span class="badge badge-hoje">🟢 HOJE</span>';
         else if (s.is_amanha) badge = '<span class="badge badge-amanha">🔵 AMANHÃ</span>';
         else badge = `<span class="badge badge-neutro">📅 ${s.data}</span>`;
+        if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
 
         let rows = '';
         if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;
