@@ -47,7 +47,7 @@
     <!-- Service Worker (PWA) -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/static/sw.js')
+            navigator.serviceWorker.register('/sw.js')
                 .then(() => console.log('Service Worker registado'))
                 .catch(err => console.warn('SW erro:', err));
         }
