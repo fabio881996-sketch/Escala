@@ -135,7 +135,9 @@ const EscalaGeralPage = {
                 const sv = e['serviço'] || '';
                 const key = comServico ? `${h}||${sv}` : h;
                 if (!mapa[key]) mapa[key] = { h, sv, nomes:[], vtr:'', rad:'', ind:'' };
-                mapa[key].nomes.push(e['nome_fmt'] || e['id'] || '');
+                const nomeMil = e['nome_fmt'] || e['id'] || '';
+                const trocaCom = e['troca_com'] || '';
+                mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
                 if (e['viatura'] && e['viatura'] !== 'nan') mapa[key].vtr = e['viatura'];
                 if (e['rádio'] && e['rádio'] !== 'nan') mapa[key].rad = e['rádio'];
                 if (e['indicativo rádio'] && e['indicativo rádio'] !== 'nan') mapa[key].ind = e['indicativo rádio'];
@@ -157,7 +159,7 @@ const EscalaGeralPage = {
                 const bg = alt ? '#F8FAFC' : '#fff';
                 t += `<tr style="background:${bg};border-bottom:1px solid #F1F5F9">
                     <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:var(--azul);white-space:nowrap">${h || '—'}</td>
-                    <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join(', ')}</td>
+                    <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join('<br>')}</td>
                     ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : ''}
                     ${hasInd ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${ind}</td>` : ''}
                     ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rad}</td>` : ''}
