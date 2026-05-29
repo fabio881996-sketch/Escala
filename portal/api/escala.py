@@ -133,12 +133,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     else:
                         continue
 
-                    # Confirmar que a troca é do serviço que está a ser mostrado
-                    serv_orig_str = str(t["servico_origem"]) if str(t["id_origem"]).strip() == str(u_id).strip() else str(t["servico_destino"])
-                    serv_orig_nome = serv_orig_str.rsplit("(", 1)[0].strip()
-                    if serv_orig_nome.lower()[:8] not in servico.lower():
-                        continue
-
                     serv_novo = s.rsplit("(", 1)[0].strip()
                     hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
 
