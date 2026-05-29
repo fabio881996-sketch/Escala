@@ -56,7 +56,6 @@ const App = {
 
         App.checkPendentes();
         App.initPush();
-        GCal.verificarCallbackPendente();
 
         // Ouvir mensagem do SW para navegar após clique na notificação
         navigator.serviceWorker?.addEventListener('message', e => {
@@ -131,7 +130,9 @@ const App = {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
 
         try {
-            const reg = await navigator.serviceWorker.ready;
+            // Usar getRegistrations para evitar pending quando SW não é controller
+            const regs = await navigator.serviceWorker.getRegistrations();
+            const reg = regs[0] || await navigator.serviceWorker.ready;
 
             // Verificar se já está subscrito
             const existing = await reg.pushManager.getSubscription();
