@@ -174,6 +174,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
 
             troca_aplicada = False
             id_excluir = ""
+            troca_com = ""
             # row_ref aponta para a linha cujos dados (viatura, radio, colegas) devem ser usados
             row_ref = row
 
@@ -200,6 +201,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     servico = str(row_ref.get("serviço", "")).strip()
                     horario = str(row_ref.get("horário", "")).strip()
                     id_excluir = id_outro
+                    troca_com = id_para_nome.get(id_outro, id_outro)
                     troca_aplicada = True
                     break
 
@@ -209,6 +211,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "servico": servico,
                 "horario": horario,
                 "troca_aprovada": troca_aplicada,
+                "troca_com": troca_com,
                 "viatura": str(row_ref.get("viatura", "") or "").replace("nan", ""),
                 "radio": str(row_ref.get("rádio", "") or "").replace("nan", ""),
                 "indicativo": str(row_ref.get("indicativo rádio", "") or "").replace("nan", ""),
