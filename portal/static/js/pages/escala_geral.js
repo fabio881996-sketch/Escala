@@ -71,7 +71,7 @@ const EscalaGeralPage = {
         const outros = [];
 
         const AUSENCIA = ['folga semanal','folga complementar','férias','licença','convalescença','outras licenças','doente'];
-        const ADM = ['diligência','tribunal','pronto','secretaria','inquérito','fcaa','instrução','remunerado'];
+        const ADM = ['diligência','tribunal','pronto','secretaria','inquérito','fcaa','instrução','remunerado','gratif','remun'];
 
         for (const e of entradas) {
             const sv = (e['serviço'] || '').toLowerCase().trim();
