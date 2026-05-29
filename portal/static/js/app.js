@@ -56,6 +56,7 @@ const App = {
 
         App.checkPendentes();
         App.initPush();
+        GCal.verificarCallbackPendente();
 
         // Ouvir mensagem do SW para navegar após clique na notificação
         navigator.serviceWorker?.addEventListener('message', e => {

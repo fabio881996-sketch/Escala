@@ -4,34 +4,28 @@
 
 const GCal = {
 
-    // Iniciar autenticação Google
+    // Iniciar autenticação Google — redirect na mesma janela
     async autenticar(tipo) {
         const data = await API._get(`/api/calendar/auth?tipo=${tipo}`);
-        const authUrl = data.auth_url;
+        // Guardar intenção antes do redirect
+        sessionStorage.setItem('gcal_pending', tipo);
+        window.location.href = data.auth_url;
+        // Nunca resolve — a página vai fazer redirect
+        return new Promise(() => {});
+    },
 
-        // Abrir popup OAuth
-        const popup = window.open(authUrl, 'google_auth', 'width=500,height=600');
-
-        return new Promise((resolve, reject) => {
-            // Ouvir mensagem do callback
-            const handler = (e) => {
-                if (e.data?.type === 'GCAL_AUTH_OK') {
-                    window.removeEventListener('message', handler);
-                    clearInterval(check);
-                    resolve(e.data.tipo);
-                }
-            };
-            window.addEventListener('message', handler);
-
-            // Verificar se popup fechou sem autenticar
-            const check = setInterval(() => {
-                if (popup?.closed) {
-                    clearInterval(check);
-                    window.removeEventListener('message', handler);
-                    reject(new Error('Autenticação cancelada'));
-                }
-            }, 500);
-        });
+    // Chamar no init da app após voltar do OAuth
+    verificarCallbackPendente() {
+        const tipo = sessionStorage.getItem('gcal_pending');
+        if (!tipo) return;
+        sessionStorage.removeItem('gcal_pending');
+        // Pequeno delay para garantir que a app carregou
+        setTimeout(() => {
+            console.log('[GCal] a retomar exportação após OAuth:', tipo);
+            if (tipo === 'escala') GCal.exportarEscala();
+            else if (tipo === 'folgas') GCal.exportarFolgas();
+            else if (tipo === 'ferias') GCal.exportarFerias();
+        }, 1000);
     },
 
     // Verificar se já está autenticado
