@@ -118,7 +118,6 @@ def enviar_push(u_ids: list[str], titulo: str, corpo: str, url: str = "/", tag: 
                     notification=messaging.AndroidNotification(
                         title=titulo,
                         body=corpo,
-                        click_action="FLUTTER_NOTIFICATION_CLICK",
                         tag=tag,
                     )
                 )
