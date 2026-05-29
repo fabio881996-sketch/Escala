@@ -16,7 +16,7 @@ const App = {
         document.getElementById('app').innerHTML = `
             <div id="navbar">
                 <div class="nav-left">
-                    <span class="nav-logo">🛡️</span>
+                    <img src="/static/icons/icon-192.png" alt="GNR" style="width:32px;height:32px;border-radius:6px;object-fit:cover">
                     <div>
                         <div class="nav-title">Portal de Escalas</div>
                         <div class="nav-sub">Posto de Famalicão</div>
