@@ -116,6 +116,9 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             horario = str(row.get("horário", ""))
 
             troca_aplicada = False
+            # row_ref aponta para a linha cujos dados (viatura, radio, colegas) devem ser usados
+            row_ref = row
+
             if not df_trocas.empty:
                 tr = df_trocas[
                     (df_trocas["data"] == d_s) &
@@ -125,14 +128,32 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 for _, t in tr.iterrows():
                     if str(t["id_origem"]).strip() == str(u_id).strip():
                         s = str(t["servico_destino"])
-                        servico = s.rsplit("(", 1)[0].strip()
-                        horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
-                        troca_aplicada = True
                     elif str(t["id_destino"]).strip() == str(u_id).strip():
                         s = str(t["servico_origem"])
-                        servico = s.rsplit("(", 1)[0].strip()
-                        horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
-                        troca_aplicada = True
+                    else:
+                        continue
+
+                    # Confirmar que a troca é do serviço que está a ser mostrado
+                    serv_orig_str = str(t["servico_origem"]) if str(t["id_origem"]).strip() == str(u_id).strip() else str(t["servico_destino"])
+                    serv_orig_nome = serv_orig_str.rsplit("(", 1)[0].strip()
+                    if serv_orig_nome.lower()[:8] not in servico.lower():
+                        continue
+
+                    serv_novo = s.rsplit("(", 1)[0].strip()
+                    hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+
+                    # Buscar a linha do serviço novo na escala do dia (para viatura/radio correctos)
+                    mask_novo = (
+                        (df_d["serviço"].astype(str).str.strip().str.lower() == serv_novo.lower()) &
+                        (df_d["horário"].astype(str).str.strip() == hor_novo.strip())
+                    )
+                    if mask_novo.any():
+                        row_ref = df_d[mask_novo].iloc[0]
+
+                    servico = serv_novo
+                    horario = hor_novo
+                    troca_aplicada = True
+                    break
 
             servicos.append({
                 "data": d_s,
@@ -140,17 +161,17 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "servico": servico,
                 "horario": horario,
                 "troca_aprovada": troca_aplicada,
-                "viatura": str(row.get("viatura", "") or "").replace("nan", ""),
-                "radio": str(row.get("rádio", "") or "").replace("nan", ""),
-                "indicativo": str(row.get("indicativo rádio", "") or "").replace("nan", ""),
-                "giro": str(row.get("giro", "") or "").replace("nan", ""),
-                "observacoes": str(row.get("observações", "") or "").replace("nan", ""),
+                "viatura": str(row_ref.get("viatura", "") or "").replace("nan", ""),
+                "radio": str(row_ref.get("rádio", "") or "").replace("nan", ""),
+                "indicativo": str(row_ref.get("indicativo rádio", "") or "").replace("nan", ""),
+                "giro": str(row_ref.get("giro", "") or "").replace("nan", ""),
+                "observacoes": str(row_ref.get("observações", "") or "").replace("nan", ""),
                 "is_hoje": dt == hj.date(),
                 "is_amanha": dt == (hj.date() + timedelta(days=1)),
                 "colegas": [
                     id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
                     for _, r in df_d[
-                        (df_d["serviço"].astype(str).str.strip() == servico.strip()) &
+                        (df_d["serviço"].astype(str).str.strip().str.lower() == servico.strip().lower()) &
                         (df_d["horário"].astype(str).str.strip() == horario.strip()) &
                         (df_d["id"].astype(str).str.strip() != str(u_id).strip())
                     ].iterrows()
