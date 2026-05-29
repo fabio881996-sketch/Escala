@@ -2,7 +2,7 @@
    sw.js — Service Worker (PWA) v2
    ============================================ */
 
-const CACHE_NAME = 'gnr-escala-v2';
+const CACHE_NAME = 'gnr-escala-v3';
 const STATIC_ASSETS = [
     '/',
     '/static/css/app.css',
@@ -50,7 +50,21 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // Estáticos — cache first
+    // JS — network first (garante versão mais recente)
+    if (url.pathname.startsWith('/static/js/')) {
+        event.respondWith(
+            fetch(event.request).then(response => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                }
+                return response;
+            }).catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // CSS e outros estáticos — cache first
     event.respondWith(
         caches.match(event.request).then(cached => {
             if (cached) return cached;
