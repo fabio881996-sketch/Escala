@@ -168,26 +168,8 @@ async def google_callback(code: str = Query(None), state: str = Query(None), err
             </body></html>
         """)
 
-    return HTMLResponse(f"""
-        <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#1A2B4A;color:white">
-            <h2>✅ Conta Google ligada!</h2>
-            <p>A sincronizar eventos...</p>
-            <script>
-                // Tentar várias vezes para garantir que o opener recebe
-                let tentativas = 0;
-                const enviar = setInterval(() => {{
-                    tentativas++;
-                    if (window.opener && !window.opener.closed) {{
-                        window.opener.postMessage({{type:'GCAL_AUTH_OK', tipo:'{tipo}'}}, '*');
-                    }}
-                    if (tentativas >= 5) {{
-                        clearInterval(enviar);
-                        setTimeout(() => window.close(), 500);
-                    }}
-                }}, 300);
-            </script>
-        </body></html>
-    """)
+    # Redirecionar de volta ao portal — o JS detecta o gcal_pending no sessionStorage
+    return RedirectResponse(url="https://portal-escalas-gnr-production.up.railway.app/")
 
 
 @router.get("/status")
