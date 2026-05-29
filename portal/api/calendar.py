@@ -168,8 +168,8 @@ async def google_callback(code: str = Query(None), state: str = Query(None), err
             </body></html>
         """)
 
-    # Redirecionar de volta ao portal — o JS detecta o gcal_pending no sessionStorage
-    return RedirectResponse(url="https://portal-escalas-gnr-production.up.railway.app/")
+    # Redirecionar de volta ao portal com ?gcal=tipo para o JS detectar
+    return RedirectResponse(url=f"https://portal-escalas-gnr-production.up.railway.app/?gcal={tipo}")
 
 
 @router.get("/status")
