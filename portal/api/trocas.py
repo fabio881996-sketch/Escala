@@ -424,6 +424,22 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
         ws.update_cell(resposta.row_index + 1, 6, novo_status)
+        # Notificar ambos os militares
+        try:
+            from portal.api.notificacoes import enviar_push
+            rows_all = ws.get_all_values()
+            row_data = rows_all[resposta.row_index] if resposta.row_index < len(rows_all) else []
+            id_origem = str(row_data[1]).strip() if len(row_data) > 1 else ""
+            id_destino = str(row_data[3]).strip() if len(row_data) > 3 else ""
+            data_troca = str(row_data[0]).strip() if row_data else ""
+            emoji = "✅" if novo_status == "Aprovada" else "❌"
+            titulo = f"{emoji} Troca {novo_status.lower()}"
+            corpo = f"A troca de {data_troca} foi {novo_status.lower()} pelo admin."
+            ids = [i for i in [id_origem, id_destino] if i]
+            if ids:
+                enviar_push(u_ids=ids, titulo=titulo, corpo=corpo, url="/trocas")
+        except Exception:
+            pass
         return {"ok": True, "status": novo_status}
     except HTTPException:
         raise
