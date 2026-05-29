@@ -22,7 +22,7 @@ const DefinicoesPage = {
             <div class="card" style="margin-bottom:12px;padding:16px">
                 <div style="font-size:.68rem;font-weight:800;color:var(--azul);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Notificações</div>
                 <div id="notif-status" style="font-size:.78rem;color:#64748b;margin-bottom:12px">A verificar...</div>
-                <button id="notif-btn" class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.toggleNotificacoes(event)">
+                <button id="notif-btn" class="btn btn-primary" style="width:100%" onclick="DefinicoesPage.toggleNotificacoes()">
                     🔔 Ativar Notificações
                 </button>
             </div>
@@ -112,7 +112,7 @@ const DefinicoesPage = {
         }
     },
 
-    async toggleNotificacoes(e) {
+    async toggleNotificacoes() {
         const isCapacitor = !!(window.Capacitor?.isNativePlatform?.() || window.Capacitor?.platform);
         const btnEl = document.getElementById('notif-btn');
         const statusEl = document.getElementById('notif-status');
@@ -144,7 +144,10 @@ const DefinicoesPage = {
             const ativas = Notification.permission === 'granted';
             if (ativas) {
                 if ('serviceWorker' in navigator && 'PushManager' in window) {
-                    const reg = await navigator.serviceWorker.ready;
+                    // Usar getRegistrations em vez de serviceWorker.ready (evita pending)
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    const reg = regs[0];
+                    if (!reg) { await App._initPushWeb(); return; }
                     const existing = await reg.pushManager.getSubscription();
                     if (existing) {
                         // Tem subscription activa — desativar
@@ -153,7 +156,7 @@ const DefinicoesPage = {
                         if (statusEl) statusEl.innerHTML = '❌ Notificações desactivadas';
                         if (btnEl) { btnEl.textContent = '🔔 Ativar Notificações'; btnEl.classList.replace('btn-secondary','btn-primary'); }
                     } else {
-                        // Permissão mas subscription perdida (ex: SW reinstalado) — re-registar
+                        // Permissão mas subscription perdida — re-registar
                         await App._initPushWeb();
                         if (statusEl) statusEl.innerHTML = '✅ Notificações activas';
                     }
