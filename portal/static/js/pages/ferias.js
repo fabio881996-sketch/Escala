@@ -138,7 +138,7 @@ const FeriasPage = {
 
             if (isCapacitor) {
                 const Filesystem = window.Capacitor.Plugins.Filesystem;
-                const Share = window.Capacitor.Plugins.Share;
+                const CalendarPlugin = window.Capacitor.Plugins.CalendarPlugin;
                 await Filesystem.writeFile({
                     path: filename,
                     data: btoa(unescape(encodeURIComponent(text))),
@@ -146,7 +146,7 @@ const FeriasPage = {
                     encoding: null,
                 });
                 const fileUri = await Filesystem.getUri({ path: filename, directory: 'CACHE' });
-                await Share.share({ title: filename, url: fileUri.uri, dialogTitle: 'Abrir com...' });
+                await CalendarPlugin.openICS({ path: fileUri.uri.replace('file://', '') });
             } else {
                 const blob = new Blob([text], { type: 'text/calendar;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
