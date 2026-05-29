@@ -68,10 +68,11 @@ const EscalaGeralPage = {
         const apoio = [];
         const patOcorr = [];
         const patrulhas = [];
+        const remunerados = [];
         const outros = [];
 
         const AUSENCIA = ['folga semanal','folga complementar','férias','licença','convalescença','outras licenças','doente'];
-        const ADM = ['diligência','tribunal','pronto','secretaria','inquérito','fcaa','instrução','remunerado','gratif','remun'];
+        const ADM = ['diligência','tribunal','pronto','secretaria','inquérito','fcaa','instrução'];
 
         for (const e of entradas) {
             const sv = (e['serviço'] || '').toLowerCase().trim();
@@ -93,6 +94,10 @@ const EscalaGeralPage = {
                 patOcorr.push(e);
             } else if (sv.includes('patrulha')) {
                 patrulhas.push(e);
+            } else if (/remun|grat/i.test(sv)) {
+                remunerados.push(e);
+            } else if (/^giro/i.test(sv)) {
+                // giros têm secção própria no Streamlit — ignorar aqui
             } else {
                 outros.push(e);
             }
@@ -175,6 +180,7 @@ const EscalaGeralPage = {
         html += renderTabela('Apoio ao Atendimento', apoio);
         html += renderTabela('Patrulha Ocorrências', patOcorr);
         html += renderTabela('Patrulhas', patrulhas, true);
+        html += renderTabela('Remunerados / Gratificados', remunerados, false);
         if (outros.length) html += renderTabela('Outros Serviços', outros, true);
 
         el.innerHTML = html;
