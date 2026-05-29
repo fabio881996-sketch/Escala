@@ -116,6 +116,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             horario = str(row.get("horário", ""))
 
             troca_aplicada = False
+            id_excluir = ""
             # row_ref aponta para a linha cujos dados (viatura, radio, colegas) devem ser usados
             row_ref = row
 
@@ -126,7 +127,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
                 ]
                 for _, t in tr.iterrows():
-                    # Determinar o ID do outro militar
                     if str(t["id_origem"]).strip() == str(u_id).strip():
                         id_outro = str(t["id_destino"]).strip()
                     elif str(t["id_destino"]).strip() == str(u_id).strip():
@@ -134,7 +134,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     else:
                         continue
 
-                    # Buscar o serviço do outro militar directamente na escala do dia
+                    # Buscar o serviço do outro militar directamente na escala
                     linha_outro = df_d[df_d["id"].astype(str).str.strip() == id_outro]
                     if linha_outro.empty:
                         continue
@@ -142,6 +142,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     row_ref = linha_outro.iloc[0]
                     servico = str(row_ref.get("serviço", "")).strip()
                     horario = str(row_ref.get("horário", "")).strip()
+                    id_excluir = id_outro
                     troca_aplicada = True
                     break
 
@@ -163,7 +164,8 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     for _, r in df_d[
                         (df_d["serviço"].astype(str).str.strip().str.lower() == servico.strip().lower()) &
                         (df_d["horário"].astype(str).str.strip() == horario.strip()) &
-                        (df_d["id"].astype(str).str.strip() != str(u_id).strip())
+                        (df_d["id"].astype(str).str.strip() != str(u_id).strip()) &
+                        (df_d["id"].astype(str).str.strip() != str(id_excluir).strip())
                     ].iterrows()
                     if str(r["id"]).strip()
                 ],
