@@ -53,8 +53,9 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                     "Capitão": "Cap",
                 }
                 posto_abrev = posto
+                posto_norm2 = posto.rstrip('.').strip()
                 for _nome, _abrev in _postos.items():
-                    if posto.lower() == _nome.lower():
+                    if posto_norm2.lower() == _nome.lower():
                         posto_abrev = _abrev
                         break
                 nomes = str(r.get("nome", "")).strip().split()
@@ -135,7 +136,8 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             for _, r in df_util.iterrows():
                 uid = str(r.get("id", "")).strip()
                 posto = str(r.get("posto", "")).strip()
-                posto_abrev = next((v for k, v in _postos_abrev.items() if k.lower() == posto.lower()), posto)
+                posto_norm = posto.rstrip('.').strip()
+                posto_abrev = next((v for k, v in _postos_abrev.items() if k.lower() == posto_norm.lower()), posto_norm)
                 nomes = str(r.get("nome", "")).strip().split()
                 apelido = nomes[-1] if nomes else ""
                 if uid:
@@ -250,6 +252,8 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     {
                         "servico": str(rr.get("serviço", "")).strip(),
                         "horario": str(rr.get("horário", "")).strip(),
+                        "viatura": str(rr.get("viatura", "") or "").replace("nan", ""),
+                        "radio": str(rr.get("rádio", "") or "").replace("nan", ""),
                         "observacoes": str(rr.get("observações", "") or "").replace("nan", ""),
                         "colegas": [
                             id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
