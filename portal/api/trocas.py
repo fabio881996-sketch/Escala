@@ -377,21 +377,29 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         if id_destino != u_id:
             raise HTTPException(status_code=403, detail="Não és o destinatário desta troca")
 
-        novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
-        # Coluna status = coluna F = índice 6 (1-based para gspread)
+        # Militar aceita → Pendente_Admin (aguarda validação do admin)
+        # Militar rejeita → Rejeitada
+        novo_status = "Pendente_Admin" if resposta.acao == "aceitar" else "Rejeitada"
         col_status = 6
         ws.update_cell(resposta.row_index, col_status, novo_status)
         # Notificar o autor original
         try:
             from portal.api.notificacoes import enviar_push
             id_origem = str(row[1]).strip()
-            emoji = "✅" if novo_status == "Aprovada" else "❌"
-            enviar_push(
-                u_ids=[id_origem],
-                titulo=f"{emoji} Troca {novo_status.lower()}",
-                corpo=f"A tua troca de {row[0]} foi {novo_status.lower()}.",
-                url="/trocas",
-            )
+            if resposta.acao == "aceitar":
+                enviar_push(
+                    u_ids=[id_origem],
+                    titulo="🔄 Troca aceite — aguarda validação",
+                    corpo=f"A tua troca de {row[0]} foi aceite e aguarda validação do admin.",
+                    url="/trocas",
+                )
+            else:
+                enviar_push(
+                    u_ids=[id_origem],
+                    titulo="❌ Troca recusada",
+                    corpo=f"A tua troca de {row[0]} foi recusada.",
+                    url="/trocas",
+                )
         except Exception:
             pass
         return {"ok": True, "status": novo_status}
