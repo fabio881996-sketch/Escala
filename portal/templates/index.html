@@ -39,14 +39,14 @@
     <script src="/static/js/pages/minha_escala.js"></script>
     <script src="/static/js/pages/escala_geral.js"></script>
     <script src="/static/js/pages/ferias.js"></script>
-    <script src="/static/js/pages/definicoes.js"></script>
     <script src="/static/js/pages/trocas.js"></script>
+    <script src="/static/js/gcal.js"></script>
     <script src="/static/js/app.js"></script>
 
     <!-- Service Worker (PWA) -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('/static/sw.js')
                 .then(() => console.log('Service Worker registado'))
                 .catch(err => console.warn('SW erro:', err));
         }
