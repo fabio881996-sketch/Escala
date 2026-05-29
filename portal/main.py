@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from portal.api import auth, escala, trocas, utilizadores, notificacoes, ferias
+from portal.api import auth, escala, trocas, utilizadores, notificacoes, ferias, calendar
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ app.include_router(escala.router,         prefix="/api/escala",        tags=["es
 app.include_router(trocas.router,         prefix="/api/trocas",        tags=["trocas"])
 app.include_router(utilizadores.router,   prefix="/api/utilizadores",  tags=["utilizadores"])
 app.include_router(ferias.router,         prefix="/api/ferias",        tags=["ferias"])
+app.include_router(calendar.router,       prefix="/api/calendar",      tags=["calendar"])
 app.include_router(notificacoes.router,   prefix="/api/notificacoes",  tags=["notificacoes"])
 
 
@@ -42,11 +43,6 @@ async def warmup():
             logger.warning(f"Warm-up falhou (ignorado): {e}")
     asyncio.create_task(_load())
 
-
-# Servir sw.js na raiz (necessário para o scope correcto do Service Worker)
-@app.get("/sw.js")
-async def sw():
-    return FileResponse("portal/static/sw.js", media_type="application/javascript")
 
 # Servir o frontend
 @app.get("/")
