@@ -173,8 +173,18 @@ async def google_callback(code: str = Query(None), state: str = Query(None), err
             <h2>✅ Conta Google ligada!</h2>
             <p>A sincronizar eventos...</p>
             <script>
-                window.opener?.postMessage({{type:'GCAL_AUTH_OK', tipo:'{tipo}'}}, '*');
-                setTimeout(() => window.close(), 1500);
+                // Tentar várias vezes para garantir que o opener recebe
+                let tentativas = 0;
+                const enviar = setInterval(() => {{
+                    tentativas++;
+                    if (window.opener && !window.opener.closed) {{
+                        window.opener.postMessage({{type:'GCAL_AUTH_OK', tipo:'{tipo}'}}, '*');
+                    }}
+                    if (tentativas >= 5) {{
+                        clearInterval(enviar);
+                        setTimeout(() => window.close(), 500);
+                    }}
+                }}, 300);
             </script>
         </body></html>
     """)
