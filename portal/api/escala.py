@@ -115,6 +115,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             servico = str(row.get("serviço", ""))
             horario = str(row.get("horário", ""))
 
+            troca_aplicada = False
             if not df_trocas.empty:
                 tr = df_trocas[
                     (df_trocas["data"] == d_s) &
@@ -126,16 +127,19 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         s = str(t["servico_destino"])
                         servico = s.rsplit("(", 1)[0].strip()
                         horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                        troca_aplicada = True
                     elif str(t["id_destino"]).strip() == str(u_id).strip():
                         s = str(t["servico_origem"])
                         servico = s.rsplit("(", 1)[0].strip()
                         horario = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                        troca_aplicada = True
 
             servicos.append({
                 "data": d_s,
                 "aba": aba,
                 "servico": servico,
                 "horario": horario,
+                "troca_aprovada": troca_aplicada,
                 "viatura": str(row.get("viatura", "") or "").replace("nan", ""),
                 "radio": str(row.get("rádio", "") or "").replace("nan", ""),
                 "indicativo": str(row.get("indicativo rádio", "") or "").replace("nan", ""),
