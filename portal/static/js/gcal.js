@@ -122,19 +122,26 @@ const GCal = {
     async exportarEscala() {
         try {
             const autenticado = await this.estaAutenticado();
+            console.log('[GCal] autenticado:', autenticado);
             if (!autenticado) {
+                console.log('[GCal] a iniciar autenticação...');
                 await this.autenticar('escala');
+                console.log('[GCal] autenticação concluída');
             }
             const data = await API.minha_escala();
             const servicos = (data?.servicos || []).filter(s => {
                 const l = s.servico.toLowerCase();
                 return !l.match(/folga|férias|ferias|licen|doente|conval|dilig|tribunal|pronto/);
             });
+            console.log('[GCal] serviços a exportar:', servicos.length);
             if (!servicos.length) { alert('Sem serviços para exportar.'); return; }
             const eventos = this.servicosParaEventos(servicos);
+            console.log('[GCal] eventos criados:', eventos.length, eventos);
             const result = await this.sincronizar(eventos);
+            console.log('[GCal] resultado sync:', result);
             alert(`✅ ${result.criados} eventos adicionados ao Google Calendar!`);
         } catch(e) {
+            console.error('[GCal] erro:', e);
             if (e.message !== 'Autenticação cancelada') alert('❌ Erro: ' + e.message);
         }
     },
