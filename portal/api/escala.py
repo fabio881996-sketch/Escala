@@ -175,15 +175,25 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 continue
 
             dias_sem = 0
-            row = meu.iloc[0]
             d_s = dt.strftime("%d/%m/%Y")
+
+            # Separar remunerados/gratificados dos serviços normais
+            import re as _re
+            meu_normal = meu[~meu["serviço"].astype(str).str.lower().str.contains(r'remu|grat', na=False)]
+            meu_remun  = meu[meu["serviço"].astype(str).str.lower().str.contains(r'remu|grat', na=False)]
+
+            # Processar serviço normal (primeiro registo)
+            if not meu_normal.empty:
+                row = meu_normal.iloc[0]
+            else:
+                row = meu.iloc[0]
+
             servico = str(row.get("serviço", ""))
             horario = str(row.get("horário", ""))
 
             troca_aplicada = False
             id_excluir = ""
             troca_com = ""
-            # row_ref aponta para a linha cujos dados (viatura, radio, colegas) devem ser usados
             row_ref = row
 
             if not df_trocas.empty:
@@ -200,7 +210,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     else:
                         continue
 
-                    # Buscar o serviço do outro militar directamente na escala
                     linha_outro = df_d[df_d["id"].astype(str).str.strip() == id_outro]
                     if linha_outro.empty:
                         continue
@@ -236,6 +245,23 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         (df_d["id"].astype(str).str.strip() != str(id_excluir).strip())
                     ].iterrows()
                     if str(r["id"]).strip()
+                ],
+                "remunerados": [
+                    {
+                        "servico": str(rr.get("serviço", "")).strip(),
+                        "horario": str(rr.get("horário", "")).strip(),
+                        "observacoes": str(rr.get("observações", "") or "").replace("nan", ""),
+                        "colegas": [
+                            id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
+                            for _, r in df_d[
+                                (df_d["serviço"].astype(str).str.strip().str.lower() == str(rr.get("serviço","")).strip().lower()) &
+                                (df_d["horário"].astype(str).str.strip() == str(rr.get("horário","")).strip()) &
+                                (df_d["id"].astype(str).str.strip() != str(u_id).strip())
+                            ].iterrows()
+                            if str(r["id"]).strip()
+                        ],
+                    }
+                    for _, rr in meu_remun.iterrows()
                 ],
             })
 
