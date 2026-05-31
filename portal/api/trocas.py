@@ -355,6 +355,7 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
             pedido.id_destino, pedido.servico_destino,
             "Pendente_Militar", pedido.observacoes or ""
         ])
+        get_loader().limpar_cache()
         # Notificar o destinatário
         try:
             from portal.api.notificacoes import enviar_push
@@ -394,6 +395,7 @@ async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(ob
         if id_origem != u_id:
             raise HTTPException(status_code=403, detail="Só o autor pode cancelar")
         ws.update_cell(payload.row_index, 6, "Cancelada")
+        get_loader().limpar_cache()
         return {"ok": True}
     except HTTPException:
         raise
@@ -433,6 +435,7 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         novo_status = "Pendente_Admin" if resposta.acao == "aceitar" else "Rejeitada"
         col_status = 6
         ws.update_cell(resposta.row_index, col_status, novo_status)
+        get_loader().limpar_cache()
         # Notificar o autor original
         try:
             from portal.api.notificacoes import enviar_push
@@ -475,6 +478,7 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
         ws.update_cell(resposta.row_index, 6, novo_status)
+        get_loader().limpar_cache()
         # Notificar ambos os militares
         try:
             from portal.api.notificacoes import enviar_push

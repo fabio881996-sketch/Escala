@@ -111,6 +111,42 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _get_colegas(df_d, df_trocas, d_s, servico, horario, u_id, id_excluir, id_para_nome):
+    """Calcula colegas aplicando trocas aprovadas do dia."""
+    # Construir mapa de trocas: id_original -> id_efectivo
+    id_efectivo = {}
+    if not df_trocas.empty:
+        tr = df_trocas[
+            (df_trocas["data"] == d_s) &
+            (df_trocas["status"] == "Aprovada") &
+            (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+        ]
+        for _, t in tr.iterrows():
+            io = str(t["id_origem"]).strip()
+            id_ = str(t["id_destino"]).strip()
+            # io vai fazer o serviço de id_ e vice-versa
+            id_efectivo[io] = id_
+            id_efectivo[id_] = io
+
+    colegas = []
+    mask = (
+        (df_d["serviço"].astype(str).str.strip().str.lower() == servico.strip().lower()) &
+        (df_d["horário"].astype(str).str.strip() == horario.strip()) &
+        (df_d["id"].astype(str).str.strip() != u_id) &
+        (df_d["id"].astype(str).str.strip() != id_excluir)
+    )
+    for _, r in df_d[mask].iterrows():
+        mid = str(r["id"]).strip()
+        if not mid:
+            continue
+        # Se este militar trocou, mostrar quem vai efectivamente fazer o serviço
+        mid_real = id_efectivo.get(mid, mid)
+        nome = id_para_nome.get(mid_real, mid_real)
+        if nome not in colegas:
+            colegas.append(nome)
+    return colegas
+
+
 @router.get("/minha")
 async def minha_escala(current_user: dict = Depends(obter_user_atual)):
     """Batch optimizado — uma chamada HTTP para todos os dias."""
@@ -239,16 +275,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "observacoes": str(row_ref.get("observações", "") or "").replace("nan", ""),
                 "is_hoje": dt == hj.date(),
                 "is_amanha": dt == (hj.date() + timedelta(days=1)),
-                "colegas": [
-                    id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
-                    for _, r in df_d[
-                        (df_d["serviço"].astype(str).str.strip().str.lower() == servico.strip().lower()) &
-                        (df_d["horário"].astype(str).str.strip() == horario.strip()) &
-                        (df_d["id"].astype(str).str.strip() != str(u_id).strip()) &
-                        (df_d["id"].astype(str).str.strip() != str(id_excluir).strip())
-                    ].iterrows()
-                    if str(r["id"]).strip()
-                ],
+                "colegas": _get_colegas(df_d, df_trocas, d_s, servico, horario, str(u_id), id_excluir, id_para_nome),
                 "remunerados": [
                     {
                         "servico": str(rr.get("serviço", "")).strip(),
