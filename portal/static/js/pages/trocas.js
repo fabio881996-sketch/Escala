@@ -57,8 +57,8 @@ const TrocasPage = {
                     <div class="card-subtitle">De: ${t.nome_origem || t.id_origem}</div>
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'aceitar')">✅ Aceitar</button>
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'rejeitar')">❌ Recusar</button>
+                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'aceitar', this)">✅ Aceitar</button>
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'rejeitar', this)">❌ Recusar</button>
                     </div>
                 </div>`).join('');
 
@@ -72,7 +72,7 @@ const TrocasPage = {
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     ${t.status === 'Pendente_Militar' ? `
                     <div style="margin-top:12px">
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelar(${t.__row_index || 0})">🗑️ Cancelar pedido</button>
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelar(${t.__row_index || 0}, this)">🗑️ Cancelar pedido</button>
                     </div>` : ''}
                 </div>`;
             }).join('');
@@ -83,27 +83,30 @@ const TrocasPage = {
         }
     },
 
-    async cancelar(rowIndex) {
+    async cancelar(rowIndex, btn) {
         if (!confirm('Tens a certeza que queres cancelar este pedido?')) return;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
         try {
             await API._post('/api/trocas/cancelar', { row_index: rowIndex });
             await this.loadPendentes();
             App.checkPendentes();
         } catch (e) {
             alert('❌ Erro: ' + e.message);
+            if (btn) { btn.disabled = false; btn.textContent = '🗑️ Cancelar pedido'; }
         }
     },
 
-    async responder(rowIndex, acao) {
+    async responder(rowIndex, acao, btn) {
         const label = acao === 'aceitar' ? 'Aceitar' : 'Recusar';
         if (!confirm(`Tens a certeza que queres ${label.toLowerCase()} esta troca?`)) return;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
         try {
             await API.responder_troca({ row_index: rowIndex, acao });
             await this.loadPendentes();
-            // Actualizar badge
             App.checkPendentes();
         } catch (e) {
             alert(`❌ Erro: ${e.message}`);
+            if (btn) { btn.disabled = false; btn.textContent = acao === 'aceitar' ? '✅ Aceitar' : '❌ Recusar'; }
         }
     },
 
@@ -128,12 +131,7 @@ const TrocasPage = {
                 const direcao = souOrigem ? '→' : '←';
                 return `
                     <div class="card card-${cor}">
-                        <div class="card-label">${t.data} • ${
-                            t.status === 'Aprovada' ? '✅ Aprovada' :
-                            t.status === 'Rejeitada' ? '❌ Rejeitada' :
-                            t.status === 'Pendente_Admin' ? '⏳ Aguarda admin' :
-                            t.status === 'Cancelada' ? '🚫 Cancelada' : '⏳ Pendente'
-                        }</div>
+                        <div class="card-label">${t.data} • ${statusLabel}</div>
                         <div class="card-title">🔄 ${t.servico_origem}</div>
                         <div class="card-subtitle">${direcao} ${contraparte}</div>
                         ${t.observacoes ? `<div class="card-subtitle" style="margin-top:2px">📝 ${t.observacoes}</div>` : ''}
