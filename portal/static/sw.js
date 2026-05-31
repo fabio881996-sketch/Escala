@@ -131,7 +131,7 @@ self.addEventListener('notificationclick', event => {
                 }
             }
             // Senão abrir nova janela
-            if (clients.openWindow) return clients.openWindow(targetUrl);
+            if (clients.openWindow) return clients.openWindow('/?nav=' + targetUrl.replace(/^\//, ''));
         })
     );
 });
