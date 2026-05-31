@@ -241,35 +241,32 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     (df_trocas["status"] == "Aprovada") &
                     (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
                 ]
-                # Seguir cadeia de trocas até ao serviço final
-                id_actual = str(u_id).strip()
-                visitados = {id_actual}
-                for _ in range(10):
-                    encontrou = False
-                    for _, t in tr.iterrows():
-                        if str(t["id_origem"]).strip() == id_actual:
-                            id_outro = str(t["id_destino"]).strip()
-                        elif str(t["id_destino"]).strip() == id_actual:
-                            id_outro = str(t["id_origem"]).strip()
-                        else:
-                            continue
-                        if id_outro in visitados:
-                            continue
-                        linha_outro = df_d[df_d["id"].astype(str).str.strip() == id_outro]
-                        if linha_outro.empty:
-                            continue
-                        row_ref = linha_outro.iloc[0]
+                # Aplicar todas as trocas do dia em ordem — simular estado final
+                # Construir mapa: quem vai fazer o serviço de quem
+                # Começa com cada militar a fazer o seu próprio serviço
+                quem_faz = {}  # quem_faz[id] = id de quem está na escala original
+                for _, t in tr.iterrows():
+                    io = str(t["id_origem"]).strip()
+                    id_ = str(t["id_destino"]).strip()
+                    # Inicializar se ainda não existe
+                    if io not in quem_faz:
+                        quem_faz[io] = io
+                    if id_ not in quem_faz:
+                        quem_faz[id_] = id_
+                    # Trocar: quem estava a fazer o serviço de io passa a fazer o de id_ e vice-versa
+                    quem_faz[io], quem_faz[id_] = quem_faz[id_], quem_faz[io]
+
+                uid_s = str(u_id).strip()
+                if uid_s in quem_faz and quem_faz[uid_s] != uid_s:
+                    id_final = quem_faz[uid_s]
+                    linha_final = df_d[df_d["id"].astype(str).str.strip() == id_final]
+                    if not linha_final.empty:
+                        row_ref = linha_final.iloc[0]
                         servico = str(row_ref.get("serviço", "")).strip()
                         horario = str(row_ref.get("horário", "")).strip()
-                        id_excluir = id_outro
-                        troca_com = id_para_nome.get(id_outro, id_outro)
+                        id_excluir = id_final
+                        troca_com = id_para_nome.get(id_final, id_final)
                         troca_aplicada = True
-                        visitados.add(id_outro)
-                        id_actual = id_outro
-                        encontrou = True
-                        break
-                    if not encontrou:
-                        break
 
             servicos.append({
                 "data": d_s,
