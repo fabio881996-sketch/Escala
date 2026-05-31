@@ -77,7 +77,7 @@ def _cached_load_trocas() -> pd.DataFrame:
     if hit:
         return val
     result = GoogleSheetsClient().load_data(EXCHANGES_SHEET_NAME)
-    _cache.set("trocas", result, 120)
+    _cache.set("trocas", result, 10)  # TTL curto — trocas mudam frequentemente
     return result
 
 def _cached_load_usuarios() -> pd.DataFrame:
