@@ -241,25 +241,35 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     (df_trocas["status"] == "Aprovada") &
                     (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
                 ]
-                for _, t in tr.iterrows():
-                    if str(t["id_origem"]).strip() == str(u_id).strip():
-                        id_outro = str(t["id_destino"]).strip()
-                    elif str(t["id_destino"]).strip() == str(u_id).strip():
-                        id_outro = str(t["id_origem"]).strip()
-                    else:
-                        continue
-
-                    linha_outro = df_d[df_d["id"].astype(str).str.strip() == id_outro]
-                    if linha_outro.empty:
-                        continue
-
-                    row_ref = linha_outro.iloc[0]
-                    servico = str(row_ref.get("serviço", "")).strip()
-                    horario = str(row_ref.get("horário", "")).strip()
-                    id_excluir = id_outro
-                    troca_com = id_para_nome.get(id_outro, id_outro)
-                    troca_aplicada = True
-                    break
+                # Seguir cadeia de trocas até ao serviço final
+                id_actual = str(u_id).strip()
+                visitados = {id_actual}
+                for _ in range(10):
+                    encontrou = False
+                    for _, t in tr.iterrows():
+                        if str(t["id_origem"]).strip() == id_actual:
+                            id_outro = str(t["id_destino"]).strip()
+                        elif str(t["id_destino"]).strip() == id_actual:
+                            id_outro = str(t["id_origem"]).strip()
+                        else:
+                            continue
+                        if id_outro in visitados:
+                            continue
+                        linha_outro = df_d[df_d["id"].astype(str).str.strip() == id_outro]
+                        if linha_outro.empty:
+                            continue
+                        row_ref = linha_outro.iloc[0]
+                        servico = str(row_ref.get("serviço", "")).strip()
+                        horario = str(row_ref.get("horário", "")).strip()
+                        id_excluir = id_outro
+                        troca_com = id_para_nome.get(id_outro, id_outro)
+                        troca_aplicada = True
+                        visitados.add(id_outro)
+                        id_actual = id_outro
+                        encontrou = True
+                        break
+                    if not encontrou:
+                        break
 
             servicos.append({
                 "data": d_s,
