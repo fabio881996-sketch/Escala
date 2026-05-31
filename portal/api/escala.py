@@ -38,7 +38,7 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                 posto = str(r.get("posto", "")).strip()
                 # Abreviar postos GNR
                 _postos = {
-                    "Guarda Principal": "Grd Pr",
+                    "Guarda Principal": "Grd Pr", "Guarda Pr.": "Grd Pr", "Guarda Pr": "Grd Pr",
                     "Cabo Chefe": "Cb Ch",
                     "Cabo": "Cb",
                     "Furriel": "Furr",
@@ -125,7 +125,8 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
 
         # Mapa id -> formato "ID Posto Apelido"
         _postos_abrev = {
-            "Guarda Principal": "Grd Pr", "Cabo Chefe": "Cb Ch", "Cabo": "Cb",
+            "Guarda Principal": "Grd Pr", "Guarda Pr.": "Grd Pr", "Guarda Pr": "Grd Pr",
+            "Cabo Chefe": "Cb Ch", "Cabo": "Cb",
             "Furriel": "Furr", "Segundo Sargento": "2Sarg", "Primeiro Sargento": "1Sarg",
             "Sargento Ajudante": "Sarg Aj", "Sargento Chefe": "Sarg Ch",
             "Sargento": "2Sarg", "Guarda": "Grd", "Alferes": "Alf",
@@ -307,7 +308,7 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
                 u_ids=todos_ids,
                 titulo="📅 Nova escala publicada",
                 corpo=f"A escala de {data_fmt} foi publicada.",
-                url="/escala-geral",
+                url="/home",
                 tag="escala-publicada",
             )
         except Exception:

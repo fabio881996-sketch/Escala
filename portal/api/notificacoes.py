@@ -226,7 +226,7 @@ async def publicar_escala_notif(payload: PublicarEscalaPayload):
             u_ids=todos_ids,
             titulo="📅 Nova escala publicada",
             corpo=f"A escala de {data_fmt} foi publicada.",
-            url="/escala-geral",
+            url="/home",
             tag="escala-publicada",
         )
         return {"ok": True}

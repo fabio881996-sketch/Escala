@@ -209,7 +209,7 @@ async def disponiveis(
         except Exception:
             pass
 
-        # ── Meu serviço no dia ──
+        # ── Meu serviço no dia (aplicar trocas aprovadas) ──
         meu_servico = None
         meu_horario = None
         if not df_dia.empty:
@@ -218,6 +218,27 @@ async def disponiveis(
                 row = minha_linha.iloc[0]
                 meu_servico = str(row.get("serviço", "")).strip()
                 meu_horario = str(row.get("horário", "")).strip()
+                # Verificar se há troca aprovada que altera o meu serviço
+                if not df_trocas.empty and data_fmt:
+                    tr = df_trocas[
+                        (df_trocas["data"] == data_fmt) &
+                        (df_trocas["status"] == "Aprovada") &
+                        (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                    ]
+                    for _, t in tr.iterrows():
+                        if str(t["id_origem"]).strip() == u_id:
+                            id_outro = str(t["id_destino"]).strip()
+                        elif str(t["id_destino"]).strip() == u_id:
+                            id_outro = str(t["id_origem"]).strip()
+                        else:
+                            continue
+                        linha_outro = df_dia[df_dia["id"].astype(str).str.strip() == id_outro]
+                        if linha_outro.empty:
+                            continue
+                        row_outro = linha_outro.iloc[0]
+                        meu_servico = str(row_outro.get("serviço", "")).strip()
+                        meu_horario = str(row_outro.get("horário", "")).strip()
+                        break
 
         # ── Filtrar disponíveis consoante o tipo ──
         disponiveis_lista = []
