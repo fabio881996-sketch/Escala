@@ -56,10 +56,12 @@ const App = {
 
         App.checkPendentes();
         App.initPush();
+        App.verificarNavPendente();
+        GCal.verificarCallbackPendente();
 
         // Ouvir mensagem do SW para navegar após clique na notificação
         navigator.serviceWorker?.addEventListener('message', e => {
-            if (e.data?.type === 'NAVIGATE') Router.go(e.data.url.replace('/', '') || 'home');
+            if (e.data?.type === 'NAVIGATE') { const pg = e.data.url.replace(/^\//, '') || 'home'; Router.go(pg === 'trocas' ? 'trocas' : pg === 'home' ? 'home' : pg); }
         });
     },
 
@@ -166,6 +168,16 @@ const App = {
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
         const rawData = atob(base64);
         return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+    },
+
+    verificarNavPendente() {
+        const params = new URLSearchParams(window.location.search);
+        const nav = params.get('nav');
+        if (!nav) return;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('nav');
+        window.history.replaceState({}, '', url.toString());
+        setTimeout(() => Router.go(nav), 300);
     },
 
     logout() {
