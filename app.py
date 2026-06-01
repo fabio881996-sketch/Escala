@@ -2312,42 +2312,87 @@ if not st.session_state["logged_in"]:
                         st.rerun()
 
     if modo == "pin":
-        buf = st.session_state["pin_buf"]
-        err = st.session_state["pin_erro"]
-        n   = len(buf)
-
-        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
-        err_msg = "PIN incorreto. Tenta novamente." if err else ""
-        if bloqueado:
-            resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
-            err_msg = f"🔒 Bloqueado. Aguarda {resto}s."
-
         st.markdown("""
         <style>
         .stApp { background:#FFFFFF !important; }
         header, footer, [data-testid="stToolbar"], [data-testid="stDecoration"],
         [data-testid="stStatusWidget"], #MainMenu { display:none !important; }
-        .block-container { padding:0 !important; max-width:100% !important; }
-        div[data-testid="stButton"]>button {
-            width:76px !important; height:76px !important; border-radius:50% !important;
-            background:#F1F5F9 !important; color:#0F172A !important;
-            font-size:24px !important; font-weight:300 !important;
-            border:none !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;
-            padding:0 !important; margin:0 auto !important;
-            transition:transform 0.08s ease, background 0.08s ease !important; }
-        div[data-testid="stButton"]>button:hover {
-            background:#E2E8F0 !important; transform:scale(0.95) !important; }
-        div[data-testid="stButton"]>button:active {
-            background:#CBD5E1 !important; transform:scale(0.90) !important; }
-        [data-testid="stHorizontalBlock"] {
-            display:flex !important; flex-direction:row !important;
-            justify-content:center !important; gap:14px !important; flex-wrap:nowrap !important; }
-        [data-testid="stHorizontalBlock"]>[data-testid="stColumn"] {
-            flex:0 0 76px !important; min-width:76px !important;
-            max-width:76px !important; width:76px !important; padding:0 !important; }
+        .block-container { padding:2rem 1rem !important; max-width:480px !important; margin:0 auto !important; }
         </style>
         """, unsafe_allow_html=True)
-        _keypad_fragment()
+
+        bloqueado = bool(st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"])
+        is_desktop = st.session_state.get("_is_desktop", True)
+
+        if is_desktop:
+            st.markdown("""
+            <div style="display:flex;flex-direction:column;align-items:center;padding:32px 0 24px 0;">
+                <div style="font-size:2.8rem;margin-bottom:6px;">🚓</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;margin-bottom:2px">Portal de Escalas</div>
+                <div style="font-size:0.72rem;font-weight:600;color:#2563EB;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
+                <div style="font-size:0.68rem;color:#64748B;margin-bottom:16px">Posto Territorial de Famalicão</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.session_state["pin_erro"]:
+                st.error("PIN incorreto. Tenta novamente.")
+            if bloqueado:
+                resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
+                st.error(f"🔒 Bloqueado. Aguarda {resto}s.")
+            pin_input = st.text_input("PIN", type="password", max_chars=4,
+                                      placeholder="Introduz o PIN", label_visibility="collapsed",
+                                      key="pin_desktop_input")
+            if st.button("ENTRAR", use_container_width=True, disabled=bloqueado):
+                if len(str(pin_input)) == 4:
+                    df_u = load_utilizadores()
+                    user = None
+                    for _, row_u in df_u.iterrows():
+                        if verificar_pin(str(pin_input), str(row_u.get('pin', ''))):
+                            user = row_u
+                            break
+                    if user is not None:
+                        pin_guardado = str(user.get('pin', '')).strip()
+                        if ':' not in pin_guardado or len(pin_guardado) <= 10:
+                            migrar_pin_para_hash(str(user.get('email', '')), str(pin_input))
+                        fazer_login(user, user['email'])
+                        st.rerun(scope="app")
+                    else:
+                        st.session_state["pin_tentativas"] += 1
+                        if st.session_state["pin_tentativas"] >= 3:
+                            st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
+                            st.session_state["pin_tentativas"] = 0
+                        st.session_state["pin_erro"] = True
+                        st.session_state["pin_buf"] = ""
+                        st.rerun()
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("📱 Usar keypad", use_container_width=True):
+                st.session_state["_is_desktop"] = False
+                st.rerun()
+        else:
+            st.markdown("""
+            <style>
+            div[data-testid="stButton"]>button {
+                width:76px !important; height:76px !important; border-radius:50% !important;
+                background:#F1F5F9 !important; color:#0F172A !important;
+                font-size:24px !important; font-weight:300 !important;
+                border:none !important; box-shadow:0 2px 8px rgba(0,0,0,0.08) !important;
+                padding:0 !important; margin:0 auto !important;
+                transition:transform 0.08s ease, background 0.08s ease !important; }
+            div[data-testid="stButton"]>button:hover {
+                background:#E2E8F0 !important; transform:scale(0.95) !important; }
+            div[data-testid="stButton"]>button:active {
+                background:#CBD5E1 !important; transform:scale(0.90) !important; }
+            [data-testid="stHorizontalBlock"] {
+                display:flex !important; flex-direction:row !important;
+                justify-content:center !important; gap:14px !important; flex-wrap:nowrap !important; }
+            [data-testid="stHorizontalBlock"]>[data-testid="stColumn"] {
+                flex:0 0 76px !important; min-width:76px !important;
+                max-width:76px !important; width:76px !important; padding:0 !important; }
+            </style>
+            """, unsafe_allow_html=True)
+            _keypad_fragment()
+            if st.button("⌨️ Usar teclado", use_container_width=True):
+                st.session_state["_is_desktop"] = True
+                st.rerun()
 
     # ── MODO EMAIL/PASSWORD ── (removido -- login só por PIN)
     # ── MODO REGISTAR PIN ── (removido -- PINs criados pelos admins)
