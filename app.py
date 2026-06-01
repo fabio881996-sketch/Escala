@@ -2287,16 +2287,6 @@ if not st.session_state["logged_in"]:
                         st.rerun()
 
     if modo == "pin":
-        buf = st.session_state["pin_buf"]
-        err = st.session_state["pin_erro"]
-        n   = len(buf)
-
-        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
-        err_msg = "PIN incorreto. Tenta novamente." if err else ""
-        if bloqueado:
-            resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
-            err_msg = f"🔒 Bloqueado. Aguarda {resto}s."
-
         st.markdown("""
         <style>
         .stApp { background:#FFFFFF !important; }
@@ -2322,7 +2312,68 @@ if not st.session_state["logged_in"]:
             max-width:76px !important; width:76px !important; padding:0 !important; }
         </style>
         """, unsafe_allow_html=True)
-        _keypad_fragment()
+
+        # Detectar desktop via query params (Streamlit injeta screen width no contexto)
+        # Usar input directo no desktop para maior rapidez
+        is_desktop = st.session_state.get("_is_desktop", None)
+        if is_desktop is None:
+            # Primeira vez — assumir desktop, o utilizador pode mudar
+            is_desktop = True
+            st.session_state["_is_desktop"] = True
+
+        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
+
+        if is_desktop:
+            # ── Desktop: input directo ──
+            st.markdown("""
+            <div style="display:flex;flex-direction:column;align-items:center;padding:48px 0 24px 0;">
+                <div style="font-size:2.8rem;margin-bottom:6px;filter:drop-shadow(0 4px 8px rgba(30,58,138,0.25))">🚓</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;letter-spacing:-0.02em;margin-bottom:2px">Portal de Escalas</div>
+                <div style="font-size:0.72rem;font-weight:600;color:#2563EB;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
+                <div style="font-size:0.68rem;color:#64748B;margin-bottom:28px">Posto Territorial de Famalicão</div>
+            </div>
+            """, unsafe_allow_html=True)
+            _, col_c, _ = st.columns([1, 1, 1])
+            with col_c:
+                err_msg = "PIN incorreto. Tenta novamente." if st.session_state["pin_erro"] else ""
+                if bloqueado:
+                    resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
+                    err_msg = f"🔒 Bloqueado. Aguarda {resto}s."
+                if err_msg:
+                    st.error(err_msg)
+                pin_input = st.text_input("🔐 PIN", type="password", max_chars=4,
+                                          placeholder="····", label_visibility="collapsed",
+                                          key="pin_desktop_input")
+                if st.button("ENTRAR", use_container_width=True, disabled=bloqueado):
+                    if len(pin_input) == 4:
+                        df_u = load_utilizadores()
+                        user = None
+                        for _, row_u in df_u.iterrows():
+                            if verificar_pin(pin_input, str(row_u.get('pin', ''))):
+                                user = row_u
+                                break
+                        if user is not None:
+                            pin_guardado = str(user.get('pin', '')).strip()
+                            if ':' not in pin_guardado or len(pin_guardado) <= 10:
+                                migrar_pin_para_hash(str(user.get('email', '')), pin_input)
+                            fazer_login(user, user['email'])
+                            st.rerun(scope="app")
+                        else:
+                            st.session_state["pin_tentativas"] += 1
+                            if st.session_state["pin_tentativas"] >= 3:
+                                st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
+                                st.session_state["pin_tentativas"] = 0
+                            st.session_state["pin_erro"] = True
+                            st.rerun()
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("📱 Usar keypad", use_container_width=True):
+                    st.session_state["_is_desktop"] = False
+                    st.rerun()
+        else:
+            _keypad_fragment()
+            if st.button("⌨️ Usar teclado", use_container_width=True):
+                st.session_state["_is_desktop"] = True
+                st.rerun()
 
     # ── MODO EMAIL/PASSWORD ── (removido -- login só por PIN)
     # ── MODO REGISTAR PIN ── (removido -- PINs criados pelos admins)
@@ -4555,20 +4606,23 @@ else:
     elif menu == "⚖️ Validar Trocas":
         st.title("⚖️ Validação Superior de Trocas")
 
-        # Processar ação pendente ANTES de renderizar os botões
-        acao_val = st.session_state.pop('validar_acao', None)
-        if acao_val:
-            atualizar_status_gsheet(acao_val['idx'], acao_val['status'], u_nome)
-            invalidar_trocas()
-            st.rerun()
+        @st.fragment
+        def _validar_trocas_fragment():
+            df_t = load_trocas()
 
-        if df_trocas.empty:
-            st.info("Sem dados.")
-        else:
-            # ── Aguardam aceitação do militar ──
-            pnd_mil = df_trocas[
-                (df_trocas['status'] == 'Pendente_Militar') &
-                (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+            acao_val = st.session_state.pop('validar_acao', None)
+            if acao_val:
+                atualizar_status_gsheet(acao_val['idx'], acao_val['status'], u_nome)
+                invalidar_trocas()
+                st.rerun(scope="fragment")
+
+            if df_t.empty:
+                st.info("Sem dados.")
+                return
+
+            pnd_mil = df_t[
+                (df_t['status'] == 'Pendente_Militar') &
+                (df_t['servico_origem'] != 'MATAR_REMUNERADO')
             ]
             if not pnd_mil.empty:
                 st.markdown(f"#### 🕐 Aguardam aceitação do militar ({len(pnd_mil)})")
@@ -4583,8 +4637,7 @@ else:
                             st.warning(f"**Aguarda aceitação:**\n\n{n_d}\n\n`{r['servico_destino']}`")
                 st.markdown("---")
 
-            # ── Aguardam validação do admin ──
-            pnd = df_trocas[df_trocas['status'] == 'Pendente_Admin']
+            pnd = df_t[df_t['status'] == 'Pendente_Admin']
             if pnd.empty:
                 st.success("✅ Não há trocas pendentes de validação.")
             else:
@@ -4609,11 +4662,12 @@ else:
                         c1, c2 = st.columns(2)
                         if c1.button("✔️ VALIDAR",  key=f"ok_{idx}", use_container_width=True):
                             st.session_state['validar_acao'] = {'idx': idx, 'status': 'Aprovada'}
-                            st.rerun()
+                            st.rerun(scope="fragment")
                         if c2.button("🚫 REJEITAR", key=f"no_{idx}", use_container_width=True):
                             st.session_state['validar_acao'] = {'idx': idx, 'status': 'Rejeitada'}
-                            st.rerun()
+                            st.rerun(scope="fragment")
 
+        _validar_trocas_fragment()
     # --- 📜 HISTÓRICO DE TROCAS ---
     elif menu == "📜 Trocas Validadas":
         st.title("📜 Histórico de Trocas Aprovadas")
