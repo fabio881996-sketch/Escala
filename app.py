@@ -2300,17 +2300,15 @@ if not st.session_state["logged_in"]:
         bloqueado = bool(st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"])
         is_desktop = st.session_state.get("_is_desktop", True)
 
-        # Cabeçalho comum
-        st.markdown("""
-        <div style="display:flex;flex-direction:column;align-items:center;padding:32px 0 24px 0;">
-            <div style="font-size:2.8rem;margin-bottom:6px;">🚓</div>
-            <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;margin-bottom:2px">Portal de Escalas</div>
-            <div style="font-size:0.72rem;font-weight:600;color:#2563EB;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
-            <div style="font-size:0.68rem;color:#64748B;margin-bottom:16px">Posto Territorial de Famalicão</div>
-        </div>
-        """, unsafe_allow_html=True)
-
         if is_desktop:
+            st.markdown("""
+            <div style="display:flex;flex-direction:column;align-items:center;padding:32px 0 24px 0;">
+                <div style="font-size:2.8rem;margin-bottom:6px;">🚓</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;margin-bottom:2px">Portal de Escalas</div>
+                <div style="font-size:0.72rem;font-weight:600;color:#2563EB;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
+                <div style="font-size:0.68rem;color:#64748B;margin-bottom:16px">Posto Territorial de Famalicão</div>
+            </div>
+            """, unsafe_allow_html=True)
             if st.session_state["pin_erro"]:
                 st.error("PIN incorreto. Tenta novamente.")
             if bloqueado:
