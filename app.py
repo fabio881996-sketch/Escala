@@ -2313,49 +2313,40 @@ if not st.session_state["logged_in"]:
         </style>
         """, unsafe_allow_html=True)
 
-        # Detectar desktop via query params (Streamlit injeta screen width no contexto)
-        # Usar input directo no desktop para maior rapidez
-        is_desktop = st.session_state.get("_is_desktop", None)
-        if is_desktop is None:
-            # Primeira vez — assumir desktop, o utilizador pode mudar
-            is_desktop = True
-            st.session_state["_is_desktop"] = True
-
-        bloqueado = st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"]
+        bloqueado = bool(st.session_state["pin_bloqueado_ate"] and datetime.now() < st.session_state["pin_bloqueado_ate"])
+        is_desktop = st.session_state.get("_is_desktop", True)
 
         if is_desktop:
-            # ── Desktop: input directo ──
             st.markdown("""
             <div style="display:flex;flex-direction:column;align-items:center;padding:48px 0 24px 0;">
-                <div style="font-size:2.8rem;margin-bottom:6px;filter:drop-shadow(0 4px 8px rgba(30,58,138,0.25))">🚓</div>
-                <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;letter-spacing:-0.02em;margin-bottom:2px">Portal de Escalas</div>
-                <div style="font-size:0.72rem;font-weight:600;color:#2563EB;letter-spacing:0.04em;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
+                <div style="font-size:2.8rem;margin-bottom:6px;">🚓</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#1A2B4A;margin-bottom:2px">Portal de Escalas</div>
+                <div style="font-size:0.72rem;font-weight:600;color:#2563EB;text-transform:uppercase;margin-bottom:2px">Guarda Nacional Republicana</div>
                 <div style="font-size:0.68rem;color:#64748B;margin-bottom:28px">Posto Territorial de Famalicão</div>
             </div>
             """, unsafe_allow_html=True)
             _, col_c, _ = st.columns([1, 1, 1])
             with col_c:
-                err_msg = "PIN incorreto. Tenta novamente." if st.session_state["pin_erro"] else ""
+                if st.session_state["pin_erro"]:
+                    st.error("PIN incorreto. Tenta novamente.")
                 if bloqueado:
                     resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
-                    err_msg = f"🔒 Bloqueado. Aguarda {resto}s."
-                if err_msg:
-                    st.error(err_msg)
-                pin_input = st.text_input("🔐 PIN", type="password", max_chars=4,
+                    st.error(f"🔒 Bloqueado. Aguarda {resto}s.")
+                pin_input = st.text_input("PIN", type="password", max_chars=4,
                                           placeholder="····", label_visibility="collapsed",
                                           key="pin_desktop_input")
                 if st.button("ENTRAR", use_container_width=True, disabled=bloqueado):
-                    if len(pin_input) == 4:
+                    if len(str(pin_input)) == 4:
                         df_u = load_utilizadores()
                         user = None
                         for _, row_u in df_u.iterrows():
-                            if verificar_pin(pin_input, str(row_u.get('pin', ''))):
+                            if verificar_pin(str(pin_input), str(row_u.get('pin', ''))):
                                 user = row_u
                                 break
                         if user is not None:
                             pin_guardado = str(user.get('pin', '')).strip()
                             if ':' not in pin_guardado or len(pin_guardado) <= 10:
-                                migrar_pin_para_hash(str(user.get('email', '')), pin_input)
+                                migrar_pin_para_hash(str(user.get('email', '')), str(pin_input))
                             fazer_login(user, user['email'])
                             st.rerun(scope="app")
                         else:
@@ -2364,6 +2355,7 @@ if not st.session_state["logged_in"]:
                                 st.session_state["pin_bloqueado_ate"] = datetime.now() + timedelta(seconds=30)
                                 st.session_state["pin_tentativas"] = 0
                             st.session_state["pin_erro"] = True
+                            st.session_state["pin_buf"] = ""
                             st.rerun()
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("📱 Usar keypad", use_container_width=True):
@@ -2371,9 +2363,11 @@ if not st.session_state["logged_in"]:
                     st.rerun()
         else:
             _keypad_fragment()
-            if st.button("⌨️ Usar teclado", use_container_width=True):
-                st.session_state["_is_desktop"] = True
-                st.rerun()
+            _, col_kb, _ = st.columns([1, 1, 1])
+            with col_kb:
+                if st.button("⌨️ Usar teclado", use_container_width=True):
+                    st.session_state["_is_desktop"] = True
+                    st.rerun()
 
     # ── MODO EMAIL/PASSWORD ── (removido -- login só por PIN)
     # ── MODO REGISTAR PIN ── (removido -- PINs criados pelos admins)
