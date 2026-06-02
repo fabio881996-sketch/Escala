@@ -6363,9 +6363,12 @@ else:
                         if None in (hi_serv, hf_serv, hi_novo, hf_novo): return True
                         fim_serv = hf_serv if hf_serv > hi_serv else hf_serv + 1440
                         fim_novo = hf_novo if hf_novo > hi_novo else hf_novo + 1440
-                        descanso_1 = (hi_novo + 1440 - fim_serv) % 1440
-                        descanso_2 = (hi_serv + 1440 - fim_novo) % 1440
-                        return descanso_1 >= 480 and descanso_2 >= 480
+                        # Descanso entre fim do serviço e início do remunerado
+                        descanso_depois_serv = (hi_novo + 1440 - fim_serv) % 1440
+                        # Descanso entre fim do remunerado e início do serviço
+                        descanso_depois_rem = (hi_serv + 1440 - fim_novo) % 1440
+                        # Basta garantir 8h num dos lados
+                        return descanso_depois_serv >= 480 or descanso_depois_rem >= 480
 
                     _IMP_ABS = r'ferias|licen|convalesc|fcaa|cter|dilig|pronto'
                     _IMP_HOR = r'tribunal|inquer|secretaria'
