@@ -6538,7 +6538,7 @@ else:
                             'resultados': resultados_slots,
                             'data': data_str_rem,
                             'aba': aba_rem,
-                            'tabela': tab_rem_sel,
+                            'tabela': 'A',  # tabela é por slot
                             'col_total': col_total,
                             'col_ultimo': col_ultimo,
                         }
