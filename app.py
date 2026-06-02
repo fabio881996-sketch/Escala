@@ -6367,7 +6367,8 @@ else:
                         descanso_2 = (hi_serv + 1440 - fim_novo) % 1440
                         return descanso_1 >= 480 and descanso_2 >= 480
 
-                    _IMP = r'ferias|licen|convalesc|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
+                    _IMP_ABS = r'ferias|licen|convalesc|fcaa|cter|dilig|pronto'
+                    _IMP_HOR = r'tribunal|inquer|secretaria'
                     servicos_dia = {}
                     militares_com_servico = set()
                     militares_de_folga = set()
@@ -6378,8 +6379,16 @@ else:
                             serv_norm = norm(str(row_sd.get('serviço', '')))
                             if 'folga semanal' in serv_norm or 'folga complementar' in serv_norm:
                                 militares_de_folga.add(mid_sd)
-                            elif re.search(_IMP, serv_norm):
+                            elif re.search(_IMP_ABS, serv_norm):
                                 pass
+                            elif re.search(_IMP_HOR, serv_norm):
+                                # Tribunal usa horário da sheet; secretaria/inquérito fixo 09-17
+                                hor_sd = str(row_sd.get('horário', '')).strip()
+                                if not hor_sd or '-' not in hor_sd:
+                                    hor_sd = '09-17'  # secretaria/inquérito sem horário definido
+                                hi_sd, hf_sd = _parse_horario(hor_sd)
+                                servicos_dia.setdefault(mid_sd, []).append((hi_sd, hf_sd, str(row_sd.get('serviço',''))))
+                                militares_com_servico.add(mid_sd)
                             elif not re.search(r'remu|grat', serv_norm):
                                 hor_sd = str(row_sd.get('horário', '')).strip()
                                 hi_sd, hf_sd = _parse_horario(hor_sd)
@@ -6388,7 +6397,7 @@ else:
 
                     ausentes_dia = set()
                     if not df_dia_rem.empty:
-                        aus_mask = df_dia_rem['serviço'].apply(norm).str.contains(_IMP, na=False)
+                        aus_mask = df_dia_rem['serviço'].apply(norm).str.contains(_IMP_ABS, na=False)
                         for mid_a in df_dia_rem[aus_mask]['id'].astype(str).str.strip().tolist():
                             if mid_a: ausentes_dia.add(mid_a)
                     for _, row_u in df_ord_rem.iterrows():
