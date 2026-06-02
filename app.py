@@ -6423,9 +6423,12 @@ else:
                         return True
 
                     # ── Alocação conjunta ────────────────────────────────────
-                    # Para cada slot, manter lista de nomeados e avisos
+                    # Estratégia: preferir militares diferentes entre slots,
+                    # mas se não houver suficientes, permitir repetir desde que
+                    # não haja sobreposição de horários
                     resultados_slots = []
-                    # ja_nomeados_ids: lista de (slot_idx, mid) para verificar cross-slot
+                    # ja_nomeados_ids: lista de (slot_idx, mid) — para verificar cross-slot
+                    # na 1ª passagem exclui quem já foi nomeado noutro slot
                     ja_nomeados_ids = []
 
                     for slot_idx, slot in enumerate(slots_parsed):
@@ -6486,8 +6489,32 @@ else:
 
                         resultados_slots.append({'slot': slot, 'nomeados': nomeados, 'avisos': avisos, 'skipped': skipped})
 
+                    # ── 2ª passagem: completar slots com militares já nomeados noutros slots ──
+                    for slot_idx, res in enumerate(resultados_slots):
+                        slot = res['slot']
+                        if len(res['nomeados']) >= slot['n']:
+                            continue  # já completo
+                        _ct, _cu = slot['col_total'], slot['col_ultimo']
+                        df_disp2 = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
+                        df_disp2[_ct] = pd.to_numeric(df_disp2[_ct], errors='coerce').fillna(0)
+                        df_disp2[_cu] = pd.to_datetime(df_disp2[_cu], dayfirst=True, errors='coerce')
+                        df_disp2_sorted = df_disp2.sort_values([_cu, _ct], ascending=[True, True], na_position='first')
+                        for _, row_r in df_disp2_sorted.iterrows():
+                            if len(res['nomeados']) >= slot['n']: break
+                            mid_r = str(row_r.get('id', '')).strip()
+                            if not mid_r or mid_r in [n['id'] for n in res['nomeados']]: continue
+                            # Permitir mesmo que já nomeado noutro slot — só verificar sobreposição
+                            skipped2 = []
+                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped2):
+                                grupo = 'Voluntário c/ serviço' if mid_r in militares_com_servico else                                         'Voluntário de folga' if mid_r in militares_de_folga else 'Disponível'
+                                res['nomeados'].append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
+                                                        'grupo': f"{grupo} (já nomeado noutro remunerado)",
+                                                        'total': int(row_r[_ct])})
+                                ja_nomeados_ids.append((slot_idx, mid_r))
+                                res['avisos'].append(f"ℹ️ **{get_nome_curto(df_util, mid_r)}** já nomeado noutro remunerado do mesmo dia")
+
                     # ── Mostrar resultados ───────────────────────────────────
-                    tipo_col = "Tabela B" if tab_rem_sel == "B" else ("Tabela A — Fim de Semana" if is_fds else "Tabela A — Semana")
+                    tipo_col = ""  # tabela é por slot
                     todos_ok = all(len(r['nomeados']) >= r['slot']['n'] for r in resultados_slots)
 
                     for i, res in enumerate(resultados_slots):
