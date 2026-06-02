@@ -6444,7 +6444,6 @@ else:
                         nomeados = []
                         avisos   = []
                         skipped  = []
-                        # Ordenar pela tabela deste slot
                         _ct, _cu = slot['col_total'], slot['col_ultimo']
                         for col in [_ct, _cu]:
                             if col not in df_ord_rem.columns:
@@ -6454,111 +6453,63 @@ else:
                         df_disp = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
                         df_disp_sorted = df_disp.sort_values([_cu, _ct], ascending=[True, True], na_position='first')
 
-                        # GRUPO 1: voluntários com serviço ou disponíveis
-                        for _, row_r in df_disp_sorted.iterrows():
-                            if len(nomeados) >= slot['n']: break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in nomeados]: continue
-                            if not bool(row_r['voluntario']): continue
-                            if mid_r in ausentes_dia: continue
-                            if mid_r in militares_de_folga: continue
-                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped):
-                                grupo = 'Voluntário c/ serviço' if mid_r in militares_com_servico else 'Voluntário disponível'
-                                nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                                 'grupo': grupo, 'total': int(row_r[col_total])})
-                                ja_nomeados_ids.append((slot_idx, mid_r))
+                        ja_neste_slot = lambda: [n['id'] for n in nomeados]
 
-                        # GRUPO 2: voluntários de folga
-                        for _, row_r in df_disp_sorted.iterrows():
-                            if len(nomeados) >= slot['n']: break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in nomeados]: continue
-                            if not bool(row_r['voluntario']): continue
-                            if mid_r not in militares_de_folga: continue
-                            if mid_r in ausentes_dia: continue
-                            if not bool(row_r['folga']): continue
-                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped):
-                                nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                                 'grupo': 'Voluntário de folga', 'total': int(row_r[col_total])})
-                                ja_nomeados_ids.append((slot_idx, mid_r))
+                        def _nomear_grupo(filtro_fn, grupo_label, aviso_extra=False):
+                            for _, row_r in df_disp_sorted.iterrows():
+                                if len(nomeados) >= slot['n']: break
+                                mid_r = str(row_r.get('id', '')).strip()
+                                if not mid_r or mid_r in ja_neste_slot(): continue
+                                if not filtro_fn(row_r, mid_r): continue
+                                if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped):
+                                    if aviso_extra:
+                                        avisos.append(f"⚠️ **{get_nome_curto(df_util, mid_r)} ({mid_r})** nomeado fora da lista de voluntários")
+                                    label = grupo_label(mid_r)
+                                    nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
+                                                     'grupo': label, 'total': int(row_r[_ct])})
+                                    ja_nomeados_ids.append((slot_idx, mid_r))
 
-                        # GRUPO 3: não voluntários
-                        for _, row_r in df_disp_sorted.iterrows():
-                            if len(nomeados) >= slot['n']: break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in nomeados]: continue
-                            if bool(row_r['voluntario']): continue
-                            if mid_r in ausentes_dia: continue
-                            if mid_r in militares_de_folga: continue
-                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped):
-                                avisos.append(f"⚠️ **{get_nome_curto(df_util, mid_r)} ({mid_r})** nomeado fora da lista de voluntários")
-                                nomeados.append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                                 'grupo': 'Não voluntário', 'total': int(row_r[col_total])})
-                                ja_nomeados_ids.append((slot_idx, mid_r))
+                        # G1: voluntários com serviço/disponíveis — novos
+                        _nomear_grupo(
+                            lambda r, m: bool(r['voluntario']) and m not in ausentes_dia and m not in militares_de_folga
+                                and not any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: 'Voluntário c/ serviço' if m in militares_com_servico else 'Voluntário disponível'
+                        )
+                        # G1b: repetir voluntários com serviço/disponíveis já noutro slot
+                        _nomear_grupo(
+                            lambda r, m: bool(r['voluntario']) and m not in ausentes_dia and m not in militares_de_folga
+                                and any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: ('Voluntário c/ serviço' if m in militares_com_servico else 'Voluntário disponível') + ' (já nomeado noutro remunerado)'
+                        )
+                        # G2: voluntários de folga — novos
+                        _nomear_grupo(
+                            lambda r, m: bool(r['voluntario']) and m in militares_de_folga and bool(r['folga'])
+                                and m not in ausentes_dia and not any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: 'Voluntário de folga'
+                        )
+                        # G2b: repetir voluntários de folga já noutro slot
+                        _nomear_grupo(
+                            lambda r, m: bool(r['voluntario']) and m in militares_de_folga and bool(r['folga'])
+                                and m not in ausentes_dia and any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: 'Voluntário de folga (já nomeado noutro remunerado)'
+                        )
+                        # G3: não voluntários — novos
+                        _nomear_grupo(
+                            lambda r, m: not bool(r['voluntario']) and m not in ausentes_dia and m not in militares_de_folga
+                                and not any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: 'Não voluntário',
+                            aviso_extra=True
+                        )
+                        # G3b: repetir não voluntários já noutro slot
+                        _nomear_grupo(
+                            lambda r, m: not bool(r['voluntario']) and m not in ausentes_dia and m not in militares_de_folga
+                                and any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: 'Não voluntário (já nomeado noutro remunerado)',
+                            aviso_extra=True
+                        )
 
                         resultados_slots.append({'slot': slot, 'nomeados': nomeados, 'avisos': avisos, 'skipped': skipped})
 
-                    # ── 2ª passagem: completar slots com militares já nomeados noutros slots ──
-                    # Aplica as mesmas regras de elegibilidade — só muda que permite repetir
-                    for slot_idx, res in enumerate(resultados_slots):
-                        slot = res['slot']
-                        if len(res['nomeados']) >= slot['n']:
-                            continue  # já completo
-                        _ct, _cu = slot['col_total'], slot['col_ultimo']
-                        df_disp2 = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
-                        df_disp2[_ct] = pd.to_numeric(df_disp2[_ct], errors='coerce').fillna(0)
-                        df_disp2[_cu] = pd.to_datetime(df_disp2[_cu], dayfirst=True, errors='coerce')
-                        df_disp2_sorted = df_disp2.sort_values([_cu, _ct], ascending=[True, True], na_position='first')
-
-                        # GRUPO 1 repetição: voluntários com serviço ou disponíveis (não folga)
-                        for _, row_r in df_disp2_sorted.iterrows():
-                            if len(res['nomeados']) >= slot['n']: break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in res['nomeados']]: continue
-                            if not bool(row_r['voluntario']): continue
-                            if mid_r in ausentes_dia: continue
-                            if mid_r in militares_de_folga: continue
-                            skipped2 = []
-                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped2):
-                                grupo = 'Voluntário c/ serviço' if mid_r in militares_com_servico else 'Voluntário disponível'
-                                res['nomeados'].append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                                        'grupo': f"{grupo} (já nomeado noutro remunerado)",
-                                                        'total': int(row_r[_ct])})
-                                ja_nomeados_ids.append((slot_idx, mid_r))
-                                res['avisos'].append(f"ℹ️ **{get_nome_curto(df_util, mid_r)}** já nomeado noutro remunerado do mesmo dia")
-
-                        # GRUPO 2 repetição: voluntários de folga com folga=Sim
-                        for _, row_r in df_disp2_sorted.iterrows():
-                            if len(res['nomeados']) >= slot['n']: break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in res['nomeados']]: continue
-                            if not bool(row_r['voluntario']): continue
-                            if mid_r not in militares_de_folga: continue
-                            if mid_r in ausentes_dia: continue
-                            if not bool(row_r['folga']): continue
-                            skipped2 = []
-                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped2):
-                                res['nomeados'].append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                                        'grupo': 'Voluntário de folga (já nomeado noutro remunerado)',
-                                                        'total': int(row_r[_ct])})
-                                ja_nomeados_ids.append((slot_idx, mid_r))
-                                res['avisos'].append(f"ℹ️ **{get_nome_curto(df_util, mid_r)}** já nomeado noutro remunerado do mesmo dia")
-
-                        # GRUPO 3 repetição: não voluntários (último recurso)
-                        for _, row_r in df_disp2_sorted.iterrows():
-                            if len(res['nomeados']) >= slot['n']: break
-                            mid_r = str(row_r.get('id', '')).strip()
-                            if not mid_r or mid_r in [n['id'] for n in res['nomeados']]: continue
-                            if bool(row_r['voluntario']): continue
-                            if mid_r in ausentes_dia: continue
-                            if mid_r in militares_de_folga: continue
-                            skipped2 = []
-                            if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped2):
-                                res['avisos'].append(f"⚠️ **{get_nome_curto(df_util, mid_r)}** nomeado fora da lista de voluntários (já nomeado noutro remunerado)")
-                                res['nomeados'].append({'id': mid_r, 'nome': get_nome_curto(df_util, mid_r),
-                                                        'grupo': 'Não voluntário (já nomeado noutro remunerado)',
-                                                        'total': int(row_r[_ct])})
-                                ja_nomeados_ids.append((slot_idx, mid_r))
 
                     # ── Mostrar resultados ───────────────────────────────────
                     tipo_col = ""  # tabela é por slot
@@ -7110,7 +7061,7 @@ else:
                 mil_opts_l = {f"{r.get('posto','')} {r.get('nome','')} (ID: {r.get('id','')})".strip(): str(r.get('id',''))
                               for _, r in df_util.iterrows() if str(r.get('id','')).strip()}
                 mil_sel_l = st.selectbox("Militar:", list(mil_opts_l.keys()), key="lic_mil")
-                tipo_l = st.selectbox("Tipo:", ["Convalescença", "Licença", "Outras Licenças", "Diligência", "Tribunal", "FCAA CTer", "Folga Complementar"], key="lic_tipo")
+                tipo_l = st.selectbox("Tipo:", ["Convalescença", "Licença", "Outras Licenças", "Diligência", "Tribunal", "Instrução", "FCAA CTer", "Folga Complementar"], key="lic_tipo")
             with col_l2:
                 ini_l = st.date_input("Data início:", format="DD/MM/YYYY", key="lic_ini")
                 fim_l = st.date_input("Data fim:", format="DD/MM/YYYY", key="lic_fim")
