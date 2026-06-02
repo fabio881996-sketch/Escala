@@ -5522,6 +5522,39 @@ else:
                                 ids_escalados_g = set()
                                 novas_linhas = {str(row_e['id']): dict(row_e) for _, row_e in df_editado.iterrows()}
 
+                                # ── Regra da Secretaria ──────────────────────────────────
+                                # Identificar militares da secretaria
+                                ids_secretaria = set()
+                                if not df_folgas.empty and 'serviço' in df_folgas.columns:
+                                    col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
+                                    for _, row_f in df_folgas.iterrows():
+                                        if norm(str(row_f.get('serviço', ''))) == 'secretaria':
+                                            ids_secretaria.add(str(row_f.get(col_id_f, '')).strip())
+
+                                # Contar secretaria disponíveis nesse dia
+                                # (não ausentes, não já indisponíveis por dispensa/férias)
+                                sec_disponiveis = set()
+                                for mid_s in ids_secretaria:
+                                    if mid_s in ids_indisponiveis: continue
+                                    if militar_tem_dispensa_slot(mid_s, d_gerar, df_licencas, 'Secretaria', ''): continue
+                                    if militar_de_ferias(mid_s, d_gerar, df_ferias, feriados): continue
+                                    sec_disponiveis.add(mid_s)
+
+                                # Tem de ficar sempre 1 na secretaria
+                                # O primeiro a ser escalado é o topo da ordem_escala (A1, A2, A3)
+                                # Por isso reserva-se o último disponível na ordem
+                                sec_reservados = set()
+                                if len(sec_disponiveis) >= 1:
+                                    # Ordenar pela posição na ordem_escala de Atendimento
+                                    ordem_atend = ordem_g.get("Atendimento 00-08", []) +                                                   ordem_g.get("Atendimento 08-16", []) +                                                   ordem_g.get("Atendimento 16-24", [])
+                                    sec_por_ordem = [mid for mid in ordem_atend if mid in sec_disponiveis]
+                                    # Adicionar os que não estão na ordem (por precaução)
+                                    for mid in sec_disponiveis:
+                                        if mid not in sec_por_ordem:
+                                            sec_por_ordem.append(mid)
+                                    # Reservar o último — o primeiro será escalado
+                                    sec_reservados = {sec_por_ordem[-1]}
+
                                 for servico, horario, num in SLOTS_AJUSTADOS:
                                     col_key = f"{servico} {horario}"
                                     if col_key not in ordem_g:
@@ -5534,6 +5567,7 @@ else:
                                         motivo = None
                                         if mid in ids_indisponiveis: motivo = 'indisponivel'
                                         elif mid in ids_escalados_g: motivo = 'ja_escalado'
+                                        elif mid in sec_reservados and _e_atendimento(servico): motivo = 'reservado_secretaria'
                                         elif militar_tem_dispensa_slot(mid, d_gerar, df_licencas, servico, horario): motivo = 'dispensa_slot'
                                         elif servico not in militares_servicos.get(mid, []): motivo = f'sem_servico:{militares_servicos.get(mid,[])}'
                                         else:
@@ -6478,23 +6512,11 @@ else:
                                 and not any(m == mid for _, mid in ja_nomeados_ids),
                             lambda m: 'Voluntário c/ serviço' if m in militares_com_servico else 'Voluntário disponível'
                         )
-                        # G1b: repetir voluntários com serviço/disponíveis já noutro slot
-                        _nomear_grupo(
-                            lambda r, m: bool(r['voluntario']) and m not in ausentes_dia and m not in militares_de_folga
-                                and any(m == mid for _, mid in ja_nomeados_ids),
-                            lambda m: ('Voluntário c/ serviço' if m in militares_com_servico else 'Voluntário disponível') + ' (já nomeado noutro remunerado)'
-                        )
                         # G2: voluntários de folga — novos
                         _nomear_grupo(
                             lambda r, m: bool(r['voluntario']) and m in militares_de_folga and bool(r['folga'])
                                 and m not in ausentes_dia and not any(m == mid for _, mid in ja_nomeados_ids),
                             lambda m: 'Voluntário de folga'
-                        )
-                        # G2b: repetir voluntários de folga já noutro slot
-                        _nomear_grupo(
-                            lambda r, m: bool(r['voluntario']) and m in militares_de_folga and bool(r['folga'])
-                                and m not in ausentes_dia and any(m == mid for _, mid in ja_nomeados_ids),
-                            lambda m: 'Voluntário de folga (já nomeado noutro remunerado)'
                         )
                         # G3: não voluntários — novos
                         _nomear_grupo(
@@ -6502,6 +6524,18 @@ else:
                                 and not any(m == mid for _, mid in ja_nomeados_ids),
                             lambda m: 'Não voluntário',
                             aviso_extra=True
+                        )
+                        # G1b: repetir voluntários com serviço/disponíveis já noutro slot
+                        _nomear_grupo(
+                            lambda r, m: bool(r['voluntario']) and m not in ausentes_dia and m not in militares_de_folga
+                                and any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: ('Voluntário c/ serviço' if m in militares_com_servico else 'Voluntário disponível') + ' (já nomeado noutro remunerado)'
+                        )
+                        # G2b: repetir voluntários de folga já noutro slot
+                        _nomear_grupo(
+                            lambda r, m: bool(r['voluntario']) and m in militares_de_folga and bool(r['folga'])
+                                and m not in ausentes_dia and any(m == mid for _, mid in ja_nomeados_ids),
+                            lambda m: 'Voluntário de folga (já nomeado noutro remunerado)'
                         )
                         # G3b: repetir não voluntários já noutro slot
                         _nomear_grupo(
