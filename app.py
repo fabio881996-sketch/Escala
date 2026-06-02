@@ -6270,20 +6270,16 @@ else:
                 st.stop()
             else:
                 # ── Configuração base ──────────────────────────────
-                col_r1, col_r2 = st.columns(2)
-                with col_r1:
-                    d_rem = st.date_input("Data:", format="DD/MM/YYYY", key="d_rem")
-                with col_r2:
-                    tab_rem_sel = st.selectbox("Tabela:", ["A", "B"], key="tab_rem_sel")
+                d_rem = st.date_input("Data:", format="DD/MM/YYYY", key="d_rem")
 
                 # ── Lista de remunerados a nomear ──────────────────
                 if 'rem_slots' not in st.session_state:
-                    st.session_state['rem_slots'] = [{'hor': '', 'n': 2, 'obs': ''}]
+                    st.session_state['rem_slots'] = [{'hor': '', 'n': 2, 'obs': '', 'tab': 'A'}]
 
                 st.markdown("**Remunerados a nomear em simultâneo:**")
                 slots = st.session_state['rem_slots']
                 for i, slot in enumerate(slots):
-                    col_s1, col_s2, col_s3, col_s4 = st.columns([2, 1, 3, 0.5])
+                    col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns([2, 1, 1, 3, 0.5])
                     with col_s1:
                         slots[i]['hor'] = st.text_input(f"Horário {i+1}:", value=slot['hor'],
                             placeholder="ex: 08-12", key=f"hor_rem_{i}")
@@ -6291,9 +6287,12 @@ else:
                         slots[i]['n'] = st.number_input(f"Nº mil. {i+1}:", min_value=1, max_value=10,
                             value=slot['n'], key=f"n_rem_{i}")
                     with col_s3:
+                        slots[i]['tab'] = st.selectbox(f"Tab. {i+1}:", ["A", "B"],
+                            index=0 if slot.get('tab','A') == 'A' else 1, key=f"tab_rem_{i}")
+                    with col_s4:
                         slots[i]['obs'] = st.text_input(f"Obs. {i+1}:", value=slot['obs'],
                             placeholder="ex: Reg. Trânsito", key=f"obs_rem_{i}")
-                    with col_s4:
+                    with col_s5:
                         if i > 0:
                             st.markdown("<br>", unsafe_allow_html=True)
                             if st.button("🗑️", key=f"del_rem_{i}"):
@@ -6303,7 +6302,7 @@ else:
                 col_add, col_calc = st.columns(2)
                 with col_add:
                     if st.button("➕ Adicionar remunerado", use_container_width=True, key="btn_add_rem"):
-                        st.session_state['rem_slots'].append({'hor': '', 'n': 2, 'obs': ''})
+                        st.session_state['rem_slots'].append({'hor': '', 'n': 2, 'obs': '', 'tab': 'A'})
                         st.rerun()
 
                 with col_calc:
@@ -6322,22 +6321,27 @@ else:
                     data_str_rem = d_rem.strftime("%d/%m/%Y")
 
                     is_fds = d_rem.weekday() >= 5
-                    if tab_rem_sel == "B":
-                        col_total  = "total_ano_b"
-                        col_ultimo = "ultimo_b"
-                    elif is_fds:
-                        col_total  = "total_ano_a_fds"
-                        col_ultimo = "ultimo_a_fds"
-                    else:
-                        col_total  = "total_ano_a_semana"
-                        col_ultimo = "ultimo_a_semana"
+
+                    def _cols_para_tab(tab):
+                        if tab == "B":
+                            return "total_ano_b", "ultimo_b"
+                        elif is_fds:
+                            return "total_ano_a_fds", "ultimo_a_fds"
+                        else:
+                            return "total_ano_a_semana", "ultimo_a_semana"
 
                     # Parsear horários de todos os slots
                     slots_parsed = []
                     for slot in slots_validos:
                         hi, hf = _parse_horario(slot['hor'])
-                        horas = round((hf - hi) / 60, 1) if hf > hi else round((1440 - hi + hf) / 60, 1) if hi is not None and hf is not None else 0
-                        slots_parsed.append({**slot, 'hi': hi, 'hf': hf, 'horas': horas})
+                        horas = round((hf - hi) / 60, 1) if hf and hi and hf > hi else round((1440 - hi + hf) / 60, 1) if hi is not None and hf is not None else 0
+                        col_total, col_ultimo = _cols_para_tab(slot.get('tab', 'A'))
+                        slots_parsed.append({**slot, 'hi': hi, 'hf': hf, 'horas': horas,
+                                             'col_total': col_total, 'col_ultimo': col_ultimo})
+
+                    # Para garantir que todas as colunas existem
+                    col_total = "total_ano_a_semana"
+                    col_ultimo = "ultimo_a_semana"
 
                     for col in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso', col_total, col_ultimo]:
                         if col not in df_ord_rem.columns:
@@ -6428,6 +6432,15 @@ else:
                         nomeados = []
                         avisos   = []
                         skipped  = []
+                        # Ordenar pela tabela deste slot
+                        _ct, _cu = slot['col_total'], slot['col_ultimo']
+                        for col in [_ct, _cu]:
+                            if col not in df_ord_rem.columns:
+                                df_ord_rem[col] = ''
+                        df_ord_rem[_ct] = pd.to_numeric(df_ord_rem[_ct], errors='coerce').fillna(0)
+                        df_ord_rem[_cu] = pd.to_datetime(df_ord_rem[_cu], dayfirst=True, errors='coerce')
+                        df_disp = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
+                        df_disp_sorted = df_disp.sort_values([_cu, _ct], ascending=[True, True], na_position='first')
 
                         # GRUPO 1: voluntários com serviço ou disponíveis
                         for _, row_r in df_disp_sorted.iterrows():
@@ -6528,28 +6541,33 @@ else:
                                 slot = res['slot']
                                 ids_nomeados = [n['id'] for n in res['nomeados']]
                                 ids_str = ", ".join(ids_nomeados)
+                                tab_slot = slot.get('tab', 'A')
                                 ws_dia_rem.append_row([
                                     ids_str,
-                                    f"Svç Remunerado - Tabela {dados_rem['tabela']}",
+                                    f"Svç Remunerado - Tabela {tab_slot}",
                                     slot['hor'],
                                     "", "", "",
                                     slot['obs'],
                                 ])
                                 hi_s, hf_s = _parse_horario(slot['hor'])
                                 horas_add = round((hf_s - hi_s) / 60, 1) if hf_s and hi_s and hf_s > hi_s else round((1440 - hi_s + hf_s) / 60, 1) if hi_s and hf_s else 1
+                                col_t_slot = slot.get('col_total', dados_rem['col_total'])
+                                col_u_slot = slot.get('col_ultimo', dados_rem['col_ultimo'])
+                                col_tot_idx_s = hdrs_ord.index(col_t_slot) if col_t_slot in hdrs_ord else None
+                                col_ult_idx_s = hdrs_ord.index(col_u_slot) if col_u_slot in hdrs_ord else None
 
                                 for i, row_o in enumerate(todos_vals[1:], start=2):
                                     mid_o = str(row_o[col_id_idx]).strip() if col_id_idx < len(row_o) else ''
                                     if mid_o in ids_nomeados:
-                                        if col_tot_idx is not None:
-                                            total_atual = float(str(row_o[col_tot_idx]).strip() or 0) if col_tot_idx < len(row_o) else 0
-                                            cl = chr(ord('A') + col_tot_idx)
+                                        if col_tot_idx_s is not None:
+                                            total_atual = float(str(row_o[col_tot_idx_s]).strip() or 0) if col_tot_idx_s < len(row_o) else 0
+                                            cl = chr(ord('A') + col_tot_idx_s)
                                             upds_ord.append({'range': f'{cl}{i}', 'values': [[total_atual + horas_add]]})
-                                        if col_ult_idx is not None:
-                                            cl2 = chr(ord('A') + col_ult_idx)
+                                        if col_ult_idx_s is not None:
+                                            cl2 = chr(ord('A') + col_ult_idx_s)
                                             upds_ord.append({'range': f'{cl2}{i}', 'values': [[dados_rem['data']]]})
                                 for mid_h in ids_nomeados:
-                                    ws_hist.append_row([mid_h, dados_rem['data'], dados_rem['col_ultimo']])
+                                    ws_hist.append_row([mid_h, dados_rem['data'], col_u_slot])
 
                             if upds_ord:
                                 ws_ord.batch_update(upds_ord)
