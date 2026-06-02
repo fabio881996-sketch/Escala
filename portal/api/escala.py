@@ -185,7 +185,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             dt = hj.date() + timedelta(days=delta)
             if dt.strftime("%d-%m") in dias_pub:
                 dias_a_mostrar.append(dt)
-            if len(dias_a_mostrar) >= 20:
+            if len(dias_a_mostrar) >= 60:
                 break
 
         if not dias_a_mostrar:
@@ -198,7 +198,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         dias_sem = 0
 
         for dt in dias_a_mostrar:
-            if dias_sem >= 5:
+            if dias_sem >= 14:
                 break
 
             aba = dt.strftime("%d-%m")
