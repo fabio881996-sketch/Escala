@@ -347,11 +347,36 @@ async def disponiveis(
                 if cedeu:
                     continue
 
+            # Verificar se este militar tem também remunerado nesse dia
+            tem_rem = False
+            rem_serv = ""
+            rem_hor = ""
+            if tipo == "simples" and not df_dia.empty:
+                for _, row_rem in df_dia[df_dia["id"].astype(str).str.strip() == mid].iterrows():
+                    s_rem = str(row_rem.get("serviço","")).strip()
+                    if re.search(r"remun|gratif", _norm(s_rem)):
+                        # Verificar se não cedeu já
+                        cedeu_rem = False
+                        if not df_trocas.empty and data_fmt:
+                            cedeu_rem = not df_trocas[
+                                (df_trocas["data"] == data_fmt) &
+                                (df_trocas["status"] == "Aprovada") &
+                                (df_trocas["servico_origem"].str.upper() == "MATAR_REMUNERADO") &
+                                (df_trocas["id_destino"].astype(str) == mid)
+                            ].empty
+                        if not cedeu_rem:
+                            tem_rem = True
+                            rem_serv = s_rem
+                            rem_hor = str(row_rem.get("horário","")).strip()
+
             disponiveis_lista.append({
                 "id": mid,
                 "nome": nomes.get(mid, mid),
                 "servico": servico,
                 "horario": horario,
+                "tem_remunerado": tem_rem,
+                "remunerado_servico": rem_serv,
+                "remunerado_horario": rem_hor,
             })
 
         return {
@@ -373,6 +398,7 @@ class PedidoTroca(BaseModel):
     servico_origem: str
     servico_destino: str
     observacoes: Optional[str] = ""
+    incluir_remunerado: Optional[bool] = False
 
 
 @router.post("/solicitar")
@@ -403,6 +429,22 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
             )
         except Exception:
             pass
+        # Se pedido, criar também pedido MATAR_REMUNERADO
+        if pedido.incluir_remunerado:
+            try:
+                from datetime import datetime as _dt3
+                ws.append_row([
+                    pedido.data, u_id, "MATAR_REMUNERADO",
+                    pedido.id_destino, pedido.servico_destino,
+                    "Pendente_Militar", "",
+                    "",
+                    _dt3.now().strftime("%d/%m/%Y %H:%M"),
+                    "",
+                ])
+            except Exception:
+                pass
+
+        get_loader().limpar_cache()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
