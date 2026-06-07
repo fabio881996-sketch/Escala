@@ -9,3 +9,4 @@ firebase-admin>=7.0.0
 fpdf==1.7.2
 requests
 streamlit
+google-api-python-client
