@@ -485,6 +485,23 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
                     corpo=f"A tua troca de {row[0]} foi aceite e aguarda validação do admin.",
                     url="/trocas",
                 )
+                # Notificar admins
+                try:
+                    from services.data_loader import DataLoader
+                    from core.database import GoogleSheetsClient
+                    _loader_notif = DataLoader(sheets_client=GoogleSheetsClient())
+                    df_util_notif = _loader_notif.carregar_usuarios()
+                    admin_ids = df_util_notif[df_util_notif["is_admin"].astype(str).str.lower().isin(["true","1","sim"])]["id"].astype(str).str.strip().tolist()
+                    if admin_ids:
+                        enviar_push(
+                            u_ids=admin_ids,
+                            titulo="⚖️ Troca aguarda validação",
+                            corpo=f"Troca de {row[0]} aguarda a tua validação.",
+                            url="/trocas",
+                            tag="validar-troca",
+                        )
+                except Exception:
+                    pass
             else:
                 enviar_push(
                     u_ids=[id_origem],
