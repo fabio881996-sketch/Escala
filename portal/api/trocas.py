@@ -44,7 +44,7 @@ def _parse_horario(h: str):
     return ini, fim
 
 
-def _verificar_descanso(u_id: str, data_str: str, novo_horario: str, loader: DataLoader) -> tuple[bool, str]:
+def _verificar_descanso(u_id: str, data_str: str, novo_horario: str, loader: DataLoader, novo_servico: str = "") -> tuple[bool, str]:
     """Verifica 8h de descanso em relação a serviços no dia anterior e seguinte."""
     MIN_DESCANSO = 480  # 8 horas em minutos
     novo = _parse_horario(novo_horario)
@@ -80,6 +80,10 @@ def _verificar_descanso(u_id: str, data_str: str, novo_horario: str, loader: Dat
                     # serviço seguinte: descanso = ini_adj + 1440 - fim_novo
                     descanso = ini_adj + 1440 - fim_novo if ini_adj < fim_novo else ini_adj - fim_novo
                 if descanso < MIN_DESCANSO:
+                    # Excepção: atendimento/apoio permite consecutivos 16-24 + 00-08
+                    _AT = re.compile(r'atendimento|apoio ao atendimento', re.IGNORECASE)
+                    if _AT.search(serv_adj) or _AT.search(novo_servico):
+                        continue  # permitido
                     horas = descanso // 60
                     mins = descanso % 60
                     return False, f"Apenas {horas}h{mins:02d}m de descanso em relação ao serviço {lado}"
@@ -153,6 +157,25 @@ async def trocas_pendentes(current_user: dict = Depends(obter_user_atual)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _consecutivos_permitidos(serv1: str, serv2: str) -> bool:
+    """Verifica se dois serviços podem ser consecutivos (16-24 + 00-08).
+    Só permitido se um deles for Atendimento ou Apoio ao Atendimento."""
+    _AT = re.compile(r'atendimento|apoio ao atendimento', re.IGNORECASE)
+    h1 = _parse_horario(serv1)
+    h2 = _parse_horario(serv2)
+    if not h1 or not h2:
+        return True  # sem horário definido, não bloquear
+    ini1, fim1 = h1
+    ini2, fim2 = h2
+    # Consecutivos = fim de um é início do outro (sem descanso)
+    # 16-24 (fim=1440) seguido de 00-08 (ini=0) — diferença de 0 minutos
+    gap = (ini2 - fim1) % 1440
+    if gap > 60:  # mais de 1h de intervalo — não são consecutivos
+        return True
+    # São consecutivos — só permitido se um for atendimento/apoio
+    return bool(_AT.search(serv1) or _AT.search(serv2))
+
+
 # ── Novo endpoint: disponíveis para troca num dia ─────────────
 
 @router.get("/disponíveis")
@@ -209,7 +232,7 @@ async def disponiveis(
         except Exception:
             pass
 
-        # ── Meu serviço no dia (aplicar trocas aprovadas) ──
+        # ── Meu serviço no dia ──
         meu_servico = None
         meu_horario = None
         if not df_dia.empty:
@@ -218,27 +241,6 @@ async def disponiveis(
                 row = minha_linha.iloc[0]
                 meu_servico = str(row.get("serviço", "")).strip()
                 meu_horario = str(row.get("horário", "")).strip()
-                # Verificar se há troca aprovada que altera o meu serviço
-                if not df_trocas.empty and data_fmt:
-                    tr = df_trocas[
-                        (df_trocas["data"] == data_fmt) &
-                        (df_trocas["status"] == "Aprovada") &
-                        (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
-                    ]
-                    for _, t in tr.iterrows():
-                        if str(t["id_origem"]).strip() == u_id:
-                            id_outro = str(t["id_destino"]).strip()
-                        elif str(t["id_destino"]).strip() == u_id:
-                            id_outro = str(t["id_origem"]).strip()
-                        else:
-                            continue
-                        linha_outro = df_dia[df_dia["id"].astype(str).str.strip() == id_outro]
-                        if linha_outro.empty:
-                            continue
-                        row_outro = linha_outro.iloc[0]
-                        meu_servico = str(row_outro.get("serviço", "")).strip()
-                        meu_horario = str(row_outro.get("horário", "")).strip()
-                        break
 
         # ── Filtrar disponíveis consoante o tipo ──
         disponiveis_lista = []
@@ -267,7 +269,6 @@ async def disponiveis(
                 if e_folga:
                     continue
                 if e_remunerado:
-                    # Verificar se cedeu o remunerado
                     cedeu = False
                     if not df_trocas.empty and data_fmt:
                         cedeu = not df_trocas[
@@ -279,15 +280,47 @@ async def disponiveis(
                     if not cedeu:
                         continue
                 # Verificar descanso
-                ok, motivo = _verificar_descanso(mid, data_fmt, horario, loader)
+                ok, motivo = _verificar_descanso(mid, data_fmt, horario, loader, servico)
                 if not ok:
                     continue
+                # Verificar consecutivos ilegais
+                if meu_horario and horario:
+                    _bloquear = False
+                    try:
+                        dt_obj = datetime.strptime(data_fmt, "%d/%m/%Y")
+                        serv_eu_vou_fazer = f"{servico} ({horario})"
+                        serv_outro_vai_fazer = f"{meu_servico} ({meu_horario})"
+                        for delta in [-1, 1]:
+                            if _bloquear: break
+                            aba_adj = (dt_obj + timedelta(days=delta)).strftime("%d-%m")
+                            try:
+                                df_adj = loader.carregar_escala(aba_adj)
+                            except Exception:
+                                continue
+                            if df_adj.empty: continue
+                            # Verificar se EU fico com consecutivos ilegais
+                            for _, r_adj in df_adj[df_adj["id"].astype(str).str.strip() == u_id].iterrows():
+                                s_adj = str(r_adj.get("serviço",""))
+                                h_adj = str(r_adj.get("horário",""))
+                                if not _consecutivos_permitidos(f"{s_adj} ({h_adj})", serv_eu_vou_fazer):
+                                    _bloquear = True; break
+                            if _bloquear: break
+                            # Verificar se O OUTRO fica com consecutivos ilegais
+                            for _, r_adj in df_adj[df_adj["id"].astype(str).str.strip() == mid].iterrows():
+                                s_adj = str(r_adj.get("serviço",""))
+                                h_adj = str(r_adj.get("horário",""))
+                                if not _consecutivos_permitidos(f"{s_adj} ({h_adj})", serv_outro_vai_fazer):
+                                    _bloquear = True; break
+                    except Exception:
+                        pass
+                    if _bloquear:
+                        continue
 
             elif tipo == "folga":
                 # Eu tenho folga, quero trocar com quem tem serviço
                 if e_folga or e_remunerado:
                     continue
-                ok, _ = _verificar_descanso(mid, data_fmt, meu_horario or "", loader)
+                ok, _ = _verificar_descanso(mid, data_fmt, meu_horario or "", loader, meu_servico or "")
                 if not ok:
                     continue
 
@@ -295,7 +328,7 @@ async def disponiveis(
                 # Eu tenho remunerado e quero ceder — o destino deve ter serviço normal
                 if e_folga or e_remunerado:
                     continue
-                ok, _ = _verificar_descanso(mid, data_fmt, meu_horario or "", loader)
+                ok, _ = _verificar_descanso(mid, data_fmt, meu_horario or "", loader, meu_servico or "")
                 if not ok:
                     continue
 
@@ -350,12 +383,15 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
         from core.database import get_sheet
         sh = get_sheet()
         ws = sh.worksheet("registos_trocas")
+        from datetime import datetime as _dt
         ws.append_row([
             pedido.data, u_id, pedido.servico_origem,
             pedido.id_destino, pedido.servico_destino,
-            "Pendente_Militar", pedido.observacoes or ""
+            "Pendente_Militar", pedido.observacoes or "",
+            "",  # validador (col H)
+            _dt.now().strftime("%d/%m/%Y %H:%M"),  # data_pedido (col I)
+            "",  # data_aceitacao (col J)
         ])
-        get_loader().limpar_cache()
         # Notificar o destinatário
         try:
             from portal.api.notificacoes import enviar_push
@@ -395,7 +431,6 @@ async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(ob
         if id_origem != u_id:
             raise HTTPException(status_code=403, detail="Só o autor pode cancelar")
         ws.update_cell(payload.row_index, 6, "Cancelada")
-        get_loader().limpar_cache()
         return {"ok": True}
     except HTTPException:
         raise
@@ -432,10 +467,13 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
 
         # Militar aceita → Pendente_Admin (aguarda validação do admin)
         # Militar rejeita → Rejeitada
+        from datetime import datetime as _dt
         novo_status = "Pendente_Admin" if resposta.acao == "aceitar" else "Rejeitada"
         col_status = 6
-        ws.update_cell(resposta.row_index, col_status, novo_status)
-        get_loader().limpar_cache()
+        updates = [{"range": f"F{resposta.row_index}", "values": [[novo_status]]}]
+        if resposta.acao == "aceitar":
+            updates.append({"range": f"J{resposta.row_index}", "values": [[_dt.now().strftime("%d/%m/%Y %H:%M")]]})
+        ws.batch_update(updates)
         # Notificar o autor original
         try:
             from portal.api.notificacoes import enviar_push
@@ -478,7 +516,6 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
         ws.update_cell(resposta.row_index, 6, novo_status)
-        get_loader().limpar_cache()
         # Notificar ambos os militares
         try:
             from portal.api.notificacoes import enviar_push
