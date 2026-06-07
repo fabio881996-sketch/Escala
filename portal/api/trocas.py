@@ -501,6 +501,38 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/pendentes-admin")
+async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
+    """Devolve trocas Pendente_Admin para validação pelo admin."""
+    try:
+        loader = get_loader()
+        df = loader.carregar_trocas()
+        df_util = loader.carregar_usuarios()
+        id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                   for _, r in df_util.iterrows() if str(r.get("id","")).strip()}
+        if df.empty:
+            return {"trocas": []}
+        pend = df[df["status"] == "Pendente_Admin"].copy()
+        trocas = []
+        for i, (idx, row) in enumerate(pend.iterrows()):
+            trocas.append({
+                "data":            str(row.get("data", "")),
+                "id_origem":       str(row.get("id_origem", "")),
+                "nome_origem":     id_nome.get(str(row.get("id_origem","")), str(row.get("id_origem",""))),
+                "servico_origem":  str(row.get("servico_origem", "")),
+                "id_destino":      str(row.get("id_destino", "")),
+                "nome_destino":    id_nome.get(str(row.get("id_destino","")), str(row.get("id_destino",""))),
+                "servico_destino": str(row.get("servico_destino", "")),
+                "observacoes":     str(row.get("observacoes", "")),
+                "data_pedido":     str(row.get("data_pedido", "")),
+                "data_aceitacao":  str(row.get("data_aceitacao", "")),
+                "__row_index":     idx + 2,
+            })
+        return {"trocas": trocas}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Admin: validar trocas ────────────────────────────────────
 
 @router.post("/validar")
