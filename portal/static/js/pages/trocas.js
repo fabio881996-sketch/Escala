@@ -263,6 +263,24 @@ const TrocasPage = {
         `;
     },
 
+    onMilitarChange(sel) {
+        const opt = sel.options[sel.selectedIndex];
+        const temRem = opt.dataset.temRemunerado === 'true';
+        const wrap = document.getElementById('rem-checkbox-wrap');
+        const label = document.getElementById('rem-label');
+        if (!wrap) return;
+        if (temRem && opt.dataset.remServico) {
+            const remServ = opt.dataset.remServico;
+            const remHor = opt.dataset.remHorario;
+            label.textContent = `💶 Incluir transferência do remunerado: ${remServ}${remHor ? ` (${remHor})` : ''}`;
+            wrap.style.display = 'block';
+        } else {
+            wrap.style.display = 'none';
+            const cb = document.getElementById('incluir-rem');
+            if (cb) cb.checked = false;
+        }
+    },
+
     async carregarDia() {
         const dataInput = document.getElementById('troca-data');
         const tipoInput = document.getElementById('troca-tipo');
@@ -303,8 +321,13 @@ const TrocasPage = {
             }
 
             const opcoesHTML = disponiveis.map(d =>
-                `<option value="${d.id}" data-servico="${d.servico}" data-horario="${d.horario}">
-                    ${d.nome} — ${d.servico} ${d.horario ? `(${d.horario})` : ''}
+                `<option value="${d.id}"
+                    data-servico="${d.servico}"
+                    data-horario="${d.horario}"
+                    data-tem-remunerado="${d.tem_remunerado || false}"
+                    data-rem-servico="${d.remunerado_servico || ''}"
+                    data-rem-horario="${d.remunerado_horario || ''}">
+                    ${d.nome} — ${d.servico} ${d.horario ? `(${d.horario})` : ''}${d.tem_remunerado ? ' 💶' : ''}
                 </option>`
             ).join('');
 
@@ -313,9 +336,15 @@ const TrocasPage = {
                 ${alertaMeuServico}
                 <div class="form-group">
                     <label class="form-label">👤 Trocar com</label>
-                    <select id="troca-mil" class="form-input form-select">
+                    <select id="troca-mil" class="form-input form-select" onchange="TrocasPage.onMilitarChange(this)">
                         ${opcoesHTML}
                     </select>
+                </div>
+                <div id="rem-checkbox-wrap" style="display:none;margin-bottom:12px">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem">
+                        <input type="checkbox" id="incluir-rem" style="width:16px;height:16px">
+                        <span id="rem-label">💶 Incluir transferência do remunerado</span>
+                    </label>
                 </div>
                 <div class="form-group">
                     <label class="form-label">📝 Observações (opcional)</label>
@@ -326,6 +355,9 @@ const TrocasPage = {
                     📨 Enviar Pedido
                 </button>
             `;
+            // Verificar militar seleccionado por defeito
+            const milSel = document.getElementById('troca-mil');
+            if (milSel) TrocasPage.onMilitarChange(milSel);
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
         }
@@ -350,6 +382,7 @@ const TrocasPage = {
         let servicoOrigem = meuServico || 'auto';
         if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
 
+        const incluirRem = document.getElementById('incluir-rem')?.checked || false;
         const el = document.getElementById('troca-resultado');
         try {
             await API.solicitar_troca({
@@ -359,6 +392,7 @@ const TrocasPage = {
                 servico_origem: servicoOrigem,
                 servico_destino: servicoDestino,
                 observacoes: obs,
+                incluir_remunerado: incluirRem,
             });
             el.innerHTML = `<div class="alert alert-success">✅ Pedido enviado com sucesso!</div>`;
             setTimeout(() => this.render(), 2000);
