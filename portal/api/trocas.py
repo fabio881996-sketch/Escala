@@ -565,6 +565,149 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
         ws.update_cell(resposta.row_index, 6, novo_status)
+        get_loader().limpar_cache()
+
+        # Gerar e guardar PDF no Drive se aprovada
+        if novo_status == "Aprovada":
+            try:
+                from reportlab.pdfgen import canvas as _canvas
+                from reportlab.lib.pagesizes import A4
+                from reportlab.lib.units import mm
+                from reportlab.lib.colors import HexColor
+                from reportlab.lib.styles import ParagraphStyle
+                from reportlab.platypus import Paragraph
+                from reportlab.pdfbase import pdfmetrics
+                from reportlab.pdfbase.ttfonts import TTFont
+                from google.oauth2 import service_account
+                from googleapiclient.discovery import build
+                from googleapiclient.http import MediaIoBaseUpload
+                import base64 as _b64, tempfile as _tmp, os as _os, io as _io, json as _json, re as _re2
+                from datetime import datetime as _dt2
+
+                row_data = rows[resposta.row_index - 1]
+                _data      = str(row_data[0]).strip() if len(row_data) > 0 else ""
+                _id_orig   = str(row_data[1]).strip() if len(row_data) > 1 else ""
+                _serv_orig = str(row_data[2]).strip() if len(row_data) > 2 else ""
+                _id_dest   = str(row_data[3]).strip() if len(row_data) > 3 else ""
+                _serv_dest = str(row_data[4]).strip() if len(row_data) > 4 else ""
+                _validador = f"{current_user.get('posto','')} {current_user.get('nome','')}".strip()
+                _data_val  = _dt2.now().strftime("%d/%m/%Y %H:%M")
+                _data_ped  = str(row_data[8]).strip() if len(row_data) > 8 else ""
+                _data_ace  = str(row_data[9]).strip() if len(row_data) > 9 else ""
+
+                # Nomes dos militares
+                loader_pdf = get_loader()
+                df_u = loader_pdf.carregar_usuarios()
+                _id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                            for _, r in df_u.iterrows() if str(r.get("id","")).strip()}
+                _nome_orig = _id_nome.get(_id_orig, _id_orig)
+                _nome_dest = _id_nome.get(_id_dest, _id_dest)
+                filename = f"Troca_{_data.replace('/','_')}_{_id_orig}_{_id_dest}.pdf"
+
+                # Gerar PDF
+                try:
+                    pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+                    pdfmetrics.registerFont(TTFont('DejaVu-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+                    pdfmetrics.registerFont(TTFont('DejaVu-Italic', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'))
+                    fn, fn_bold, fn_it = 'DejaVu', 'DejaVu-Bold', 'DejaVu-Italic'
+                except Exception:
+                    fn, fn_bold, fn_it = 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique'
+
+                _CAB_B64 = os.environ.get("PDF_CABECALHO_B64", "")
+                buf = _io.BytesIO()
+                cv = _canvas.Canvas(buf, pagesize=A4)
+                w, h = A4
+
+                if _CAB_B64:
+                    try:
+                        _cb = _b64.b64decode(_CAB_B64)
+                        with _tmp.NamedTemporaryFile(suffix='.jpg', delete=False) as _tf:
+                            _tf.write(_cb); _cp = _tf.name
+                        cab_w = 95*mm; cab_h = cab_w * (235/398)
+                        cv.drawImage(_cp, 20*mm, h-8*mm-cab_h, width=cab_w, height=cab_h, preserveAspectRatio=True)
+                        _os.unlink(_cp)
+                        cv.setFillColor(HexColor('#000000')); cv.setFont(fn_bold, 15)
+                        cv.drawString(20*mm+cab_w+10*mm, h-8*mm-cab_h/2, "TROCA DE SERVIÇO")
+                        y = h-8*mm-cab_h-10*mm
+                    except Exception:
+                        cv.setFont(fn_bold, 14); cv.drawCentredString(w/2, h-20*mm, "TROCA DE SERVIÇO")
+                        y = h-35*mm
+                else:
+                    cv.setFont(fn_bold, 14); cv.drawCentredString(w/2, h-20*mm, "TROCA DE SERVIÇO")
+                    y = h-35*mm
+
+                style = ParagraphStyle('body', fontName=fn, fontSize=11, leading=18)
+                texto = (
+                    f"O militar <b>{_nome_orig}</b> (ID {_id_orig}), solicitou a autorização "
+                    f"para a troca do serviço <b>'{_serv_orig}'</b> pelo serviço <b>'{_serv_dest}'</b> "
+                    f"do militar <b>{_nome_dest}</b> (ID {_id_dest}), para o dia <b>{_data}</b>."
+                )
+                p = Paragraph(texto, style)
+                pw, ph = p.wrap(170*mm, h); p.drawOn(cv, 20*mm, y-ph); y -= ph+10*mm
+
+                # Aviso consecutivos
+                def _hf(serv, g):
+                    m = _re2.search(r'\((\d{2})-(\d{2})\)', str(serv))
+                    return int(m.group(g)) if m else None
+                _av = []
+                if _hf(_serv_orig, 2) in (0,24) and _hf(_serv_dest, 1) == 0:
+                    _av.append(f"Nota: <b>{_nome_orig}</b> ficará com serviços consecutivos: <b>{_serv_orig}</b> seguido de <b>{_serv_dest}</b>.")
+                if _hf(_serv_dest, 2) in (0,24) and _hf(_serv_orig, 1) == 0:
+                    _av.append(f"Nota: <b>{_nome_dest}</b> ficará com serviços consecutivos: <b>{_serv_dest}</b> seguido de <b>{_serv_orig}</b>.")
+                if _av:
+                    style_av = ParagraphStyle('av', fontName=fn_bold, fontSize=10, leading=14, textColor=HexColor('#b45309'))
+                    for av in _av:
+                        cv.setFillColor(HexColor('#FFFBEB')); cv.setStrokeColor(HexColor('#f59e0b')); cv.setLineWidth(0.8)
+                        p_av = Paragraph(av, style_av); pw_av, ph_av = p_av.wrap(162*mm, h)
+                        cv.rect(20*mm, y-ph_av-4*mm, 170*mm, ph_av+8*mm, fill=1, stroke=1)
+                        p_av.drawOn(cv, 24*mm, y-ph_av-1*mm); y -= ph_av+14*mm
+
+                cv.setFont(fn_bold, 10); cv.setFillColor(HexColor('#1a2b4a'))
+                cv.drawString(20*mm, y, "REGISTO DE CONFIRMAÇÕES"); y -= 6*mm
+                cv.setStrokeColor(HexColor('#1a2b4a')); cv.setLineWidth(0.8)
+                cv.line(20*mm, y, w-20*mm, y); y -= 8*mm
+
+                def _bloco(y, num, tit, nome, data, cor):
+                    bh = 22*mm
+                    cv.setFillColor(HexColor(cor)); cv.rect(20*mm, y-bh, 170*mm, bh, fill=1, stroke=0)
+                    cv.setFillColor(HexColor('#1a2b4a')); cv.rect(20*mm, y-bh, 3*mm, bh, fill=1, stroke=0)
+                    cv.setFont(fn_bold, 14); cv.setFillColor(HexColor('#1a2b4a')); cv.drawString(26*mm, y-14*mm, num)
+                    cv.setFont(fn_bold, 9); cv.setFillColor(HexColor('#64748b')); cv.drawString(35*mm, y-8*mm, tit.upper())
+                    cv.setFont(fn_bold, 11); cv.setFillColor(HexColor('#1e293b')); cv.drawString(35*mm, y-15*mm, nome)
+                    cv.setFont(fn_it, 9); cv.setFillColor(HexColor('#64748b')); cv.drawRightString(w-22*mm, y-15*mm, data or "—")
+                    return y-bh-4*mm
+
+                y = _bloco(y, "①", "Solicitante", f"{_nome_orig} (ID {_id_orig})", _data_ped, '#F8FAFC')
+                y = _bloco(y, "②", "Aceite pelo militar de destino", f"{_nome_dest} (ID {_id_dest})", _data_ace, '#F0FDF4')
+                y = _bloco(y, "③", "Autorizado superiormente", _validador, _data_val, '#EFF6FF')
+
+                cv.setStrokeColor(HexColor('#cccccc')); cv.setLineWidth(0.5)
+                cv.line(20*mm, 22*mm, w-20*mm, 22*mm)
+                cv.setFont(fn_it, 8); cv.setFillColor(HexColor('#646464'))
+                cv.drawRightString(w-20*mm, 15*mm, f"Gerado em: {_dt2.now().strftime('%d/%m/%Y %H:%M')}")
+                cv.save()
+                pdf_bytes = buf.getvalue()
+
+                # Upload Drive
+                creds_raw = _os.environ.get("GOOGLE_CREDENTIALS", "")
+                if creds_raw:
+                    info = _json.loads(creds_raw)
+                    creds = service_account.Credentials.from_service_account_info(
+                        info, scopes=["https://www.googleapis.com/auth/drive"])
+                    service = build("drive", "v3", credentials=creds)
+                    folder_name = "Trocas GNR"
+                    q = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+                    res = service.files().list(q=q, fields="files(id)").execute()
+                    files = res.get("files", [])
+                    folder_id = files[0]["id"] if files else service.files().create(
+                        body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder"},
+                        fields="id").execute()["id"]
+                    file_meta = {"name": filename, "parents": [folder_id]}
+                    media = MediaIoBaseUpload(_io.BytesIO(pdf_bytes), mimetype="application/pdf")
+                    service.files().create(body=file_meta, media_body=media, fields="id").execute()
+            except Exception:
+                pass
+
         # Notificar ambos os militares
         try:
             from portal.api.notificacoes import enviar_push
