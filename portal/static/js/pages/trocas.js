@@ -7,12 +7,17 @@ const TrocasPage = {
 
     async render() {
         const content = document.getElementById('content');
+        const user = API.getUser();
+        const tabValidar = user?.is_admin
+            ? `<button class="tab-btn" onclick="TrocasPage.setTab('validar', this)">⚖️ Validar</button>`
+            : '';
         content.innerHTML = `
             <div class="section-header">🔄 Trocas de Serviço</div>
             <div class="tabs">
                 <button class="tab-btn" onclick="TrocasPage.setTab('pendentes', this)">📥 Pendentes</button>
                 <button class="tab-btn" onclick="TrocasPage.setTab('historico', this)">📋 Histórico</button>
                 <button class="tab-btn active" onclick="TrocasPage.setTab('solicitar', this)">➕ Solicitar</button>
+                ${tabValidar}
             </div>
             <div id="trocas-content">${Components.loading()}</div>
         `;
@@ -25,6 +30,7 @@ const TrocasPage = {
         btn.classList.add('active');
         if (tab === 'pendentes') this.loadPendentes();
         else if (tab === 'historico') this.loadHistorico();
+        else if (tab === 'validar') this.loadValidar();
         else this.renderSolicitar();
     },
 
@@ -144,6 +150,89 @@ const TrocasPage = {
             }).join('');
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
+        }
+    },
+
+    // ── VALIDAR (admin) ──────────────────────────────────────
+    _horFim(serv) {
+        const m = serv?.match(/\((\d{2})-(\d{2})\)/);
+        return m ? parseInt(m[2]) : null;
+    },
+    _horIni(serv) {
+        const m = serv?.match(/\((\d{2})-(\d{2})\)/);
+        return m ? parseInt(m[1]) : null;
+    },
+    _consecutivoAviso(nomeA, servA, nomeB, servB) {
+        // A vai fazer servA, B vai fazer servB
+        // Consecutivo: servA termina a 24 e servB começa a 00
+        const avisos = [];
+        if (this._horFim(servA) === 24 && this._horIni(servB) === 0)
+            avisos.push(`⚠️ ${nomeA} ficará com serviços consecutivos: <b>${servA}</b> seguido de <b>${servB}</b>`);
+        if (this._horFim(servB) === 24 && this._horIni(servA) === 0)
+            avisos.push(`⚠️ ${nomeB} ficará com serviços consecutivos: <b>${servB}</b> seguido de <b>${servA}</b>`);
+        return avisos;
+    },
+
+    async loadValidar() {
+        const el = document.getElementById('trocas-content');
+        el.innerHTML = Components.loading();
+        try {
+            const data = await API._get('/api/trocas/pendentes-admin', false);
+            const trocas = data?.trocas || [];
+            if (!trocas.length) {
+                el.innerHTML = `<div class="empty-state"><div class="empty-icon">⚖️</div><p>Sem trocas para validar.</p></div>`;
+                return;
+            }
+            el.innerHTML = trocas.map(t => {
+                const nomeOrig = t.nome_origem || t.id_origem;
+                const nomeDest = t.nome_destino || t.id_destino;
+                // Após troca: origem vai fazer servico_destino, destino vai fazer servico_origem
+                const avisos = this._consecutivoAviso(nomeOrig, t.servico_destino, nomeDest, t.servico_origem);
+                const avisosHtml = avisos.length
+                    ? `<div style="background:#FFFBEB;border:1px solid #f59e0b;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:.78rem;color:#b45309;font-weight:600">
+                        ${avisos.join('<br>')}
+                       </div>` : '';
+                return `
+                <div class="card card-amber">
+                    <div class="card-label">⚖️ Aguarda validação • ${t.data}</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
+                        <div style="background:#eff6ff;border-radius:8px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:800;color:#2563eb;text-transform:uppercase;margin-bottom:4px">📤 Solicita</div>
+                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeOrig}</div>
+                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Cede: <b>${t.servico_origem}</b></div>
+                            <div style="font-size:.75rem;color:#16a34a;margin-top:2px">Fica com: <b>${t.servico_destino}</b></div>
+                        </div>
+                        <div style="background:#f0fdf4;border-radius:8px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:4px">📥 Aceita</div>
+                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeDest}</div>
+                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Cede: <b>${t.servico_destino}</b></div>
+                            <div style="font-size:.75rem;color:#16a34a;margin-top:2px">Fica com: <b>${t.servico_origem}</b></div>
+                        </div>
+                    </div>
+                    ${avisosHtml}
+                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
+                    <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="btn btn-success btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'aceitar', this)">✅ Aprovar</button>
+                        <button class="btn btn-danger btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'rejeitar', this)">🚫 Rejeitar</button>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
+        }
+    },
+
+    async validar(rowIndex, acao, btn) {
+        const label = acao === 'aceitar' ? 'Aprovar' : 'Rejeitar';
+        if (!confirm(`Tens a certeza que queres ${label.toLowerCase()} esta troca?`)) return;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+        try {
+            await API._post('/api/trocas/validar', { row_index: rowIndex, acao });
+            await this.loadValidar();
+            App.checkPendentes();
+        } catch (e) {
+            alert(`❌ Erro: ${e.message}`);
+            if (btn) { btn.disabled = false; btn.textContent = acao === 'aceitar' ? '✅ Aprovar' : '🚫 Rejeitar'; }
         }
     },
 
