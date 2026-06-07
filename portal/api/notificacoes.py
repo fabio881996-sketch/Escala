@@ -244,3 +244,28 @@ class TestePush(BaseModel):
 async def teste_push(payload: TestePush):
     enviar_push(payload.u_ids, payload.titulo, payload.corpo)
     return {"ok": True}
+
+
+class NotifInternaPayload(BaseModel):
+    secret: str
+    u_ids: list[str]
+    titulo: str
+    corpo: str
+    url: str = "/home"
+    tag: str = "gnr-notif"
+
+
+@router.post("/notificar-interno")
+async def notificar_interno(payload: NotifInternaPayload):
+    """Endpoint para notificações internas vindas do Streamlit."""
+    expected = os.environ.get("RAILWAY_NOTIFY_SECRET", "")
+    if not expected or payload.secret != expected:
+        raise HTTPException(status_code=403, detail="Não autorizado")
+    enviar_push(
+        u_ids=payload.u_ids,
+        titulo=payload.titulo,
+        corpo=payload.corpo,
+        url=payload.url,
+        tag=payload.tag,
+    )
+    return {"ok": True}
