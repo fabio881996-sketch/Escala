@@ -3639,10 +3639,10 @@ else:
 
     elif menu == "📊 Estatísticas":
         df_ferias = load_ferias(ano_atual)
-                feriados = load_feriados(ano_atual)
-                df_folgas = load_folgas(ano_atual)
-                df_licencas = load_licencas(ano_atual)
-                grupos_folga = load_grupos_folga()
+        feriados = load_feriados(ano_atual)
+        df_folgas = load_folgas(ano_atual)
+        df_licencas = load_licencas(ano_atual)
+        grupos_folga = load_grupos_folga()
         st.title("📊 Estatísticas de Serviço")
 
         if is_admin:
@@ -3727,7 +3727,7 @@ else:
     # --- 🏖️ FÉRIAS ---
     elif menu == "🏖️ Férias":
         df_ferias = load_ferias(ano_atual)
-                feriados = load_feriados(ano_atual)
+        feriados = load_feriados(ano_atual)
         st.title("🏖️ Plano de Férias")
         ano_sel_f = st.selectbox("Ano:", [ano_atual, ano_atual + 1], index=0)
         df_f = load_ferias(ano_sel_f)
@@ -3834,10 +3834,10 @@ else:
     # --- 🔍 ESCALA GERAL ---
     elif menu == "🔍 Escala Geral":
         df_ferias = load_ferias(ano_atual)
-                feriados = load_feriados(ano_atual)
-                df_folgas = load_folgas(ano_atual)
-                df_licencas = load_licencas(ano_atual)
-                grupos_folga = load_grupos_folga()
+        feriados = load_feriados(ano_atual)
+        df_folgas = load_folgas(ano_atual)
+        df_licencas = load_licencas(ano_atual)
+        grupos_folga = load_grupos_folga()
         st.title("🔍 Escala Geral")
 
         if is_admin:
@@ -4277,10 +4277,10 @@ else:
         # --- 🚨 ALERTAS (ADMIN) ---
     elif menu == "🚨 Alertas":
         df_ferias = load_ferias(ano_atual)
-                feriados = load_feriados(ano_atual)
-                df_folgas = load_folgas(ano_atual)
-                df_licencas = load_licencas(ano_atual)
-                grupos_folga = load_grupos_folga()
+        feriados = load_feriados(ano_atual)
+        df_folgas = load_folgas(ano_atual)
+        df_licencas = load_licencas(ano_atual)
+        grupos_folga = load_grupos_folga()
         st.title("🚨 Alertas da Escala")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
@@ -4400,10 +4400,10 @@ else:
         # --- ⚙️ GERAR ESCALA (ADMIN) ---
     elif menu == "⚙️ Gerar Escala":
         df_ferias = load_ferias(ano_atual)
-                feriados = load_feriados(ano_atual)
-                df_folgas = load_folgas(ano_atual)
-                df_licencas = load_licencas(ano_atual)
-                grupos_folga = load_grupos_folga()
+        feriados = load_feriados(ano_atual)
+        df_folgas = load_folgas(ano_atual)
+        df_licencas = load_licencas(ano_atual)
+        grupos_folga = load_grupos_folga()
         st.title("⚙️ Gerar Escala Automática")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
@@ -6563,7 +6563,7 @@ else:
     # --- 🏥 LICENÇAS (ADMIN) ---
     elif menu == "🏥 Dispensas":
         df_licencas = load_licencas(ano_atual)
-                df_folgas = load_folgas(ano_atual)
+        df_folgas = load_folgas(ano_atual)
         st.title("🏥 Dispensas")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
@@ -6749,10 +6749,10 @@ else:
     # --- 📢 PUBLICAR ESCALA (ADMIN) ---
     elif menu == "📢 Publicar Escala":
         df_ferias = load_ferias(ano_atual)
-                feriados = load_feriados(ano_atual)
-                df_folgas = load_folgas(ano_atual)
-                df_licencas = load_licencas(ano_atual)
-                grupos_folga = load_grupos_folga()
+        feriados = load_feriados(ano_atual)
+        df_folgas = load_folgas(ano_atual)
+        df_licencas = load_licencas(ano_atual)
+        grupos_folga = load_grupos_folga()
         st.title("📢 Publicar Escala")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
