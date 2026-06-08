@@ -6,7 +6,12 @@ from pydantic import BaseModel
 from typing import Optional
 
 from portal.api.auth import obter_admin
-from services.data_loader import get_loader
+from core.database import GoogleSheetsClient
+from services.data_loader import DataLoader
+
+
+def get_loader() -> DataLoader:
+    return DataLoader(sheets_client=GoogleSheetsClient())
 
 router = APIRouter()
 
