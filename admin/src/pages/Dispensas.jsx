@@ -63,8 +63,8 @@ export default function Dispensas() {
 
   // Agrupar activas vs passadas
   const hoje = new Date().toISOString().slice(0,10).split('-').reverse().join('/')
-  const activas = dispensas.filter(d => !d.fim || d.fim >= hoje)
-  const passadas = dispensas.filter(d => d.fim && d.fim < hoje)
+  const activas = dispensas.filter(d => d.activa !== false)
+  const passadas = dispensas.filter(d => d.activa === false)
 
   function handleAdd(e) {
     e.preventDefault()

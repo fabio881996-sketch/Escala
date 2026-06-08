@@ -183,9 +183,13 @@ export default function EscalaGeral() {
   }
 
   function navDia(delta) {
-    const d = new Date(data + 'T00:00:00')
+    const parts = data.split('-')
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]))
     d.setDate(d.getDate() + delta)
-    setData(d.toISOString().slice(0,10))
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth()+1).padStart(2,'0')
+    const dd = String(d.getDate()).padStart(2,'0')
+    setData(`${yyyy}-${mm}-${dd}`)
   }
 
   return (
