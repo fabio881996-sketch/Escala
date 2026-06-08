@@ -412,6 +412,113 @@ async def conf_remunerados(body: dict, current_user: dict = Depends(obter_admin)
 
 
 # ── Efetivo ──────────────────────────────────────────────────
+@router.get("/escala-pdf-completo")
+async def escala_pdf_completo(current_user: dict = Depends(obter_admin)):
+    """Gera PDF com todas as escalas publicadas."""
+    try:
+        import io
+        from fastapi.responses import Response
+        from reportlab.pdfgen import canvas as rl_canvas
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.lib.colors import HexColor
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import base64 as _b64, tempfile as _tmp
+
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+            pdfmetrics.registerFont(TTFont('DejaVu-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+            fn, fn_bold = 'DejaVu', 'DejaVu-Bold'
+        except Exception:
+            fn, fn_bold = 'Helvetica', 'Helvetica-Bold'
+
+        loader = get_loader()
+        dias_pub = loader.carregar_dias_publicados()
+        df_util = loader.carregar_usuarios()
+        df_trocas = loader.carregar_trocas()
+        id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                   for _, r in df_util.iterrows()}
+
+        buf = io.BytesIO()
+        cv = rl_canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+
+        _cab_b64 = os.environ.get("PDF_CABECALHO_B64", "")
+
+        for i, aba in enumerate(sorted(dias_pub)):
+            try:
+                df = loader.carregar_escala(aba)
+            except Exception:
+                continue
+            if df.empty:
+                continue
+
+            if i > 0:
+                cv.showPage()
+
+            y = h - 10*mm
+
+            # Cabeçalho
+            if _cab_b64:
+                try:
+                    _cb = _b64.b64decode(_cab_b64)
+                    with _tmp.NamedTemporaryFile(suffix='.jpg', delete=False) as _tf:
+                        _tf.write(_cb); _cp = _tf.name
+                    cab_w = 80*mm; cab_h = cab_w * (235/398)
+                    cv.drawImage(_cp, 20*mm, h-8*mm-cab_h, width=cab_w, height=cab_h, preserveAspectRatio=True)
+                    os.unlink(_cp)
+                    y = h - 8*mm - cab_h - 6*mm
+                except Exception:
+                    pass
+
+            # Título dia
+            cv.setFont(fn_bold, 12)
+            cv.setFillColor(HexColor('#0f2540'))
+            cv.drawString(20*mm, y, f"ESCALA — {aba}")
+            y -= 10*mm
+
+            # Agrupar por serviço/horário
+            from collections import defaultdict
+            grupos = defaultdict(list)
+            for _, r in df.iterrows():
+                mid = str(r.get('id','')).strip()
+                if not mid: continue
+                serv = str(r.get('serviço','')).strip()
+                hor = str(r.get('horário','')).strip()
+                nome = id_nome.get(mid, mid)
+                grupos[f"{serv}|{hor}"].append(nome)
+
+            cv.setFont(fn_bold, 9)
+            for chave, nomes in sorted(grupos.items()):
+                serv, hor = chave.split('|',1)
+                if not serv: continue
+                cv.setFillColor(HexColor('#0f2540'))
+                label = f"{serv}" + (f" ({hor})" if hor else "")
+                cv.drawString(20*mm, y, label)
+                y -= 5*mm
+                cv.setFont(fn, 9)
+                cv.setFillColor(HexColor('#495057'))
+                linha = ', '.join(nomes)
+                cv.drawString(25*mm, y, linha[:120])
+                y -= 5*mm
+                cv.setFont(fn_bold, 9)
+                if y < 25*mm:
+                    cv.showPage()
+                    y = h - 20*mm
+
+            # Rodapé
+            cv.setFont(fn, 7)
+            cv.setFillColor(HexColor('#adb5bd'))
+            cv.drawRightString(w-20*mm, 12*mm, f"Portal de Escalas GNR — Posto Territorial de Famalicão")
+
+        cv.save()
+        return Response(content=buf.getvalue(), media_type="application/pdf",
+                       headers={"Content-Disposition": "attachment; filename=Escala_Completa.pdf"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/efetivo")
 async def efetivo(current_user: dict = Depends(obter_admin)):
     try:
