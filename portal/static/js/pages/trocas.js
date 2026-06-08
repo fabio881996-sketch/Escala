@@ -186,15 +186,28 @@ const TrocasPage = {
             el.innerHTML = trocas.map(t => {
                 const nomeOrig = t.nome_origem || t.id_origem;
                 const nomeDest = t.nome_destino || t.id_destino;
-                // Após troca: origem vai fazer servico_destino, destino vai fazer servico_origem
-                const avisos = this._consecutivoAviso(nomeOrig, t.servico_destino, nomeDest, t.servico_origem);
+                const isMatar = t.servico_origem === 'MATAR_REMUNERADO';
+                const avisos = isMatar ? [] : this._consecutivoAviso(nomeOrig, t.servico_destino, nomeDest, t.servico_origem);
                 const avisosHtml = avisos.length
                     ? `<div style="background:#FFFBEB;border:1px solid #f59e0b;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:.78rem;color:#b45309;font-weight:600">
                         ${avisos.join('<br>')}
                        </div>` : '';
-                return `
-                <div class="card card-amber">
-                    <div class="card-label">⚖️ Aguarda validação • ${t.data}</div>
+
+                const cardBody = isMatar ? `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
+                        <div style="background:#fefce8;border-radius:8px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:800;color:#854d0e;text-transform:uppercase;margin-bottom:4px">💶 Cede Remunerado</div>
+                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeDest}</div>
+                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Serviço: <b>${t.servico_destino}</b></div>
+                            <div style="font-size:.75rem;color:#94a3b8;margin-top:2px">Mantém o seu serviço</div>
+                        </div>
+                        <div style="background:#f0fdf4;border-radius:8px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:4px">💶 Faz Remunerado</div>
+                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeOrig}</div>
+                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Fica com: <b>${t.servico_destino}</b></div>
+                            <div style="font-size:.75rem;color:#94a3b8;margin-top:2px">Adicional ao seu serviço</div>
+                        </div>
+                    </div>` : `
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
                         <div style="background:#eff6ff;border-radius:8px;padding:10px">
                             <div style="font-size:.65rem;font-weight:800;color:#2563eb;text-transform:uppercase;margin-bottom:4px">📤 Solicita</div>
@@ -208,7 +221,12 @@ const TrocasPage = {
                             <div style="font-size:.75rem;color:#64748b;margin-top:2px">Cede: <b>${t.servico_destino}</b></div>
                             <div style="font-size:.75rem;color:#16a34a;margin-top:2px">Fica com: <b>${t.servico_origem}</b></div>
                         </div>
-                    </div>
+                    </div>`;
+
+                return `
+                <div class="card card-amber">
+                    <div class="card-label">${isMatar ? '💶 Cedência de Remunerado' : '⚖️ Aguarda validação'} • ${t.data}</div>
+                    ${cardBody}
                     ${avisosHtml}
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     <div style="display:flex;gap:8px;margin-top:12px">
@@ -369,8 +387,9 @@ const TrocasPage = {
         if (!milSel) return;
 
         const opt = milSel.options[milSel.selectedIndex];
-        const servicoDestino = opt.dataset.servico || '';
+        const _srvBase = opt.dataset.servico || '';
         const horarioDestino = opt.dataset.horario || '';
+        const servicoDestino = horarioDestino ? `${_srvBase} (${horarioDestino})` : _srvBase;
         const idDestino = milSel.value;
         const obs = obsEl?.value || '';
 
@@ -379,7 +398,8 @@ const TrocasPage = {
         const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
 
         // Serviço origem: para dar_remunerado usar marcador especial
-        let servicoOrigem = meuServico || 'auto';
+        // Incluir horário no serviço origem
+        let servicoOrigem = (meuServico && meuHorario) ? `${meuServico} (${meuHorario})` : (meuServico || 'auto');
         if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
 
         const incluirRem = document.getElementById('incluir-rem')?.checked || false;
