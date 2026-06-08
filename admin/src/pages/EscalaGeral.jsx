@@ -139,6 +139,7 @@ export default function EscalaGeral() {
   const hoje = new Date()
   const [data, setData] = useState(hoje.toISOString().slice(0,10))
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [pdfCompletoLoading, setPdfCompletoLoading] = useState(false)
 
   const dataObj = new Date(data + 'T00:00:00')
   const aba = toAba(dataObj)
@@ -152,6 +153,20 @@ export default function EscalaGeral() {
 
   const entradas = res?.entradas || []
   const g = agrupar(entradas)
+
+  async function downloadPdfCompleto() {
+    setPdfCompletoLoading(true)
+    try {
+      const token = localStorage.getItem('gnr_admin_token')
+      const resp = await fetch(`/admin/api/escala-pdf-completo`, { headers: { Authorization: `Bearer ${token}` } })
+      if (!resp.ok) throw new Error('Erro ao gerar PDF')
+      const blob = await resp.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href=url; a.download=`Escala_Completa.pdf`; a.click()
+      URL.revokeObjectURL(url)
+    } catch(e) { alert('Erro: ' + e.message) }
+    finally { setPdfCompletoLoading(false) }
+  }
 
   async function downloadPdf() {
     setPdfLoading(true)
@@ -184,12 +199,8 @@ export default function EscalaGeral() {
           </p>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-          {[-1,1].map((d,i) => (
-            <button key={i} onClick={() => navDia(d)} style={{
-              width:32, height:32, border:'1px solid #dee2e6', borderRadius:6, background:'#fff',
-              cursor:'pointer', fontSize:16, color:'#6c757d', display:'flex', alignItems:'center', justifyContent:'center'
-            }}>{d<0?'‹':'›'}</button>
-          ))}
+          <button onClick={() => navDia(-1)} style={{ width:32, height:32, border:'1px solid #dee2e6', borderRadius:6, background:'#fff', cursor:'pointer', fontSize:16, color:'#6c757d', display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+          <button onClick={() => navDia(1)} style={{ width:32, height:32, border:'1px solid #dee2e6', borderRadius:6, background:'#fff', cursor:'pointer', fontSize:16, color:'#6c757d', display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
           <input type="date" value={data} onChange={e => setData(e.target.value)} style={{
             padding:'5px 10px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13,
             background:'#fff', color:'#212529', outline:'none'
@@ -199,7 +210,14 @@ export default function EscalaGeral() {
             border:'1px solid #dee2e6', borderRadius:6, background:'#fff', cursor:'pointer',
             fontSize:13, color:'#495057', fontWeight:500, opacity: (!entradas.length || pdfLoading) ? .4 : 1
           }}>
-            {pdfLoading ? '⏳' : '↓'} PDF
+            {pdfLoading ? '⏳' : '↓'} PDF Dia
+          </button>
+          <button onClick={downloadPdfCompleto} disabled={pdfCompletoLoading} style={{
+            display:'flex', alignItems:'center', gap:6, padding:'6px 14px',
+            border:'1px solid #dee2e6', borderRadius:6, background:'#fff', cursor:'pointer',
+            fontSize:13, color:'#495057', fontWeight:500, opacity: pdfCompletoLoading ? .4 : 1
+          }}>
+            {pdfCompletoLoading ? '⏳' : '↓'} PDF Completo
           </button>
         </div>
       </div>
