@@ -9,7 +9,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from portal.api import auth, escala, trocas, utilizadores, notificacoes, ferias, calendar
-from portal.api import admin as admin_api
+try:
+    from portal.api import admin as admin_api
+    _admin_ok = True
+except ImportError:
+    _admin_ok = False
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +36,8 @@ app.include_router(utilizadores.router,   prefix="/api/utilizadores",  tags=["ut
 app.include_router(ferias.router,         prefix="/api/ferias",        tags=["ferias"])
 app.include_router(calendar.router,       prefix="/api/calendar",      tags=["calendar"])
 app.include_router(notificacoes.router,   prefix="/api/notificacoes",  tags=["notificacoes"])
-app.include_router(admin_api.router,      prefix="/admin/api",         tags=["admin"])
+if _admin_ok:
+    app.include_router(admin_api.router, prefix="/admin/api", tags=["admin"])
 
 
 @app.on_event("startup")
