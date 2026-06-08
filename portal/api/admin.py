@@ -16,6 +16,189 @@ def get_loader() -> DataLoader:
 router = APIRouter()
 
 
+# ── Escala Geral ─────────────────────────────────────────────
+@router.get("/escala-dia/{aba}")
+async def escala_dia_admin(aba: str, current_user: dict = Depends(obter_admin)):
+    """Devolve escala de um dia com trocas aplicadas e nomes formatados."""
+    try:
+        from portal.api.escala import _get_dia_com_trocas
+        data = await _get_dia_com_trocas(aba)
+        return data
+    except Exception:
+        # Fallback directo
+        loader = get_loader()
+        df = loader.carregar_escala(aba)
+        df_util = loader.carregar_usuarios()
+        id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                   for _, r in df_util.iterrows()}
+        if df.empty:
+            return {"entradas": [], "data": aba}
+        entradas = []
+        for _, r in df.iterrows():
+            mid = str(r.get("id","")).strip()
+            entradas.append({
+                "id":       mid,
+                "nome":     id_nome.get(mid, mid),
+                "servico":  str(r.get("serviço","")).strip(),
+                "horario":  str(r.get("horário","")).strip(),
+                "viatura":  str(r.get("viatura","")).strip(),
+                "radio":    str(r.get("rádio","")).strip(),
+                "indicativo": str(r.get("indicativo rádio","")).strip(),
+                "giro":     str(r.get("giro","")).strip(),
+                "obs":      str(r.get("observações","")).strip(),
+            })
+        return {"entradas": entradas, "data": aba}
+
+
+@router.get("/escala-pdf/{aba}")
+async def escala_pdf(aba: str, current_user: dict = Depends(obter_admin)):
+    """Gera e devolve PDF da escala de um dia."""
+    try:
+        import io, sys
+        from fastapi.responses import Response
+        # Importar função do app.py (Streamlit) — se não disponível, gerar simples
+        sys.path.insert(0, '/app')
+        loader = get_loader()
+        df = loader.carregar_escala(aba)
+        df_util = loader.carregar_usuarios()
+        df_trocas = loader.carregar_trocas()
+
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Escala não encontrada")
+
+        # Aplicar trocas
+        data_fmt = f"{aba[3:5]}/{aba[:2]}/{__import__('datetime').datetime.now().year}"
+        df_at = df.copy()
+        df_at['id_disp'] = df_at['id'].astype(str)
+        if not df_trocas.empty:
+            import re
+            tr_v = df_trocas[
+                (df_trocas['status'] == 'Aprovada') &
+                (df_trocas['servico_origem'] != 'MATAR_REMUNERADO')
+            ]
+            for _, t in tr_v.iterrows():
+                m_o = df_at['id'].astype(str) == str(t['id_origem'])
+                if m_o.any():
+                    df_at.loc[m_o, 'id_disp'] = f"{t['id_destino']} 🔄 {t['id_origem']}"
+                m_d = df_at['id'].astype(str) == str(t['id_destino'])
+                if m_d.any():
+                    df_at.loc[m_d, 'id_disp'] = f"{t['id_origem']} 🔄 {t['id_destino']}"
+
+        # Gerar PDF simples com ReportLab
+        from reportlab.pdfgen import canvas as rl_canvas
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units import mm
+        from reportlab.lib.colors import HexColor
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import tempfile, base64 as _b64
+
+        try:
+            pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+            pdfmetrics.registerFont(TTFont('DejaVu-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+            fn, fn_bold = 'DejaVu', 'DejaVu-Bold'
+        except Exception:
+            fn, fn_bold = 'Helvetica', 'Helvetica-Bold'
+
+        id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                   for _, r in df_util.iterrows()}
+
+        buf = io.BytesIO()
+        cv = rl_canvas.Canvas(buf, pagesize=A4)
+        w, h = A4
+
+        # Cabeçalho
+        _cab_b64 = os.environ.get("PDF_CABECALHO_B64", "")
+        y = h - 10*mm
+        if _cab_b64:
+            try:
+                import tempfile as _tmp
+                _cb = _b64.b64decode(_cab_b64)
+                with _tmp.NamedTemporaryFile(suffix='.jpg', delete=False) as _tf:
+                    _tf.write(_cb); _cp = _tf.name
+                cab_w = 170*mm; cab_h = cab_w * (235/398)
+                cv.drawImage(_cp, 20*mm, h-8*mm-cab_h, width=cab_w, height=cab_h, preserveAspectRatio=True)
+                os.unlink(_cp)
+                y = h - 8*mm - cab_h - 8*mm
+            except Exception:
+                pass
+
+        # Título
+        cv.setFont(fn_bold, 14)
+        cv.setFillColor(HexColor('#0B1929'))
+        dia_fmt = f"{aba[3:5]}/{aba[:2]}"
+        cv.drawCentredString(w/2, y - 8*mm, f"ESCALA — {dia_fmt}")
+        y -= 20*mm
+
+        # Agrupar por serviço
+        from collections import defaultdict
+        grupos = defaultdict(list)
+        for _, r in df_at.iterrows():
+            serv = str(r.get('serviço','')).strip()
+            hor  = str(r.get('horário','')).strip()
+            mid  = str(r.get('id','')).strip()
+            nome = id_nome.get(mid, mid)
+            id_d = str(r.get('id_disp', mid)).strip()
+            grupos[f"{serv}|{hor}"].append(f"{nome} ({id_d})")
+
+        cv.setFont(fn_bold, 10)
+        for chave, militares in sorted(grupos.items()):
+            serv, hor = chave.split('|', 1)
+            if not serv: continue
+            cv.setFillColor(HexColor('#0B1929'))
+            cv.setFont(fn_bold, 9)
+            label = f"{serv}" + (f" — {hor}" if hor else "")
+            cv.drawString(20*mm, y, label)
+            y -= 5*mm
+            cv.setFont(fn, 9)
+            cv.setFillColor(HexColor('#334155'))
+            for m in militares:
+                cv.drawString(25*mm, y, m)
+                y -= 5*mm
+            y -= 2*mm
+            if y < 30*mm:
+                cv.showPage()
+                y = h - 20*mm
+
+        cv.save()
+        pdf_bytes = buf.getvalue()
+        return Response(content=pdf_bytes, media_type="application/pdf",
+                       headers={"Content-Disposition": f"attachment; filename=Escala_{aba}.pdf"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Lista abas ───────────────────────────────────────────────
+@router.get("/lista-abas")
+async def lista_abas(current_user: dict = Depends(obter_admin)):
+    try:
+        loader = get_loader()
+        abas = loader.carregar_lista_abas()
+        return {"abas": abas}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Despublicar ───────────────────────────────────────────────
+@router.post("/despublicar/{aba}")
+async def despublicar(aba: str, current_user: dict = Depends(obter_admin)):
+    try:
+        from core.database import GoogleSheetsClient
+        sh = GoogleSheetsClient().get_spreadsheet()
+        ws_pub = sh.worksheet("dias_publicados")
+        vals = ws_pub.col_values(1)
+        for i, v in enumerate(vals, start=1):
+            if str(v).strip() == aba:
+                ws_pub.delete_rows(i)
+                get_loader().limpar_cache()
+                return {"ok": True}
+        return {"ok": True, "msg": "Não encontrado"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Efetivo ──────────────────────────────────────────────────
 @router.get("/efetivo")
 async def efetivo(current_user: dict = Depends(obter_admin)):
