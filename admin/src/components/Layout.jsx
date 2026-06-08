@@ -19,71 +19,74 @@ export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  function handleLogout() {
-    logout()
-    navigate('/')
-  }
-
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
+    <div style={{ display:'flex', height:'100vh', overflow:'hidden', background:'#f8f9fa' }}>
       {/* Sidebar */}
-      <aside className="w-60 bg-[#0B1929] flex flex-col shrink-0">
+      <aside style={{
+        width:220, background:'#0f2540', display:'flex', flexDirection:'column',
+        flexShrink:0, borderRight:'1px solid #1a3a5c'
+      }}>
         {/* Logo */}
-        <div className="px-5 py-5 border-b border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#2E7FD4] to-[#1A3A5C] flex items-center justify-center text-lg shadow-lg">
-              🚓
-            </div>
+        <div style={{ padding:'20px 16px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{
+              width:36, height:36, borderRadius:8, background:'rgba(46,127,212,0.25)',
+              display:'flex', alignItems:'center', justifyContent:'center', fontSize:18
+            }}>🚓</div>
             <div>
-              <div className="text-white font-display font-bold text-sm leading-tight">Portal Admin</div>
-              <div className="text-[#C9A84C] text-[10px] font-medium tracking-wider uppercase">GNR Famalicão</div>
+              <div style={{ color:'#fff', fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:13, lineHeight:1.2 }}>Portal Admin</div>
+              <div style={{ color:'#c9a84c', fontSize:10, fontWeight:600, letterSpacing:'0.06em', textTransform:'uppercase' }}>GNR Famalicão</div>
             </div>
           </div>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
+        <nav style={{ flex:1, overflowY:'auto', padding:'10px 8px' }}>
           {NAV.map(({ to, icon, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group
-                ${isActive
-                  ? 'bg-[#2E7FD4] text-white font-medium shadow-lg shadow-[#2E7FD4]/20'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-                }`
-              }
-            >
-              <span className="text-base w-5 text-center">{icon}</span>
-              <span className="font-display">{label}</span>
+            <NavLink key={to} to={to} style={({ isActive }) => ({
+              display:'flex', alignItems:'center', gap:10,
+              padding:'8px 10px', borderRadius:6, marginBottom:2,
+              textDecoration:'none', fontSize:13, transition:'all 0.1s',
+              background: isActive ? '#2e7fd4' : 'transparent',
+              color: isActive ? '#fff' : 'rgba(255,255,255,0.6)',
+              fontWeight: isActive ? 600 : 400,
+            })}>
+              <span style={{ fontSize:15, width:20, textAlign:'center' }}>{icon}</span>
+              <span style={{ fontFamily:"'Syne',sans-serif" }}>{label}</span>
             </NavLink>
           ))}
         </nav>
 
         {/* User */}
-        <div className="px-3 py-4 border-t border-white/5">
-          <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/5">
-            <div className="w-7 h-7 rounded-full bg-[#2E7FD4]/20 flex items-center justify-center text-[#2E7FD4] text-xs font-bold">
+        <div style={{ padding:'12px 8px', borderTop:'1px solid rgba(255,255,255,0.07)' }}>
+          <div style={{
+            display:'flex', alignItems:'center', gap:10, padding:'8px 10px',
+            borderRadius:6, background:'rgba(255,255,255,0.05)'
+          }}>
+            <div style={{
+              width:28, height:28, borderRadius:'50%', background:'rgba(46,127,212,0.3)',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              color:'#7bb8f0', fontSize:11, fontWeight:700
+            }}>
               {user?.nome?.charAt(0) || 'A'}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-white text-xs font-medium truncate">{user?.nome || 'Admin'}</div>
-              <div className="text-slate-500 text-[10px]">Administrador</div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ color:'#fff', fontSize:12, fontWeight:500, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                {user?.nome?.split(' ')[0] || 'Admin'}
+              </div>
+              <div style={{ color:'rgba(255,255,255,0.4)', fontSize:10 }}>Administrador</div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="text-slate-500 hover:text-red-400 transition-colors text-sm"
-              title="Sair"
-            >
-              ⏻
-            </button>
+            <button onClick={() => { logout(); navigate('/') }} style={{
+              background:'none', border:'none', cursor:'pointer',
+              color:'rgba(255,255,255,0.35)', fontSize:16, padding:4,
+              borderRadius:4, transition:'color 0.1s'
+            }} title="Sair">⏻</button>
           </div>
         </div>
       </aside>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto">
+      <main style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column' }}>
         <Outlet />
       </main>
     </div>

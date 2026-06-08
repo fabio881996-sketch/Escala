@@ -1,164 +1,139 @@
-// ── Page Header ──────────────────────────────────────────────
+const H = { background:'#fff', borderBottom:'1px solid #dee2e6', padding:'14px 28px', display:'flex', alignItems:'center', justifyContent:'space-between' }
+const HDR_TXT = { fontFamily:"'Syne',sans-serif", fontSize:20, fontWeight:700, color:'#0f2540', margin:0 }
+const SUB_TXT = { fontSize:13, color:'#6c757d', margin:'2px 0 0' }
+
 export function PageHeader({ icon, title, subtitle, actions }) {
   return (
-    <div className="flex items-start justify-between px-8 py-6 border-b border-slate-200 bg-white">
-      <div className="flex items-center gap-4">
-        <div className="w-10 h-10 rounded-xl bg-[#0B1929]/5 flex items-center justify-center text-xl">
-          {icon}
-        </div>
+    <div style={H}>
+      <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+        <div style={{ width:40, height:40, borderRadius:10, background:'#f1f3f5', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>{icon}</div>
         <div>
-          <h1 className="font-display text-xl font-bold text-[#0B1929]">{title}</h1>
-          {subtitle && <p className="text-sm text-slate-500 mt-0.5">{subtitle}</p>}
+          <h1 style={HDR_TXT}>{title}</h1>
+          {subtitle && <p style={SUB_TXT}>{subtitle}</p>}
         </div>
       </div>
-      {actions && <div className="flex items-center gap-2">{actions}</div>}
+      {actions && <div style={{ display:'flex', alignItems:'center', gap:8 }}>{actions}</div>}
     </div>
   )
 }
 
-// ── Loading ───────────────────────────────────────────────────
 export function Loading({ text = 'A carregar...' }) {
   return (
-    <div className="flex flex-col items-center justify-center py-24 gap-3">
-      <svg className="animate-spin h-8 w-8 text-[#2E7FD4]" viewBox="0 0 24 24" fill="none">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'80px 0', gap:12, color:'#6c757d' }}>
+      <svg style={{ animation:'spin 1s linear infinite', width:28, height:28 }} viewBox="0 0 24 24" fill="none">
+        <style>{'@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}'}</style>
+        <circle cx="12" cy="12" r="10" stroke="#dee2e6" strokeWidth="3"/>
+        <path fill="#2e7fd4" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
       </svg>
-      <span className="text-sm text-slate-500">{text}</span>
+      <span style={{ fontSize:13 }}>{text}</span>
     </div>
   )
 }
 
-// ── Error ─────────────────────────────────────────────────────
 export function ErrorBox({ message }) {
   return (
-    <div className="mx-8 mt-6 flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
-      <span className="text-lg">⚠️</span>
-      <span>{message}</span>
+    <div style={{ margin:'16px 24px', display:'flex', alignItems:'center', gap:10, padding:'12px 16px', background:'#fff5f5', border:'1px solid #ffc9c9', borderRadius:8, color:'#c92a2a', fontSize:13 }}>
+      ⚠️ {message}
     </div>
   )
 }
 
-// ── Card ──────────────────────────────────────────────────────
-export function Card({ children, className = '' }) {
+export function Card({ children, className, style = {} }) {
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm ${className}`}>
+    <div style={{ background:'#fff', borderRadius:8, border:'1px solid #dee2e6', ...style }}>
       {children}
     </div>
   )
 }
 
-// ── Badge ─────────────────────────────────────────────────────
 export function Badge({ children, color = 'blue' }) {
   const colors = {
-    blue:   'bg-blue-50 text-blue-700 border-blue-200',
-    green:  'bg-green-50 text-green-700 border-green-200',
-    red:    'bg-red-50 text-red-700 border-red-200',
-    amber:  'bg-amber-50 text-amber-700 border-amber-200',
-    slate:  'bg-slate-100 text-slate-600 border-slate-200',
-    navy:   'bg-[#0B1929]/5 text-[#0B1929] border-[#0B1929]/10',
+    blue:  { bg:'#e7f5ff', color:'#1971c2', border:'#a5d8ff' },
+    green: { bg:'#ebfbee', color:'#2f9e44', border:'#b2f2bb' },
+    red:   { bg:'#fff5f5', color:'#c92a2a', border:'#ffc9c9' },
+    amber: { bg:'#fff9db', color:'#e67700', border:'#ffec99' },
+    slate: { bg:'#f1f3f5', color:'#495057', border:'#dee2e6' },
+    navy:  { bg:'#e7f5ff', color:'#0f2540', border:'#a5d8ff' },
   }
+  const c = colors[color] || colors.slate
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${colors[color]}`}>
+    <span style={{ display:'inline-flex', alignItems:'center', padding:'2px 8px', borderRadius:4, fontSize:11, fontWeight:600, background:c.bg, color:c.color, border:`1px solid ${c.border}` }}>
       {children}
     </span>
   )
 }
 
-// ── Button ────────────────────────────────────────────────────
-export function Button({ children, onClick, variant = 'primary', size = 'md', disabled, loading, className = '' }) {
+export function Button({ children, onClick, variant = 'primary', size = 'md', disabled, loading, type = 'button', className, style: extraStyle = {} }) {
   const variants = {
-    primary:   'bg-[#2E7FD4] hover:bg-[#1A6BC4] text-white shadow-sm shadow-[#2E7FD4]/20',
-    secondary: 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-200',
-    danger:    'bg-red-600 hover:bg-red-700 text-white',
-    ghost:     'hover:bg-slate-100 text-slate-600',
-    success:   'bg-green-600 hover:bg-green-700 text-white',
+    primary: { background:'#2e7fd4', color:'#fff', border:'1px solid #2e7fd4' },
+    secondary: { background:'#fff', color:'#495057', border:'1px solid #dee2e6' },
+    danger: { background:'#c92a2a', color:'#fff', border:'1px solid #c92a2a' },
+    success: { background:'#2f9e44', color:'#fff', border:'1px solid #2f9e44' },
+    ghost: { background:'transparent', color:'#6c757d', border:'1px solid transparent' },
   }
-  const sizes = {
-    sm: 'px-3 py-1.5 text-xs',
-    md: 'px-4 py-2 text-sm',
-    lg: 'px-5 py-2.5 text-base',
-  }
+  const sizes = { sm: { padding:'5px 12px', fontSize:12 }, md: { padding:'7px 16px', fontSize:13 }, lg: { padding:'9px 20px', fontSize:14 } }
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed font-display
-        ${variants[variant]} ${sizes[size]} ${className}`}
-    >
-      {loading && (
-        <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-        </svg>
-      )}
+    <button type={type} onClick={onClick} disabled={disabled || loading} style={{
+      display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
+      fontFamily:"'Syne',sans-serif", fontWeight:600, borderRadius:6, cursor:'pointer',
+      transition:'all 0.1s', opacity: (disabled||loading) ? .5 : 1,
+      ...variants[variant], ...sizes[size], ...extraStyle
+    }}>
+      {loading && <svg style={{ animation:'spin 1s linear infinite', width:12, height:12 }} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="4"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
       {children}
     </button>
   )
 }
 
-// ── Input ─────────────────────────────────────────────────────
 export function Input({ label, ...props }) {
   return (
-    <div className="space-y-1">
-      {label && <label className="block text-xs font-medium text-slate-600 tracking-wide uppercase">{label}</label>}
-      <input
-        {...props}
-        className={`w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 
-          focus:outline-none focus:border-[#2E7FD4] focus:ring-2 focus:ring-[#2E7FD4]/10 transition-all
-          ${props.className || ''}`}
-      />
+    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+      {label && <label style={{ fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.06em' }}>{label}</label>}
+      <input {...props} style={{ padding:'7px 10px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13, color:'#212529', background:'#fff', outline:'none', ...props.style }} />
     </div>
   )
 }
 
-// ── Select ────────────────────────────────────────────────────
 export function Select({ label, children, ...props }) {
   return (
-    <div className="space-y-1">
-      {label && <label className="block text-xs font-medium text-slate-600 tracking-wide uppercase">{label}</label>}
-      <select
-        {...props}
-        className={`w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm text-slate-800 
-          focus:outline-none focus:border-[#2E7FD4] focus:ring-2 focus:ring-[#2E7FD4]/10 transition-all
-          ${props.className || ''}`}
-      >
+    <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+      {label && <label style={{ fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.06em' }}>{label}</label>}
+      <select {...props} style={{ padding:'7px 10px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13, color:'#212529', background:'#fff', outline:'none', ...props.style }}>
         {children}
       </select>
     </div>
   )
 }
 
-// ── Stat Card ─────────────────────────────────────────────────
 export function StatCard({ icon, label, value, sub, color = 'blue' }) {
   const colors = {
-    blue:  'from-[#2E7FD4]/10 to-[#2E7FD4]/5 border-[#2E7FD4]/20',
-    green: 'from-green-50 to-green-50/50 border-green-200',
-    amber: 'from-amber-50 to-amber-50/50 border-amber-200',
-    navy:  'from-[#0B1929]/5 to-[#0B1929]/3 border-[#0B1929]/10',
+    blue:  { bg:'#e7f5ff', border:'#a5d8ff', val:'#1971c2' },
+    green: { bg:'#ebfbee', border:'#b2f2bb', val:'#2f9e44' },
+    amber: { bg:'#fff9db', border:'#ffec99', val:'#e67700' },
+    navy:  { bg:'#e9ecef', border:'#ced4da', val:'#0f2540' },
   }
+  const c = colors[color] || colors.blue
   return (
-    <div className={`bg-gradient-to-br ${colors[color]} border rounded-xl p-5`}>
-      <div className="flex items-start justify-between">
+    <div style={{ background:c.bg, border:`1px solid ${c.border}`, borderRadius:8, padding:'16px 20px' }}>
+      <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between' }}>
         <div>
-          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p>
-          <p className="text-2xl font-display font-bold text-[#0B1929] mt-1">{value}</p>
-          {sub && <p className="text-xs text-slate-400 mt-1">{sub}</p>}
+          <p style={{ fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.06em', margin:'0 0 6px' }}>{label}</p>
+          <p style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:700, color:c.val, margin:0 }}>{value}</p>
+          {sub && <p style={{ fontSize:11, color:'#6c757d', margin:'4px 0 0' }}>{sub}</p>}
         </div>
-        <span className="text-2xl">{icon}</span>
+        <span style={{ fontSize:24, opacity:.7 }}>{icon}</span>
       </div>
     </div>
   )
 }
 
-// ── Empty State ───────────────────────────────────────────────
 export function Empty({ icon = '📭', title, subtitle }) {
   return (
-    <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-      <span className="text-4xl opacity-50">{icon}</span>
-      <div>
-        <p className="font-display font-semibold text-slate-600">{title}</p>
-        {subtitle && <p className="text-sm text-slate-400 mt-1">{subtitle}</p>}
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'60px 0', gap:12, opacity:.5 }}>
+      <span style={{ fontSize:40 }}>{icon}</span>
+      <div style={{ textAlign:'center' }}>
+        <p style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, color:'#495057', margin:0 }}>{title}</p>
+        {subtitle && <p style={{ fontSize:13, color:'#6c757d', margin:'4px 0 0' }}>{subtitle}</p>}
       </div>
     </div>
   )
