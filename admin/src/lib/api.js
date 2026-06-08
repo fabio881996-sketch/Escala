@@ -32,7 +32,7 @@ export const api = {
   // Auth
   login: async (pin) => {
     const form = new URLSearchParams()
-    form.append('username', 'pin')
+    form.append('username', pin)
     form.append('password', pin)
     const res = await fetch('/api/auth/login', { method: 'POST', body: form })
     if (!res.ok) {
