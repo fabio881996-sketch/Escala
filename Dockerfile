@@ -3,7 +3,7 @@ FROM node:20-slim AS admin-build
 
 WORKDIR /admin
 COPY admin/package*.json ./
-RUN npm ci
+RUN npm install
 COPY admin/ .
 RUN npm run build
 
