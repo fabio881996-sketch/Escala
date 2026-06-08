@@ -30,7 +30,17 @@ export const api = {
   delete: (path)       => request(path, { method: 'DELETE' }),
 
   // Auth
-  login: (pin) => request('/api/auth/login-pin', { method: 'POST', body: JSON.stringify({ pin }) }),
+  login: async (pin) => {
+    const form = new URLSearchParams()
+    form.append('username', 'pin')
+    form.append('password', pin)
+    const res = await fetch('/api/auth/login', { method: 'POST', body: form })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || 'PIN incorreto')
+    }
+    return res.json()
+  },
 
   // Admin
   utilizadores:         ()          => request('/admin/api/utilizadores'),
