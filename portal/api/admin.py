@@ -199,6 +199,218 @@ async def despublicar(aba: str, current_user: dict = Depends(obter_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Gerar Escala ─────────────────────────────────────────────
+@router.post("/gerar-escala")
+async def gerar_escala_endpoint(body: dict, current_user: dict = Depends(obter_admin)):
+    """Gera escala automática para um ou mais dias."""
+    try:
+        # Importar a lógica de geração do Streamlit
+        import sys
+        sys.path.insert(0, '/app')
+        from portal.api.escala import gerar_escala_auto_dia
+        
+        dias = body.get("dias", [])
+        resultados = []
+        for aba in dias:
+            try:
+                res = await gerar_escala_auto_dia(aba)
+                resultados.append(res)
+            except Exception as e:
+                resultados.append({"aba": aba, "erro": str(e), "escalados": [], "avisos": []})
+        
+        return {"resultados": resultados}
+    except ImportError:
+        # Fallback: retornar estrutura vazia com mensagem
+        raise HTTPException(status_code=501, detail="Endpoint gerar-escala em implementação — use o Streamlit por agora")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/guardar-escala")
+async def guardar_escala_endpoint(body: dict, current_user: dict = Depends(obter_admin)):
+    """Guarda escala gerada no Sheets."""
+    try:
+        raise HTTPException(status_code=501, detail="Endpoint guardar-escala em implementação — use o Streamlit por agora")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Remunerados calcular/confirmar ──────────────────────────
+@router.post("/remunerados/calcular")
+async def calc_remunerados(body: dict, current_user: dict = Depends(obter_admin)):
+    """Calcula nomeação de remunerados multi-slot."""
+    try:
+        import re
+        loader = get_loader()
+        df_dia = loader.carregar_escala(body["aba"])
+        df_util = loader.carregar_usuarios()
+        df_trocas = loader.carregar_trocas()
+        df_ord_rem = loader.carregar_ordem_remunerados()
+        df_ferias = loader.carregar_ferias()
+        df_licencas = loader.carregar_licencas()
+        feriados = loader.carregar_feriados()
+
+        from datetime import datetime as _dt
+        dt_rem = _dt.strptime(body["data"], "%d/%m/%Y")
+        is_fds = dt_rem.weekday() >= 5
+
+        id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                   for _, r in df_util.iterrows()}
+
+        def _norm(t): return str(t).lower().strip()
+        def _parse_h(h):
+            try:
+                p = str(h).strip().split('-')
+                return int(p[0])*60, int(p[1])*60
+            except: return None, None
+
+        def _cols_tab(tab):
+            if tab == "B": return "total_ano_b","ultimo_b"
+            elif is_fds: return "total_ano_a_fds","ultimo_a_fds"
+            else: return "total_ano_a_semana","ultimo_a_semana"
+
+        _IMP_ABS = r'ferias|licen|convalesc|fcaa|cter|dilig|pronto'
+        militares_de_folga, servicos_dia, ausentes_dia = set(), {}, set()
+        if not df_dia.empty:
+            for _, row in df_dia.iterrows():
+                mid = str(row.get("id","")).strip()
+                serv = str(row.get("serviço","")).strip()
+                hor  = str(row.get("horário","")).strip()
+                sn = _norm(serv)
+                if re.search(r'folga semanal|folga complementar', sn): militares_de_folga.add(mid)
+                elif re.search(_IMP_ABS, sn): ausentes_dia.add(mid)
+                elif not re.search(r'remu|grat', sn):
+                    hi, hf = _parse_h(hor)
+                    servicos_dia.setdefault(mid,[]).append((hi,hf,serv))
+        for mid in (df_util["id"].astype(str).str.strip() if not df_util.empty else []):
+            # férias
+            pass
+
+        def _pode(row_r, mid, slot, ja_nom):
+            if mid in ausentes_dia: return False
+            hi_n, hf_n = _parse_h(slot["hor"])
+            todos = list(servicos_dia.get(mid,[]))
+            for (si,mi) in ja_nom:
+                if mi == mid:
+                    sp = slots_p[si]
+                    hi2,hf2 = _parse_h(sp["hor"])
+                    todos.append((hi2,hf2,f"Rem {sp['hor']}"))
+            for hi_s,hf_s,_ in todos:
+                if None in (hi_s,hf_s,hi_n,hf_n): continue
+                e1=hf_s if hf_s>hi_s else hf_s+1440
+                e2=hf_n if hf_n>hi_n else hf_n+1440
+                if hi_s<e2 and hi_n<e1: return False
+            prescinde = str(row_r.get("prescinde_descanso","")).lower() in ("true","1","sim")
+            if not prescinde:
+                for hi_s,hf_s,_ in todos:
+                    if None in (hi_s,hf_s,hi_n,hf_n): continue
+                    fim_s=hf_s if hf_s>hi_s else hf_s+1440
+                    fim_n=hf_n if hf_n>hi_n else hf_n+1440
+                    d1=(hi_n+1440-fim_s)%1440
+                    d2=(hi_s+1440-fim_n)%1440
+                    at = re.compile(r'atendimento|apoio', re.I)
+                    if not (d1>=480 or d2>=480) and not at.search(_) if len(_:=_)>0 else True:
+                        if not (d1>=480 or d2>=480): return False
+            return True
+
+        import pandas as pd
+        slots_p = body.get("slots",[])
+        resultados = []
+        ja_nom = []
+
+        for si, slot in enumerate(slots_p):
+            if not slot.get("hor"): continue
+            col_t, col_u = _cols_tab(slot.get("tab","A"))
+            for col in [col_t,col_u]:
+                if col not in df_ord_rem.columns: df_ord_rem[col]=""
+            df_ord_rem[col_t] = pd.to_numeric(df_ord_rem[col_t],errors='coerce').fillna(0)
+            df_ord_rem[col_u] = pd.to_datetime(df_ord_rem[col_u],dayfirst=True,errors='coerce')
+            df_disp = df_ord_rem[df_ord_rem["disponivel"].astype(str).str.lower().isin(["true","1","sim"])].copy()
+            df_disp_s = df_disp.sort_values([col_u,col_t],ascending=[True,True],na_position='first')
+
+            nomeados, avisos, skipped = [], [], []
+
+            def _nomear(filtro_fn, label_fn, aviso=False):
+                for _, row_r in df_disp_s.iterrows():
+                    if len(nomeados) >= slot["n"]: break
+                    mid = str(row_r.get("id","")).strip()
+                    if not mid or mid in [n["id"] for n in nomeados]: continue
+                    if not filtro_fn(row_r, mid): continue
+                    sk = []
+                    if _pode(row_r, mid, slot, ja_nom):
+                        if aviso: avisos.append(f"⚠️ <b>{id_nome.get(mid,mid)}</b> nomeado fora dos voluntários")
+                        nomeados.append({"id":mid,"nome":id_nome.get(mid,mid),"grupo":label_fn(mid),"total":int(row_r[col_t])})
+                        ja_nom.append((si,mid))
+                    else:
+                        skipped.extend(sk)
+
+            vol = lambda r,m: str(r.get("voluntario","")).lower() in ("true","1","sim")
+            folga_ok = lambda r,m: str(r.get("folga","")).lower() in ("true","1","sim")
+            ja_n = lambda m: any(m==mi for _,mi in ja_nom)
+
+            _nomear(lambda r,m: vol(r,m) and m not in ausentes_dia and m not in militares_de_folga and not ja_n(m),
+                    lambda m: "Voluntário c/ serviço" if m in servicos_dia else "Voluntário disponível")
+            _nomear(lambda r,m: vol(r,m) and m in militares_de_folga and folga_ok(r,m) and m not in ausentes_dia and not ja_n(m),
+                    lambda m: "Voluntário de folga")
+            _nomear(lambda r,m: not vol(r,m) and m not in ausentes_dia and m not in militares_de_folga and not ja_n(m),
+                    lambda m: "Não voluntário", aviso=True)
+            _nomear(lambda r,m: vol(r,m) and m not in ausentes_dia and m not in militares_de_folga and ja_n(m),
+                    lambda m: "Voluntário (já nomeado noutro remunerado)")
+            _nomear(lambda r,m: vol(r,m) and m in militares_de_folga and folga_ok(r,m) and m not in ausentes_dia and ja_n(m),
+                    lambda m: "Voluntário de folga (já nomeado noutro remunerado)")
+
+            resultados.append({"slot":slot,"nomeados":nomeados,"avisos":avisos,"skipped":skipped})
+
+        return {"resultados": resultados, "data": body["data"], "aba": body["aba"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/remunerados/confirmar")
+async def conf_remunerados(body: dict, current_user: dict = Depends(obter_admin)):
+    """Confirma nomeação e escreve na escala."""
+    try:
+        import requests as _req
+        secret = os.environ.get("RAILWAY_NOTIFY_SECRET","")
+        railway_url = "https://portal-escalas-gnr-production.up.railway.app"
+
+        from core.database import GoogleSheetsClient
+        sh = GoogleSheetsClient().get_spreadsheet()
+        resultado = body.get("resultado",{})
+
+        for res in resultado.get("resultados",[]):
+            if not res.get("nomeados"): continue
+            slot = res["slot"]
+            ids = [n["id"] for n in res["nomeados"]]
+            aba = resultado["aba"]
+            ws_dia = sh.worksheet(aba)
+            ws_dia.append_row([
+                ";".join(ids),
+                f"Svç Remunerado - Tabela {slot.get('tab','A')}",
+                slot["hor"], "", "", "", slot.get("obs",""),
+            ])
+            # Atualizar ordem_remunerados
+            loader = get_loader()
+            df_ord = loader.carregar_ordem_remunerados()
+            # Notificar
+            try:
+                _req.post(f"{railway_url}/api/notificacoes/notificar-interno", json={
+                    "secret": secret,
+                    "u_ids": ids,
+                    "titulo": "💶 Nomeação para Remunerado",
+                    "corpo": f"Foste nomeado para Remunerado Tabela {slot.get('tab','A')} — {slot['hor']} — {resultado['data']}.",
+                    "url": "/home", "tag": "remunerado",
+                }, timeout=5)
+            except: pass
+
+        get_loader().limpar_cache()
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Efetivo ──────────────────────────────────────────────────
 @router.get("/efetivo")
 async def efetivo(current_user: dict = Depends(obter_admin)):
