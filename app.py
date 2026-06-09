@@ -6082,16 +6082,34 @@ else:
                             ws_hist = sh_conf.worksheet("historico_remunerados")
                             upds_ord = []
 
+                            # Ler linhas actuais para verificar duplicados
+                            linhas_dia_rem = ws_dia_rem.get_all_values()
+                            hdrs_dia_rem = [_nc(h) for h in (linhas_dia_rem[0] if linhas_dia_rem else [])]
+                            col_serv_r = hdrs_dia_rem.index('servico') if 'servico' in hdrs_dia_rem else (hdrs_dia_rem.index('serviço') if 'serviço' in hdrs_dia_rem else 1)
+                            col_hor_r  = hdrs_dia_rem.index('horario') if 'horario' in hdrs_dia_rem else (hdrs_dia_rem.index('horário') if 'horário' in hdrs_dia_rem else 2)
+
                             for res in dados_rem['resultados']:
                                 if not res['nomeados']: continue
                                 slot = res['slot']
                                 ids_nomeados = [n['id'] for n in res['nomeados']]
                                 ids_str = ", ".join(ids_nomeados)
                                 tab_slot = slot.get('tab', 'A')
+                                serv_novo = f"Svç Remunerado - Tabela {tab_slot}"
+                                hor_novo  = slot['hor']
+                                # Verificar se já existe linha com mesmo serviço e horário
+                                ja_existe = any(
+                                    _nc(str(row[col_serv_r])) == _nc(serv_novo) and
+                                    str(row[col_hor_r]).strip() == hor_novo.strip()
+                                    for row in linhas_dia_rem[1:]
+                                    if len(row) > max(col_serv_r, col_hor_r)
+                                )
+                                if ja_existe:
+                                    st.warning(f"⚠️ Remunerado {tab_slot} ({hor_novo}) já existe na escala — linha não duplicada.")
+                                    continue
                                 ws_dia_rem.append_row([
                                     ids_str,
-                                    f"Svç Remunerado - Tabela {tab_slot}",
-                                    slot['hor'],
+                                    serv_novo,
+                                    hor_novo,
                                     "", "", "",
                                     slot['obs'],
                                 ])
