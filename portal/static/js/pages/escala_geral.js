@@ -200,7 +200,7 @@ const EscalaGeralPage = {
                     ${hasVtr ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Viatura</th>' : ''}
                 </tr></thead><tbody>`;
             let alt = false;
-            for (const { h, sv, nomes, vtr, rad, ind } of Object.values(mapa)) {
+            for (const { h, sv, obs, nomes, vtr, rad, ind } of Object.values(mapa)) {
                 const bg = alt ? '#F8FAFC' : '#fff';
                 t += `<tr style="background:${bg};border-bottom:1px solid #F1F5F9">
                     <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:var(--azul);white-space:nowrap">${h || '—'}</td>
