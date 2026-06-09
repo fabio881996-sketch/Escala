@@ -82,6 +82,8 @@ const EscalaGeralPage = {
                 const tipo = (e['serviço'] || sv).trim();
                 if (!ausencias[tipo]) ausencias[tipo] = [];
                 ausencias[tipo].push(nome);
+            } else if (sv.includes('remun') || sv.includes('gratif')) {
+                remunerados.push(e);
             } else if (ADM.some(t => sv.includes(t))) {
                 const tipo = (e['serviço'] || sv).trim();
                 if (!adm[tipo]) adm[tipo] = [];
@@ -94,10 +96,6 @@ const EscalaGeralPage = {
                 patOcorr.push(e);
             } else if (sv.includes('patrulha')) {
                 patrulhas.push(e);
-            } else if (/remun|grat/i.test(sv)) {
-                remunerados.push(e);
-            } else if (/^giro/i.test(sv)) {
-                // giros têm secção própria no Streamlit — ignorar aqui
             } else {
                 outros.push(e);
             }
@@ -130,7 +128,46 @@ const EscalaGeralPage = {
         const temInd = (linhas) => linhas.some(e => e['indicativo rádio'] && e['indicativo rádio'] !== 'nan');
         const temRad = (linhas) => linhas.some(e => e['rádio'] && e['rádio'] !== 'nan');
         const temVtr = (linhas) => linhas.some(e => e['viatura'] && e['viatura'] !== 'nan');
-        const temObs = (linhas) => linhas.some(e => e['observacoes'] && e['observacoes'] !== 'nan' && e['observacoes'] !== '');
+
+        const renderTabelaRem = (titulo, linhasOrig) => {
+            if (!linhasOrig.length) return '';
+            const linhas = this.sortHorario(linhasOrig);
+            const mapa = {};
+            for (const e of linhas) {
+                const h = e['horário'] || '';
+                const obs = e['observacoes'] || e['observações'] || e['obs'] || '';
+                const key = obs ? `${h}||${obs}` : h;
+                if (!mapa[key]) mapa[key] = { h, obs, nomes:[], vtrs:[] };
+                const nomeMil = e['nome_fmt'] || e['id'] || '';
+                const trocaCom = e['troca_com'] || '';
+                mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
+                if (e['viatura'] && e['viatura'] !== 'nan' && !mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']);
+            }
+            const hasVtr = linhas.some(e => e['viatura'] && e['viatura'] !== 'nan');
+            const hasObs = Object.values(mapa).some(g => g.obs);
+            let t = `<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">
+                <div style="font-size:.68rem;font-weight:800;color:#fff;background:#16a34a;padding:7px 14px;text-transform:uppercase;letter-spacing:.06em">${titulo}</div>
+                <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:280px">
+                <thead><tr style="background:#f0fdf4">
+                    <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:#15803d;text-align:left;border-bottom:1px solid #dcfce7;white-space:nowrap">Horário</th>
+                    <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:#15803d;text-align:left;border-bottom:1px solid #dcfce7">Militares</th>
+                    ${hasObs ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:#15803d;text-align:left;border-bottom:1px solid #dcfce7">Observação</th>' : ''}
+                    ${hasVtr ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:#15803d;text-align:left;border-bottom:1px solid #dcfce7">Viatura</th>' : ''}
+                </tr></thead><tbody>`;
+            let alt = false;
+            for (const { h, obs, nomes, vtrs } of Object.values(mapa)) {
+                const bg = alt ? '#f0fdf4' : '#fff';
+                t += `<tr style="background:${bg};border-bottom:1px solid #f0fdf4">
+                    <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:#15803d;white-space:nowrap">${h || '—'}</td>
+                    <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join('<br>')}</td>
+                    ${hasObs ? `<td style="padding:8px 10px;font-size:.72rem;color:#16a34a;font-weight:600">${obs || '—'}</td>` : ''}
+                    ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtrs.join(' / ') || '—'}</td>` : ''}
+                </tr>`;
+                alt = !alt;
+            }
+            t += `</tbody></table></div></div>`;
+            return t;
+        };
 
         const renderTabela = (titulo, linhasOrig, comServico = false) => {
             if (!linhasOrig.length) return '';
@@ -139,40 +176,39 @@ const EscalaGeralPage = {
             for (const e of linhas) {
                 const h = e['horário'] || '';
                 const sv = e['serviço'] || '';
-                const key = comServico ? `${h}||${sv}` : h;
-                if (!mapa[key]) mapa[key] = { h, sv, nomes:[], vtrs:[], rads:[], ind:'', obs:'' };
+                const obs = e['observacoes'] || e['observações'] || e['obs'] || '';
+                // Incluir observação na chave para distinguir grupos com mesmo horário/serviço mas obs diferente
+                const key = comServico ? `${h}||${sv}` : (obs ? `${h}||${obs}` : h);
+                if (!mapa[key]) mapa[key] = { h, sv, obs, nomes:[], vtr:'', rad:'', ind:'' };
                 const nomeMil = e['nome_fmt'] || e['id'] || '';
                 const trocaCom = e['troca_com'] || '';
                 mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
-                if (e['viatura'] && e['viatura'] !== 'nan' && !mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']);
-                if (e['rádio'] && e['rádio'] !== 'nan' && !mapa[key].rads.includes(e['rádio'])) mapa[key].rads.push(e['rádio']);
+                if (e['viatura'] && e['viatura'] !== 'nan') { if(!mapa[key].vtrs) mapa[key].vtrs=[]; if(!mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']); mapa[key].vtr = mapa[key].vtrs.join(' / '); }
+                if (e['rádio'] && e['rádio'] !== 'nan') mapa[key].rad = e['rádio'];
                 if (e['indicativo rádio'] && e['indicativo rádio'] !== 'nan') mapa[key].ind = e['indicativo rádio'];
-                if (e['observacoes'] && e['observacoes'] !== 'nan' && e['observacoes'] !== '') mapa[key].obs = e['observacoes'];
             }
-            const hasInd = temInd(linhas), hasRad = temRad(linhas), hasVtr = temVtr(linhas), hasObs = temObs(linhas);
+            const hasInd = temInd(linhas), hasRad = temRad(linhas), hasVtr = temVtr(linhas);
             let t = `<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">
                 <div style="font-size:.68rem;font-weight:800;color:#fff;background:var(--azul);padding:7px 14px;text-transform:uppercase;letter-spacing:.06em">${titulo}</div>
                 <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:280px">
                 <thead><tr style="background:#EFF6FF">
                     <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Horário</th>
                     <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Militares</th>
-                    ${comServico ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Serviço</th>' : ''}
+                    ${comServico ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Serviço</th>' : '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Observação</th>'}
                     ${hasInd ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Indicativo</th>' : ''}
                     ${hasRad ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Rádio</th>' : ''}
                     ${hasVtr ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Viatura</th>' : ''}
-                    ${hasObs ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Obs.</th>' : ''}
                 </tr></thead><tbody>`;
             let alt = false;
-            for (const { h, sv, nomes, vtrs, rads, ind, obs } of Object.values(mapa)) {
+            for (const { h, sv, nomes, vtr, rad, ind } of Object.values(mapa)) {
                 const bg = alt ? '#F8FAFC' : '#fff';
                 t += `<tr style="background:${bg};border-bottom:1px solid #F1F5F9">
                     <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:var(--azul);white-space:nowrap">${h || '—'}</td>
                     <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join('<br>')}</td>
-                    ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : ''}
+                    ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : (obs ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${obs}</td>` : '')}
                     ${hasInd ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${ind}</td>` : ''}
-                    ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rads.join('<br>')}</td>` : ''}
-                    ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtrs.join('<br>')}</td>` : ''}
-                    ${hasObs ? `<td style="padding:8px 10px;font-size:.72rem;color:#475569">${obs}</td>` : ''}
+                    ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rad}</td>` : ''}
+                    ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtr}</td>` : ''}
                 </tr>`;
                 alt = !alt;
             }
@@ -184,8 +220,8 @@ const EscalaGeralPage = {
         html += renderTabela('Apoio ao Atendimento', apoio);
         html += renderTabela('Patrulha Ocorrências', patOcorr);
         html += renderTabela('Patrulhas', patrulhas, true);
-        html += renderTabela('Remunerados / Gratificados', remunerados, false);
         if (outros.length) html += renderTabela('Outros Serviços', outros, true);
+        html += renderTabelaRem('Remunerados / Gratificados', remunerados);
 
         el.innerHTML = html;
     }
