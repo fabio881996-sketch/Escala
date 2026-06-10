@@ -450,6 +450,49 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/cancelar-aprovada")
+async def cancelar_troca_aprovada(payload: CancelarTroca, current_user: dict = Depends(obter_user_atual)):
+    """Cancela uma troca já aprovada — notifica ambos os militares."""
+    try:
+        loader = get_loader()
+        sh = loader.sheets_client.get_spreadsheet()
+        ws = sh.worksheet("registos_trocas")
+        rows = ws.get_all_values()
+        row = rows[payload.row_index - 1]
+
+        # Verificar que está Aprovada
+        status_actual = str(row[5]).strip() if len(row) > 5 else ""
+        if status_actual != "Aprovada":
+            raise HTTPException(status_code=400, detail="Troca não está aprovada")
+
+        ws.update_cell(payload.row_index, 6, "Cancelada")
+        loader.limpar_cache()
+
+        # Notificar ambos os militares
+        try:
+            from portal.api.notificacoes import enviar_push
+            id_origem  = str(row[1]).strip() if len(row) > 1 else ""
+            id_destino = str(row[3]).strip() if len(row) > 3 else ""
+            data_troca = str(row[0]).strip() if len(row) > 0 else ""
+            admin_nome = f"{current_user.get('nome','Admin')}"
+            if id_origem or id_destino:
+                enviar_push(
+                    u_ids=[_id for _id in [id_origem, id_destino] if _id],
+                    titulo="🚫 Troca cancelada",
+                    corpo=f"A troca de {data_troca} foi cancelada pelo admin ({admin_nome}).",
+                    url="/trocas",
+                    tag="troca-cancelada",
+                )
+        except Exception:
+            pass
+
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Cancelar pedido (só o autor pode cancelar) ───────────────
 
 class CancelarTroca(BaseModel):
