@@ -89,6 +89,19 @@ const TrocasPage = {
         }
     },
 
+    async cancelarAprovada(rowIndex, btn) {
+        if (!confirm('Tens a certeza que queres cancelar esta troca aprovada? Os militares serão notificados.')) return;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+        try {
+            await API._post('/api/trocas/cancelar-aprovada', { row_index: rowIndex });
+            await this.loadHistorico();
+            App.checkPendentes();
+        } catch (e) {
+            alert('❌ Erro: ' + e.message);
+            if (btn) { btn.disabled = false; btn.textContent = '🚫 Cancelar Troca'; }
+        }
+    },
+
     async cancelar(rowIndex, btn) {
         if (!confirm('Tens a certeza que queres cancelar este pedido?')) return;
         if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
@@ -127,14 +140,24 @@ const TrocasPage = {
                 el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>Sem histórico de trocas.</p></div>`;
                 return;
             }
+            const hoje = new Date(); hoje.setHours(0,0,0,0);
             el.innerHTML = trocas.map(t => {
                 const user = API.getUser();
                 const souOrigem = String(t.id_origem) === String(user?.id);
-                const cor = t.status === 'Aprovada' ? 'verde' : t.status === 'Rejeitada' ? 'vermelho' : 'amber';
+                const cor = t.status === 'Aprovada' ? 'verde' : t.status === 'Rejeitada' ? 'vermelho' : t.status === 'Cancelada' ? 'vermelho' : 'amber';
                 const contraparte = souOrigem
                     ? (t.nome_destino || t.id_destino)
                     : (t.nome_origem || t.id_origem);
                 const direcao = souOrigem ? '→' : '←';
+                // Verificar se o dia da troca ainda não passou
+                let podeCancelar = false;
+                if (t.status === 'Aprovada' && souOrigem) {
+                    try {
+                        const parts = t.data.split('/');
+                        const dataTroca = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
+                        podeCancelar = dataTroca >= hoje;
+                    } catch(e) {}
+                }
                 return `
                     <div class="card card-${cor}">
                         <div class="card-label">${t.data} • ${
@@ -146,6 +169,10 @@ const TrocasPage = {
                         <div class="card-title">🔄 ${t.servico_origem}</div>
                         <div class="card-subtitle">${direcao} ${contraparte}</div>
                         ${t.observacoes ? `<div class="card-subtitle" style="margin-top:2px">📝 ${t.observacoes}</div>` : ''}
+                        ${podeCancelar ? `
+                        <div style="margin-top:10px">
+                            <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelarAprovada(${t.__row_index}, this)">🚫 Cancelar Troca</button>
+                        </div>` : ''}
                     </div>`;
             }).join('');
         } catch (e) {
