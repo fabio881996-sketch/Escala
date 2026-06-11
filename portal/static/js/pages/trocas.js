@@ -257,8 +257,8 @@ const TrocasPage = {
                     ${avisosHtml}
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'aceitar', this)">✅ Aprovar</button>
-                        <button class="btn btn-danger btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'rejeitar', this)">🚫 Rejeitar</button>
+                        <button class="btn btn-success btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'aceitar', this, '${t.data}', '${t.id_origem}')">✅ Aprovar</button>
+                        <button class="btn btn-danger btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'rejeitar', this, '${t.data}', '${t.id_origem}')">🚫 Rejeitar</button>
                     </div>
                 </div>`;
             }).join('');
@@ -267,12 +267,12 @@ const TrocasPage = {
         }
     },
 
-    async validar(rowIndex, acao, btn) {
+    async validar(rowIndex, acao, btn, dataTroca, idOrigem) {
         const label = acao === 'aceitar' ? 'Aprovar' : 'Rejeitar';
         if (!confirm(`Tens a certeza que queres ${label.toLowerCase()} esta troca?`)) return;
         if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
         try {
-            await API._post('/api/trocas/validar', { row_index: rowIndex, acao });
+            await API._post('/api/trocas/validar', { row_index: rowIndex, acao, data_troca: dataTroca || '', id_origem_troca: idOrigem || '' });
             await this.loadValidar();
             App.checkPendentes();
         } catch (e) {
