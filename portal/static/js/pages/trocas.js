@@ -213,7 +213,7 @@ const TrocasPage = {
             el.innerHTML = trocas.map(t => {
                 const nomeOrig = t.nome_origem || t.id_origem;
                 const nomeDest = t.nome_destino || t.id_destino;
-                const isMatar = t.servico_origem === 'MATAR_REMUNERADO';
+                const isMatar = t.servico_origem === 'MATAR_REMUNERADO' || t.servico_origem === 'FAZER_REMUNERADO';
                 const avisos = isMatar ? [] : this._consecutivoAviso(nomeOrig, t.servico_destino, nomeDest, t.servico_origem);
                 const avisosHtml = avisos.length
                     ? `<div style="background:#FFFBEB;border:1px solid #f59e0b;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:.78rem;color:#b45309;font-weight:600">
@@ -308,16 +308,25 @@ const TrocasPage = {
         `;
     },
 
-    onMilitarChange(sel) {
+    onMilitarChange(sel, euTenhoRem = false, meuServico = '', meuHorario = '') {
         const opt = sel.options[sel.selectedIndex];
         const temRem = opt.dataset.temRemunerado === 'true';
         const wrap = document.getElementById('rem-checkbox-wrap');
         const label = document.getElementById('rem-label');
         if (!wrap) return;
+
+        const linhas = [];
         if (temRem && opt.dataset.remServico) {
             const remServ = opt.dataset.remServico;
             const remHor = opt.dataset.remHorario;
-            label.textContent = `💶 Incluir transferência do remunerado: ${remServ}${remHor ? ` (${remHor})` : ''}`;
+            linhas.push(`💶 Remunerado do militar de destino: ${remServ}${remHor ? ` (${remHor})` : ''}`);
+        }
+        if (euTenhoRem && meuServico) {
+            linhas.push(`💶 O teu remunerado: ${meuServico}${meuHorario ? ` (${meuHorario})` : ''}`);
+        }
+
+        if (linhas.length > 0) {
+            label.innerHTML = linhas.join('<br>');
             wrap.style.display = 'block';
         } else {
             wrap.style.display = 'none';
@@ -351,6 +360,10 @@ const TrocasPage = {
                 alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens remunerado neste dia.</div>`;
             }
 
+            // Verificar se EU tenho remunerado neste dia
+            const _meuServ = (meu_servico || '').toLowerCase();
+            const euTenhoRem = /remun|gratif/.test(_meuServ);
+
             const meuServicoHTML = meu_servico
                 ? `<div class="card" style="margin-bottom:12px;background:var(--bg-card)">
                        <div class="card-label">O teu serviço</div>
@@ -381,7 +394,7 @@ const TrocasPage = {
                 ${alertaMeuServico}
                 <div class="form-group">
                     <label class="form-label">👤 Trocar com</label>
-                    <select id="troca-mil" class="form-input form-select" onchange="TrocasPage.onMilitarChange(this)">
+                    <select id="troca-mil" class="form-input form-select" onchange="TrocasPage.onMilitarChange(this, ${euTenhoRem}, '${meu_servico || ''}', '${meu_horario || ''}')">
                         ${opcoesHTML}
                     </select>
                 </div>
@@ -402,7 +415,7 @@ const TrocasPage = {
             `;
             // Verificar militar seleccionado por defeito
             const milSel = document.getElementById('troca-mil');
-            if (milSel) TrocasPage.onMilitarChange(milSel);
+            if (milSel) TrocasPage.onMilitarChange(milSel, euTenhoRem, meu_servico, meu_horario);
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
         }
@@ -428,6 +441,7 @@ const TrocasPage = {
         // Incluir horário no serviço origem
         let servicoOrigem = (meuServico && meuHorario) ? `${meuServico} (${meuHorario})` : (meuServico || 'auto');
         if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
+        if (tipo === 'fazer_remunerado') servicoOrigem = 'FAZER_REMUNERADO';
 
         const incluirRem = document.getElementById('incluir-rem')?.checked || false;
         const el = document.getElementById('troca-resultado');
