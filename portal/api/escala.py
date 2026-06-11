@@ -38,7 +38,7 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                 posto = str(r.get("posto", "")).strip()
                 # Abreviar postos GNR
                 _postos = {
-                    "Guarda Principal": "Grd Pr", "Guarda Pr.": "Grd Pr", "Guarda Pr": "Grd Pr",
+                    "Guarda Principal": "Grd Pr",
                     "Cabo Chefe": "Cb Ch",
                     "Cabo": "Cb",
                     "Furriel": "Furr",
@@ -53,9 +53,8 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                     "Capitão": "Cap",
                 }
                 posto_abrev = posto
-                posto_norm2 = posto.rstrip('.').strip()
                 for _nome, _abrev in _postos.items():
-                    if posto_norm2.lower() == _nome.lower():
+                    if posto.lower() == _nome.lower():
                         posto_abrev = _abrev
                         break
                 nomes = str(r.get("nome", "")).strip().split()
@@ -76,7 +75,7 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             trocas_dia = df_trocas[
                 (df_trocas["data"] == d_s) &
                 (df_trocas["status"] == "Aprovada") &
-                (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO", "FAZER_REMUNERADO"]))
             ]
             for _, t in trocas_dia.iterrows():
                 id_orig = str(t["id_origem"]).strip()
@@ -111,42 +110,6 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _get_colegas(df_d, df_trocas, d_s, servico, horario, u_id, id_excluir, id_para_nome):
-    """Calcula colegas aplicando trocas aprovadas do dia."""
-    # Construir mapa de trocas: id_original -> id_efectivo
-    id_efectivo = {}
-    if not df_trocas.empty:
-        tr = df_trocas[
-            (df_trocas["data"] == d_s) &
-            (df_trocas["status"] == "Aprovada") &
-            (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
-        ]
-        for _, t in tr.iterrows():
-            io = str(t["id_origem"]).strip()
-            id_ = str(t["id_destino"]).strip()
-            # io vai fazer o serviço de id_ e vice-versa
-            id_efectivo[io] = id_
-            id_efectivo[id_] = io
-
-    colegas = []
-    mask = (
-        (df_d["serviço"].astype(str).str.strip().str.lower() == servico.strip().lower()) &
-        (df_d["horário"].astype(str).str.strip() == horario.strip()) &
-        (df_d["id"].astype(str).str.strip() != u_id) &
-        (df_d["id"].astype(str).str.strip() != id_excluir)
-    )
-    for _, r in df_d[mask].iterrows():
-        mid = str(r["id"]).strip()
-        if not mid:
-            continue
-        # Se este militar trocou, mostrar quem vai efectivamente fazer o serviço
-        mid_real = id_efectivo.get(mid, mid)
-        nome = id_para_nome.get(mid_real, mid_real)
-        if nome not in colegas:
-            colegas.append(nome)
-    return colegas
-
-
 @router.get("/minha")
 async def minha_escala(current_user: dict = Depends(obter_user_atual)):
     """Batch optimizado — uma chamada HTTP para todos os dias."""
@@ -159,33 +122,23 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
 
-        # Mapa id -> formato "ID Posto Apelido"
-        _postos_abrev = {
-            "Guarda Principal": "Grd Pr", "Guarda Pr.": "Grd Pr", "Guarda Pr": "Grd Pr",
-            "Cabo Chefe": "Cb Ch", "Cabo": "Cb",
-            "Furriel": "Furr", "Segundo Sargento": "2Sarg", "Primeiro Sargento": "1Sarg",
-            "Sargento Ajudante": "Sarg Aj", "Sargento Chefe": "Sarg Ch",
-            "Sargento": "2Sarg", "Guarda": "Grd", "Alferes": "Alf",
-            "Tenente": "Ten", "Capitão": "Cap",
-        }
+        # Mapa id -> formato "ID Posto PrimeiroNome Apelido"
         id_para_nome = {}
         if not df_util.empty:
             for _, r in df_util.iterrows():
                 uid = str(r.get("id", "")).strip()
                 posto = str(r.get("posto", "")).strip()
-                posto_norm = posto.rstrip('.').strip()
-                posto_abrev = next((v for k, v in _postos_abrev.items() if k.lower() == posto_norm.lower()), posto_norm)
                 nomes = str(r.get("nome", "")).strip().split()
-                apelido = nomes[-1] if nomes else ""
+                nome_curto = f"{nomes[0]} {nomes[-1]}" if len(nomes) > 1 else " ".join(nomes)
                 if uid:
-                    id_para_nome[uid] = f"{uid} {posto_abrev} {apelido}".strip()
+                    id_para_nome[uid] = f"{uid} {posto} {nome_curto}".strip()
 
         dias_a_mostrar: list[date] = []
         for delta in range(90):
             dt = hj.date() + timedelta(days=delta)
             if dt.strftime("%d-%m") in dias_pub:
                 dias_a_mostrar.append(dt)
-            if len(dias_a_mostrar) >= 60:
+            if len(dias_a_mostrar) >= 20:
                 break
 
         if not dias_a_mostrar:
@@ -198,7 +151,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         dias_sem = 0
 
         for dt in dias_a_mostrar:
-            if dias_sem >= 14:
+            if dias_sem >= 5:
                 break
 
             aba = dt.strftime("%d-%m")
@@ -214,59 +167,44 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 continue
 
             dias_sem = 0
+            row = meu.iloc[0]
             d_s = dt.strftime("%d/%m/%Y")
-
-            # Separar remunerados/gratificados dos serviços normais
-            import re as _re
-            meu_normal = meu[~meu["serviço"].astype(str).str.lower().str.contains(r'remu|grat', na=False)]
-            meu_remun  = meu[meu["serviço"].astype(str).str.lower().str.contains(r'remu|grat', na=False)]
-
-            # Processar serviço normal (primeiro registo)
-            if not meu_normal.empty:
-                row = meu_normal.iloc[0]
-            else:
-                row = meu.iloc[0]
-
             servico = str(row.get("serviço", ""))
             horario = str(row.get("horário", ""))
 
             troca_aplicada = False
-            id_excluir = ""
-            troca_com = ""
+            # row_ref aponta para a linha cujos dados (viatura, radio, colegas) devem ser usados
             row_ref = row
 
             if not df_trocas.empty:
                 tr = df_trocas[
                     (df_trocas["data"] == d_s) &
                     (df_trocas["status"] == "Aprovada") &
-                    (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                    (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO", "FAZER_REMUNERADO"]))
                 ]
-                # Aplicar todas as trocas do dia em ordem — simular estado final
-                # Construir mapa: quem vai fazer o serviço de quem
-                # Começa com cada militar a fazer o seu próprio serviço
-                quem_faz = {}  # quem_faz[id] = id de quem está na escala original
                 for _, t in tr.iterrows():
-                    io = str(t["id_origem"]).strip()
-                    id_ = str(t["id_destino"]).strip()
-                    # Inicializar se ainda não existe
-                    if io not in quem_faz:
-                        quem_faz[io] = io
-                    if id_ not in quem_faz:
-                        quem_faz[id_] = id_
-                    # Trocar: quem estava a fazer o serviço de io passa a fazer o de id_ e vice-versa
-                    quem_faz[io], quem_faz[id_] = quem_faz[id_], quem_faz[io]
+                    if str(t["id_origem"]).strip() == str(u_id).strip():
+                        s = str(t["servico_destino"])
+                    elif str(t["id_destino"]).strip() == str(u_id).strip():
+                        s = str(t["servico_origem"])
+                    else:
+                        continue
 
-                uid_s = str(u_id).strip()
-                if uid_s in quem_faz and quem_faz[uid_s] != uid_s:
-                    id_final = quem_faz[uid_s]
-                    linha_final = df_d[df_d["id"].astype(str).str.strip() == id_final]
-                    if not linha_final.empty:
-                        row_ref = linha_final.iloc[0]
-                        servico = str(row_ref.get("serviço", "")).strip()
-                        horario = str(row_ref.get("horário", "")).strip()
-                        id_excluir = id_final
-                        troca_com = id_para_nome.get(id_final, id_final)
-                        troca_aplicada = True
+                    serv_novo = s.rsplit("(", 1)[0].strip()
+                    hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+
+                    # Buscar a linha do serviço novo na escala do dia (para viatura/radio correctos)
+                    mask_novo = (
+                        (df_d["serviço"].astype(str).str.strip().str.lower() == serv_novo.lower()) &
+                        (df_d["horário"].astype(str).str.strip() == hor_novo.strip())
+                    )
+                    if mask_novo.any():
+                        row_ref = df_d[mask_novo].iloc[0]
+
+                    servico = serv_novo
+                    horario = hor_novo
+                    troca_aplicada = True
+                    break
 
             servicos.append({
                 "data": d_s,
@@ -274,7 +212,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "servico": servico,
                 "horario": horario,
                 "troca_aprovada": troca_aplicada,
-                "troca_com": troca_com,
                 "viatura": str(row_ref.get("viatura", "") or "").replace("nan", ""),
                 "radio": str(row_ref.get("rádio", "") or "").replace("nan", ""),
                 "indicativo": str(row_ref.get("indicativo rádio", "") or "").replace("nan", ""),
@@ -282,25 +219,14 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "observacoes": str(row_ref.get("observações", "") or "").replace("nan", ""),
                 "is_hoje": dt == hj.date(),
                 "is_amanha": dt == (hj.date() + timedelta(days=1)),
-                "colegas": _get_colegas(df_d, df_trocas, d_s, servico, horario, str(u_id), id_excluir, id_para_nome),
-                "remunerados": [
-                    {
-                        "servico": str(rr.get("serviço", "")).strip(),
-                        "horario": str(rr.get("horário", "")).strip(),
-                        "viatura": str(rr.get("viatura", "") or "").replace("nan", ""),
-                        "radio": str(rr.get("rádio", "") or "").replace("nan", ""),
-                        "observacoes": str(rr.get("observações", "") or "").replace("nan", ""),
-                        "colegas": [
-                            id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
-                            for _, r in df_d[
-                                (df_d["serviço"].astype(str).str.strip().str.lower() == str(rr.get("serviço","")).strip().lower()) &
-                                (df_d["horário"].astype(str).str.strip() == str(rr.get("horário","")).strip()) &
-                                (df_d["id"].astype(str).str.strip() != str(u_id).strip())
-                            ].iterrows()
-                            if str(r["id"]).strip()
-                        ],
-                    }
-                    for _, rr in meu_remun.iterrows()
+                "colegas": [
+                    id_para_nome.get(str(r["id"]).strip(), str(r["id"]).strip())
+                    for _, r in df_d[
+                        (df_d["serviço"].astype(str).str.strip().str.lower() == servico.strip().lower()) &
+                        (df_d["horário"].astype(str).str.strip() == horario.strip()) &
+                        (df_d["id"].astype(str).str.strip() != str(u_id).strip())
+                    ].iterrows()
+                    if str(r["id"]).strip()
                 ],
             })
 
@@ -342,7 +268,7 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
                 u_ids=todos_ids,
                 titulo="📅 Nova escala publicada",
                 corpo=f"A escala de {data_fmt} foi publicada.",
-                url="/home",
+                url="/escala-geral",
                 tag="escala-publicada",
             )
         except Exception:

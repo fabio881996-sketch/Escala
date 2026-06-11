@@ -274,7 +274,7 @@ async def disponiveis(
                         cedeu = not df_trocas[
                             (df_trocas["data"] == data_fmt) &
                             (df_trocas["status"] == "Aprovada") &
-                            (df_trocas["servico_origem"].str.upper() == "MATAR_REMUNERADO") &
+                            (df_trocas["servico_origem"].str.upper().isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
                             (df_trocas["id_destino"].astype(str) == mid)
                         ].empty
                     if not cedeu:
@@ -341,7 +341,7 @@ async def disponiveis(
                     cedeu = not df_trocas[
                         (df_trocas["data"] == data_fmt) &
                         (df_trocas["status"] == "Aprovada") &
-                        (df_trocas["servico_origem"].str.upper() == "MATAR_REMUNERADO") &
+                        (df_trocas["servico_origem"].str.upper().isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
                         (df_trocas["id_destino"].astype(str) == mid)
                     ].empty
                 if cedeu:
@@ -361,7 +361,7 @@ async def disponiveis(
                             cedeu_rem = not df_trocas[
                                 (df_trocas["data"] == data_fmt) &
                                 (df_trocas["status"] == "Aprovada") &
-                                (df_trocas["servico_origem"].str.upper() == "MATAR_REMUNERADO") &
+                                (df_trocas["servico_origem"].str.upper().isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
                                 (df_trocas["id_destino"].astype(str) == mid)
                             ].empty
                         if not cedeu_rem:
