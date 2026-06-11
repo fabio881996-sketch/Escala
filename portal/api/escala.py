@@ -75,7 +75,7 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             trocas_dia = df_trocas[
                 (df_trocas["data"] == d_s) &
                 (df_trocas["status"] == "Aprovada") &
-                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO", "FAZER_REMUNERADO"]))
+                (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
             ]
             for _, t in trocas_dia.iterrows():
                 id_orig = str(t["id_origem"]).strip()
@@ -180,7 +180,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 tr = df_trocas[
                     (df_trocas["data"] == d_s) &
                     (df_trocas["status"] == "Aprovada") &
-                    (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO", "FAZER_REMUNERADO"]))
+                    (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
                 ]
                 for _, t in tr.iterrows():
                     if str(t["id_origem"]).strip() == str(u_id).strip():
@@ -231,6 +231,33 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             })
 
         return {"servicos": servicos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/aniversarios")
+async def aniversarios(current_user: dict = Depends(obter_user_atual)):
+    """Devolve aniversariantes de hoje."""
+    try:
+        from datetime import datetime as _dt
+        loader = get_loader()
+        df_util = loader.carregar_usuarios()
+        hoje = _dt.now()
+        aniversariantes = []
+        if 'nascimento' in df_util.columns:
+            for _, row in df_util.iterrows():
+                nasc = str(row.get('nascimento', '')).strip()
+                if not nasc or nasc == 'nan':
+                    continue
+                try:
+                    dt_nasc = _dt.strptime(nasc.replace('/', '-'), '%d-%m-%Y')
+                    if dt_nasc.day == hoje.day and dt_nasc.month == hoje.month:
+                        idade = hoje.year - dt_nasc.year
+                        nome = f"{row.get('posto','')} {row.get('nome','')}".strip()
+                        aniversariantes.append({"nome": nome, "idade": idade})
+                except Exception:
+                    continue
+        return {"aniversariantes": aniversariantes}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
