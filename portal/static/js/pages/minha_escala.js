@@ -2,14 +2,22 @@
 
 const MinhaEscalaPage = {
     async render() {
-        // Verificar aniversários
+        const content = document.getElementById('content');
+        const user = API.getUser();
+        content.innerHTML = `
+            <div class="section-h">👤 ${user?.nome || ''}</div>
+            <div id="me-list">${Components.skeleton(3)}</div>`;
         try {
-            const _anivData = await API._get('/api/escala/aniversarios');
-            const _aniv = _anivData?.aniversariantes || [];
-            if (_aniv.length) {
-                const _banner = document.createElement('div');
-                _banner.style.cssText = 'padding:0 16px;margin-top:8px';
-                _banner.innerHTML = _aniv.map(a => `
+            const [data, anivData] = await Promise.all([
+                API.minha_escala(),
+                API._get('/api/escala/aniversarios', false).catch(() => null),
+            ]);
+            this.renderServicos(data?.servicos || []);
+            const aniv = anivData?.aniversariantes || [];
+            if (aniv.length) {
+                const banner = document.createElement('div');
+                banner.style.cssText = 'padding:8px 16px 0';
+                banner.innerHTML = aniv.map(a => `
                     <div style="background:linear-gradient(135deg,#FEF9C3,#FEF08A);border-left:4px solid #EAB308;
                         border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
                         <span style="font-size:1.6rem">🎂</span>
@@ -18,18 +26,8 @@ const MinhaEscalaPage = {
                             <div style="color:#92400E;font-size:.8rem">Completa ${a.idade} anos — Parabéns! 🎉</div>
                         </div>
                     </div>`).join('');
-                const _content = document.getElementById('content');
-                if (_content) _content.prepend(_banner);
+                content.prepend(banner);
             }
-        } catch(e) {}
-        const content = document.getElementById('content');
-        const user = API.getUser();
-        content.innerHTML = `
-            <div class="section-h">👤 ${user?.nome || ''}</div>
-            <div id="me-list">${Components.skeleton(3)}</div>`;
-        try {
-            const data = await API.minha_escala();
-            this.renderServicos(data?.servicos || []);
         } catch (e) {
             document.getElementById('me-list').innerHTML =
                 `<div class="alert alert-error">❌ ${e.message}</div>`;
