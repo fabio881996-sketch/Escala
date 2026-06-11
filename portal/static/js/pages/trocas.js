@@ -214,7 +214,7 @@ const TrocasPage = {
                 const nomeOrig = t.nome_origem || t.id_origem;
                 const nomeDest = t.nome_destino || t.id_destino;
                 const isMatar = t.servico_origem === 'MATAR_REMUNERADO' || t.servico_origem === 'FAZER_REMUNERADO';
-                const avisos = isMatar ? [] : this._consecutivoAviso(nomeOrig, t.servico_destino, nomeDest, t.servico_origem);
+                const avisos = t.avisos_consecutivos || [];
                 const avisosHtml = avisos.length
                     ? `<div style="background:#FFFBEB;border:1px solid #f59e0b;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:.78rem;color:#b45309;font-weight:600">
                         ${avisos.join('<br>')}
