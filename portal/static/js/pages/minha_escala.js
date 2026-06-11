@@ -2,11 +2,28 @@
 
 const MinhaEscalaPage = {
     async render() {
+        // Verificar aniversários
+        try {
+            const _anivData = await API._get('/api/escala/aniversarios');
+            const _aniv = _anivData?.aniversariantes || [];
+            if (_aniv.length) {
+                const _banner = document.createElement('div');
+                _banner.style.cssText = 'padding:0 16px;margin-top:8px';
+                _banner.innerHTML = _aniv.map(a => `
+                    <div style="background:linear-gradient(135deg,#FEF9C3,#FEF08A);border-left:4px solid #EAB308;
+                        border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+                        <span style="font-size:1.6rem">🎂</span>
+                        <div>
+                            <div style="font-weight:700;color:#713F12;font-size:.9rem">Hoje é o aniversário de ${a.nome}!</div>
+                            <div style="color:#92400E;font-size:.8rem">Completa ${a.idade} anos — Parabéns! 🎉</div>
+                        </div>
+                    </div>`).join('');
+                const _content = document.getElementById('content');
+                if (_content) _content.prepend(_banner);
+            }
+        } catch(e) {}
         const content = document.getElementById('content');
         const user = API.getUser();
-        // Limpar cache antes de carregar para garantir dados frescos
-        const cacheKey = 'api_/api/escala/minha';
-        sessionStorage.removeItem(cacheKey);
         content.innerHTML = `
             <div class="section-h">👤 ${user?.nome || ''}</div>
             <div id="me-list">${Components.skeleton(3)}</div>`;
@@ -32,18 +49,13 @@ const MinhaEscalaPage = {
         const cls = this.cardClass(s.servico);
         const icone = this.icone(s.servico);
 
-        const _diasSem = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-        const _dParts = s.data.split('/');
-        const _dObj = new Date(parseInt(_dParts[2]), parseInt(_dParts[1])-1, parseInt(_dParts[0]));
-        const _diaSem = _diasSem[_dObj.getDay()];
         let badge = '';
         if (s.is_hoje) badge = '<span class="badge badge-hoje">🟢 HOJE</span>';
         else if (s.is_amanha) badge = '<span class="badge badge-amanha">🔵 AMANHÃ</span>';
-        else badge = `<span class="badge badge-neutro">📅 ${s.data} · ${_diaSem}</span>`;
+        else badge = `<span class="badge badge-neutro">📅 ${s.data}</span>`;
         if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
 
         let rows = '';
-        if (s.troca_aprovada && s.troca_com) rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.78rem;color:#92400e">c/ ${s.troca_com}</span></div>`;
         if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;
         if (s.viatura && s.viatura !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">🚔</span>${s.viatura}</div>`;
         if (s.radio && s.radio !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📻</span>${s.radio}</div>`;
@@ -53,33 +65,12 @@ const MinhaEscalaPage = {
         }
         if (s.observacoes && s.observacoes !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📝</span>${s.observacoes}</div>`;
 
-        let cards = `
+        return `
             <div class="card ${cls}">
                 <div class="card-label">${badge}</div>
                 <div class="card-title">${icone} ${s.servico}</div>
                 ${rows}
             </div>`;
-
-        // Card extra para remunerados no mesmo dia
-        if (s.remunerados?.length) {
-            for (const r of s.remunerados) {
-                let remBadge = s.is_hoje ? '<span class="badge badge-hoje">🟢 HOJE</span>' :
-                               s.is_amanha ? '<span class="badge badge-amanha">🔵 AMANHÃ</span>' :
-                               `<span class="badge badge-neutro">📅 ${s.data}</span>`;
-                remBadge += ' <span style="background:#16a34a;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">💰 REMUNERADO</span>';
-                cards += `
-            <div class="card card-verde">
-                <div class="card-label">${remBadge}</div>
-                <div class="card-title">💰 ${r.servico}</div>
-                ${r.horario ? `<div class="card-row"><span class="card-row-icon">🕒</span>${r.horario}</div>` : ''}
-                ${r.viatura ? `<div class="card-row"><span class="card-row-icon">🚔</span>${r.viatura}</div>` : ''}
-                ${r.radio ? `<div class="card-row"><span class="card-row-icon">📻</span>${r.radio}</div>` : ''}
-                ${r.observacoes ? `<div class="card-row"><span class="card-row-icon">📝</span>${r.observacoes}</div>` : ''}
-                ${r.colegas?.length ? `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${r.colegas.join(' · ')}</span></div>` : ''}
-            </div>`;
-            }
-        }
-        return cards;
     },
 
     cardClass(s) {
