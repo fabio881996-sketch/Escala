@@ -773,7 +773,7 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
                 import base64 as _b64, tempfile as _tmp, os as _os, io as _io, json as _json, re as _re2
                 from datetime import datetime as _dt2
 
-                row_data = rows[resposta.row_index - 1]
+                row_data = rows[found_row - 1]
                 _data      = str(row_data[0]).strip() if len(row_data) > 0 else ""
                 _id_orig   = str(row_data[1]).strip() if len(row_data) > 1 else ""
                 _serv_orig = str(row_data[2]).strip() if len(row_data) > 2 else ""
