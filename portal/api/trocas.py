@@ -616,19 +616,90 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
             return {"trocas": []}
         pend = df[df["status"] == "Pendente_Admin"].copy()
         trocas = []
-        for i, (idx, row) in enumerate(pend.iterrows()):
+
+        def _hor_fim(serv):
+            import re as _re
+            m = _re.search(r'\((\d{2})-(\d{2})\)', str(serv))
+            return int(m.group(2)) if m else None
+
+        def _hor_ini(serv):
+            import re as _re
+            m = _re.search(r'\((\d{2})-(\d{2})\)', str(serv))
+            return int(m.group(1)) if m else None
+
+        def _consecutivo_aviso(id_mil, nome_mil, serv_vai_fazer, data_str):
+            """Verifica se o militar vai ficar com serviços consecutivos (16-24 + 00-08 no dia seguinte)."""
+            avisos = []
+            try:
+                from datetime import datetime as _dt, timedelta as _td
+                dt = _dt.strptime(data_str, "%d/%m/%Y")
+                hf = _hor_fim(serv_vai_fazer)
+                hi = _hor_ini(serv_vai_fazer)
+                if hf is None: return []
+
+                # Se vai fazer 00-08, verificar se no dia anterior tem 16-24
+                if hi == 0:
+                    aba_ant = (dt - _td(days=1)).strftime("%d-%m")
+                    try:
+                        df_ant = loader.carregar_escala(aba_ant)
+                        if not df_ant.empty:
+                            mil_ant = df_ant[df_ant["id"].astype(str).str.strip() == id_mil]
+                            for _, r_ant in mil_ant.iterrows():
+                                s_ant = str(r_ant.get("serviço",""))
+                                h_ant = str(r_ant.get("horário",""))
+                                serv_ant_full = f"{s_ant} ({h_ant})" if h_ant else s_ant
+                                if _hor_fim(serv_ant_full) in (0, 24):
+                                    avisos.append(f"⚠️ {nome_mil} ficará com serviços consecutivos: <b>{serv_ant_full}</b> seguido de <b>{serv_vai_fazer}</b>")
+                    except Exception:
+                        pass
+
+                # Se vai fazer 16-24, verificar se no dia seguinte tem 00-08
+                if hf in (0, 24):
+                    aba_seg = (dt + _td(days=1)).strftime("%d-%m")
+                    try:
+                        df_seg = loader.carregar_escala(aba_seg)
+                        if not df_seg.empty:
+                            mil_seg = df_seg[df_seg["id"].astype(str).str.strip() == id_mil]
+                            for _, r_seg in mil_seg.iterrows():
+                                s_seg = str(r_seg.get("serviço",""))
+                                h_seg = str(r_seg.get("horário",""))
+                                serv_seg_full = f"{s_seg} ({h_seg})" if h_seg else s_seg
+                                if _hor_ini(serv_seg_full) == 0:
+                                    avisos.append(f"⚠️ {nome_mil} ficará com serviços consecutivos: <b>{serv_vai_fazer}</b> seguido de <b>{serv_seg_full}</b>")
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            return avisos
+
+        for idx, row in pend.iterrows():
+            data_str   = str(row.get("data", ""))
+            id_orig    = str(row.get("id_origem", ""))
+            id_dest    = str(row.get("id_destino", ""))
+            serv_orig  = str(row.get("servico_origem", ""))
+            serv_dest  = str(row.get("servico_destino", ""))
+            nome_orig  = id_nome.get(id_orig, id_orig)
+            nome_dest  = id_nome.get(id_dest, id_dest)
+
+            # Após troca: origem vai fazer serv_dest, destino vai fazer serv_orig
+            avisos = []
+            if serv_orig not in ("MATAR_REMUNERADO", "FAZER_REMUNERADO"):
+                avisos += _consecutivo_aviso(id_orig, nome_orig, serv_dest, data_str)
+                avisos += _consecutivo_aviso(id_dest, nome_dest, serv_orig, data_str)
+
             trocas.append({
-                "data":            str(row.get("data", "")),
-                "id_origem":       str(row.get("id_origem", "")),
-                "nome_origem":     id_nome.get(str(row.get("id_origem","")), str(row.get("id_origem",""))),
-                "servico_origem":  str(row.get("servico_origem", "")),
-                "id_destino":      str(row.get("id_destino", "")),
-                "nome_destino":    id_nome.get(str(row.get("id_destino","")), str(row.get("id_destino",""))),
-                "servico_destino": str(row.get("servico_destino", "")),
+                "data":            data_str,
+                "id_origem":       id_orig,
+                "nome_origem":     nome_orig,
+                "servico_origem":  serv_orig,
+                "id_destino":      id_dest,
+                "nome_destino":    nome_dest,
+                "servico_destino": serv_dest,
                 "observacoes":     str(row.get("observacoes", "")),
                 "data_pedido":     str(row.get("data_pedido", "")),
                 "data_aceitacao":  str(row.get("data_aceitacao", "")),
-                "__row_index":     idx + 2,
+                "__row_index":     int(idx) + 2,
+                "avisos_consecutivos": avisos,
             })
         return {"trocas": trocas}
     except Exception as e:
