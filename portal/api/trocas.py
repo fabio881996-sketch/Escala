@@ -528,6 +528,8 @@ async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(ob
 class RespostaTroca(BaseModel):
     row_index: int   # índice da linha na sheet (1-based, incluindo cabeçalho)
     acao: str        # "aceitar" | "rejeitar"
+    data_troca: Optional[str] = ""      # DD/MM/YYYY para identificar linha exacta
+    id_origem_troca: Optional[str] = "" # id_origem para identificar linha exacta
 
 
 @router.post("/responder")
@@ -616,6 +618,10 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
             return {"trocas": []}
         pend = df[df["status"] == "Pendente_Admin"].copy()
         trocas = []
+        # Carregar todas as linhas para mapear índice real do Sheets
+        from core.database import get_sheet as _gs
+        _ws_tr = _gs().worksheet("registos_trocas")
+        _rows_all = _ws_tr.get_all_values()
 
         def _hor_fim(serv):
             import re as _re
@@ -687,6 +693,16 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
                 avisos += _consecutivo_aviso(id_orig, nome_orig, serv_dest, data_str)
                 avisos += _consecutivo_aviso(id_dest, nome_dest, serv_orig, data_str)
 
+            # Encontrar linha real no Sheets por data+id_origem+servico_origem
+            real_row = int(idx) + 2  # fallback
+            for _ri, _r in enumerate(_rows_all[1:], start=2):
+                if (len(_r) > 5 and
+                    str(_r[0]).strip() == data_str and
+                    str(_r[1]).strip() == id_orig and
+                    str(_r[5]).strip() == "Pendente_Admin"):
+                    real_row = _ri
+                    break
+
             trocas.append({
                 "data":            data_str,
                 "id_origem":       id_orig,
@@ -698,7 +714,7 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
                 "observacoes":     str(row.get("observacoes", "")),
                 "data_pedido":     str(row.get("data_pedido", "")),
                 "data_aceitacao":  str(row.get("data_aceitacao", "")),
-                "__row_index":     int(idx) + 2,
+                "__row_index":     real_row,
                 "avisos_consecutivos": avisos,
             })
         return {"trocas": trocas}
@@ -716,11 +732,28 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
         sh = get_sheet()
         ws = sh.worksheet("registos_trocas")
         rows = ws.get_all_values()
-        if resposta.row_index < 1 or resposta.row_index >= len(rows):
+
+        # Encontrar linha exacta por data+id_origem ou por row_index
+        found_row = None
+        if resposta.data_troca and resposta.id_origem_troca:
+            for ri, row in enumerate(rows[1:], start=2):
+                if (len(row) > 5 and
+                    str(row[0]).strip() == resposta.data_troca.strip() and
+                    str(row[1]).strip() == resposta.id_origem_troca.strip() and
+                    str(row[5]).strip() == "Pendente_Admin"):
+                    found_row = ri
+                    break
+        if not found_row:
+            # Fallback: tentar row_index directo
+            target = resposta.row_index
+            if 1 < target <= len(rows) and str(rows[target-1][5]).strip() == "Pendente_Admin":
+                found_row = target
+        if not found_row:
             raise HTTPException(status_code=404, detail="Linha não encontrada")
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
-        ws.update_cell(resposta.row_index, 6, novo_status)
+        ws.update_cell(found_row, 6, novo_status)
+        resposta.row_index = found_row  # Actualizar para usar abaixo
         get_loader().limpar_cache()
 
         # Gerar e guardar PDF no Drive se aprovada
