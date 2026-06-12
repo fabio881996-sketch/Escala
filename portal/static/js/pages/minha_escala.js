@@ -61,6 +61,9 @@ const MinhaEscalaPage = {
         if (!isAusencia && s.colegas && s.colegas.length > 0) {
             rows += `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${s.colegas.join(' · ')}</span></div>`;
         }
+        if (!isAusencia && s.troca_com) {
+            rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.8rem;color:#d97706;font-weight:600">Trocou c/ ${s.troca_com}</span></div>`;
+        }
         if (s.observacoes && s.observacoes !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📝</span>${s.observacoes}</div>`;
 
         return `
