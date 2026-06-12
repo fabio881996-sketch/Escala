@@ -454,19 +454,24 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
 async def cancelar_troca_aprovada(payload: CancelarTroca, current_user: dict = Depends(obter_user_atual)):
     """Cancela uma troca já aprovada — notifica ambos os militares."""
     try:
-        loader = get_loader()
-        sh = loader.sheets_client.get_spreadsheet()
+        from core.database import get_sheet
+        sh = get_sheet()
         ws = sh.worksheet("registos_trocas")
         rows = ws.get_all_values()
-        row = rows[payload.row_index - 1]
+
+        # Encontrar linha por row_index
+        target = payload.row_index
+        if target < 2 or target > len(rows):
+            raise HTTPException(status_code=404, detail="Linha não encontrada")
+        row = rows[target - 1]
 
         # Verificar que está Aprovada
         status_actual = str(row[5]).strip() if len(row) > 5 else ""
         if status_actual != "Aprovada":
             raise HTTPException(status_code=400, detail="Troca não está aprovada")
 
-        ws.update_cell(payload.row_index, 6, "Cancelada")
-        loader.limpar_cache()
+        ws.update_cell(target, 6, "Cancelada")
+        get_loader().limpar_cache()
 
         # Notificar ambos os militares
         try:
