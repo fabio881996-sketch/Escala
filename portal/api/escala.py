@@ -201,7 +201,10 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 dias_sem += 1
                 continue
 
-            meu = df_d[df_d["id"].astype(str).str.strip() == str(u_id).strip()]
+            _uid_str = str(u_id).strip()
+            meu = df_d[df_d["id"].astype(str).str.strip().apply(
+                lambda x: _uid_str == x or _uid_str in [i.strip() for i in x.split(";")]
+            )]
             if meu.empty:
                 dias_sem += 1
                 continue
