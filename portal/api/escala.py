@@ -205,6 +205,18 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             meu = df_d[df_d["id"].astype(str).str.strip().apply(
                 lambda x: _uid_str == x or _uid_str in [i.strip() for i in x.split(";")]
             )]
+
+            # Remover linhas de remunerado que foram cedidas via MATAR_REMUNERADO
+            if not df_trocas.empty and not meu.empty:
+                d_s_check = dt.strftime("%d/%m/%Y")
+                cedeu_rem = df_trocas[
+                    (df_trocas["data"] == d_s_check) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (df_trocas["servico_origem"] == "MATAR_REMUNERADO") &
+                    (df_trocas["id_origem"].astype(str).str.strip() == _uid_str)
+                ]
+                if not cedeu_rem.empty:
+                    meu = meu[~meu["serviço"].astype(str).str.lower().str.contains("remun|gratif")]
             if meu.empty:
                 dias_sem += 1
                 continue
@@ -267,6 +279,81 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 "is_amanha": dt == (hj.date() + timedelta(days=1)),
                 "colegas": _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome),
             })
+
+            # Verificar se há FAZER_REMUNERADO ou MATAR_REMUNERADO aprovado — adicionar remunerado cedido
+            if not df_trocas.empty:
+                tr_rem = df_trocas[
+                    (df_trocas["data"] == d_s) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                ]
+                for _, t_rem in tr_rem.iterrows():
+                    # FAZER_REMUNERADO: id_origem é quem faz, id_destino é quem cede
+                    # MATAR_REMUNERADO: id_destino é quem faz, id_origem é quem cede
+                    is_fazer = str(t_rem["servico_origem"]).strip() == "FAZER_REMUNERADO"
+                    quem_faz = str(t_rem["id_origem"]).strip() if is_fazer else str(t_rem["id_destino"]).strip()
+                    quem_cede = str(t_rem["id_destino"]).strip() if is_fazer else str(t_rem["id_origem"]).strip()
+                    if quem_faz != str(u_id).strip():
+                        continue
+                    # Encontrar linha do remunerado na escala do dia
+                    serv_rem = str(t_rem.get("servico_destino","")).strip()
+                    hor_rem = ""
+                    vtr_rem = ""
+                    rad_rem = ""
+                    ind_rem = ""
+                    obs_rem = ""
+                    if "(" in serv_rem:
+                        hor_rem = serv_rem.rsplit("(",1)[1].rstrip(")")
+                        serv_rem = serv_rem.rsplit("(",1)[0].strip()
+                    # Procurar linha do remunerado no df_d pelo id de quem cede
+                    mask_rem = df_d["id"].astype(str).str.strip().apply(
+                        lambda x: quem_cede == x or quem_cede in [i.strip() for i in x.split(";")]
+                    )
+                    rem_rows = df_d[mask_rem & df_d["serviço"].astype(str).str.lower().str.contains("remun|gratif")]
+                    if not rem_rows.empty:
+                        r_rem = rem_rows.iloc[0]
+                        serv_rem = str(r_rem.get("serviço","")).strip()
+                        hor_rem  = str(r_rem.get("horário","")).strip()
+                        vtr_rem  = str(r_rem.get("viatura","") or "").replace("nan","")
+                        rad_rem  = str(r_rem.get("rádio","") or "").replace("nan","")
+                        ind_rem  = str(r_rem.get("indicativo rádio","") or "").replace("nan","")
+                        obs_rem  = str(r_rem.get("observações","") or "").replace("nan","")
+                    # Colegas do remunerado — outros militares na mesma linha
+                    colegas_rem = []
+                    if not rem_rows.empty:
+                        ids_rem = [i.strip() for i in str(rem_rows.iloc[0].get("id","")).split(";")]
+                        colegas_rem = [id_para_nome.get(i, i) for i in ids_rem if i and i != str(u_id).strip()]
+                    # Também incluir outros com FAZER_REMUNERADO aprovado no mesmo slot
+                    outros_fazer = df_trocas[
+                        (df_trocas["data"] == d_s) &
+                        (df_trocas["status"] == "Aprovada") &
+                        (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
+                        (df_trocas["id_origem" if is_fazer else "id_destino"].astype(str).str.strip() != str(u_id).strip())
+                    ]
+                    for _, o in outros_fazer.iterrows():
+                        outro_id = str(o["id_origem"]).strip() if is_fazer else str(o["id_destino"]).strip()
+                        nome_outro = id_para_nome.get(outro_id, outro_id)
+                        if nome_outro not in colegas_rem:
+                            colegas_rem.append(nome_outro)
+
+                    servicos.append({
+                        "data": d_s,
+                        "aba": aba,
+                        "servico": serv_rem or "Svç Remunerado",
+                        "horario": hor_rem,
+                        "troca_aprovada": False,
+                        "troca_com": id_para_nome.get(quem_cede, quem_cede),
+                        "troca_com_label": "Cedido por",
+                        "viatura": vtr_rem,
+                        "radio": rad_rem,
+                        "indicativo": ind_rem,
+                        "giro": "",
+                        "observacoes": obs_rem,
+                        "is_hoje": dt == hj.date(),
+                        "is_amanha": dt == (hj.date() + timedelta(days=1)),
+                        "colegas": colegas_rem,
+                        "is_remunerado": True,
+                    })
 
         return {"servicos": servicos}
     except Exception as e:
