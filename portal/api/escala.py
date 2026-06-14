@@ -75,7 +75,7 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             trocas_dia = df_trocas[
                 (df_trocas["data"] == d_s) &
                 (df_trocas["status"] == "Aprovada") &
-                (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
             ]
             for _, t in trocas_dia.iterrows():
                 id_orig = str(t["id_origem"]).strip()
@@ -221,7 +221,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 tr = df_trocas[
                     (df_trocas["data"] == d_s) &
                     (df_trocas["status"] == "Aprovada") &
-                    (df_trocas["servico_origem"] != "MATAR_REMUNERADO")
+                    (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
                 ]
                 for _, t in tr.iterrows():
                     if str(t["id_origem"]).strip() == str(u_id).strip():
