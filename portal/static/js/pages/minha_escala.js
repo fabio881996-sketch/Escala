@@ -58,6 +58,7 @@ const MinhaEscalaPage = {
             badge = `<span class="badge badge-neutro">📅 ${_diaSem} ${s.data}</span>`;
         }
         if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
+        if (s.is_remunerado) badge += ' <span style="background:#16a34a;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">💶 REMUNERADO</span>';
 
         let rows = '';
         if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;
@@ -68,7 +69,8 @@ const MinhaEscalaPage = {
             rows += `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${s.colegas.join(' · ')}</span></div>`;
         }
         if (!isAusencia && s.troca_com) {
-            rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.8rem;color:#d97706;font-weight:600">Trocou c/ ${s.troca_com}</span></div>`;
+            const label = s.troca_com_label || 'Trocou c/';
+            rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.8rem;color:#d97706;font-weight:600">${label} ${s.troca_com}</span></div>`;
         }
         if (s.observacoes && s.observacoes !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📝</span>${s.observacoes}</div>`;
 
