@@ -261,7 +261,17 @@ async def disponiveis(
         if df_dia.empty:
             return {"meu_servico": meu_servico, "meu_horario": meu_horario, "disponiveis": []}
 
+        # Expandir linhas com múltiplos IDs separados por ;
+        rows_expandidas = []
         for _, row in df_dia.iterrows():
+            raw_id = str(row.get("id", "")).strip()
+            ids_linha = [i.strip() for i in raw_id.split(";") if i.strip()]
+            for single_id in ids_linha:
+                row_copy = row.copy()
+                row_copy["id"] = single_id
+                rows_expandidas.append(row_copy)
+
+        for row in rows_expandidas:
             mid = str(row.get("id", "")).strip()
             if not mid or mid == u_id or mid in ids_com_troca or mid in ids_pronto:
                 continue
