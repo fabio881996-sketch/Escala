@@ -4694,26 +4694,7 @@ else:
                             'indicativo': dados['indicativo'], 'rádio': dados['rádio'],
                             'giro': dados['giro'], 'viatura': dados.get('viatura',''), 'observações': dados['observações'],
                         })
-                        # Adicionar remunerados como linhas extra APENAS se não aparecem em linha multi-ID
-                        for d_rem in servs_rem:
-                            # Verificar se este remunerado já aparece numa linha multi-ID
-                            ja_em_multi = any(
-                                (';' in chave or ',' in chave) and mid in re.split(r'[;,]', chave)
-                                and any(
-                                    d.get('serviço','') == d_rem.get('serviço','') and
-                                    d.get('horário','') == d_rem.get('horário','')
-                                    for d in lista
-                                )
-                                for chave, lista in mapa_existente.items()
-                                if ';' in chave or ',' in chave
-                            )
-                            if not ja_em_multi:
-                                linhas.append({
-                                    'id': mid, 'nome': f"{posto} {nome}".strip(),
-                                    'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
-                                    'indicativo': d_rem['indicativo'], 'rádio': d_rem['rádio'],
-                                    'giro': d_rem['giro'], 'viatura': d_rem.get('viatura',''), 'observações': d_rem['observações'],
-                                })
+                        # Não adicionar remunerados individuais — ficam na linha multi-ID
                         continue  # já adicionou as linhas
                     else:
                         tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
@@ -7019,11 +7000,12 @@ else:
                                     ws_u = sh_u.worksheet("utilizadores")
                                     headers_u = [h.strip().lower() for h in ws_u.row_values(1)]
                                     col_pin_u = headers_u.index('pin') + 1
-                                    col_email_u = headers_u.index('email') + 1
-                                    emails_col = ws_u.col_values(col_email_u)
+                                    col_id_u = headers_u.index('id') + 1 if 'id' in headers_u else 1
+                                    id_u = str(row_u.get('id', '')).strip()
+                                    ids_col = ws_u.col_values(col_id_u)
                                     linha_u = None
-                                    for i, ev in enumerate(emails_col):
-                                        if ev.strip().lower() == email_u.lower():
+                                    for i, iv in enumerate(ids_col):
+                                        if iv.strip() == id_u:
                                             linha_u = i + 1
                                             break
                                     if linha_u:
