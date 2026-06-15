@@ -209,9 +209,11 @@ async def disponiveis(
 
         ids_com_troca: set[str] = set()
         if not df_trocas.empty and data_fmt:
+            # Só trocas de serviço (não remunerados) bloqueiam disponibilidade
             aprovadas = df_trocas[
                 (df_trocas["data"] == data_fmt) &
-                (df_trocas["status"] == "Aprovada")
+                (df_trocas["status"] == "Aprovada") &
+                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
             ]
             ids_com_troca = set(
                 aprovadas["id_origem"].astype(str).tolist() +
