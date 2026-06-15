@@ -4635,21 +4635,22 @@ else:
                     pass
 
                 linhas = []
-                # Primeiro adicionar linhas com múltiplos IDs (remunerados partilhados)
-                linhas_multi_ids_adicionadas = set()
+                # Primeiro adicionar linhas com múltiplos IDs e serviço REMUNERADO (não expandir)
+                linhas_rem_multi_adicionadas = set()
                 for chave, lista_dados in mapa_existente.items():
                     if ';' in chave or ',' in chave:
                         for d_multi in lista_dados:
-                            chave_unica = f"{chave}|{d_multi.get('serviço','')}|{d_multi.get('horário','')}"
-                            if chave_unica not in linhas_multi_ids_adicionadas:
-                                linhas_multi_ids_adicionadas.add(chave_unica)
-                                linhas.append({
-                                    'id': chave, 'nome': chave,
-                                    'serviço': d_multi['serviço'], 'horário': d_multi['horário'],
-                                    'indicativo': d_multi['indicativo'], 'rádio': d_multi['rádio'],
-                                    'giro': d_multi['giro'], 'viatura': d_multi.get('viatura',''),
-                                    'observações': d_multi['observações'],
-                                })
+                            if re.search(r'remun|gratif', norm(d_multi.get('serviço',''))):
+                                chave_unica = f"{chave}|{d_multi.get('serviço','')}|{d_multi.get('horário','')}"
+                                if chave_unica not in linhas_rem_multi_adicionadas:
+                                    linhas_rem_multi_adicionadas.add(chave_unica)
+                                    linhas.append({
+                                        'id': chave, 'nome': chave,
+                                        'serviço': d_multi['serviço'], 'horário': d_multi['horário'],
+                                        'indicativo': d_multi['indicativo'], 'rádio': d_multi['rádio'],
+                                        'giro': d_multi['giro'], 'viatura': d_multi.get('viatura',''),
+                                        'observações': d_multi['observações'],
+                                    })
 
                 for _, row_u in df_util.iterrows():
                     mid = str(row_u.get('id', '')).strip()
@@ -4693,14 +4694,26 @@ else:
                             'indicativo': dados['indicativo'], 'rádio': dados['rádio'],
                             'giro': dados['giro'], 'viatura': dados.get('viatura',''), 'observações': dados['observações'],
                         })
-                        # Adicionar remunerados como linhas extra
+                        # Adicionar remunerados como linhas extra APENAS se não aparecem em linha multi-ID
                         for d_rem in servs_rem:
-                            linhas.append({
-                                'id': mid, 'nome': f"{posto} {nome}".strip(),
-                                'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
-                                'indicativo': d_rem['indicativo'], 'rádio': d_rem['rádio'],
-                                'giro': d_rem['giro'], 'viatura': d_rem.get('viatura',''), 'observações': d_rem['observações'],
-                            })
+                            # Verificar se este remunerado já aparece numa linha multi-ID
+                            ja_em_multi = any(
+                                (';' in chave or ',' in chave) and mid in re.split(r'[;,]', chave)
+                                and any(
+                                    d.get('serviço','') == d_rem.get('serviço','') and
+                                    d.get('horário','') == d_rem.get('horário','')
+                                    for d in lista
+                                )
+                                for chave, lista in mapa_existente.items()
+                                if ';' in chave or ',' in chave
+                            )
+                            if not ja_em_multi:
+                                linhas.append({
+                                    'id': mid, 'nome': f"{posto} {nome}".strip(),
+                                    'serviço': d_rem['serviço'], 'horário': d_rem['horário'],
+                                    'indicativo': d_rem['indicativo'], 'rádio': d_rem['rádio'],
+                                    'giro': d_rem['giro'], 'viatura': d_rem.get('viatura',''), 'observações': d_rem['observações'],
+                                })
                         continue  # já adicionou as linhas
                     else:
                         tipo_folga = militar_de_folga(mid, d_gerar, df_folgas, grupos_folga, feriados)
