@@ -98,6 +98,27 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                     df.at[idx_orig, "__troca_com"] = id_dest
                     df.at[idx_dest, "__troca_com"] = id_orig
 
+        # Aplicar cedência de remunerado (FAZER_REMUNERADO e MATAR_REMUNERADO)
+        if not df_trocas.empty and d_s:
+            trocas_rem = df_trocas[
+                (df_trocas["data"] == d_s) &
+                (df_trocas["status"] == "Aprovada") &
+                (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+            ]
+            for _, t in trocas_rem.iterrows():
+                is_fazer = str(t["servico_origem"]).strip() == "FAZER_REMUNERADO"
+                quem_faz   = str(t["id_origem"]).strip() if is_fazer else str(t["id_destino"]).strip()
+                quem_cede  = str(t["id_destino"]).strip() if is_fazer else str(t["id_origem"]).strip()
+                # Encontrar linha do remunerado — onde está quem cede
+                for idx_r, row_r in df.iterrows():
+                    ids_r = [i.strip() for i in str(row_r.get("id","")).split(";")]
+                    serv_r = str(row_r.get("serviço","")).lower()
+                    if quem_cede in ids_r and ("remun" in serv_r or "gratif" in serv_r):
+                        # Substituir quem_cede por quem_faz
+                        novos_ids = [quem_faz if i == quem_cede else i for i in ids_r]
+                        df.at[idx_r, "id"] = ";".join(novos_ids)
+                        break
+
         entradas = df.fillna("").to_dict(orient="records")
         for e in entradas:
             uid = str(e.get("id", "")).strip()
@@ -322,7 +343,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     colegas_rem = []
                     if not rem_rows.empty:
                         ids_rem = [i.strip() for i in str(rem_rows.iloc[0].get("id","")).split(";")]
-                        colegas_rem = [id_para_nome.get(i, i) for i in ids_rem if i and i != str(u_id).strip()]
+                        colegas_rem = [id_para_nome.get(i, i) for i in ids_rem if i and i != str(u_id).strip() and i != quem_cede]
                     # Também incluir outros com FAZER_REMUNERADO aprovado no mesmo slot
                     outros_fazer = df_trocas[
                         (df_trocas["data"] == d_s) &

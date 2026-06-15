@@ -263,6 +263,16 @@ async def disponiveis(
 
             e_folga = bool(FOLGAS_RE.search(servico))
             e_remunerado = bool(re.search(r"remun|gratif", servico_norm))
+            # Se cedeu o remunerado via MATAR_REMUNERADO, não é remunerado
+            if e_remunerado and not df_trocas.empty and data_fmt:
+                cedeu = not df_trocas[
+                    (df_trocas["data"] == data_fmt) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (df_trocas["servico_origem"] == "MATAR_REMUNERADO") &
+                    (df_trocas["id_origem"].astype(str).str.strip() == mid)
+                ].empty
+                if cedeu:
+                    e_remunerado = False
 
             if tipo == "simples":
                 # Só militares com serviço normal (não folga, não remunerado não cedido)
