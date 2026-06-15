@@ -4618,8 +4618,15 @@ else:
                                 'viatura':    _gt(row_t, ix_vt_t),
                                 'observações':_gt(row_t, ix_ob_t),
                             }
-                            for mid in re.split(r'[;,\n]+', id_raw):
-                                mid = mid.strip()
+                            ids_linha = [m.strip() for m in re.split(r'[;,\n]+', id_raw) if m.strip()]
+                            if len(ids_linha) > 1:
+                                # Linha com múltiplos IDs (ex: remunerado) — guardar com id_raw original
+                                chave = id_raw.strip()
+                                if chave not in mapa_existente:
+                                    mapa_existente[chave] = []
+                                mapa_existente[chave].append(dados_t)
+                            else:
+                                mid = ids_linha[0] if ids_linha else ''
                                 if mid:
                                     if mid not in mapa_existente:
                                         mapa_existente[mid] = []
@@ -4628,6 +4635,22 @@ else:
                     pass
 
                 linhas = []
+                # Primeiro adicionar linhas com múltiplos IDs (remunerados partilhados)
+                linhas_multi_ids_adicionadas = set()
+                for chave, lista_dados in mapa_existente.items():
+                    if ';' in chave or ',' in chave:
+                        for d_multi in lista_dados:
+                            chave_unica = f"{chave}|{d_multi.get('serviço','')}|{d_multi.get('horário','')}"
+                            if chave_unica not in linhas_multi_ids_adicionadas:
+                                linhas_multi_ids_adicionadas.add(chave_unica)
+                                linhas.append({
+                                    'id': chave, 'nome': chave,
+                                    'serviço': d_multi['serviço'], 'horário': d_multi['horário'],
+                                    'indicativo': d_multi['indicativo'], 'rádio': d_multi['rádio'],
+                                    'giro': d_multi['giro'], 'viatura': d_multi.get('viatura',''),
+                                    'observações': d_multi['observações'],
+                                })
+
                 for _, row_u in df_util.iterrows():
                     mid = str(row_u.get('id', '')).strip()
                     if not mid or mid == 'nan':
@@ -5769,6 +5792,73 @@ else:
                                                 _adicionar_lista(campo, val)
                                 _guardar_sheets({aba_e: df_editado_s})
                                 load_data.clear()
+
+                                # Cancelar trocas aprovadas para IDs alterados
+                                try:
+                                    orig_dict_e = st.session_state.get('editar_escala_original', {})
+                                    orig_aba_e = orig_dict_e.get(aba_e, {})
+                                    ids_alterados = set()
+                                    if orig_aba_e and not df_editado_s.empty:
+                                        for _, row_e in df_editado_s.iterrows():
+                                            mid_e = str(row_e.get('id','')).strip()
+                                            if not mid_e or mid_e not in orig_aba_e: continue
+                                            orig_r = orig_aba_e[mid_e]
+                                            serv_orig_e = str(orig_r.get('serviço','')).strip()
+                                            serv_novo_e = str(row_e.get('serviço','')).strip()
+                                            hor_orig_e  = str(orig_r.get('horário','')).strip()
+                                            hor_novo_e  = str(row_e.get('horário','')).strip()
+                                            if serv_orig_e != serv_novo_e or hor_orig_e != hor_novo_e:
+                                                ids_alterados.add(mid_e)
+
+                                    if ids_alterados:
+                                        data_aba_e = f"{aba_e[3:5]}/{aba_e[:2]}/{datetime.now().year}"
+                                        df_tr_e = load_trocas()
+                                        sh_tr_e = get_sheet()
+                                        ws_tr_e = sh_tr_e.worksheet("registos_trocas")
+                                        rows_tr_e = ws_tr_e.get_all_values()
+                                        hdrs_tr_e = rows_tr_e[0] if rows_tr_e else []
+                                        def _ci(name):
+                                            try: return [h.lower().strip() for h in hdrs_tr_e].index(name)
+                                            except: return None
+                                        ci_data   = _ci('data')
+                                        ci_status = _ci('status')
+                                        ci_orig   = _ci('id_origem')
+                                        ci_dest   = _ci('id_destino')
+                                        canceladas_e = []
+                                        for ri, row_tr in enumerate(rows_tr_e[1:], start=2):
+                                            if len(row_tr) <= max(ci_data, ci_status, ci_orig, ci_dest): continue
+                                            if str(row_tr[ci_data]).strip() != data_aba_e: continue
+                                            if str(row_tr[ci_status]).strip() != 'Aprovada': continue
+                                            id_o = str(row_tr[ci_orig]).strip()
+                                            id_d = str(row_tr[ci_dest]).strip()
+                                            if id_o in ids_alterados or id_d in ids_alterados:
+                                                ws_tr_e.update_cell(ri, ci_status + 1, 'Cancelada')
+                                                canceladas_e.append((id_o, id_d))
+                                        # Notificar militares afectados
+                                        if canceladas_e:
+                                            try:
+                                                import requests as _req_e
+                                                todos_ids = set()
+                                                for o, d in canceladas_e:
+                                                    todos_ids.add(o); todos_ids.add(d)
+                                                _req_e.post(
+                                                    "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/notificar-interno",
+                                                    json={
+                                                        "secret": "gnr-famalicao-2026",
+                                                        "u_ids": list(todos_ids),
+                                                        "titulo": "🔄 Troca cancelada",
+                                                        "corpo": f"A tua troca de {data_aba_e} foi cancelada devido a alteração da escala.",
+                                                        "url": "/trocas",
+                                                        "tag": "troca-cancelada",
+                                                    }, timeout=5
+                                                )
+                                                st.info(f"ℹ️ {len(canceladas_e)} troca(s) cancelada(s) automaticamente e militares notificados.")
+                                            except Exception:
+                                                pass
+                                        load_trocas.clear()
+                                except Exception:
+                                    pass
+
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
                                 st.success("✅ Guardado!")
