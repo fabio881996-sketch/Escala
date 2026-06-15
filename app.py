@@ -4619,18 +4619,20 @@ else:
                                 'observações':_gt(row_t, ix_ob_t),
                             }
                             ids_linha = [m.strip() for m in re.split(r'[;,\n]+', id_raw) if m.strip()]
-                            if len(ids_linha) > 1:
-                                # Linha com múltiplos IDs (ex: remunerado) — guardar com id_raw original
+                            e_remun = bool(re.search(r'remun|gratif', norm(sv_t)))
+                            if len(ids_linha) > 1 and e_remun:
+                                # Remunerado com múltiplos IDs — guardar com chave original
                                 chave = id_raw.strip()
                                 if chave not in mapa_existente:
                                     mapa_existente[chave] = []
                                 mapa_existente[chave].append(dados_t)
                             else:
-                                mid = ids_linha[0] if ids_linha else ''
-                                if mid:
-                                    if mid not in mapa_existente:
-                                        mapa_existente[mid] = []
-                                    mapa_existente[mid].append(dados_t)
+                                # Serviço normal ou ID único — expandir para cada ID
+                                for mid in ids_linha:
+                                    if mid:
+                                        if mid not in mapa_existente:
+                                            mapa_existente[mid] = []
+                                        mapa_existente[mid].append(dados_t)
                 except:
                     pass
 
