@@ -235,12 +235,25 @@ async def disponiveis(
         # ── Meu serviço no dia ──
         meu_servico = None
         meu_horario = None
+        # Verificar se cedi o remunerado
+        _eu_cedi_rem = not df_trocas.empty and data_fmt and not df_trocas[
+            (df_trocas["data"] == data_fmt) &
+            (df_trocas["status"] == "Aprovada") &
+            (df_trocas["servico_origem"] == "MATAR_REMUNERADO") &
+            (df_trocas["id_origem"].astype(str).str.strip() == u_id)
+        ].empty
         if not df_dia.empty:
-            minha_linha = df_dia[df_dia["id"].astype(str).str.strip() == u_id]
-            if not minha_linha.empty:
-                row = minha_linha.iloc[0]
-                meu_servico = str(row.get("serviço", "")).strip()
-                meu_horario = str(row.get("horário", "")).strip()
+            minha_linha = df_dia[df_dia["id"].astype(str).str.strip().apply(
+                lambda x: u_id == x or u_id in [i.strip() for i in x.split(";")]
+            )]
+            for _, row in minha_linha.iterrows():
+                sv = str(row.get("serviço","")).strip()
+                # Ignorar remunerado se cedeu, ou sempre ignorar remunerado para meu_servico
+                if re.search(r"remun|gratif", sv.lower()):
+                    continue
+                meu_servico = sv
+                meu_horario = str(row.get("horário","")).strip()
+                break
 
         # ── Filtrar disponíveis consoante o tipo ──
         disponiveis_lista = []
@@ -263,7 +276,7 @@ async def disponiveis(
 
             e_folga = bool(FOLGAS_RE.search(servico))
             e_remunerado = bool(re.search(r"remun|gratif", servico_norm))
-            # Se cedeu o remunerado via MATAR_REMUNERADO, não é remunerado
+            # Se cedeu o remunerado (MATAR_REMUNERADO), não é remunerado
             if e_remunerado and not df_trocas.empty and data_fmt:
                 cedeu = not df_trocas[
                     (df_trocas["data"] == data_fmt) &
@@ -273,6 +286,12 @@ async def disponiveis(
                 ].empty
                 if cedeu:
                     e_remunerado = False
+
+            # Se tem FAZER_REMUNERADO aprovado, esse remunerado não impede trocas do serviço principal
+            if not e_remunerado and not df_trocas.empty and data_fmt:
+                pass  # já tratado acima
+
+
 
             if tipo == "simples":
                 # Só militares com serviço normal (não folga, não remunerado não cedido)
