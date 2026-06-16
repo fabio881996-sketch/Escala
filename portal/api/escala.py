@@ -142,8 +142,8 @@ def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
     serv_map = {}
     for _, r in df_d.iterrows():
         raw_id = str(r.get("id","")).strip()
-        sv = str(r.get("serviço","")).strip()
-        hor = str(r.get("horário","")).strip()
+        sv = str(r.get("serviço","") or r.get("servico","")).strip()
+        hor = str(r.get("horário","") or r.get("horario","")).strip()
         for mid in [i.strip() for i in raw_id.split(";") if i.strip()]:
             serv_map[mid] = (sv, hor)
     # Aplicar trocas aprovadas ao mapa
