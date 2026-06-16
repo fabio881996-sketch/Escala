@@ -5,8 +5,7 @@ from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core.database import GoogleSheetsClient
-from services.data_loader import DataLoader
+from services.data_loader_factory import get_data_loader as _get_data_loader
 from portal.api.auth import obter_user_atual, obter_admin
 
 router = APIRouter()
@@ -14,10 +13,10 @@ router = APIRouter()
 _loader: DataLoader | None = None
 
 
-def get_loader() -> DataLoader:
+def get_loader():
     global _loader
     if _loader is None:
-        _loader = DataLoader(sheets_client=GoogleSheetsClient())
+        _loader = _get_data_loader()
     return _loader
 
 

@@ -9,8 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from core.database import GoogleSheetsClient
-from services.data_loader import DataLoader
+from services.data_loader_factory import get_data_loader as _get_data_loader
 from portal.api.auth import obter_user_atual, obter_admin
 
 router = APIRouter()
@@ -93,8 +92,8 @@ def _verificar_descanso(u_id: str, data_str: str, novo_horario: str, loader: Dat
     return True, ""
 
 
-def get_loader() -> DataLoader:
-    return DataLoader(sheets_client=GoogleSheetsClient())
+def get_loader():
+    return _get_data_loader()
 
 
 # ── Endpoints existentes ─────────────────────────────────────

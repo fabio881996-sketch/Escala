@@ -6,12 +6,11 @@ from pydantic import BaseModel
 from typing import Optional
 
 from portal.api.auth import obter_admin
-from core.database import GoogleSheetsClient
-from services.data_loader import DataLoader
+from services.data_loader_factory import get_data_loader as _get_data_loader
 
 
-def get_loader() -> DataLoader:
-    return DataLoader(sheets_client=GoogleSheetsClient())
+def get_loader():
+    return _get_data_loader()
 
 router = APIRouter()
 
@@ -251,10 +250,10 @@ class UpdateUtilizador(BaseModel):
 async def update_utilizador(uid: str, body: UpdateUtilizador, current_user: dict = Depends(obter_admin)):
     try:
         import os, json
-        from core.database import GoogleSheetsClient
-        from passlib.hash import bcrypt
+        import secrets, hashlib
+        from core.database import get_sheet
 
-        sh = GoogleSheetsClient().get_spreadsheet()
+        sh = get_sheet()
         ws = sh.worksheet("utilizadores")
         vals = ws.get_all_values()
         hdrs = [h.strip().lower() for h in vals[0]]
@@ -264,10 +263,9 @@ async def update_utilizador(uid: str, body: UpdateUtilizador, current_user: dict
         for i, row in enumerate(vals[1:], start=2):
             if str(row[col_id]).strip() == uid.strip():
                 if body.pin is not None and col_pin is not None:
-                    salt = bcrypt.gen_salt()
-                    hashed = bcrypt.using(rounds=12).hash(body.pin)
-                    cl = chr(ord('A') + col_pin)
-                    ws.update_cell(i, col_pin + 1, f"{salt}:{hashed}")
+                    salt = secrets.token_hex(16)
+                    h = hashlib.sha256(f"{salt}{body.pin}".encode()).hexdigest()
+                    ws.update_cell(i, col_pin + 1, f"{h}:{salt}")
                 get_loader().limpar_cache()
                 return {"ok": True}
         raise HTTPException(status_code=404, detail="Utilizador não encontrado")
