@@ -306,8 +306,13 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     "colegas": _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome),
                 })
 
-            # Processar remunerados nomeados directamente (linha multi-ID no Sheets)
+            # Processar remunerados nomeados directamente (linha multi-ID) — dedupllicar por serviço+horário
+            _rem_vistos = set()
             for _, row_rem in linhas_remun.iterrows():
+                _chave_rem = (str(row_rem.get("serviço","")), str(row_rem.get("horário","")), str(row_rem.get("observações","")))
+                if _chave_rem in _rem_vistos:
+                    continue
+                _rem_vistos.add(_chave_rem)
                 serv_rem = str(row_rem.get("serviço","")).strip()
                 hor_rem  = str(row_rem.get("horário","")).strip()
                 ids_linha = [i.strip() for i in str(row_rem.get("id","")).split(";") if i.strip()]
