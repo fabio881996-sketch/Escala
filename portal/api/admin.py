@@ -201,6 +201,26 @@ async def escala_pdf(aba: str, current_user: dict = Depends(obter_admin)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/lista-abas")
+async def lista_abas(current_user: dict = Depends(obter_admin)):
+    try:
+        loader = get_loader()
+        abas = loader.carregar_lista_abas()
+        return {"abas": abas}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/despublicar/{aba}")
+async def despublicar(aba: str, current_user: dict = Depends(obter_admin)):
+    try:
+        loader = get_loader()
+        loader.despublicar_dia(aba)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/efetivo")
 async def efetivo(current_user: dict = Depends(obter_admin)):
     try:

@@ -420,21 +420,13 @@ async def dias_publicados(current_user: dict = Depends(obter_user_atual)):
 @router.post("/publicar/{aba}")
 async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        try:
-            ws = sh.worksheet("escala_publicada")
-        except Exception:
-            ws = sh.add_worksheet(title="escala_publicada", rows=100, cols=1)
-            ws.update("A1", [["data"]])
-        ws.append_row([aba])
-        get_loader().limpar_cache()
-        # Notificar todos os utilizadores
+        loader = get_loader()
+        loader.publicar_dia(aba)
+        loader.limpar_cache()
         try:
             from portal.api.notificacoes import enviar_push
-            df_util = get_loader().carregar_usuarios()
+            df_util = loader.carregar_usuarios()
             todos_ids = df_util["id"].astype(str).str.strip().tolist()
-            # Formatar data para exibição (DD-MM → DD/MM)
             data_fmt = aba.replace("-", "/")
             enviar_push(
                 u_ids=todos_ids,
@@ -453,15 +445,9 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
 @router.delete("/publicar/{aba}")
 async def despublicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("escala_publicada")
-        vals = ws.get_all_values()
-        for i, row in enumerate(vals[1:], start=2):
-            if str(row[0]).strip() == aba:
-                ws.delete_rows(i)
-                break
-        get_loader().limpar_cache()
+        loader = get_loader()
+        loader.despublicar_dia(aba)
+        loader.limpar_cache()
         return {"ok": True, "aba": aba}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
