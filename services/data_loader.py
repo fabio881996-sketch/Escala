@@ -251,37 +251,14 @@ class DataLoader:
             else:
                 abas_sem_cache.append(aba)
 
-        # Buscar abas em falta numa única chamada batch
+        # Buscar abas em falta sequencialmente com cache
         if abas_sem_cache:
-            try:
-                sh = GoogleSheetsClient().get_sheet()
-                # Usar values_batch_get para buscar tudo de uma vez
-                ranges = [f"'{aba}'!A:Z" for aba in abas_sem_cache]
-                batch_result = sh.values_batch_get(ranges)
-                value_ranges = batch_result.get("valueRanges", [])
-                for i, aba in enumerate(abas_sem_cache):
-                    try:
-                        vals = value_ranges[i].get("values", []) if i < len(value_ranges) else []
-                        if vals and len(vals) > 1:
-                            import pandas as pd
-                            hdrs = [str(h).strip() for h in vals[0]]
-                            rows = vals[1:]
-                            df = pd.DataFrame(rows, columns=hdrs[:len(rows[0])] if rows else hdrs)
-                        else:
-                            import pandas as pd
-                            df = pd.DataFrame()
-                        _cache.set(f"load:{aba}", df, 300)
-                        resultado[aba] = df
-                    except Exception as exc:
-                        logger.warning("Falha a processar aba '%s': %s", aba, exc)
-                        resultado[aba] = pd.DataFrame()
-            except Exception as exc:
-                logger.warning("Batch falhou, fallback sequencial: %s", exc)
-                for aba in abas_sem_cache:
-                    try:
-                        resultado[aba] = _cached_load(aba)
-                    except Exception:
-                        resultado[aba] = pd.DataFrame()
+            for aba in abas_sem_cache:
+                try:
+                    resultado[aba] = _cached_load(aba)
+                except Exception as exc:
+                    logger.warning("Falha a carregar aba '%s': %s", aba, exc)
+                    resultado[aba] = pd.DataFrame()
 
         return resultado
 
