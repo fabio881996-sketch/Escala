@@ -45,13 +45,12 @@ async def warmup():
     """Pré-carregar dados críticos no arranque para resposta imediata."""
     async def _load():
         try:
-            from core.database import GoogleSheetsClient
-            from services.data_loader import DataLoader
-            loader = DataLoader(sheets_client=GoogleSheetsClient())
+            from services.data_loader_factory import get_data_loader
+            loader = get_data_loader()
             loader.carregar_usuarios()
             loader.carregar_dias_publicados()
             loader.carregar_trocas()
-            logger.info("Warm-up completo")
+            logger.info("Warm-up completo (PostgreSQL)" if __import__('os').environ.get('DATABASE_URL') else "Warm-up completo (Sheets)")
         except Exception as e:
             logger.warning(f"Warm-up falhou (ignorado): {e}")
     asyncio.create_task(_load())
