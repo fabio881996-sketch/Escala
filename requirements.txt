@@ -10,3 +10,4 @@ fpdf==1.7.2
 requests
 streamlit
 google-api-python-client
+pypdf
