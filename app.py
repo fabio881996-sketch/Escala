@@ -5045,17 +5045,10 @@ else:
                                 # Tem de ficar sempre 1 na secretaria
                                 # O primeiro a ser escalado é o topo da ordem_escala (A1, A2, A3)
                                 # Por isso reserva-se o último disponível na ordem
-                                sec_reservados = set()
-                                if len(sec_disponiveis) >= 1:
-                                    # Ordenar pela posição na ordem_escala de Atendimento
-                                    ordem_atend = ordem_g.get("Atendimento 00-08", []) +                                                   ordem_g.get("Atendimento 08-16", []) +                                                   ordem_g.get("Atendimento 16-24", [])
-                                    sec_por_ordem = [mid for mid in ordem_atend if mid in sec_disponiveis]
-                                    # Adicionar os que não estão na ordem (por precaução)
-                                    for mid in sec_disponiveis:
-                                        if mid not in sec_por_ordem:
-                                            sec_por_ordem.append(mid)
-                                    # Reservar o último — o primeiro será escalado
-                                    sec_reservados = {sec_por_ordem[-1]}
+                                # Militares da secretaria disponíveis (sem férias, tribunal, folga, dispensas)
+                                # Regra: sempre tem de ficar ≥1 na secretaria
+                                # Ao escalar para atendimento, verificar que ainda sobra 1
+                                sec_escalados_atend = set()  # conta quantos da sec já foram escalados
 
                                 for servico, horario, num in SLOTS_AJUSTADOS:
                                     col_key = f"{servico} {horario}"
@@ -5069,7 +5062,7 @@ else:
                                         motivo = None
                                         if mid in ids_indisponiveis: motivo = 'indisponivel'
                                         elif mid in ids_escalados_g: motivo = 'ja_escalado'
-                                        elif mid in sec_reservados and _e_atendimento(servico): motivo = 'reservado_secretaria'
+                                        elif mid in sec_disponiveis and _e_atendimento(servico) and (len(sec_disponiveis) - len(sec_escalados_atend) <= 1): motivo = 'reservado_secretaria'
                                         elif militar_tem_dispensa_slot(mid, d_gerar, df_licencas, servico, horario): motivo = 'dispensa_slot'
                                         elif servico not in militares_servicos.get(mid, []): motivo = f'sem_servico:{militares_servicos.get(mid,[])}'
                                         elif horario == '00-08' and (servico == 'Atendimento' or servico == 'Patrulha Ocorrências') and militar_de_ferias(mid, d_gerar - timedelta(days=1), df_ferias, feriados): motivo = 'vem_de_ferias'
@@ -5099,6 +5092,8 @@ else:
                                     for mid in colocados:
                                         novas_linhas[mid]['serviço'] = servico
                                         novas_linhas[mid]['horário'] = horario
+                                        if mid in sec_disponiveis and _e_atendimento(servico):
+                                            sec_escalados_atend.add(mid)
                                         if servico == 'Patrulha Ocorrências':
                                             novas_linhas[mid]['indicativo'] = '031.6A'
                                             novas_linhas[mid]['viatura']    = 'BT-05-NX'
@@ -5112,6 +5107,13 @@ else:
                                         # Rodar na ordem
                                         ordem_g[col_key].remove(mid)
                                         ordem_g[col_key].append(mid)
+
+                                # Adicionar militares da secretaria não escalados com serviço "Secretaria"
+                                for mid_sec in sec_disponiveis:
+                                    if mid_sec not in ids_escalados_g:
+                                        if mid_sec in novas_linhas:
+                                            novas_linhas[mid_sec]['serviço'] = 'Secretaria'
+                                            novas_linhas[mid_sec]['horário'] = ''
 
                                 st.session_state['tabela_escala'] = list(novas_linhas.values())
                                 st.session_state['ordem_gerada'] = ordem_g
