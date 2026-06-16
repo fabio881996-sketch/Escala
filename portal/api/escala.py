@@ -316,6 +316,15 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 serv_rem = str(row_rem.get("serviço","")).strip()
                 hor_rem  = str(row_rem.get("horário","")).strip()
                 ids_linha = [i.strip() for i in str(row_rem.get("id","")).split(";") if i.strip()]
+                # Se só tem 1 ID na linha, procurar outros com o mesmo remunerado no df_d
+                if len(ids_linha) <= 1:
+                    serv_r = str(row_rem.get("serviço","")).strip().lower()
+                    hor_r  = str(row_rem.get("horário","")).strip()
+                    for _, r2 in df_d.iterrows():
+                        if _re.search(r"remun|gratif", str(r2.get("serviço","")).lower()):
+                            if str(r2.get("horário","")).strip() == hor_r:
+                                ids_extra = [i.strip() for i in str(r2.get("id","")).split(";") if i.strip()]
+                                ids_linha = list(set(ids_linha + ids_extra))
                 colegas_rem = [id_para_nome.get(i, i) for i in ids_linha if i != str(u_id).strip()]
                 servicos.append({
                     "data": d_s, "aba": aba, "servico": serv_rem, "horario": hor_rem,
@@ -402,6 +411,21 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         "is_remunerado": True,
                     })
 
+        # Ordenar por data e depois por horário de início
+        def _sort_key(s):
+            from datetime import datetime as _dt2
+            try:
+                d = _dt2.strptime(s["data"], "%d/%m/%Y")
+            except Exception:
+                d = _dt2(2099, 1, 1)
+            hor = s.get("horario", "") or ""
+            try:
+                h_ini = int(hor.split("-")[0])
+            except Exception:
+                h_ini = 99
+            return (d, h_ini)
+
+        servicos.sort(key=_sort_key)
         return {"servicos": servicos}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
