@@ -25,6 +25,11 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
     """Devolve escala de um dia com nomes formatados."""
     try:
         loader = get_loader()
+        # Verificar se o dia está publicado (admins vêem sempre)
+        if not current_user.get("is_admin"):
+            dias_pub = loader.carregar_dias_publicados()
+            if data_str not in dias_pub:
+                return {"data": data_str, "entradas": []}
         df = loader.carregar_escala(data_str)
         if df.empty:
             return {"data": data_str, "entradas": []}
