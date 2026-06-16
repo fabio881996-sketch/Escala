@@ -138,15 +138,14 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
 def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
     """Devolve colegas correctos após aplicar trocas."""
     import re as _re
-    # Construir mapa id -> (servico, horario) após trocas
+    # Construir mapa id -> (servico, horario) após trocas — expandir IDs múltiplos
     serv_map = {}
     for _, r in df_d.iterrows():
-        mid = str(r.get("id","")).strip()
-        if mid:
-            serv_map[mid] = (
-                str(r.get("serviço","")).strip(),
-                str(r.get("horário","")).strip()
-            )
+        raw_id = str(r.get("id","")).strip()
+        sv = str(r.get("serviço","")).strip()
+        hor = str(r.get("horário","")).strip()
+        for mid in [i.strip() for i in raw_id.split(";") if i.strip()]:
+            serv_map[mid] = (sv, hor)
     # Aplicar trocas aprovadas ao mapa
     if not df_trocas.empty and d_s:
         tr = df_trocas[
@@ -247,64 +246,82 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 continue
 
             dias_sem = 0
-            row = meu.iloc[0]
             d_s = dt.strftime("%d/%m/%Y")
-            servico = str(row.get("serviço", ""))
-            horario = str(row.get("horário", ""))
 
-            troca_aplicada = False
-            troca_com_id = ""
-            # row_ref aponta para a linha cujos dados (viatura, radio, colegas) devem ser usados
-            row_ref = row
+            # Iterar todas as linhas do militar — pode ter serviço normal + remunerado nomeado
+            import re as _re
+            linhas_normais = meu[~meu["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
+            linhas_remun   = meu[meu["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
 
-            if not df_trocas.empty:
-                tr = df_trocas[
-                    (df_trocas["data"] == d_s) &
-                    (df_trocas["status"] == "Aprovada") &
-                    (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
-                ]
-                for _, t in tr.iterrows():
-                    if str(t["id_origem"]).strip() == str(u_id).strip():
-                        s = str(t["servico_destino"])
-                    elif str(t["id_destino"]).strip() == str(u_id).strip():
-                        s = str(t["servico_origem"])
-                    else:
-                        continue
+            # Processar serviços normais
+            for _, row in (linhas_normais if not linhas_normais.empty else meu.head(1)).iterrows():
+                servico = str(row.get("serviço", ""))
+                horario = str(row.get("horário", ""))
+                if _re.search(r"remun|gratif", servico.lower()):
+                    continue
 
-                    serv_novo = s.rsplit("(", 1)[0].strip()
-                    hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                troca_aplicada = False
+                troca_com_id = ""
+                row_ref = row
 
-                    # Buscar a linha do serviço novo na escala do dia (para viatura/radio correctos)
-                    mask_novo = (
-                        (df_d["serviço"].astype(str).str.strip().str.lower() == serv_novo.lower()) &
-                        (df_d["horário"].astype(str).str.strip() == hor_novo.strip())
-                    )
-                    if mask_novo.any():
-                        row_ref = df_d[mask_novo].iloc[0]
+                if not df_trocas.empty:
+                    tr = df_trocas[
+                        (df_trocas["data"] == d_s) &
+                        (df_trocas["status"] == "Aprovada") &
+                        (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                    ]
+                    for _, t in tr.iterrows():
+                        if str(t["id_origem"]).strip() == str(u_id).strip():
+                            s = str(t["servico_destino"])
+                        elif str(t["id_destino"]).strip() == str(u_id).strip():
+                            s = str(t["servico_origem"])
+                        else:
+                            continue
+                        serv_novo = s.rsplit("(", 1)[0].strip()
+                        hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                        mask_novo = (
+                            (df_d["serviço"].astype(str).str.strip().str.lower() == serv_novo.lower()) &
+                            (df_d["horário"].astype(str).str.strip() == hor_novo.strip())
+                        )
+                        if mask_novo.any():
+                            row_ref = df_d[mask_novo].iloc[0]
+                        servico = serv_novo
+                        horario = hor_novo
+                        troca_aplicada = True
+                        troca_com_id = str(t["id_destino"]).strip() if str(t["id_origem"]).strip() == str(u_id).strip() else str(t["id_origem"]).strip()
+                        break
 
-                    servico = serv_novo
-                    horario = hor_novo
-                    troca_aplicada = True
-                    troca_com_id = str(t["id_destino"]).strip() if str(t["id_origem"]).strip() == str(u_id).strip() else str(t["id_origem"]).strip()
-                    break
+                servicos.append({
+                    "data": d_s, "aba": aba, "servico": servico, "horario": horario,
+                    "troca_aprovada": troca_aplicada,
+                    "troca_com": id_para_nome.get(troca_com_id, troca_com_id) if troca_com_id else "",
+                    "troca_com_label": "Cedido por",
+                    "viatura": str(row_ref.get("viatura", "") or "").replace("nan", ""),
+                    "radio": str(row_ref.get("rádio", "") or "").replace("nan", ""),
+                    "indicativo": str(row_ref.get("indicativo rádio", "") or "").replace("nan", ""),
+                    "giro": str(row_ref.get("giro", "") or "").replace("nan", ""),
+                    "observacoes": str(row_ref.get("observações", "") or "").replace("nan", ""),
+                    "is_hoje": dt == hj.date(),
+                    "is_amanha": dt == (hj.date() + timedelta(days=1)),
+                    "colegas": _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome),
+                })
 
-            servicos.append({
-                "data": d_s,
-                "aba": aba,
-                "servico": servico,
-                "horario": horario,
-                "troca_aprovada": troca_aplicada,
-                "troca_com": id_para_nome.get(troca_com_id, troca_com_id) if troca_com_id else "",
-                "viatura": str(row_ref.get("viatura", "") or "").replace("nan", ""),
-                "radio": str(row_ref.get("rádio", "") or "").replace("nan", ""),
-                "indicativo": str(row_ref.get("indicativo rádio", "") or "").replace("nan", ""),
-                "giro": str(row_ref.get("giro", "") or "").replace("nan", ""),
-                "observacoes": str(row_ref.get("observações", "") or "").replace("nan", ""),
-                "is_hoje": dt == hj.date(),
-                "is_amanha": dt == (hj.date() + timedelta(days=1)),
-                "colegas": _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome),
-            })
-
+            # Processar remunerados nomeados directamente (linha multi-ID no Sheets)
+            for _, row_rem in linhas_remun.iterrows():
+                serv_rem = str(row_rem.get("serviço","")).strip()
+                hor_rem  = str(row_rem.get("horário","")).strip()
+                ids_linha = [i.strip() for i in str(row_rem.get("id","")).split(";") if i.strip()]
+                colegas_rem = [id_para_nome.get(i, i) for i in ids_linha if i != str(u_id).strip()]
+                servicos.append({
+                    "data": d_s, "aba": aba, "servico": serv_rem, "horario": hor_rem,
+                    "troca_aprovada": False, "troca_com": "", "troca_com_label": "",
+                    "viatura": str(row_rem.get("viatura","") or "").replace("nan",""),
+                    "radio": str(row_rem.get("rádio","") or "").replace("nan",""),
+                    "indicativo": str(row_rem.get("indicativo rádio","") or "").replace("nan",""),
+                    "giro": "", "observacoes": str(row_rem.get("observações","") or "").replace("nan",""),
+                    "is_hoje": dt == hj.date(), "is_amanha": dt == (hj.date() + timedelta(days=1)),
+                    "colegas": colegas_rem, "is_remunerado": True,
+                })
             # Verificar se há FAZER_REMUNERADO ou MATAR_REMUNERADO aprovado — adicionar remunerado cedido
             if not df_trocas.empty:
                 tr_rem = df_trocas[
