@@ -1,126 +1,87 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { PageHeader, Loading, ErrorBox, Card, Badge, Button } from '../components/ui'
+import { PageHeader, Button, Badge } from '../components/ui'
 
 const DIAS_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
 const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
-function toAba(date) {
-  return `${String(date.getDate()).padStart(2,'0')}-${String(date.getMonth()+1).padStart(2,'0')}`
+function toAba(d) {
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}`
 }
 
 export default function Publicar() {
   const qc = useQueryClient()
   const [msg, setMsg] = useState('')
 
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data: pubData, isLoading } = useQuery({
     queryKey: ['dias-publicados'],
     queryFn: () => api.get('/api/escala/publicados'),
-    staleTime: 30 * 1000,
+    staleTime: 30*1000,
   })
-
-  const { data: abas } = useQuery({
+  const { data: abasData } = useQuery({
     queryKey: ['lista-abas'],
     queryFn: () => api.get('/admin/api/lista-abas'),
-    staleTime: 60 * 1000,
+    staleTime: 60*1000,
   })
 
   const pubMut = useMutation({
-    mutationFn: (aba) => api.post(`/api/escala/publicar/${aba}`, {}),
-    onSuccess: (_, aba) => {
-      qc.invalidateQueries(['dias-publicados'])
-      setMsg(`✅ Escala ${aba} publicada!`)
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: e => setMsg('❌ ' + e.message),
+    mutationFn: aba => api.post(`/api/escala/publicar/${aba}`, {}),
+    onSuccess: (_, aba) => { qc.invalidateQueries(['dias-publicados']); setMsg(`✅ ${aba} publicado!`); setTimeout(()=>setMsg(''),3000) },
+    onError: e => { setMsg('❌ '+e.message); setTimeout(()=>setMsg(''),4000) },
   })
-
   const despubMut = useMutation({
-    mutationFn: (aba) => api.post(`/api/escala/despublicar/${aba}`, {}),
-    onSuccess: (_, aba) => {
-      qc.invalidateQueries(['dias-publicados'])
-      setMsg(`✅ Escala ${aba} despublicada!`)
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: e => setMsg('❌ ' + e.message),
+    mutationFn: aba => api.post(`/admin/api/despublicar/${aba}`, {}),
+    onSuccess: (_, aba) => { qc.invalidateQueries(['dias-publicados']); setMsg(`✅ ${aba} despublicado!`); setTimeout(()=>setMsg(''),3000) },
+    onError: e => { setMsg('❌ '+e.message); setTimeout(()=>setMsg(''),4000) },
   })
 
-  const diasPub = data?.dias || []
-  const todasAbas = abas?.abas || []
-
-  // Gerar próximos 30 dias
+  const diasPub = pubData?.dias || []
+  const todasAbas = abasData?.abas || []
   const hoje = new Date()
+
   const proximos = Array.from({length:30},(_,i) => {
-    const d = new Date(hoje)
-    d.setDate(d.getDate() + i)
-    return d
+    const d = new Date(hoje); d.setDate(d.getDate()+i); return d
   })
 
   return (
-    <div>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f8f9fa' }}>
       <PageHeader icon="📢" title="Publicar Escala" subtitle={`${diasPub.length} dias publicados`} />
-
-      <div className="p-6 space-y-4">
-        {msg && (
-          <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${msg.startsWith('✅') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {msg}
+      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
+        {msg && <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:8, background: msg.startsWith('✅')?'#ebfbee':'#fff5f5', border:`1px solid ${msg.startsWith('✅')?'#b2f2bb':'#ffc9c9'}`, color: msg.startsWith('✅')?'#2f9e44':'#c92a2a', fontSize:13 }}>{msg}</div>}
+        <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, overflow:'hidden' }}>
+          <div style={{ padding:'12px 20px', borderBottom:'1px solid #f1f3f5', background:'#f8f9fa' }}>
+            <span style={{ fontSize:11, fontWeight:700, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.06em' }}>Próximos 30 dias</span>
           </div>
-        )}
-
-        {isLoading && <Loading />}
-        {error && <ErrorBox message={error.message} />}
-
-        <Card>
-          <div className="px-5 py-3 border-b border-slate-100">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Próximos 30 dias</span>
-          </div>
-          <div className="divide-y divide-slate-50">
-            {proximos.map(d => {
-              const aba = toAba(d)
-              const temEscala = todasAbas.includes(aba)
-              const publicado = diasPub.includes(aba)
-              const diaSem = DIAS_PT[d.getDay()]
-              const isFds = d.getDay() === 0 || d.getDay() === 6
-
-              return (
-                <div key={aba} className={`flex items-center justify-between px-5 py-3 hover:bg-slate-50 ${isFds ? 'bg-blue-50/30' : ''}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="w-16 text-center">
-                      <div className={`text-xs font-bold ${isFds ? 'text-blue-600' : 'text-slate-400'}`}>{diaSem}</div>
-                      <div className="text-sm font-bold text-[#0B1929]">{String(d.getDate()).padStart(2,'0')}</div>
-                      <div className="text-xs text-slate-400">{MESES_PT[d.getMonth()]}</div>
-                    </div>
-                    <div className="font-mono text-xs text-slate-400">{aba}</div>
-                    {publicado && <Badge color="green">Publicado</Badge>}
-                    {!publicado && temEscala && <Badge color="amber">Com escala</Badge>}
-                    {!temEscala && <Badge color="slate">Sem escala</Badge>}
+          {proximos.map(d => {
+            const aba = toAba(d)
+            const pub = diasPub.includes(aba)
+            const temEsc = todasAbas.includes(aba)
+            const fds = d.getDay()===0||d.getDay()===6
+            const isHoje = d.toDateString()===hoje.toDateString()
+            return (
+              <div key={aba} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 20px', borderBottom:'1px solid #f8f9fa', background: fds?'#f8f9ff':'#fff' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+                  <div style={{ width:48, textAlign:'center' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color: fds?'#2563eb':'#adb5bd', textTransform:'uppercase' }}>{DIAS_PT[d.getDay()]}</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:'#0f2540' }}>{String(d.getDate()).padStart(2,'0')}</div>
+                    <div style={{ fontSize:10, color:'#adb5bd' }}>{MESES_PT[d.getMonth()]}</div>
                   </div>
-                  <div className="flex gap-2">
-                    {!publicado && temEscala && (
-                      <Button
-                        size="sm"
-                        onClick={() => pubMut.mutate(aba)}
-                        loading={pubMut.isPending && pubMut.variables === aba}
-                      >
-                        📢 Publicar
-                      </Button>
-                    )}
-                    {publicado && (
-                      <Button
-                        size="sm" variant="danger"
-                        onClick={() => { if(confirm(`Despublicar ${aba}?`)) despubMut.mutate(aba) }}
-                        loading={despubMut.isPending && despubMut.variables === aba}
-                      >
-                        Despublicar
-                      </Button>
-                    )}
+                  <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                    {isHoje && <Badge color="green">Hoje</Badge>}
+                    {pub && <Badge color="green">Publicado</Badge>}
+                    {!pub && temEsc && <Badge color="amber">Com escala</Badge>}
+                    {!temEsc && <Badge color="slate">Sem escala</Badge>}
                   </div>
                 </div>
-              )
-            })}
-          </div>
-        </Card>
+                <div style={{ display:'flex', gap:8 }}>
+                  {!pub && temEsc && <Button size="sm" onClick={()=>pubMut.mutate(aba)} loading={pubMut.isPending&&pubMut.variables===aba}>📢 Publicar</Button>}
+                  {pub && <Button size="sm" variant="danger" onClick={()=>{if(confirm(`Despublicar ${aba}?`))despubMut.mutate(aba)}} loading={despubMut.isPending&&despubMut.variables===aba}>Despublicar</Button>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

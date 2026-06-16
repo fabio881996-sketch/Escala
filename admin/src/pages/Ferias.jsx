@@ -1,69 +1,39 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { PageHeader, Loading, ErrorBox, Card, Badge } from '../components/ui'
+import { PageHeader, Loading, ErrorBox, Badge } from '../components/ui'
 
 export default function Ferias() {
   const ano = new Date().getFullYear()
-
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['ferias', ano],
-    queryFn: () => api.ferias(ano),
-    staleTime: 5 * 60 * 1000,
-  })
-
+  const { data, isLoading, error } = useQuery({ queryKey:['ferias',ano], queryFn:()=>api.ferias(ano), staleTime:5*60*1000 })
   const ferias = data?.ferias || []
-
-  // Agrupar por militar
-  const porMilitar = ferias.reduce((m,f) => {
-    if (!m[f.id]) m[f.id] = { nome: f.nome, periodos: [] }
-    m[f.id].periodos.push(f)
-    return m
-  }, {})
+  const porMilitar = ferias.reduce((m,f)=>{ if(!m[f.id])m[f.id]={nome:f.nome,periodos:[]}; m[f.id].periodos.push(f); return m }, {})
 
   return (
-    <div>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f8f9fa' }}>
       <PageHeader icon="🏖️" title="Férias" subtitle={`${Object.keys(porMilitar).length} militares com férias em ${ano}`} />
-
-      <div className="p-6">
+      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
         {isLoading && <Loading />}
         {error && <ErrorBox message={error.message} />}
         {!isLoading && !error && (
-          <Card>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500">Militar</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500">Período</th>
-                  <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500">Dias</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {Object.entries(porMilitar).map(([id, {nome, periodos}]) =>
-                  periodos.map((p, i) => (
-                    <tr key={`${id}-${i}`} className="hover:bg-slate-50">
-                      {i === 0 && (
-                        <td className="px-5 py-3 font-medium text-[#0B1929]" rowSpan={periodos.length}>
-                          {nome}
-                        </td>
-                      )}
-                      <td className="px-5 py-3 text-slate-600 text-xs font-mono">
-                        {p.inicio} → {p.fim || '—'}
-                      </td>
-                      <td className="px-5 py-3">
-                        {p.dias && <Badge color="blue">{p.dias}d</Badge>}
-                      </td>
+          <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, overflow:'hidden' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <thead><tr style={{ background:'#f8f9fa', borderBottom:'1px solid #dee2e6' }}>
+                {['Militar','Período','Dias'].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 20px', fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.05em' }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {Object.entries(porMilitar).map(([id,{nome,periodos}]) =>
+                  periodos.map((p,i)=>(
+                    <tr key={`${id}-${i}`} style={{ borderBottom:'1px solid #f8f9fa' }}>
+                      {i===0 && <td style={{ padding:'10px 20px', fontWeight:500, color:'#0f2540', verticalAlign:'top' }} rowSpan={periodos.length}>{nome}</td>}
+                      <td style={{ padding:'10px 20px', fontFamily:'monospace', fontSize:12, color:'#495057' }}>{p.inicio} → {p.fim||'—'}</td>
+                      <td style={{ padding:'10px 20px' }}>{p.dias && <Badge color="blue">{p.dias}d</Badge>}</td>
                     </tr>
                   ))
                 )}
+                {ferias.length===0 && <tr><td colSpan={3} style={{ padding:'40px', textAlign:'center', color:'#adb5bd' }}>Sem férias registadas para {ano}</td></tr>}
               </tbody>
             </table>
-            {ferias.length === 0 && (
-              <div className="text-center py-12 text-slate-400">
-                <div className="text-4xl mb-3">🏖️</div>
-                <p>Sem férias registadas para {ano}</p>
-              </div>
-            )}
-          </Card>
+          </div>
         )}
       </div>
     </div>

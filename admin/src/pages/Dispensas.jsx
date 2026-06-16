@@ -1,205 +1,127 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { PageHeader, Loading, ErrorBox, Card, Badge, Button, Input, Select } from '../components/ui'
+import { PageHeader, Loading, ErrorBox, Badge, Button, Input, Select } from '../components/ui'
 
 const TIPOS = ['Convalescença','Licença','Outras Licenças','Diligência','Tribunal','Instrução','FCAA CTer','Folga Complementar']
-
-const COR_TIPO = {
-  'Convalescença': 'amber',
-  'Licença': 'blue',
-  'Outras Licenças': 'blue',
-  'Diligência': 'slate',
-  'Tribunal': 'slate',
-  'Instrução': 'navy',
-  'FCAA CTer': 'red',
-  'Folga Complementar': 'green',
-}
+const COR = { 'Convalescença':'amber','Licença':'blue','Outras Licenças':'blue','Diligência':'slate','Tribunal':'slate','Instrução':'navy','FCAA CTer':'red','Folga Complementar':'green' }
 
 export default function Dispensas() {
   const qc = useQueryClient()
+  const [form, setForm] = useState({ id:'', tipo:TIPOS[0], inicio:'', fim:'', obs:'' })
   const [mostrarForm, setMostrarForm] = useState(false)
-  const [form, setForm] = useState({ id: '', tipo: TIPOS[0], inicio: '', fim: '', obs: '' })
   const [filtro, setFiltro] = useState('')
   const [msg, setMsg] = useState('')
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['dispensas'],
-    queryFn: api.dispensas,
-    staleTime: 60 * 1000,
-  })
-
-  const { data: util } = useQuery({
-    queryKey: ['utilizadores'],
-    queryFn: api.utilizadores,
-    staleTime: 5 * 60 * 1000,
-  })
+  const { data, isLoading, error } = useQuery({ queryKey:['dispensas'], queryFn:api.dispensas, staleTime:60*1000 })
+  const { data: util } = useQuery({ queryKey:['utilizadores'], queryFn:api.utilizadores, staleTime:5*60*1000 })
 
   const addMut = useMutation({
     mutationFn: api.adicionarDispensa,
-    onSuccess: () => {
-      qc.invalidateQueries(['dispensas'])
-      setMostrarForm(false)
-      setForm({ id: '', tipo: TIPOS[0], inicio: '', fim: '', obs: '' })
-      setMsg('✅ Dispensa registada!')
-      setTimeout(() => setMsg(''), 3000)
-    },
-    onError: e => setMsg('❌ ' + e.message),
+    onSuccess: () => { qc.invalidateQueries(['dispensas']); setMostrarForm(false); setForm({id:'',tipo:TIPOS[0],inicio:'',fim:'',obs:''}); setMsg('✅ Dispensa registada!'); setTimeout(()=>setMsg(''),3000) },
+    onError: e => { setMsg('❌ '+e.message); setTimeout(()=>setMsg(''),4000) },
   })
-
   const delMut = useMutation({
     mutationFn: api.removerDispensa,
-    onSuccess: () => {
-      qc.invalidateQueries(['dispensas'])
-      setMsg('✅ Dispensa removida!')
-      setTimeout(() => setMsg(''), 3000)
-    },
+    onSuccess: () => { qc.invalidateQueries(['dispensas']); setMsg('✅ Removida!'); setTimeout(()=>setMsg(''),3000) },
   })
 
   const militares = util?.utilizadores || []
-  const dispensas = (data?.dispensas || []).filter(d =>
-    !filtro || d.nome?.toLowerCase().includes(filtro.toLowerCase()) || d.tipo?.toLowerCase().includes(filtro.toLowerCase())
-  )
-
-  // Agrupar activas vs passadas
-  const hoje = new Date().toISOString().slice(0,10).split('-').reverse().join('/')
-  const activas = dispensas.filter(d => d.activa !== false)
-  const passadas = dispensas.filter(d => d.activa === false)
-
-  function handleAdd(e) {
-    e.preventDefault()
-    if (!form.id || !form.inicio) return
-    addMut.mutate(form)
-  }
+  const all = (data?.dispensas || []).filter(d => !filtro || (d.nome||'').toLowerCase().includes(filtro.toLowerCase()) || (d.tipo||'').toLowerCase().includes(filtro.toLowerCase()))
+  const activas = all.filter(d => d.activa !== false)
+  const passadas = all.filter(d => d.activa === false)
 
   return (
-    <div>
-      <PageHeader
-        icon="🏥" title="Dispensas" subtitle={`${activas.length} activas`}
-        actions={
-          <Button onClick={() => setMostrarForm(!mostrarForm)}>
-            {mostrarForm ? '✕ Cancelar' : '➕ Nova Dispensa'}
-          </Button>
-        }
-      />
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f8f9fa' }}>
+      <PageHeader icon="🏥" title="Dispensas" subtitle={`${activas.length} activas`}
+        actions={<Button onClick={()=>setMostrarForm(!mostrarForm)}>{mostrarForm?'✕ Cancelar':'➕ Nova'}</Button>} />
+      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
+        {msg && <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:8, fontSize:13, background:msg.startsWith('✅')?'#ebfbee':'#fff5f5', color:msg.startsWith('✅')?'#2f9e44':'#c92a2a', border:`1px solid ${msg.startsWith('✅')?'#b2f2bb':'#ffc9c9'}` }}>{msg}</div>}
 
-      <div className="p-6 space-y-4">
-        {msg && (
-          <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${msg.startsWith('✅') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {msg}
+        {mostrarForm && (
+          <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, padding:20, marginBottom:16 }}>
+            <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, color:'#0f2540', marginBottom:16 }}>Nova Dispensa</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <Select label="Militar" value={form.id} onChange={e=>setForm(f=>({...f,id:e.target.value}))}>
+                <option value="">Selecionar...</option>
+                {militares.map(m=><option key={m.id} value={m.id}>{m.posto} {m.nome}</option>)}
+              </Select>
+              <Select label="Tipo" value={form.tipo} onChange={e=>setForm(f=>({...f,tipo:e.target.value}))}>
+                {TIPOS.map(t=><option key={t}>{t}</option>)}
+              </Select>
+              <Input label="Início" type="date" value={form.inicio} onChange={e=>setForm(f=>({...f,inicio:e.target.value}))} />
+              <Input label="Fim" type="date" value={form.fim} onChange={e=>setForm(f=>({...f,fim:e.target.value}))} />
+              <div style={{ gridColumn:'span 2' }}>
+                <Input label="Observações" value={form.obs} onChange={e=>setForm(f=>({...f,obs:e.target.value}))} placeholder="Opcional" />
+              </div>
+            </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginTop:16 }}>
+              <Button variant="secondary" onClick={()=>setMostrarForm(false)}>Cancelar</Button>
+              <Button onClick={()=>addMut.mutate(form)} loading={addMut.isPending} disabled={!form.id||!form.inicio}>Guardar</Button>
+            </div>
           </div>
         )}
 
-        {/* Formulário */}
-        {mostrarForm && (
-          <Card className="p-5">
-            <div className="font-display font-semibold text-[#0B1929] mb-4">Nova Dispensa</div>
-            <form onSubmit={handleAdd} className="grid grid-cols-2 gap-4">
-              <Select label="Militar" value={form.id} onChange={e => setForm(f=>({...f,id:e.target.value}))} required>
-                <option value="">Selecionar...</option>
-                {militares.map(m => (
-                  <option key={m.id} value={m.id}>{m.posto} {m.nome} ({m.id})</option>
-                ))}
-              </Select>
-              <Select label="Tipo" value={form.tipo} onChange={e => setForm(f=>({...f,tipo:e.target.value}))}>
-                {TIPOS.map(t => <option key={t}>{t}</option>)}
-              </Select>
-              <Input label="Data Início" type="date" value={form.inicio} onChange={e => setForm(f=>({...f,inicio:e.target.value}))} required />
-              <Input label="Data Fim" type="date" value={form.fim} onChange={e => setForm(f=>({...f,fim:e.target.value}))} />
-              <div className="col-span-2">
-                <Input label="Observações" value={form.obs} onChange={e => setForm(f=>({...f,obs:e.target.value}))} placeholder="Opcional" />
-              </div>
-              <div className="col-span-2 flex justify-end gap-2">
-                <Button type="button" variant="secondary" onClick={() => setMostrarForm(false)}>Cancelar</Button>
-                <Button type="submit" loading={addMut.isPending}>Guardar</Button>
-              </div>
-            </form>
-          </Card>
-        )}
-
-        {/* Filtro */}
-        <div className="flex gap-3">
-          <input
-            value={filtro}
-            onChange={e => setFiltro(e.target.value)}
-            placeholder="Filtrar por nome ou tipo..."
-            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#2E7FD4]"
-          />
+        <div style={{ marginBottom:12 }}>
+          <input value={filtro} onChange={e=>setFiltro(e.target.value)} placeholder="Filtrar..." style={{ width:'100%', padding:'8px 12px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }} />
         </div>
 
         {isLoading && <Loading />}
         {error && <ErrorBox message={error.message} />}
 
-        {/* Activas */}
         {activas.length > 0 && (
-          <Card>
-            <div className="px-5 py-2 bg-amber-50 border-b border-amber-100">
-              <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Activas ({activas.length})</span>
+          <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, overflow:'hidden', marginBottom:16 }}>
+            <div style={{ padding:'10px 20px', background:'#fffbeb', borderBottom:'1px solid #fef3c7' }}>
+              <span style={{ fontSize:11, fontWeight:700, color:'#92400e', textTransform:'uppercase', letterSpacing:'0.06em' }}>Activas ({activas.length})</span>
             </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500">Militar</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500">Tipo</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500">Início</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500">Fim</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-semibold text-slate-500">Obs</th>
-                  <th className="px-5 py-2.5 w-16"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {activas.map(d => (
-                  <tr key={d.__row} className="hover:bg-slate-50">
-                    <td className="px-5 py-3 font-medium text-[#0B1929]">{d.nome}</td>
-                    <td className="px-5 py-3"><Badge color={COR_TIPO[d.tipo] || 'slate'}>{d.tipo}</Badge></td>
-                    <td className="px-5 py-3 text-slate-600 text-xs font-mono">{d.inicio}</td>
-                    <td className="px-5 py-3 text-slate-600 text-xs font-mono">{d.fim || '—'}</td>
-                    <td className="px-5 py-3 text-slate-400 text-xs">{d.obs}</td>
-                    <td className="px-5 py-3">
-                      <button
-                        onClick={() => { if(confirm('Remover esta dispensa?')) delMut.mutate(d.__row) }}
-                        className="text-red-400 hover:text-red-600 text-xs transition-colors"
-                        disabled={delMut.isPending}
-                      >
-                        🗑️
-                      </button>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <thead><tr style={{ background:'#f8f9fa', borderBottom:'1px solid #dee2e6' }}>
+                {['Militar','Tipo','Início','Fim','Obs',''].map(h=><th key={h} style={{ textAlign:'left', padding:'8px 16px', fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.05em' }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {activas.map(d=>(
+                  <tr key={d.__row} style={{ borderBottom:'1px solid #f8f9fa' }}>
+                    <td style={{ padding:'10px 16px', fontWeight:500, color:'#0f2540' }}>{d.nome}</td>
+                    <td style={{ padding:'10px 16px' }}><Badge color={COR[d.tipo]||'slate'}>{d.tipo}</Badge></td>
+                    <td style={{ padding:'10px 16px', fontFamily:'monospace', fontSize:12, color:'#495057' }}>{d.inicio}</td>
+                    <td style={{ padding:'10px 16px', fontFamily:'monospace', fontSize:12, color:'#495057' }}>{d.fim||'—'}</td>
+                    <td style={{ padding:'10px 16px', fontSize:12, color:'#adb5bd' }}>{d.obs}</td>
+                    <td style={{ padding:'10px 16px', textAlign:'right' }}>
+                      <button onClick={()=>{if(confirm('Remover?'))delMut.mutate(d.__row)}} style={{ background:'none', border:'none', cursor:'pointer', color:'#adb5bd', fontSize:16 }}>🗑️</button>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Card>
+          </div>
         )}
 
-        {/* Passadas */}
         {passadas.length > 0 && (
-          <details className="group">
-            <summary className="cursor-pointer text-sm text-slate-500 hover:text-slate-700 py-2 select-none">
-              📋 Histórico ({passadas.length} registos)
-            </summary>
-            <Card className="mt-2">
-              <table className="w-full text-sm">
-                <tbody className="divide-y divide-slate-50">
-                  {passadas.map(d => (
-                    <tr key={d.__row} className="hover:bg-slate-50 opacity-60">
-                      <td className="px-5 py-2.5 font-medium text-[#0B1929]">{d.nome}</td>
-                      <td className="px-5 py-2.5"><Badge color="slate">{d.tipo}</Badge></td>
-                      <td className="px-5 py-2.5 text-slate-500 text-xs font-mono">{d.inicio} → {d.fim}</td>
-                      <td className="px-5 py-2.5">
-                        <button onClick={() => { if(confirm('Remover?')) delMut.mutate(d.__row) }} className="text-red-300 hover:text-red-500 text-xs">🗑️</button>
+          <details>
+            <summary style={{ cursor:'pointer', fontSize:13, color:'#6c757d', padding:'8px 0', userSelect:'none' }}>📋 Histórico ({passadas.length})</summary>
+            <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, overflow:'hidden', marginTop:8 }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                <tbody>
+                  {passadas.map(d=>(
+                    <tr key={d.__row} style={{ borderBottom:'1px solid #f8f9fa', opacity:.6 }}>
+                      <td style={{ padding:'8px 16px', fontWeight:500 }}>{d.nome}</td>
+                      <td style={{ padding:'8px 16px' }}><Badge color="slate">{d.tipo}</Badge></td>
+                      <td style={{ padding:'8px 16px', fontFamily:'monospace', fontSize:12 }}>{d.inicio} → {d.fim}</td>
+                      <td style={{ padding:'8px 16px', textAlign:'right' }}>
+                        <button onClick={()=>{if(confirm('Remover?'))delMut.mutate(d.__row)}} style={{ background:'none', border:'none', cursor:'pointer', color:'#adb5bd' }}>🗑️</button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </Card>
+            </div>
           </details>
         )}
 
-        {!isLoading && dispensas.length === 0 && (
-          <div className="text-center py-16 text-slate-400">
-            <div className="text-4xl mb-3">🏥</div>
-            <p className="font-display font-semibold">Sem dispensas registadas</p>
+        {!isLoading && all.length === 0 && (
+          <div style={{ textAlign:'center', padding:'60px 0', color:'#adb5bd' }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🏥</div>
+            <p style={{ fontWeight:600 }}>Sem dispensas registadas</p>
           </div>
         )}
       </div>

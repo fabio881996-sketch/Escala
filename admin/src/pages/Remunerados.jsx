@@ -1,191 +1,103 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { PageHeader, Loading, ErrorBox, Card, Badge, Button, Select, Input } from '../components/ui'
-
-const TABS = ['A', 'B']
+import { PageHeader, Loading, ErrorBox, Badge, Button, Input, Select } from '../components/ui'
 
 export default function Remunerados() {
   const hoje = new Date().toISOString().slice(0,10)
   const [data, setData] = useState(hoje)
-  const [slots, setSlots] = useState([{ hor: '', n: 2, tab: 'A', obs: '' }])
+  const [slots, setSlots] = useState([{ hor:'', n:2, tab:'A', obs:'' }])
   const [resultado, setResultado] = useState(null)
   const [msg, setMsg] = useState('')
 
-  const { data: util } = useQuery({ queryKey: ['utilizadores'], queryFn: api.utilizadores, staleTime: 5*60*1000 })
-
   const calcMut = useMutation({
-    mutationFn: (body) => api.post('/admin/api/remunerados/calcular', body),
-    onSuccess: (data) => setResultado(data),
-    onError: e => setMsg('❌ ' + e.message),
+    mutationFn: body => api.post('/admin/api/remunerados/calcular', body),
+    onSuccess: d => { setResultado(d); setMsg('') },
+    onError: e => { setMsg('❌ '+e.message); setTimeout(()=>setMsg(''),4000) },
   })
-
   const confMut = useMutation({
-    mutationFn: (body) => api.post('/admin/api/remunerados/confirmar', body),
-    onSuccess: () => {
-      setMsg('✅ Nomeação confirmada!')
-      setResultado(null)
-      setTimeout(() => setMsg(''), 4000)
-    },
-    onError: e => setMsg('❌ ' + e.message),
+    mutationFn: body => api.post('/admin/api/remunerados/confirmar', body),
+    onSuccess: () => { setMsg('✅ Nomeação confirmada!'); setResultado(null); setTimeout(()=>setMsg(''),4000) },
+    onError: e => { setMsg('❌ '+e.message); setTimeout(()=>setMsg(''),4000) },
   })
 
-  function addSlot() {
-    setSlots(s => [...s, { hor: '', n: 2, tab: 'A', obs: '' }])
-  }
-
-  function removeSlot(i) {
-    setSlots(s => s.filter((_,j) => j !== i))
-  }
-
-  function updateSlot(i, key, val) {
-    setSlots(s => s.map((slot,j) => j === i ? {...slot, [key]: val} : slot))
-  }
+  function addSlot() { setSlots(s=>[...s,{hor:'',n:2,tab:'A',obs:''}]) }
+  function rmSlot(i) { setSlots(s=>s.filter((_,j)=>j!==i)) }
+  function upSlot(i,k,v) { setSlots(s=>s.map((sl,j)=>j===i?{...sl,[k]:v}:sl)) }
 
   function calcular() {
-    const dt = new Date(data + 'T00:00:00')
+    const dt = new Date(data+'T00:00:00')
     const aba = `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}`
     const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`
-    calcMut.mutate({ aba, data: dataFmt, slots })
+    calcMut.mutate({ aba, data:dataFmt, slots })
   }
 
-  function confirmar() {
-    confMut.mutate({ resultado })
-  }
-
-  const corGrupo = (g) => {
-    if (g.includes('Voluntário c/ serviço') || g.includes('Voluntário disponível')) return 'green'
-    if (g.includes('folga')) return 'blue'
-    if (g.includes('Não voluntário')) return 'amber'
-    return 'slate'
-  }
+  const corGrupo = g => /Voluntário c\/ serviço|Voluntário disponível/.test(g)?'green':/folga/.test(g)?'blue':/Não voluntário/.test(g)?'amber':'slate'
 
   return (
-    <div>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f8f9fa' }}>
       <PageHeader icon="💶" title="Remunerados" subtitle="Nomeação automática" />
+      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
+        {msg && <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:8, fontSize:13, background:msg.startsWith('✅')?'#ebfbee':'#fff5f5', color:msg.startsWith('✅')?'#2f9e44':'#c92a2a', border:`1px solid ${msg.startsWith('✅')?'#b2f2bb':'#ffc9c9'}` }}>{msg}</div>}
 
-      <div className="p-6 space-y-4">
-        {msg && (
-          <div className={`flex items-center gap-2 p-3 rounded-lg text-sm border ${msg.startsWith('✅') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {msg}
+        <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, padding:20, marginBottom:16 }}>
+          <div style={{ marginBottom:16 }}>
+            <Input label="Data" type="date" value={data} onChange={e=>setData(e.target.value)} />
           </div>
-        )}
-
-        <Card className="p-5">
-          <div className="mb-4">
-            <Input label="Data" type="date" value={data} onChange={e => setData(e.target.value)} />
-          </div>
-
-          <div className="font-display font-semibold text-[#0B1929] text-sm mb-3">Remunerados a nomear</div>
-
-          <div className="space-y-3">
-            {slots.map((slot, i) => (
-              <div key={i} className="grid grid-cols-5 gap-3 items-end p-3 bg-slate-50 rounded-xl">
-                <Input
-                  label={`Horário ${i+1}`}
-                  value={slot.hor}
-                  onChange={e => updateSlot(i,'hor',e.target.value)}
-                  placeholder="ex: 08-12"
-                />
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-600 tracking-wide uppercase">Nº Mil.</label>
-                  <input type="number" min={1} max={10} value={slot.n}
-                    onChange={e => updateSlot(i,'n',parseInt(e.target.value))}
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-[#2E7FD4]" />
+          <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, fontSize:13, color:'#0f2540', marginBottom:12 }}>Remunerados a nomear</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {slots.map((slot,i)=>(
+              <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px 1fr auto', gap:10, alignItems:'end', background:'#f8f9fa', padding:12, borderRadius:8 }}>
+                <Input label={`Horário ${i+1}`} value={slot.hor} onChange={e=>upSlot(i,'hor',e.target.value)} placeholder="ex: 08-12" />
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  <label style={{ fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.06em' }}>Nº Mil.</label>
+                  <input type="number" min={1} max={10} value={slot.n} onChange={e=>upSlot(i,'n',parseInt(e.target.value))} style={{ padding:'7px 10px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13, outline:'none' }} />
                 </div>
-                <Select label="Tabela" value={slot.tab} onChange={e => updateSlot(i,'tab',e.target.value)}>
-                  <option value="A">A</option>
-                  <option value="B">B</option>
+                <Select label="Tab." value={slot.tab} onChange={e=>upSlot(i,'tab',e.target.value)}>
+                  <option>A</option><option>B</option>
                 </Select>
-                <Input
-                  label="Observação"
-                  value={slot.obs}
-                  onChange={e => updateSlot(i,'obs',e.target.value)}
-                  placeholder="ex: Reg. Trânsito"
-                />
-                <div className="flex gap-2">
-                  {i > 0 && (
-                    <button onClick={() => removeSlot(i)}
-                      className="px-3 py-2 text-red-400 hover:text-red-600 border border-red-200 rounded-lg text-sm transition-colors">
-                      🗑️
-                    </button>
-                  )}
-                </div>
+                <Input label="Observação" value={slot.obs} onChange={e=>upSlot(i,'obs',e.target.value)} placeholder="ex: Reg. Trânsito" />
+                {i>0 && <button onClick={()=>rmSlot(i)} style={{ background:'none', border:'1px solid #ffc9c9', borderRadius:6, cursor:'pointer', color:'#c92a2a', padding:'7px 10px', alignSelf:'flex-end' }}>🗑️</button>}
               </div>
             ))}
           </div>
-
-          <div className="flex gap-3 mt-4">
-            <Button variant="secondary" onClick={addSlot}>➕ Adicionar remunerado</Button>
-            <Button onClick={calcular} loading={calcMut.isPending} disabled={!slots.some(s => s.hor)}>
-              🔍 Calcular Nomeação
-            </Button>
+          <div style={{ display:'flex', gap:10, marginTop:16 }}>
+            <Button variant="secondary" onClick={addSlot}>➕ Adicionar</Button>
+            <Button onClick={calcular} loading={calcMut.isPending} disabled={!slots.some(s=>s.hor)}>🔍 Calcular</Button>
           </div>
-        </Card>
+        </div>
 
         {calcMut.isPending && <Loading text="A calcular nomeação..." />}
 
         {resultado && (
-          <Card className="overflow-hidden">
-            <div className="px-5 py-3 bg-[#0B1929] text-white font-display font-semibold text-sm">
-              Resultado da Nomeação
-            </div>
-            <div className="divide-y divide-slate-100">
-              {resultado.resultados?.map((res, i) => (
-                <div key={i} className="p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <span className="font-display font-bold text-[#0B1929]">
-                        Remunerado {i+1} — Tabela {res.slot?.tab}
-                      </span>
-                      <span className="ml-2 font-mono text-sm text-slate-500">{res.slot?.hor}</span>
-                    </div>
-                    <Badge color={res.nomeados?.length >= res.slot?.n ? 'green' : 'red'}>
-                      {res.nomeados?.length}/{res.slot?.n} nomeados
-                    </Badge>
-                  </div>
-
-                  {res.nomeados?.length > 0 ? (
-                    <div className="space-y-2">
-                      {res.nomeados.map((n, j) => (
-                        <div key={j} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                          <div>
-                            <span className="font-medium text-sm text-[#0B1929]">{n.nome}</span>
-                            <span className="text-xs text-slate-400 ml-2">({n.id})</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge color={corGrupo(n.grupo)}>{n.grupo}</Badge>
-                            <span className="text-xs text-slate-400">{n.total}h acum.</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-red-500 bg-red-50 p-3 rounded-lg">
-                      ❌ Não foi possível nomear militares suficientes
-                    </div>
-                  )}
-
-                  {res.avisos?.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {res.avisos.map((av, j) => (
-                        <div key={j} className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-1.5"
-                          dangerouslySetInnerHTML={{__html: av}} />
-                      ))}
-                    </div>
-                  )}
+          <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, overflow:'hidden' }}>
+            <div style={{ background:'#0f2540', padding:'12px 20px', color:'#fff', fontFamily:"'Syne',sans-serif", fontWeight:700 }}>Resultado</div>
+            {resultado.resultados?.map((res,i)=>(
+              <div key={i} style={{ padding:20, borderBottom:'1px solid #f1f3f5' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                  <span style={{ fontFamily:"'Syne',sans-serif", fontWeight:600, color:'#0f2540' }}>Remunerado {i+1} — Tabela {res.slot?.tab} {res.slot?.hor}</span>
+                  <Badge color={res.nomeados?.length>=res.slot?.n?'green':'red'}>{res.nomeados?.length}/{res.slot?.n}</Badge>
                 </div>
-              ))}
-            </div>
-
-            {resultado.resultados?.some(r => r.nomeados?.length > 0) && (
-              <div className="px-5 py-4 border-t border-slate-100 bg-slate-50">
-                <Button onClick={confirmar} loading={confMut.isPending} className="w-full">
-                  ✅ Confirmar Nomeação e Escrever na Escala
-                </Button>
+                {res.nomeados?.map((n,j)=>(
+                  <div key={j} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:'#f8f9fa', borderRadius:6, marginBottom:6 }}>
+                    <span style={{ fontSize:13, fontWeight:500, color:'#0f2540' }}>{n.nome}</span>
+                    <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                      <Badge color={corGrupo(n.grupo)}>{n.grupo}</Badge>
+                      <span style={{ fontSize:11, color:'#adb5bd' }}>{n.total}h</span>
+                    </div>
+                  </div>
+                ))}
+                {res.avisos?.map((av,j)=>(
+                  <div key={j} style={{ marginTop:6, padding:'6px 10px', background:'#fffbeb', border:'1px solid #fef3c7', borderRadius:4, fontSize:12, color:'#92400e' }} dangerouslySetInnerHTML={{__html:av}} />
+                ))}
+              </div>
+            ))}
+            {resultado.resultados?.some(r=>r.nomeados?.length>0) && (
+              <div style={{ padding:20, background:'#f8f9fa', borderTop:'1px solid #dee2e6' }}>
+                <Button onClick={()=>confMut.mutate({resultado})} loading={confMut.isPending} style={{ width:'100%', justifyContent:'center' }}>✅ Confirmar Nomeação</Button>
               </div>
             )}
-          </Card>
+          </div>
         )}
       </div>
     </div>

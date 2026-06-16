@@ -1,109 +1,68 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
-import { PageHeader, Loading, ErrorBox, Card, Badge, Button, Input } from '../components/ui'
+import { PageHeader, Loading, ErrorBox, Badge, Button, Input } from '../components/ui'
 
 export default function Utilizadores() {
   const qc = useQueryClient()
-  const [editId, setEditId] = useState(null)
-  const [newPin, setNewPin] = useState('')
+  const [filtro, setFiltro] = useState('')
+  const [pinForm, setPinForm] = useState({ id:null, pin:'' })
   const [msg, setMsg] = useState('')
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['utilizadores'],
-    queryFn: api.utilizadores,
-    staleTime: 5 * 60 * 1000,
+  const { data, isLoading, error } = useQuery({ queryKey:['utilizadores'], queryFn:api.utilizadores, staleTime:5*60*1000 })
+
+  const pinMut = useMutation({
+    mutationFn: ({ id, pin }) => api.post(`/admin/api/utilizadores/${id}/pin`, { pin }),
+    onSuccess: () => { qc.invalidateQueries(['utilizadores']); setPinForm({id:null,pin:''}); setMsg('✅ PIN actualizado!'); setTimeout(()=>setMsg(''),3000) },
+    onError: e => { setMsg('❌ '+e.message); setTimeout(()=>setMsg(''),4000) },
   })
 
-  const updateMut = useMutation({
-    mutationFn: ({ id, body }) => api.updateUtilizador(id, body),
-    onSuccess: () => {
-      qc.invalidateQueries(['utilizadores'])
-      setEditId(null)
-      setNewPin('')
-      setMsg('✅ PIN actualizado!')
-      setTimeout(() => setMsg(''), 3000)
-    },
-  })
-
-  const militares = data?.utilizadores || []
+  const militares = (data?.utilizadores || []).filter(m => !filtro || (m.nome||'').toLowerCase().includes(filtro.toLowerCase()) || String(m.id).includes(filtro))
 
   return (
-    <div>
-      <PageHeader icon="👤" title="Gerir Utilizadores" subtitle={`${militares.length} contas registadas`} />
-
-      <div className="p-8">
-        {msg && (
-          <div className="mb-4 flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-            {msg}
-          </div>
-        )}
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:'#f8f9fa' }}>
+      <PageHeader icon="👤" title="Utilizadores" subtitle={`${data?.utilizadores?.length||0} militares`} />
+      <div style={{ flex:1, overflowY:'auto', padding:24 }}>
+        {msg && <div style={{ marginBottom:16, padding:'10px 16px', borderRadius:8, fontSize:13, background:msg.startsWith('✅')?'#ebfbee':'#fff5f5', color:msg.startsWith('✅')?'#2f9e44':'#c92a2a', border:`1px solid ${msg.startsWith('✅')?'#b2f2bb':'#ffc9c9'}` }}>{msg}</div>}
+        <div style={{ marginBottom:16 }}>
+          <input value={filtro} onChange={e=>setFiltro(e.target.value)} placeholder="Filtrar..." style={{ width:'100%', padding:'8px 12px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13, outline:'none', boxSizing:'border-box' }} />
+        </div>
         {isLoading && <Loading />}
         {error && <ErrorBox message={error.message} />}
         {!isLoading && !error && (
-          <Card>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100">
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">ID</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nome</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Posto</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Admin</th>
-                    <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">PIN</th>
-                    <th className="px-5 py-3"></th>
+          <div style={{ background:'#fff', border:'1px solid #dee2e6', borderRadius:8, overflow:'hidden' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+              <thead><tr style={{ background:'#f8f9fa', borderBottom:'1px solid #dee2e6' }}>
+                {['ID','Posto / Nome','PIN',''].map(h=><th key={h} style={{ textAlign:'left', padding:'10px 16px', fontSize:11, fontWeight:600, color:'#6c757d', textTransform:'uppercase', letterSpacing:'0.05em' }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {militares.map(m=>(
+                  <tr key={m.id} style={{ borderBottom:'1px solid #f8f9fa' }}>
+                    <td style={{ padding:'10px 16px', fontFamily:'monospace', fontWeight:700, color:'#2e7fd4', width:60 }}>{m.id}</td>
+                    <td style={{ padding:'10px 16px' }}>
+                      <div style={{ fontWeight:500, color:'#0f2540' }}>{m.nome}</div>
+                      <div style={{ fontSize:11, color:'#adb5bd' }}>{m.posto}</div>
+                    </td>
+                    <td style={{ padding:'10px 16px' }}>
+                      {pinForm.id === m.id ? (
+                        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                          <input type="password" placeholder="Novo PIN" value={pinForm.pin} onChange={e=>setPinForm(f=>({...f,pin:e.target.value}))}
+                            style={{ padding:'5px 10px', border:'1px solid #dee2e6', borderRadius:6, fontSize:13, width:120, outline:'none' }} />
+                          <Button size="sm" onClick={()=>pinMut.mutate(pinForm)} loading={pinMut.isPending} disabled={pinForm.pin.length < 4}>Guardar</Button>
+                          <Button size="sm" variant="secondary" onClick={()=>setPinForm({id:null,pin:''})}>✕</Button>
+                        </div>
+                      ) : (
+                        m.tem_pin ? <Badge color="green">PIN definido</Badge> : <Badge color="red">Sem PIN</Badge>
+                      )}
+                    </td>
+                    <td style={{ padding:'10px 16px', textAlign:'right' }}>
+                      {pinForm.id !== m.id && <Button size="sm" variant="secondary" onClick={()=>setPinForm({id:m.id,pin:''})}>🔑 PIN</Button>}
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {militares.map(m => (
-                    <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-5 py-3 font-mono text-xs text-slate-400">{m.id}</td>
-                      <td className="px-5 py-3 font-medium text-[#0B1929]">{m.nome}</td>
-                      <td className="px-5 py-3 text-slate-600">{m.posto}</td>
-                      <td className="px-5 py-3">
-                        {m.is_admin && <Badge color="navy">Admin</Badge>}
-                      </td>
-                      <td className="px-5 py-3">
-                        {editId === m.id ? (
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="password"
-                              value={newPin}
-                              onChange={e => setNewPin(e.target.value.slice(0, 4))}
-                              maxLength={4}
-                              placeholder="Novo PIN"
-                              className="w-24 px-2 py-1 border border-[#2E7FD4] rounded-lg text-sm focus:outline-none"
-                              autoFocus
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => updateMut.mutate({ id: m.id, body: { pin: newPin } })}
-                              disabled={newPin.length !== 4}
-                              loading={updateMut.isPending}
-                            >
-                              ✓
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setEditId(null)}>✕</Button>
-                          </div>
-                        ) : (
-                          <span className="text-slate-300 font-mono text-xs">
-                            {m.tem_pin ? '••••' : <span className="text-amber-500">Sem PIN</span>}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        {editId !== m.id && (
-                          <Button size="sm" variant="secondary" onClick={() => { setEditId(m.id); setNewPin('') }}>
-                            ✏️ Editar PIN
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>
