@@ -19,7 +19,22 @@ export const api = {
   get:  url => request('GET', url),
   post: (url, body) => request('POST', url, body),
 
-  login: (pin) => request('POST', '/api/auth/login', { username: pin, password: pin }),
+  login: async (pin) => {
+    const token = localStorage.getItem(TOKEN_KEY)
+    const form = new URLSearchParams()
+    form.append('username', pin)
+    form.append('password', pin)
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: form,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || 'PIN incorreto')
+    }
+    return res.json()
+  },
   me:    () => request('GET', '/api/auth/me'),
 
   utilizadores: () => request('GET', '/admin/api/utilizadores'),
