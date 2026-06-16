@@ -77,7 +77,7 @@ def _cached_load_trocas() -> pd.DataFrame:
     if hit:
         return val
     result = GoogleSheetsClient().load_data(EXCHANGES_SHEET_NAME)
-    _cache.set("trocas", result, 10)  # TTL curto — trocas mudam frequentemente
+    _cache.set("trocas", result, 120)
     return result
 
 def _cached_load_usuarios() -> pd.DataFrame:
@@ -235,17 +235,54 @@ class DataLoader:
         return {d.strftime("%d-%m"): self.carregar_escala(d) for d in datas}
 
     def carregar_escalas_batch(self, datas: list[date]) -> dict[str, pd.DataFrame]:
-        """Carrega múltiplas escalas usando cache por aba."""
+        """Carrega múltiplas escalas — usa cache individual ou batch HTTP único."""
         if not datas:
             return {}
+
         resultado: dict[str, pd.DataFrame] = {}
+        abas_sem_cache = []
+
+        # Verificar cache primeiro
         for d in datas:
             aba = d.strftime("%d-%m")
+            val, hit = _cache.get(f"load:{aba}")
+            if hit:
+                resultado[aba] = val
+            else:
+                abas_sem_cache.append(aba)
+
+        # Buscar abas em falta numa única chamada batch
+        if abas_sem_cache:
             try:
-                resultado[aba] = _cached_load(aba)
+                sh = GoogleSheetsClient().get_sheet()
+                # Usar values_batch_get para buscar tudo de uma vez
+                ranges = [f"'{aba}'!A:Z" for aba in abas_sem_cache]
+                batch_result = sh.values_batch_get(ranges)
+                value_ranges = batch_result.get("valueRanges", [])
+                for i, aba in enumerate(abas_sem_cache):
+                    try:
+                        vals = value_ranges[i].get("values", []) if i < len(value_ranges) else []
+                        if vals and len(vals) > 1:
+                            import pandas as pd
+                            hdrs = [str(h).strip() for h in vals[0]]
+                            rows = vals[1:]
+                            df = pd.DataFrame(rows, columns=hdrs[:len(rows[0])] if rows else hdrs)
+                        else:
+                            import pandas as pd
+                            df = pd.DataFrame()
+                        _cache.set(f"load:{aba}", df, 300)
+                        resultado[aba] = df
+                    except Exception as exc:
+                        logger.warning("Falha a processar aba '%s': %s", aba, exc)
+                        resultado[aba] = pd.DataFrame()
             except Exception as exc:
-                logger.warning("Falha a carregar aba '%s': %s", aba, exc)
-                resultado[aba] = pd.DataFrame()
+                logger.warning("Batch falhou, fallback sequencial: %s", exc)
+                for aba in abas_sem_cache:
+                    try:
+                        resultado[aba] = _cached_load(aba)
+                    except Exception:
+                        resultado[aba] = pd.DataFrame()
+
         return resultado
 
     def carregar_usuarios(self) -> pd.DataFrame:
