@@ -269,26 +269,14 @@ class UpdateUtilizador(BaseModel):
 @router.put("/utilizadores/{uid}")
 async def update_utilizador(uid: str, body: UpdateUtilizador, current_user: dict = Depends(obter_admin)):
     try:
-        import os, json
         import secrets, hashlib
-        from core.database import get_sheet
-
-        sh = get_sheet()
-        ws = sh.worksheet("utilizadores")
-        vals = ws.get_all_values()
-        hdrs = [h.strip().lower() for h in vals[0]]
-        col_id  = hdrs.index("id")  if "id"  in hdrs else 0
-        col_pin = hdrs.index("pin") if "pin" in hdrs else None
-
-        for i, row in enumerate(vals[1:], start=2):
-            if str(row[col_id]).strip() == uid.strip():
-                if body.pin is not None and col_pin is not None:
-                    salt = secrets.token_hex(16)
-                    h = hashlib.sha256(f"{salt}{body.pin}".encode()).hexdigest()
-                    ws.update_cell(i, col_pin + 1, f"{h}:{salt}")
-                get_loader().limpar_cache()
-                return {"ok": True}
-        raise HTTPException(status_code=404, detail="Utilizador não encontrado")
+        loader = get_loader()
+        if body.pin is not None:
+            salt = secrets.token_hex(16)
+            h = hashlib.sha256(f"{salt}{body.pin}".encode()).hexdigest()
+            loader.actualizar_pin(uid.strip(), f"{h}:{salt}")
+        loader.limpar_cache()
+        return {"ok": True}
     except HTTPException:
         raise
     except Exception as e:
@@ -462,11 +450,9 @@ class NovaDispensa(BaseModel):
 @router.post("/dispensas")
 async def add_dispensa(body: NovaDispensa, current_user: dict = Depends(obter_admin)):
     try:
-        from core.database import GoogleSheetsClient
-        sh = GoogleSheetsClient().get_spreadsheet()
-        ws = sh.worksheet("licencas")
-        ws.append_row([body.id, body.tipo, body.inicio, body.fim, body.obs or ""])
-        get_loader().limpar_cache()
+        loader = get_loader()
+        loader.adicionar_licenca({"id": body.id, "tipo": body.tipo, "inicio": body.inicio, "fim": body.fim, "obs": body.obs or ""})
+        loader.limpar_cache()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -475,11 +461,9 @@ async def add_dispensa(body: NovaDispensa, current_user: dict = Depends(obter_ad
 @router.delete("/dispensas/{row}")
 async def del_dispensa(row: int, current_user: dict = Depends(obter_admin)):
     try:
-        from core.database import GoogleSheetsClient
-        sh = GoogleSheetsClient().get_spreadsheet()
-        ws = sh.worksheet("licencas")
-        ws.delete_rows(row)
-        get_loader().limpar_cache()
+        loader = get_loader()
+        loader.remover_licenca(row)
+        loader.limpar_cache()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

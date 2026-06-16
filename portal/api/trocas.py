@@ -446,45 +446,38 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
     """Cria pedido de troca."""
     u_id = current_user.get("sub")
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("registos_trocas")
         from datetime import datetime as _dt
-        ws.append_row([
-            pedido.data, u_id, pedido.servico_origem,
-            pedido.id_destino, pedido.servico_destino,
-            "Pendente_Militar", pedido.observacoes or "",
-            "",  # validador (col H)
-            _dt.now().strftime("%d/%m/%Y %H:%M"),  # data_pedido (col I)
-            "",  # data_aceitacao (col J)
-        ])
+        loader = get_loader()
+        loader.guardar_troca({
+            "data": pedido.data, "id_origem": u_id,
+            "servico_origem": pedido.servico_origem,
+            "id_destino": pedido.id_destino,
+            "servico_destino": pedido.servico_destino,
+            "status": "Pendente_Militar",
+            "observacoes": pedido.observacoes or "",
+            "data_pedido": _dt.now().strftime("%d/%m/%Y %H:%M"),
+        })
         # Notificar o destinatário
         try:
             from portal.api.notificacoes import enviar_push
-            enviar_push(
-                u_ids=[pedido.id_destino],
-                titulo="🔄 Novo pedido de troca",
-                corpo=f"Tens um pedido de troca para {pedido.data}.",
-                url="/trocas",
-            )
+            enviar_push(u_ids=[pedido.id_destino], titulo="🔄 Novo pedido de troca",
+                       corpo=f"Tens um pedido de troca para {pedido.data}.", url="/trocas")
         except Exception:
             pass
-        # Se pedido, criar também pedido MATAR_REMUNERADO
+        # Se pedido, criar também MATAR_REMUNERADO
         if pedido.incluir_remunerado:
             try:
-                from datetime import datetime as _dt3
-                ws.append_row([
-                    pedido.data, u_id, "MATAR_REMUNERADO",
-                    pedido.id_destino, pedido.servico_destino,
-                    "Pendente_Militar", "",
-                    "",
-                    _dt3.now().strftime("%d/%m/%Y %H:%M"),
-                    "",
-                ])
+                loader.guardar_troca({
+                    "data": pedido.data, "id_origem": u_id,
+                    "servico_origem": "MATAR_REMUNERADO",
+                    "id_destino": pedido.id_destino,
+                    "servico_destino": pedido.servico_destino,
+                    "status": "Pendente_Militar", "observacoes": "",
+                    "data_pedido": _dt.now().strftime("%d/%m/%Y %H:%M"),
+                })
             except Exception:
                 pass
-
-        get_loader().limpar_cache()
+        loader.limpar_cache()
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -494,43 +487,35 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
 async def cancelar_troca_aprovada(payload: CancelarTroca, current_user: dict = Depends(obter_user_atual)):
     """Cancela uma troca já aprovada — notifica ambos os militares."""
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("registos_trocas")
-        rows = ws.get_all_values()
-
-        # Encontrar linha por row_index
-        target = payload.row_index
-        if target < 2 or target > len(rows):
-            raise HTTPException(status_code=404, detail="Linha não encontrada")
-        row = rows[target - 1]
-
-        # Verificar que está Aprovada
-        status_actual = str(row[5]).strip() if len(row) > 5 else ""
-        if status_actual != "Aprovada":
+        loader = get_loader()
+        df = loader.carregar_trocas()
+        # Encontrar troca pelo row_index (id no PG)
+        troca = None
+        if not df.empty:
+            matches = df[df["id"] == payload.row_index] if "id" in df.columns else df.iloc[payload.row_index-2:payload.row_index-1]
+            if not matches.empty:
+                troca = matches.iloc[0]
+        if troca is None:
+            raise HTTPException(status_code=404, detail="Troca não encontrada")
+        if str(troca.get("status","")).strip() != "Aprovada":
             raise HTTPException(status_code=400, detail="Troca não está aprovada")
 
-        ws.update_cell(target, 6, "Cancelada")
-        get_loader().limpar_cache()
+        loader.actualizar_status_troca(int(troca["id"]) if "id" in troca else payload.row_index, "Cancelada")
+        loader.limpar_cache()
 
-        # Notificar ambos os militares
         try:
             from portal.api.notificacoes import enviar_push
-            id_origem  = str(row[1]).strip() if len(row) > 1 else ""
-            id_destino = str(row[3]).strip() if len(row) > 3 else ""
-            data_troca = str(row[0]).strip() if len(row) > 0 else ""
-            admin_nome = f"{current_user.get('nome','Admin')}"
-            if id_origem or id_destino:
-                enviar_push(
-                    u_ids=[_id for _id in [id_origem, id_destino] if _id],
-                    titulo="🚫 Troca cancelada",
-                    corpo=f"A troca de {data_troca} foi cancelada pelo admin ({admin_nome}).",
-                    url="/trocas",
-                    tag="troca-cancelada",
-                )
+            id_origem  = str(troca.get("id_origem","")).strip()
+            id_destino = str(troca.get("id_destino","")).strip()
+            data_troca = str(troca.get("data","")).strip()
+            enviar_push(
+                u_ids=[i for i in [id_origem, id_destino] if i],
+                titulo="🚫 Troca cancelada",
+                corpo=f"A troca de {data_troca} foi cancelada.",
+                url="/trocas", tag="troca-cancelada",
+            )
         except Exception:
             pass
-
         return {"ok": True}
     except HTTPException:
         raise
@@ -549,18 +534,19 @@ async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(ob
     """Cancela um pedido de troca feito pelo próprio utilizador."""
     u_id = str(current_user.get("sub"))
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("registos_trocas")
-        rows = ws.get_all_values()
-        row_arr_idx = payload.row_index - 1
-        if row_arr_idx < 1 or row_arr_idx >= len(rows):
-            raise HTTPException(status_code=404, detail="Linha não encontrada")
-        row = rows[row_arr_idx]
-        id_origem = str(row[1]).strip() if len(row) > 1 else ""
-        if id_origem != u_id:
+        loader = get_loader()
+        df = loader.carregar_trocas()
+        troca = None
+        if not df.empty and "id" in df.columns:
+            matches = df[df["id"] == payload.row_index]
+            if not matches.empty:
+                troca = matches.iloc[0]
+        if troca is None:
+            raise HTTPException(status_code=404, detail="Troca não encontrada")
+        if str(troca.get("id_origem","")).strip() != u_id:
             raise HTTPException(status_code=403, detail="Só o autor pode cancelar")
-        ws.update_cell(payload.row_index, 6, "Cancelada")
+        loader.actualizar_status_troca(int(troca["id"]), "Cancelada")
+        loader.limpar_cache()
         return {"ok": True}
     except HTTPException:
         raise
@@ -582,65 +568,41 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
     """Aceita ou rejeita um pedido de troca pendente."""
     u_id = str(current_user.get("sub"))
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("registos_trocas")
-        rows = ws.get_all_values()
-        # row_index é 1-based incluindo cabeçalho
-        # rows[0] = cabeçalho, rows[1] = linha 2 da sheet
-        row_arr_idx = resposta.row_index - 1
-        if row_arr_idx < 1 or row_arr_idx >= len(rows):
-            raise HTTPException(status_code=404, detail="Linha não encontrada")
-        row = rows[row_arr_idx]
-        # Colunas: data, id_origem, servico_origem, id_destino, servico_destino, status, obs
-        id_destino = str(row[3]).strip() if len(row) > 3 else ""
-        if id_destino != u_id:
+        from datetime import datetime as _dt
+        loader = get_loader()
+        df = loader.carregar_trocas()
+        troca = None
+        if not df.empty and "id" in df.columns:
+            matches = df[df["id"] == resposta.row_index]
+            if not matches.empty:
+                troca = matches.iloc[0]
+        if troca is None:
+            raise HTTPException(status_code=404, detail="Troca não encontrada")
+        if str(troca.get("id_destino","")).strip() != u_id:
             raise HTTPException(status_code=403, detail="Não és o destinatário desta troca")
 
-        # Militar aceita → Pendente_Admin (aguarda validação do admin)
-        # Militar rejeita → Rejeitada
-        from datetime import datetime as _dt
         novo_status = "Pendente_Admin" if resposta.acao == "aceitar" else "Rejeitada"
-        col_status = 6
-        updates = [{"range": f"F{resposta.row_index}", "values": [[novo_status]]}]
-        if resposta.acao == "aceitar":
-            updates.append({"range": f"J{resposta.row_index}", "values": [[_dt.now().strftime("%d/%m/%Y %H:%M")]]})
-        ws.batch_update(updates)
-        # Notificar o autor original
+        data_aceitacao = _dt.now().strftime("%d/%m/%Y %H:%M") if resposta.acao == "aceitar" else None
+        loader.actualizar_status_troca(int(troca["id"]), novo_status, data_aceitacao)
+        loader.limpar_cache()
+
         try:
             from portal.api.notificacoes import enviar_push
-            id_origem = str(row[1]).strip()
+            id_origem = str(troca.get("id_origem","")).strip()
+            data_troca = str(troca.get("data","")).strip()
             if resposta.acao == "aceitar":
-                enviar_push(
-                    u_ids=[id_origem],
-                    titulo="🔄 Troca aceite — aguarda validação",
-                    corpo=f"A tua troca de {row[0]} foi aceite e aguarda validação do admin.",
-                    url="/trocas",
-                )
+                enviar_push(u_ids=[id_origem], titulo="🔄 Troca aceite — aguarda validação",
+                           corpo=f"A tua troca de {data_troca} foi aceite e aguarda validação do admin.", url="/trocas")
                 # Notificar admins
-                try:
-                    from services.data_loader import DataLoader
-                    from core.database import GoogleSheetsClient
-                    _loader_notif = DataLoader(sheets_client=GoogleSheetsClient())
-                    df_util_notif = _loader_notif.carregar_usuarios()
-                    admin_ids = df_util_notif[df_util_notif["is_admin"].astype(str).str.lower().isin(["true","1","sim"])]["id"].astype(str).str.strip().tolist()
-                    if admin_ids:
-                        enviar_push(
-                            u_ids=admin_ids,
-                            titulo="⚖️ Troca aguarda validação",
-                            corpo=f"Troca de {row[0]} aguarda a tua validação.",
-                            url="/trocas",
-                            tag="validar-troca",
-                        )
-                except Exception:
-                    pass
+                from config.settings import ADMINS
+                df_util = loader.carregar_usuarios()
+                admin_ids = df_util[df_util["email"].astype(str).str.lower().isin([a.lower() for a in ADMINS])]["id"].astype(str).str.strip().tolist() if not df_util.empty and "email" in df_util.columns else []
+                if admin_ids:
+                    enviar_push(u_ids=admin_ids, titulo="⚖️ Troca aguarda validação",
+                               corpo=f"Troca de {data_troca} aguarda validação.", url="/trocas", tag="validar-troca")
             else:
-                enviar_push(
-                    u_ids=[id_origem],
-                    titulo="❌ Troca recusada",
-                    corpo=f"A tua troca de {row[0]} foi recusada.",
-                    url="/trocas",
-                )
+                enviar_push(u_ids=[id_origem], titulo="❌ Troca recusada",
+                           corpo=f"A tua troca de {data_troca} foi recusada.", url="/trocas")
         except Exception:
             pass
         return {"ok": True, "status": novo_status}
@@ -663,10 +625,7 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
             return {"trocas": []}
         pend = df[df["status"] == "Pendente_Admin"].copy()
         trocas = []
-        # Carregar todas as linhas para mapear índice real do Sheets
-        from core.database import get_sheet as _gs
-        _ws_tr = _gs().worksheet("registos_trocas")
-        _rows_all = _ws_tr.get_all_values()
+        # No PostgreSQL, o id é o identificador real
 
         def _hor_fim(serv):
             import re as _re
@@ -738,15 +697,8 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
                 avisos += _consecutivo_aviso(id_orig, nome_orig, serv_dest, data_str)
                 avisos += _consecutivo_aviso(id_dest, nome_dest, serv_orig, data_str)
 
-            # Encontrar linha real no Sheets por data+id_origem+servico_origem
-            real_row = int(idx) + 2  # fallback
-            for _ri, _r in enumerate(_rows_all[1:], start=2):
-                if (len(_r) > 5 and
-                    str(_r[0]).strip() == data_str and
-                    str(_r[1]).strip() == id_orig and
-                    str(_r[5]).strip() == "Pendente_Admin"):
-                    real_row = _ri
-                    break
+            # No PostgreSQL, o id da troca é o identificador real
+            real_row = int(row.get("id", idx)) if row.get("id") else int(idx)
 
             trocas.append({
                 "data":            data_str,
@@ -773,191 +725,79 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
 async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(obter_admin)):
     """Admin valida ou rejeita definitivamente uma troca já aceite pelo militar."""
     try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("registos_trocas")
-        rows = ws.get_all_values()
+        loader = get_loader()
+        df = loader.carregar_trocas()
 
-        # Encontrar linha exacta por data+id_origem ou por row_index
-        found_row = None
-        if resposta.data_troca and resposta.id_origem_troca:
-            for ri, row in enumerate(rows[1:], start=2):
-                if (len(row) > 5 and
-                    str(row[0]).strip() == resposta.data_troca.strip() and
-                    str(row[1]).strip() == resposta.id_origem_troca.strip() and
-                    str(row[5]).strip() == "Pendente_Admin"):
-                    found_row = ri
-                    break
-        if not found_row:
-            # Fallback: tentar row_index directo
-            target = resposta.row_index
-            if 1 < target <= len(rows) and str(rows[target-1][5]).strip() == "Pendente_Admin":
-                found_row = target
-        if not found_row:
+        # Encontrar troca por data+id_origem ou por id
+        troca = None
+        if not df.empty and "id" in df.columns:
+            if resposta.data_troca and resposta.id_origem_troca:
+                matches = df[
+                    (df["data"].astype(str) == resposta.data_troca.strip()) &
+                    (df["id_origem"].astype(str) == resposta.id_origem_troca.strip()) &
+                    (df["status"].astype(str) == "Pendente_Admin")
+                ]
+                if not matches.empty:
+                    troca = matches.iloc[0]
+            if troca is None:
+                matches = df[
+                    (df["id"] == resposta.row_index) &
+                    (df["status"].astype(str) == "Pendente_Admin")
+                ]
+                if not matches.empty:
+                    troca = matches.iloc[0]
+
+        if troca is None:
             raise HTTPException(status_code=404, detail="Linha não encontrada")
 
         novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
-        ws.update_cell(found_row, 6, novo_status)
-        resposta.row_index = found_row  # Actualizar para usar abaixo
-        get_loader().limpar_cache()
+        from datetime import datetime as _dt2
+        loader.actualizar_status_troca(int(troca["id"]), novo_status, _dt2.now().strftime("%d/%m/%Y %H:%M"))
+        loader.limpar_cache()
 
-        # Gerar e guardar PDF no Drive se aprovada
+        # Gerar PDF no Drive se aprovada
         if novo_status == "Aprovada":
             try:
-                from reportlab.pdfgen import canvas as _canvas
-                from reportlab.lib.pagesizes import A4
-                from reportlab.lib.units import mm
-                from reportlab.lib.colors import HexColor
-                from reportlab.lib.styles import ParagraphStyle
-                from reportlab.platypus import Paragraph
-                from reportlab.pdfbase import pdfmetrics
-                from reportlab.pdfbase.ttfonts import TTFont
-                from google.oauth2 import service_account
-                from googleapiclient.discovery import build
-                from googleapiclient.http import MediaIoBaseUpload
-                import base64 as _b64, tempfile as _tmp, os as _os, io as _io, json as _json, re as _re2
-                from datetime import datetime as _dt2
+                _data      = str(troca.get("data","")).strip()
+                _id_orig   = str(troca.get("id_origem","")).strip()
+                _serv_orig = str(troca.get("servico_origem","")).strip()
+                _id_dest   = str(troca.get("id_destino","")).strip()
+                _serv_dest = str(troca.get("servico_destino","")).strip()
+                _data_ped  = str(troca.get("data_pedido","")).strip()
+                _data_ace  = str(troca.get("data_aceitacao","")).strip()
 
-                row_data = rows[found_row - 1]
-                _data      = str(row_data[0]).strip() if len(row_data) > 0 else ""
-                _id_orig   = str(row_data[1]).strip() if len(row_data) > 1 else ""
-                _serv_orig = str(row_data[2]).strip() if len(row_data) > 2 else ""
-                _id_dest   = str(row_data[3]).strip() if len(row_data) > 3 else ""
-                _serv_dest = str(row_data[4]).strip() if len(row_data) > 4 else ""
-                _validador = f"{current_user.get('posto','')} {current_user.get('nome','')}".strip()
-                _data_val  = _dt2.now().strftime("%d/%m/%Y %H:%M")
-                _data_ped  = str(row_data[8]).strip() if len(row_data) > 8 else ""
-                _data_ace  = str(row_data[9]).strip() if len(row_data) > 9 else ""
-
-                # Nomes dos militares
-                loader_pdf = get_loader()
-                df_u = loader_pdf.carregar_usuarios()
+                df_u = loader.carregar_usuarios()
                 _id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
                             for _, r in df_u.iterrows() if str(r.get("id","")).strip()}
                 _nome_orig = _id_nome.get(_id_orig, _id_orig)
                 _nome_dest = _id_nome.get(_id_dest, _id_dest)
-                filename = f"Troca_{_data.replace('/','_')}_{_id_orig}_{_id_dest}.pdf"
 
-                # Gerar PDF
-                try:
-                    pdfmetrics.registerFont(TTFont('DejaVu', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
-                    pdfmetrics.registerFont(TTFont('DejaVu-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
-                    pdfmetrics.registerFont(TTFont('DejaVu-Italic', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'))
-                    fn, fn_bold, fn_it = 'DejaVu', 'DejaVu-Bold', 'DejaVu-Italic'
-                except Exception:
-                    fn, fn_bold, fn_it = 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique'
-
-                _CAB_B64 = os.environ.get("PDF_CABECALHO_B64", "")
-                buf = _io.BytesIO()
-                cv = _canvas.Canvas(buf, pagesize=A4)
-                w, h = A4
-
-                if _CAB_B64:
-                    try:
-                        _cb = _b64.b64decode(_CAB_B64)
-                        with _tmp.NamedTemporaryFile(suffix='.jpg', delete=False) as _tf:
-                            _tf.write(_cb); _cp = _tf.name
-                        cab_w = 95*mm; cab_h = cab_w * (235/398)
-                        cv.drawImage(_cp, 20*mm, h-8*mm-cab_h, width=cab_w, height=cab_h, preserveAspectRatio=True)
-                        _os.unlink(_cp)
-                        cv.setFillColor(HexColor('#000000')); cv.setFont(fn_bold, 15)
-                        cv.drawString(20*mm+cab_w+10*mm, h-8*mm-cab_h/2, "TROCA DE SERVIÇO")
-                        y = h-8*mm-cab_h-10*mm
-                    except Exception:
-                        cv.setFont(fn_bold, 14); cv.drawCentredString(w/2, h-20*mm, "TROCA DE SERVIÇO")
-                        y = h-35*mm
-                else:
-                    cv.setFont(fn_bold, 14); cv.drawCentredString(w/2, h-20*mm, "TROCA DE SERVIÇO")
-                    y = h-35*mm
-
-                style = ParagraphStyle('body', fontName=fn, fontSize=11, leading=18)
-                texto = (
-                    f"O militar <b>{_nome_orig}</b> (ID {_id_orig}), solicitou a autorização "
-                    f"para a troca do serviço <b>'{_serv_orig}'</b> pelo serviço <b>'{_serv_dest}'</b> "
-                    f"do militar <b>{_nome_dest}</b> (ID {_id_dest}), para o dia <b>{_data}</b>."
+                from portal.api.trocas_pdf import gerar_pdf_troca
+                gerar_pdf_troca(
+                    data=_data, nome_orig=_nome_orig, serv_orig=_serv_orig,
+                    nome_dest=_nome_dest, serv_dest=_serv_dest,
+                    data_pedido=_data_ped, data_aceitacao=_data_ace,
+                    validador=f"{current_user.get('posto','')} {current_user.get('nome','')}".strip(),
+                    data_validacao=_dt2.now().strftime("%d/%m/%Y %H:%M"),
                 )
-                p = Paragraph(texto, style)
-                pw, ph = p.wrap(170*mm, h); p.drawOn(cv, 20*mm, y-ph); y -= ph+10*mm
+            except Exception as _e:
+                pass  # PDF é opcional — não bloquear a validação
 
-                # Aviso consecutivos
-                def _hf(serv, g):
-                    m = _re2.search(r'\((\d{2})-(\d{2})\)', str(serv))
-                    return int(m.group(g)) if m else None
-                _av = []
-                if _hf(_serv_orig, 2) in (0,24) and _hf(_serv_dest, 1) == 0:
-                    _av.append(f"Nota: <b>{_nome_orig}</b> ficará com serviços consecutivos: <b>{_serv_orig}</b> seguido de <b>{_serv_dest}</b>.")
-                if _hf(_serv_dest, 2) in (0,24) and _hf(_serv_orig, 1) == 0:
-                    _av.append(f"Nota: <b>{_nome_dest}</b> ficará com serviços consecutivos: <b>{_serv_dest}</b> seguido de <b>{_serv_orig}</b>.")
-                if _av:
-                    style_av = ParagraphStyle('av', fontName=fn_bold, fontSize=10, leading=14, textColor=HexColor('#b45309'))
-                    for av in _av:
-                        cv.setFillColor(HexColor('#FFFBEB')); cv.setStrokeColor(HexColor('#f59e0b')); cv.setLineWidth(0.8)
-                        p_av = Paragraph(av, style_av); pw_av, ph_av = p_av.wrap(162*mm, h)
-                        cv.rect(20*mm, y-ph_av-4*mm, 170*mm, ph_av+8*mm, fill=1, stroke=1)
-                        p_av.drawOn(cv, 24*mm, y-ph_av-1*mm); y -= ph_av+14*mm
-
-                cv.setFont(fn_bold, 10); cv.setFillColor(HexColor('#1a2b4a'))
-                cv.drawString(20*mm, y, "REGISTO DE CONFIRMAÇÕES"); y -= 6*mm
-                cv.setStrokeColor(HexColor('#1a2b4a')); cv.setLineWidth(0.8)
-                cv.line(20*mm, y, w-20*mm, y); y -= 8*mm
-
-                def _bloco(y, num, tit, nome, data, cor):
-                    bh = 22*mm
-                    cv.setFillColor(HexColor(cor)); cv.rect(20*mm, y-bh, 170*mm, bh, fill=1, stroke=0)
-                    cv.setFillColor(HexColor('#1a2b4a')); cv.rect(20*mm, y-bh, 3*mm, bh, fill=1, stroke=0)
-                    cv.setFont(fn_bold, 14); cv.setFillColor(HexColor('#1a2b4a')); cv.drawString(26*mm, y-14*mm, num)
-                    cv.setFont(fn_bold, 9); cv.setFillColor(HexColor('#64748b')); cv.drawString(35*mm, y-8*mm, tit.upper())
-                    cv.setFont(fn_bold, 11); cv.setFillColor(HexColor('#1e293b')); cv.drawString(35*mm, y-15*mm, nome)
-                    cv.setFont(fn_it, 9); cv.setFillColor(HexColor('#64748b')); cv.drawRightString(w-22*mm, y-15*mm, data or "—")
-                    return y-bh-4*mm
-
-                y = _bloco(y, "①", "Solicitante", f"{_nome_orig} (ID {_id_orig})", _data_ped, '#F8FAFC')
-                y = _bloco(y, "②", "Aceite pelo militar de destino", f"{_nome_dest} (ID {_id_dest})", _data_ace, '#F0FDF4')
-                y = _bloco(y, "③", "Autorizado superiormente", _validador, _data_val, '#EFF6FF')
-
-                cv.setStrokeColor(HexColor('#cccccc')); cv.setLineWidth(0.5)
-                cv.line(20*mm, 22*mm, w-20*mm, 22*mm)
-                cv.setFont(fn_it, 8); cv.setFillColor(HexColor('#646464'))
-                cv.drawRightString(w-20*mm, 15*mm, f"Gerado em: {_dt2.now().strftime('%d/%m/%Y %H:%M')}")
-                cv.save()
-                pdf_bytes = buf.getvalue()
-
-                # Upload Drive
-                creds_raw = _os.environ.get("GOOGLE_CREDENTIALS", "")
-                if creds_raw:
-                    info = _json.loads(creds_raw)
-                    creds = service_account.Credentials.from_service_account_info(
-                        info, scopes=["https://www.googleapis.com/auth/drive"])
-                    service = build("drive", "v3", credentials=creds)
-                    folder_name = "Trocas GNR"
-                    q = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-                    res = service.files().list(q=q, fields="files(id)").execute()
-                    files = res.get("files", [])
-                    folder_id = files[0]["id"] if files else service.files().create(
-                        body={"name": folder_name, "mimeType": "application/vnd.google-apps.folder"},
-                        fields="id").execute()["id"]
-                    file_meta = {"name": filename, "parents": [folder_id]}
-                    media = MediaIoBaseUpload(_io.BytesIO(pdf_bytes), mimetype="application/pdf")
-                    service.files().create(body=file_meta, media_body=media, fields="id").execute()
-            except Exception:
-                pass
-
-        # Notificar ambos os militares
+        # Notificar militares
         try:
             from portal.api.notificacoes import enviar_push
-            rows_all = ws.get_all_values()
-            row_data = rows_all[resposta.row_index] if resposta.row_index < len(rows_all) else []
-            id_origem = str(row_data[1]).strip() if len(row_data) > 1 else ""
-            id_destino = str(row_data[3]).strip() if len(row_data) > 3 else ""
-            data_troca = str(row_data[0]).strip() if row_data else ""
-            emoji = "✅" if novo_status == "Aprovada" else "❌"
-            titulo = f"{emoji} Troca {novo_status.lower()}"
-            corpo = f"A troca de {data_troca} foi {novo_status.lower()} pelo admin."
-            ids = [i for i in [id_origem, id_destino] if i]
-            if ids:
-                enviar_push(u_ids=ids, titulo=titulo, corpo=corpo, url="/trocas")
+            _data_t = str(troca.get("data","")).strip()
+            _id_o = str(troca.get("id_origem","")).strip()
+            _id_d = str(troca.get("id_destino","")).strip()
+            if novo_status == "Aprovada":
+                enviar_push(u_ids=[_id_o, _id_d], titulo="✅ Troca aprovada",
+                           corpo=f"A troca de {_data_t} foi aprovada.", url="/trocas", tag="troca-aprovada")
+            else:
+                enviar_push(u_ids=[_id_o, _id_d], titulo="❌ Troca rejeitada",
+                           corpo=f"A troca de {_data_t} foi rejeitada.", url="/trocas", tag="troca-rejeitada")
         except Exception:
             pass
+
         return {"ok": True, "status": novo_status}
     except HTTPException:
         raise
