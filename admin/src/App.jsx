@@ -26,8 +26,10 @@ function Login() {
 
   async function handleLogin(e) {
     e.preventDefault()
+    e.stopPropagation()
     try {
-      const data = await api.login(document.getElementById('pin').value)
+      const pinVal = document.getElementById('pin').value
+      const data = await api.login(pinVal)
       if (!data.is_admin) { alert('Sem permissões de administrador'); return }
       setToken(data.access_token)
       setUser({ nome: data.user_nome, id: data.user_id })
