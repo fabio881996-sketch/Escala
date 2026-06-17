@@ -303,12 +303,17 @@ def get_pg_loader():
 
 # DEBUG PG — remover depois
 try:
-    _keys = list(st.secrets.keys())
-    _has_db = "DATABASE_URL" in st.secrets
-    _url_val = str(st.secrets["DATABASE_URL"])[:20] if _has_db else "N/A"
-    st.sidebar.info(f"Secrets keys: {_keys} | DB: {_has_db} | URL: {_url_val}")
-except Exception as _ex:
-    st.sidebar.error(f"Secrets erro: {_ex}")
+    _db_url_t = str(st.secrets["DATABASE_URL"])
+    import os as _os2; _os2.environ["DATABASE_URL"] = _db_url_t
+    import sys as _sys2; _sys2.path.insert(0, '/mount/src/escala')
+    from services.data_loader_pg import DataLoader as _DL_T
+    _pg_t = _DL_T()
+    _dias_t = _pg_t.carregar_dias_publicados()
+    st.sidebar.success(f"✅ PG ok! {len(_dias_t)} dias publicados")
+except Exception as _ex_t:
+    import traceback as _tb
+    st.sidebar.error(f"PG erro: {_ex_t}")
+    st.sidebar.code(_tb.format_exc()[:500])
 
 @st.cache_resource
 def get_gsheet_client():
