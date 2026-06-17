@@ -3838,30 +3838,24 @@ else:
     # --- 🔄 TROCAS ---
     elif menu == "🔄 Giros":
         st.title("🔄 Giros")
-        try:
-            client = get_gsheet_client()
-            sh = client.open_by_url(st.secrets["gsheet_url"])
-            # Giros carregados do PostgreSQL via load_utilizadores
-        return
-            valores = ws.get_all_values()
-            if not valores or len(valores) < 2:
-                st.info("Não existem giros definidos.")
+        df_giros = load_utilizadores()
+        if df_giros.empty or "giro" not in df_giros.columns:
+            st.info("Sem dados de giros.")
+        else:
+            df_giros = df_giros[df_giros["giro"].astype(str).str.strip().isin(["I","II","III","IV"])]
+            pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, giro...")
+            df_g = df_giros.copy()
+            if pesq_g:
+                p_g = pesq_g.lower()
+                df_g = df_g[df_g.apply(lambda r: p_g in str(r.get("nome","")).lower() or p_g in str(r.get("giro","")).lower(), axis=1)]
+            if df_g.empty:
+                st.info("Sem resultados.")
             else:
-                headers = [str(h).strip() for h in valores[0]]
-                df_giros = pd.DataFrame(valores[1:], columns=headers)
-                df_giros = df_giros[df_giros.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-                pesq_g = st.text_input("🔍 Pesquisar:", placeholder="nome, serviço...")
-                df_g = df_giros.copy()
-                if pesq_g:
-                    p_g = pesq_g.lower()
-                    mask_g = pd.Series([False] * len(df_g), index=df_g.index)
-                    for col in df_g.columns:
-                        mask_g |= df_g[col].astype(str).str.lower().str.contains(p_g, na=False)
-                    df_g = df_g[mask_g]
+                for giro in sorted(df_g["giro"].unique()):
+                    st.markdown(f"**Giro {giro}**")
+                    df_g_g = df_g[df_g["giro"] == giro][["id","posto","nome"]]
+                    st.dataframe(df_g_g, use_container_width=True, hide_index=True)
 
-                st.markdown(_render_tabela(df_g, expandivel=True), unsafe_allow_html=True)
-        except Exception:
-            st.info("Aba 'giros' não encontrada na Google Sheet. Cria a aba e volta aqui.")
 
         # --- 👥 EFETIVO ---
     elif menu == "👥 Efetivo":
