@@ -7,17 +7,12 @@ const TrocasPage = {
 
     async render() {
         const content = document.getElementById('content');
-        const user = API.getUser();
-        const tabValidar = user?.is_admin
-            ? `<button class="tab-btn" onclick="TrocasPage.setTab('validar', this)">⚖️ Validar</button>`
-            : '';
         content.innerHTML = `
             <div class="section-header">🔄 Trocas de Serviço</div>
             <div class="tabs">
                 <button class="tab-btn" onclick="TrocasPage.setTab('pendentes', this)">📥 Pendentes</button>
                 <button class="tab-btn" onclick="TrocasPage.setTab('historico', this)">📋 Histórico</button>
                 <button class="tab-btn active" onclick="TrocasPage.setTab('solicitar', this)">➕ Solicitar</button>
-                ${tabValidar}
             </div>
             <div id="trocas-content">${Components.loading()}</div>
         `;
@@ -30,7 +25,6 @@ const TrocasPage = {
         btn.classList.add('active');
         if (tab === 'pendentes') this.loadPendentes();
         else if (tab === 'historico') this.loadHistorico();
-        else if (tab === 'validar') this.loadValidar();
         else this.renderSolicitar();
     },
 
@@ -63,8 +57,8 @@ const TrocasPage = {
                     <div class="card-subtitle">De: ${t.nome_origem || t.id_origem}</div>
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'aceitar', this)">✅ Aceitar</button>
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index || i}, 'rejeitar', this)">❌ Recusar</button>
+                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__row_index}, 'aceitar', this)">✅ Aceitar</button>
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index}, 'rejeitar', this)">❌ Recusar</button>
                     </div>
                 </div>`).join('');
 
@@ -78,7 +72,7 @@ const TrocasPage = {
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     ${t.status === 'Pendente_Militar' ? `
                     <div style="margin-top:12px">
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelar(${t.__row_index || 0}, this)">🗑️ Cancelar pedido</button>
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelar(${t.__row_index}, this)">🗑️ Cancelar pedido</button>
                     </div>` : ''}
                 </div>`;
             }).join('');
@@ -86,19 +80,6 @@ const TrocasPage = {
             el.innerHTML = htmlPendentes + htmlMeus;
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
-        }
-    },
-
-    async cancelarAprovada(rowIndex, btn) {
-        if (!confirm('Tens a certeza que queres cancelar esta troca aprovada? Os militares serão notificados.')) return;
-        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
-        try {
-            await API._post('/api/trocas/cancelar-aprovada', { row_index: rowIndex });
-            await this.loadHistorico();
-            App.checkPendentes();
-        } catch (e) {
-            alert('❌ Erro: ' + e.message);
-            if (btn) { btn.disabled = false; btn.textContent = '🚫 Cancelar Troca'; }
         }
     },
 
@@ -140,24 +121,14 @@ const TrocasPage = {
                 el.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><p>Sem histórico de trocas.</p></div>`;
                 return;
             }
-            const hoje = new Date(); hoje.setHours(0,0,0,0);
             el.innerHTML = trocas.map(t => {
                 const user = API.getUser();
                 const souOrigem = String(t.id_origem) === String(user?.id);
-                const cor = t.status === 'Aprovada' ? 'verde' : t.status === 'Rejeitada' ? 'vermelho' : t.status === 'Cancelada' ? 'vermelho' : 'amber';
+                const cor = t.status === 'Aprovada' ? 'verde' : t.status === 'Rejeitada' ? 'vermelho' : 'amber';
                 const contraparte = souOrigem
                     ? (t.nome_destino || t.id_destino)
                     : (t.nome_origem || t.id_origem);
                 const direcao = souOrigem ? '→' : '←';
-                // Verificar se o dia da troca ainda não passou
-                let podeCancelar = false;
-                if (t.status === 'Aprovada' && souOrigem) {
-                    try {
-                        const parts = t.data.split('/');
-                        const dataTroca = new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
-                        podeCancelar = dataTroca >= hoje;
-                    } catch(e) {}
-                }
                 return `
                     <div class="card card-${cor}">
                         <div class="card-label">${t.data} • ${
@@ -169,115 +140,10 @@ const TrocasPage = {
                         <div class="card-title">🔄 ${t.servico_origem}</div>
                         <div class="card-subtitle">${direcao} ${contraparte}</div>
                         ${t.observacoes ? `<div class="card-subtitle" style="margin-top:2px">📝 ${t.observacoes}</div>` : ''}
-                        ${podeCancelar ? `
-                        <div style="margin-top:10px">
-                            <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelarAprovada(${t.__row_index}, this)">🚫 Cancelar Troca</button>
-                        </div>` : ''}
                     </div>`;
             }).join('');
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
-        }
-    },
-
-    // ── VALIDAR (admin) ──────────────────────────────────────
-    _horFim(serv) {
-        const m = serv?.match(/\((\d{2})-(\d{2})\)/);
-        return m ? parseInt(m[2]) : null;
-    },
-    _horIni(serv) {
-        const m = serv?.match(/\((\d{2})-(\d{2})\)/);
-        return m ? parseInt(m[1]) : null;
-    },
-    _consecutivoAviso(nomeA, servA, nomeB, servB) {
-        // A vai fazer servA, B vai fazer servB
-        // Consecutivo: servA termina a 24 e servB começa a 00
-        const avisos = [];
-        if (this._horFim(servA) === 24 && this._horIni(servB) === 0)
-            avisos.push(`⚠️ ${nomeA} ficará com serviços consecutivos: <b>${servA}</b> seguido de <b>${servB}</b>`);
-        if (this._horFim(servB) === 24 && this._horIni(servA) === 0)
-            avisos.push(`⚠️ ${nomeB} ficará com serviços consecutivos: <b>${servB}</b> seguido de <b>${servA}</b>`);
-        return avisos;
-    },
-
-    async loadValidar() {
-        const el = document.getElementById('trocas-content');
-        el.innerHTML = Components.loading();
-        try {
-            const data = await API._get('/api/trocas/pendentes-admin', false);
-            const trocas = data?.trocas || [];
-            if (!trocas.length) {
-                el.innerHTML = `<div class="empty-state"><div class="empty-icon">⚖️</div><p>Sem trocas para validar.</p></div>`;
-                return;
-            }
-            el.innerHTML = trocas.map(t => {
-                const nomeOrig = t.nome_origem || t.id_origem;
-                const nomeDest = t.nome_destino || t.id_destino;
-                const isMatar = t.servico_origem === 'MATAR_REMUNERADO' || t.servico_origem === 'FAZER_REMUNERADO';
-                const avisos = t.avisos_consecutivos || [];
-                const avisosHtml = avisos.length
-                    ? `<div style="background:#FFFBEB;border:1px solid #f59e0b;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:.78rem;color:#b45309;font-weight:600">
-                        ${avisos.join('<br>')}
-                       </div>` : '';
-
-                const cardBody = isMatar ? `
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
-                        <div style="background:#fefce8;border-radius:8px;padding:10px">
-                            <div style="font-size:.65rem;font-weight:800;color:#854d0e;text-transform:uppercase;margin-bottom:4px">💶 Cede Remunerado</div>
-                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeDest}</div>
-                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Serviço: <b>${t.servico_destino}</b></div>
-                            <div style="font-size:.75rem;color:#94a3b8;margin-top:2px">Mantém o seu serviço</div>
-                        </div>
-                        <div style="background:#f0fdf4;border-radius:8px;padding:10px">
-                            <div style="font-size:.65rem;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:4px">💶 Faz Remunerado</div>
-                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeOrig}</div>
-                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Fica com: <b>${t.servico_destino}</b></div>
-                            <div style="font-size:.75rem;color:#94a3b8;margin-top:2px">Adicional ao seu serviço</div>
-                        </div>
-                    </div>` : `
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
-                        <div style="background:#eff6ff;border-radius:8px;padding:10px">
-                            <div style="font-size:.65rem;font-weight:800;color:#2563eb;text-transform:uppercase;margin-bottom:4px">📤 Solicita</div>
-                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeOrig}</div>
-                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Cede: <b>${t.servico_origem}</b></div>
-                            <div style="font-size:.75rem;color:#16a34a;margin-top:2px">Fica com: <b>${t.servico_destino}</b></div>
-                        </div>
-                        <div style="background:#f0fdf4;border-radius:8px;padding:10px">
-                            <div style="font-size:.65rem;font-weight:800;color:#16a34a;text-transform:uppercase;margin-bottom:4px">📥 Aceita</div>
-                            <div style="font-size:.82rem;font-weight:700;color:#1e293b">${nomeDest}</div>
-                            <div style="font-size:.75rem;color:#64748b;margin-top:2px">Cede: <b>${t.servico_destino}</b></div>
-                            <div style="font-size:.75rem;color:#16a34a;margin-top:2px">Fica com: <b>${t.servico_origem}</b></div>
-                        </div>
-                    </div>`;
-
-                return `
-                <div class="card card-amber">
-                    <div class="card-label">${isMatar ? '💶 Cedência de Remunerado' : '⚖️ Aguarda validação'} • ${t.data}</div>
-                    ${cardBody}
-                    ${avisosHtml}
-                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
-                    <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'aceitar', this, '${t.data}', '${t.id_origem}')">✅ Aprovar</button>
-                        <button class="btn btn-danger btn-sm" style="flex:1" onclick="TrocasPage.validar(${t.__row_index}, 'rejeitar', this, '${t.data}', '${t.id_origem}')">🚫 Rejeitar</button>
-                    </div>
-                </div>`;
-            }).join('');
-        } catch (e) {
-            el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
-        }
-    },
-
-    async validar(rowIndex, acao, btn, dataTroca, idOrigem) {
-        const label = acao === 'aceitar' ? 'Aprovar' : 'Rejeitar';
-        if (!confirm(`Tens a certeza que queres ${label.toLowerCase()} esta troca?`)) return;
-        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
-        try {
-            await API._post('/api/trocas/validar', { row_index: rowIndex, acao, data_troca: dataTroca || '', id_origem_troca: idOrigem || '' });
-            await this.loadValidar();
-            App.checkPendentes();
-        } catch (e) {
-            alert(`❌ Erro: ${e.message}`);
-            if (btn) { btn.disabled = false; btn.textContent = acao === 'aceitar' ? '✅ Aprovar' : '🚫 Rejeitar'; }
         }
     },
 
@@ -308,33 +174,6 @@ const TrocasPage = {
         `;
     },
 
-    onMilitarChange(sel, euTenhoRem = false, meuServico = '', meuHorario = '') {
-        const opt = sel.options[sel.selectedIndex];
-        const temRem = opt.dataset.temRemunerado === 'true';
-        const wrap = document.getElementById('rem-checkbox-wrap');
-        const label = document.getElementById('rem-label');
-        if (!wrap) return;
-
-        const linhas = [];
-        if (temRem && opt.dataset.remServico) {
-            const remServ = opt.dataset.remServico;
-            const remHor = opt.dataset.remHorario;
-            linhas.push(`💶 Remunerado do militar de destino: ${remServ}${remHor ? ` (${remHor})` : ''}`);
-        }
-        if (euTenhoRem && meuServico) {
-            linhas.push(`💶 O teu remunerado: ${meuServico}${meuHorario ? ` (${meuHorario})` : ''}`);
-        }
-
-        if (linhas.length > 0) {
-            label.innerHTML = linhas.join('<br>');
-            wrap.style.display = 'block';
-        } else {
-            wrap.style.display = 'none';
-            const cb = document.getElementById('incluir-rem');
-            if (cb) cb.checked = false;
-        }
-    },
-
     async carregarDia() {
         const dataInput = document.getElementById('troca-data');
         const tipoInput = document.getElementById('troca-tipo');
@@ -360,10 +199,6 @@ const TrocasPage = {
                 alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens remunerado neste dia.</div>`;
             }
 
-            // Verificar se EU tenho remunerado neste dia
-            const _meuServ = (meu_servico || '').toLowerCase();
-            const euTenhoRem = /remun|gratif/.test(_meuServ);
-
             const meuServicoHTML = meu_servico
                 ? `<div class="card" style="margin-bottom:12px;background:var(--bg-card)">
                        <div class="card-label">O teu serviço</div>
@@ -379,13 +214,8 @@ const TrocasPage = {
             }
 
             const opcoesHTML = disponiveis.map(d =>
-                `<option value="${d.id}"
-                    data-servico="${d.servico}"
-                    data-horario="${d.horario}"
-                    data-tem-remunerado="${d.tem_remunerado || false}"
-                    data-rem-servico="${d.remunerado_servico || ''}"
-                    data-rem-horario="${d.remunerado_horario || ''}">
-                    ${d.nome} — ${d.servico} ${d.horario ? `(${d.horario})` : ''}${d.tem_remunerado ? ' 💶' : ''}
+                `<option value="${d.id}" data-servico="${d.servico}" data-horario="${d.horario}">
+                    ${d.nome} — ${d.servico} ${d.horario ? `(${d.horario})` : ''}
                 </option>`
             ).join('');
 
@@ -394,15 +224,9 @@ const TrocasPage = {
                 ${alertaMeuServico}
                 <div class="form-group">
                     <label class="form-label">👤 Trocar com</label>
-                    <select id="troca-mil" class="form-input form-select" onchange="TrocasPage.onMilitarChange(this, ${euTenhoRem}, '${meu_servico || ''}', '${meu_horario || ''}')">
+                    <select id="troca-mil" class="form-input form-select">
                         ${opcoesHTML}
                     </select>
-                </div>
-                <div id="rem-checkbox-wrap" style="display:none;margin-bottom:12px">
-                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:.88rem">
-                        <input type="checkbox" id="incluir-rem" style="width:16px;height:16px">
-                        <span id="rem-label">💶 Incluir transferência do remunerado</span>
-                    </label>
                 </div>
                 <div class="form-group">
                     <label class="form-label">📝 Observações (opcional)</label>
@@ -413,9 +237,6 @@ const TrocasPage = {
                     📨 Enviar Pedido
                 </button>
             `;
-            // Verificar militar seleccionado por defeito
-            const milSel = document.getElementById('troca-mil');
-            if (milSel) TrocasPage.onMilitarChange(milSel, euTenhoRem, meu_servico, meu_horario);
         } catch (e) {
             el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
         }
@@ -427,9 +248,8 @@ const TrocasPage = {
         if (!milSel) return;
 
         const opt = milSel.options[milSel.selectedIndex];
-        const _srvBase = opt.dataset.servico || '';
+        const servicoDestino = opt.dataset.servico || '';
         const horarioDestino = opt.dataset.horario || '';
-        const servicoDestino = horarioDestino ? `${_srvBase} (${horarioDestino})` : _srvBase;
         const idDestino = milSel.value;
         const obs = obsEl?.value || '';
 
@@ -438,12 +258,9 @@ const TrocasPage = {
         const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
 
         // Serviço origem: para dar_remunerado usar marcador especial
-        // Incluir horário no serviço origem
-        let servicoOrigem = (meuServico && meuHorario) ? `${meuServico} (${meuHorario})` : (meuServico || 'auto');
+        let servicoOrigem = meuServico || 'auto';
         if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
-        if (tipo === 'fazer_remunerado') servicoOrigem = 'FAZER_REMUNERADO';
 
-        const incluirRem = document.getElementById('incluir-rem')?.checked || false;
         const el = document.getElementById('troca-resultado');
         try {
             await API.solicitar_troca({
@@ -453,7 +270,6 @@ const TrocasPage = {
                 servico_origem: servicoOrigem,
                 servico_destino: servicoDestino,
                 observacoes: obs,
-                incluir_remunerado: incluirRem,
             });
             el.innerHTML = `<div class="alert alert-success">✅ Pedido enviado com sucesso!</div>`;
             setTimeout(() => this.render(), 2000);
