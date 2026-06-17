@@ -302,13 +302,12 @@ def get_pg_loader():
 
 
 # DEBUG PG — remover depois
-if 'pg_debug_shown' not in st.session_state:
-    _pg_test = get_pg_loader()
-    st.session_state['pg_debug_shown'] = True
-    if _pg_test is None:
-        st.sidebar.error(f"⚠️ PG loader é None. DB URL: {bool(_get_database_url())}")
-    else:
-        st.sidebar.success("✅ PG conectado!")
+_pg_test = get_pg_loader()
+_db_url_debug = _get_database_url()
+if _pg_test is None:
+    st.sidebar.error(f"⚠️ PG None. URL ok: {bool(_db_url_debug)}")
+else:
+    st.sidebar.success("✅ PG conectado!")
 
 @st.cache_resource
 def get_gsheet_client():
