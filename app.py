@@ -302,12 +302,13 @@ def get_pg_loader():
 
 
 # DEBUG PG — remover depois
-_pg_test = get_pg_loader()
-_db_url_debug = _get_database_url()
-if _pg_test is None:
-    st.sidebar.error(f"⚠️ PG None. URL ok: {bool(_db_url_debug)}")
-else:
-    st.sidebar.success("✅ PG conectado!")
+try:
+    _keys = list(st.secrets.keys())
+    _has_db = "DATABASE_URL" in st.secrets
+    _url_val = str(st.secrets["DATABASE_URL"])[:20] if _has_db else "N/A"
+    st.sidebar.info(f"Secrets keys: {_keys} | DB: {_has_db} | URL: {_url_val}")
+except Exception as _ex:
+    st.sidebar.error(f"Secrets erro: {_ex}")
 
 @st.cache_resource
 def get_gsheet_client():
