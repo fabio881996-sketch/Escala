@@ -277,7 +277,7 @@ def _get_database_url():
     url = _os.environ.get("DATABASE_URL", "")
     if not url:
         try:
-            url = st.secrets.get("DATABASE_URL", "")
+            url = str(st.secrets["DATABASE_URL"])
         except Exception:
             pass
     return url
