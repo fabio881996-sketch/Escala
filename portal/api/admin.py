@@ -32,20 +32,30 @@ async def escala_dia_admin(aba: str, current_user: dict = Depends(obter_admin)):
                    for _, r in df_util.iterrows()}
         if df.empty:
             return {"entradas": [], "data": aba}
+        import re as _re
         entradas = []
         for _, r in df.iterrows():
-            mid = str(r.get("id","")).strip()
-            entradas.append({
-                "id":       mid,
-                "nome":     id_nome.get(mid, mid),
-                "servico":  str(r.get("serviço","")).strip(),
-                "horario":  str(r.get("horário","")).strip(),
-                "viatura":  str(r.get("viatura","")).strip(),
-                "radio":    str(r.get("rádio","")).strip(),
-                "indicativo": str(r.get("indicativo rádio","")).strip(),
-                "giro":     str(r.get("giro","")).strip(),
-                "obs":      str(r.get("observações","")).strip(),
-            })
+            mid_raw = str(r.get("id","")).strip()
+            mids = [m.strip() for m in _re.split(r"[;,]", mid_raw) if m.strip()]
+            sv = str(r.get("serviço","")).strip()
+            hr = str(r.get("horário","")).strip()
+            vt = str(r.get("viatura","")).strip()
+            ra = str(r.get("rádio","")).strip()
+            ind = str(r.get("indicativo rádio","")).strip()
+            gi = str(r.get("giro","")).strip()
+            ob = str(r.get("observações","")).strip()
+            for mid in mids:
+                entradas.append({
+                    "id":       mid,
+                    "nome":     id_nome.get(mid, mid),
+                    "servico":  sv,
+                    "horario":  hr,
+                    "viatura":  vt,
+                    "radio":    ra,
+                    "indicativo": ind,
+                    "giro":     gi,
+                    "obs":      ob,
+                })
         return {"entradas": entradas, "data": aba}
 
 
