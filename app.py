@@ -597,6 +597,9 @@ def carregar_feriados(ano: int) -> list:
         _date(ano,11,1), _date(ano,12,1), _date(ano,12,8), _date(ano,12,25),
     ]
 
+load_feriados = carregar_feriados
+
+
 @st.cache_data(ttl=86400)
 def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
     """Conta serviços históricos de um militar -- cache 24h."""
