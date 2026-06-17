@@ -108,6 +108,12 @@ class DataLoader:
         """, (aba,))
 
         df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
+        # Expandir IDs múltiplos (ex: "710;797" -> duas linhas)
+        if not df.empty and 'id' in df.columns:
+            df['id'] = df['id'].astype(str).str.split(r'[;,]')
+            df = df.explode('id')
+            df['id'] = df['id'].str.strip()
+            df = df[df['id'] != ''].reset_index(drop=True)
         _cache.set(key, df, 300)
         return df
 
@@ -137,6 +143,11 @@ class DataLoader:
 
             for aba, linhas in por_aba.items():
                 df = pd.DataFrame(linhas) if linhas else pd.DataFrame()
+                if not df.empty and 'id' in df.columns:
+                    df['id'] = df['id'].astype(str).str.split(r'[;,]')
+                    df = df.explode('id')
+                    df['id'] = df['id'].str.strip()
+                    df = df[df['id'] != ''].reset_index(drop=True)
                 _cache.set(f"escala:{aba}", df, 300)
                 resultado[aba] = df
 
