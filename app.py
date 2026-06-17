@@ -271,16 +271,27 @@ IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 # ============================================================
 # ── PostgreSQL DataLoader ──────────────────────────────────
 import os as _os
-_USE_PG = bool(_os.environ.get("DATABASE_URL"))
+
+def _get_database_url():
+    """Lê DATABASE_URL de variável de ambiente ou Streamlit secrets."""
+    url = _os.environ.get("DATABASE_URL", "")
+    if not url:
+        try:
+            url = st.secrets.get("DATABASE_URL", "")
+        except Exception:
+            pass
+    return url
 
 @st.cache_resource
 def get_pg_loader():
     """DataLoader PostgreSQL — usado quando DATABASE_URL está definido."""
-    if not _USE_PG:
+    _db_url = _get_database_url()
+    if not _db_url:
         return None
     try:
         import sys as _sys
         _sys.path.insert(0, '/mount/src/escala')
+        _os.environ["DATABASE_URL"] = _db_url
         from services.data_loader_pg import DataLoader as _DL_PG
         return _DL_PG()
     except Exception as _e:
