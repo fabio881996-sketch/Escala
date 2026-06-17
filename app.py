@@ -4644,8 +4644,7 @@ else:
                                     if idx_id_c is not None: linha_disp[idx_id_c] = mid_u_c
                                     if idx_sv_c is not None: linha_disp[idx_sv_c] = sv_reg
                                     linhas_disp.append(linha_disp)
-                                if linhas_disp:
-                                    # No PostgreSQL já guardado acima
+                                # linhas_disp já guardadas no PostgreSQL acima
 
                                 # Gerar ordem_escala do dia seguinte
                                 _gerar_ordem_escala_dia_seguinte(sh_c, aba_dia, d_gerar)
