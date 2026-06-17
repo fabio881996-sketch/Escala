@@ -5725,6 +5725,14 @@ else:
                                         except Exception as e:
                                             st.error(f"Erro: {e}")
 
+    elif menu == "🏥 Dispensas":
+        df_licencas = load_licencas(ano_atual)
+        df_folgas = load_folgas(ano_atual)
+        st.title("🏥 Dispensas")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
         tab_disp_normal, tab_disp_slot = st.tabs(["📋 Dispensas Gerais", "🔒 Serviços/Horários"])
 
         # ── Tab Dispensas Gerais ──
@@ -5779,7 +5787,13 @@ else:
             if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_lic"):
                 try:
                     mid_l = mil_opts_l[mil_sel_l]
-                    get_pg_loader().adicionar_licenca({"id": mid_l, "tipo": tipo_l, "inicio": ini_l.strftime('%d/%m/%Y'), "fim": fim_l.strftime('%d/%m/%Y'), "obs": obs_l.strip()})
+                    _pg_lic = get_pg_loader()
+                    if _pg_lic:
+                        _pg_lic.adicionar_licenca({"id": mid_l, "tipo": tipo_l, "inicio": ini_l.strftime('%d/%m/%Y'), "fim": fim_l.strftime('%d/%m/%Y'), "obs": obs_l.strip()})
+                    else:
+                        sh_l = get_sheet()
+                        ws_l = sh_l.worksheet("Licenças")
+                        ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y'), obs_l.strip()])
                     load_licencas.clear()
                     st.success("✅ Registo adicionado!")
                     st.rerun()
@@ -5798,16 +5812,23 @@ else:
                 rem_sel_l = st.selectbox("Registo:", list(opts_rem_l.keys()), key="lic_rem")
                 if st.button("🗑️ Remover", key="btn_rem_lic", use_container_width=True):
                     try:
-                        _idx_rem = opts_rem_l[rem_sel_l]
-                        _row_rem = df_lic_show.iloc[_idx_rem]
-                        _id_rem = int(_row_rem.get("id", 0)) if "id" in _row_rem.index else 0
-                        if _id_rem:
-                            get_pg_loader().remover_licenca(_id_rem)
-                            load_licencas.clear()
-                            st.success("✅ Removido!")
-                            st.rerun()
+                        _pg_rem_lic = get_pg_loader()
+                        if _pg_rem_lic:
+                            # Obter o id real da dispensa do df
+                            _idx_rem = opts_rem_l[rem_sel_l]
+                            _row_rem = df_lic_show.iloc[_idx_rem]
+                            _id_rem = int(_row_rem.get("__row", _row_rem.get("id", 0))) if "__row" in _row_rem else 0
+                            if _id_rem:
+                                _pg_rem_lic.remover_licenca(_id_rem)
+                            else:
+                                st.error("Não foi possível identificar o registo")
                         else:
-                            st.error("Não foi possível identificar o registo")
+                            sh_l = get_sheet()
+                            ws_l = sh_l.worksheet("Licenças")
+                            ws_l.delete_rows(opts_rem_l[rem_sel_l] + 2)
+                        load_licencas.clear()
+                        st.success("✅ Removido!")
+                        st.rerun()
                     except Exception as e:
                         st.error(f"Erro: {e}")
 
@@ -5873,9 +5894,11 @@ else:
                     st.warning("Selecciona pelo menos um slot.")
                 else:
                     try:
+                        sh_sl = get_sheet()
+                        ws_sl = sh_sl.worksheet("Licenças")
                         mid_sl = mil_opts_sl[mil_sel_sl]
                         codigos_sl = ','.join(slots_opts[s] for s in slots_sel)
-                        get_pg_loader().adicionar_licenca({"id": mid_sl, "tipo": codigos_sl, "inicio": ini_sl.strftime('%d/%m/%Y'), "fim": fim_sl.strftime('%d/%m/%Y'), "obs": ""})
+                        ws_sl.append_row([mid_sl, codigos_sl, ini_sl.strftime('%d/%m/%Y'), fim_sl.strftime('%d/%m/%Y'), ''])
                         load_licencas.clear()
                         st.success(f"✅ Dispensa de slot adicionada: {codigos_sl}")
                         st.rerun()
@@ -5893,10 +5916,9 @@ else:
                 rem_sel_sl = st.selectbox("Registo:", list(opts_rem_sl.keys()), key="slot_rem")
                 if st.button("🗑️ Remover", key="btn_rem_slot", use_container_width=True):
                     try:
-                        _idx_sl = opts_rem_sl[rem_sel_sl]
-                        _row_sl = df_disp_slot.iloc[_idx_sl] if not df_disp_slot.empty else None
-                        if _row_sl is not None and "id" in _row_sl.index:
-                            get_pg_loader().remover_licenca(int(_row_sl.get("id", 0)))
+                        sh_sl = get_sheet()
+                        ws_sl = sh_sl.worksheet("Licenças")
+                        ws_sl.delete_rows(opts_rem_sl[rem_sel_sl] + 2)
                         load_licencas.clear()
                         st.success("✅ Removido!")
                         st.rerun()
@@ -5904,6 +5926,7 @@ else:
                         st.error(f"Erro: {e}")
 
     # --- 📢 PUBLICAR ESCALA (ADMIN) ---
+
     elif menu == "📢 Publicar Escala":
         df_ferias = load_ferias(ano_atual)
         feriados = load_feriados(ano_atual)
