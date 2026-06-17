@@ -4112,51 +4112,8 @@ else:
                                             mapa_existente[mid] = []
                                         mapa_existente[mid].append(dados_t)
 
-                if True:  # substituir try antigo
-                    vals_tab = []  # não usado
-                    if vals_tab and len(vals_tab) > 1:
-                        hdrs_tab = [h.strip().lower() for h in vals_tab[0]]
-                        ix_id_t  = hdrs_tab.index('id')      if 'id'      in hdrs_tab else 0
-                        ix_sv_t  = hdrs_tab.index('serviço') if 'serviço' in hdrs_tab else 1
-                        ix_hr_t  = hdrs_tab.index('horário') if 'horário' in hdrs_tab else 2
-                        ix_in_t  = hdrs_tab.index('indicativo rádio') if 'indicativo rádio' in hdrs_tab else (hdrs_tab.index('indicativo') if 'indicativo' in hdrs_tab else None)
-                        ix_ra_t  = hdrs_tab.index('rádio') if 'rádio' in hdrs_tab else None
-                        ix_gi_t  = hdrs_tab.index('giro') if 'giro' in hdrs_tab else None
-                        ix_ob_t  = hdrs_tab.index('observações') if 'observações' in hdrs_tab else None
-                        ix_vt_t  = hdrs_tab.index('viatura') if 'viatura' in hdrs_tab else None
-                        def _gt(row, ix):
-                            return str(row[ix]).strip().replace('nan','') if ix is not None and ix < len(row) else ''
-                        for row_t in vals_tab[1:]:
-                            id_raw = _gt(row_t, ix_id_t)
-                            if not id_raw: continue
-                            sv_t = _gt(row_t, ix_sv_t)
-                            if not sv_t: continue  # ignorar linhas sem serviço
-                            dados_t = {
-                                'serviço':    sv_t,
-                                'horário':    _gt(row_t, ix_hr_t),
-                                'indicativo': _gt(row_t, ix_in_t),
-                                'rádio':      _gt(row_t, ix_ra_t),
-                                'giro':       _gt(row_t, ix_gi_t),
-                                'viatura':    _gt(row_t, ix_vt_t),
-                                'observações':_gt(row_t, ix_ob_t),
-                            }
-                            ids_linha = [m.strip() for m in re.split(r'[;,\n]+', id_raw) if m.strip()]
-                            e_remun = bool(re.search(r'remun|gratif', norm(sv_t)))
-                            if len(ids_linha) > 1 and e_remun:
-                                # Remunerado com múltiplos IDs — guardar com chave original
-                                chave = id_raw.strip()
-                                if chave not in mapa_existente:
-                                    mapa_existente[chave] = []
-                                mapa_existente[chave].append(dados_t)
-                            else:
-                                # Serviço normal ou ID único — expandir para cada ID
-                                for mid in ids_linha:
-                                    if mid:
-                                        if mid not in mapa_existente:
-                                            mapa_existente[mid] = []
-                                        mapa_existente[mid].append(dados_t)
-                except:
-                    pass
+                except Exception as e_tab:
+                    st.error(f"Erro ao carregar tabela: {e_tab}")
 
                 linhas = []
                 # Primeiro adicionar linhas com múltiplos IDs e serviço REMUNERADO (não expandir)
