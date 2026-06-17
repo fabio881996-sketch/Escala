@@ -5232,13 +5232,17 @@ else:
                                         if not hor_c2 or hor_c2 == 'nan':
                                             df_editado.at[idx_c, 'horário'] = hor_def
                                 _pg_esc = get_pg_loader()
+                                _guardou_pg = False
                                 if _pg_esc:
-                                    # PostgreSQL — guardar directamente
-                                    _pg_esc.guardar_escala(aba_dia, df_editado)
-                                    load_data.clear()
-                                    st.success(f"✅ Escala de {aba_dia} guardada!")
-                                    continue
-                                sh_c = get_sheet()
+                                    try:
+                                        _pg_esc.guardar_escala(aba_dia, df_editado)
+                                        load_data.clear()
+                                        st.success(f"✅ Escala de {aba_dia} guardada!")
+                                        _guardou_pg = True
+                                    except Exception as _e_pg_esc:
+                                        st.warning(f"PostgreSQL falhou: {_e_pg_esc}")
+                                if not _guardou_pg:
+                                    sh_c = get_sheet()
                                 ws_dia_c = sh_c.worksheet(aba_dia)
                                 todas_linhas_c = ws_dia_c.get_all_values()
                                 hdrs_c_raw = [h.strip() for h in todas_linhas_c[0]] if todas_linhas_c else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
