@@ -53,29 +53,16 @@ def migrar_pin_para_hash(email: str, pin: str) -> bool:
     try:
         h, salt = hash_pin(pin)
         pin_hash = f"{h}:{salt}"
-        _pg_pin = get_pg_loader()
-        if _pg_pin:
-            df_u = _pg_pin.carregar_usuarios()
+        pg = get_pg_loader()
+        if pg:
+            df_u = pg.carregar_usuarios()
             if not df_u.empty and 'email' in df_u.columns:
                 matches = df_u[df_u['email'].astype(str).str.lower().str.strip() == email.strip().lower()]
                 if not matches.empty:
                     mid = str(matches.iloc[0]['id']).strip()
-                    _pg_pin.actualizar_pin(mid, pin_hash)
+                    pg.actualizar_pin(mid, pin_hash)
                     load_utilizadores.clear()
                     return True
-        # Fallback Sheets
-        sh = get_sheet()
-        ws = sh.worksheet("utilizadores")
-        records = ws.get_all_records()
-        headers = [h.strip().lower() for h in ws.row_values(1)]
-        if 'pin' not in headers or 'email' not in headers:
-            return False
-        col_pin = headers.index('pin') + 1
-        for i, row in enumerate(records, start=2):
-            if str(row.get('email', '')).strip().lower() == email.strip().lower():
-                ws.update_cell(i, col_pin, pin_hash)
-                load_utilizadores.clear()
-                return True
     except Exception:
         pass
     return False
@@ -371,111 +358,16 @@ def _df_from_values(vals) -> pd.DataFrame:
 
 @st.cache_data(ttl=60)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba -- PostgreSQL ou Sheets."""
+    """Carrega escala do dia do PostgreSQL."""
     import re as _re_ld
-    # Se for aba de escala diária (DD-MM), usar PostgreSQL
     if _re_ld.match(r'^\d{2}-\d{2}$', aba_nome.strip()):
-        _pg_ld = get_pg_loader()
-        if _pg_ld:
+        pg = get_pg_loader()
+        if pg:
             try:
-                return _pg_ld.carregar_escala(aba_nome)
-            except Exception:
-                pass
-    for tentativa in range(3):
-        try:
-            sh = get_sheet()
-            if sh is None:
-                return pd.DataFrame()
-            return _df_from_values(sh.worksheet(aba_nome).get_all_values())
-        except Exception as e:
-            err_str = str(e).lower()
-            if 'not found' in err_str or 'worksheet' in err_str:
-                return pd.DataFrame()
-            if tentativa < 2:
-                time.sleep(5 * (tentativa + 1))
+                return pg.carregar_escala(aba_nome)
+            except Exception as e:
+                st.error(f"Erro PG escala {aba_nome}: {e}")
     return pd.DataFrame()
-
-def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
-    """Lê aba diretamente do Sheets SEM cache -- para uso na geração de escala."""
-    for tentativa in range(3):
-        try:
-            return _df_from_values(sh.worksheet(aba_nome).get_all_values())
-        except Exception as e:
-            if '429' in str(e) and tentativa < 2:
-                time.sleep(20)
-            else:
-                return pd.DataFrame()
-    return pd.DataFrame()
-
-@st.cache_data(ttl=60)
-def load_utilizadores() -> pd.DataFrame:
-    """Carrega utilizadores com cache de 5min e retry automático."""
-    for tentativa in range(3):
-        try:
-            sh = get_sheet()
-            if sh is None:
-                return pd.DataFrame()
-            vals = sh.worksheet("utilizadores").get_all_values()
-            if not vals or len(vals) < 2:
-                return pd.DataFrame()
-            hdrs = [str(h).strip().lower() for h in vals[0]]
-            rows = []
-            for row in vals[1:]:
-                row_ext = list(row) + [''] * (len(hdrs) - len(row))
-                rows.append({hdrs[i]: str(row_ext[i]).strip() for i in range(len(hdrs))})
-            df = pd.DataFrame(rows).fillna("")
-            return df
-        except Exception:
-            if tentativa < 2:
-                time.sleep(1)
-    return pd.DataFrame()
-
-@st.cache_data(ttl=60)
-def load_lista_abas() -> list:
-    """Devolve lista de abas de escala -- PostgreSQL ou Sheets."""
-    _pg_la = get_pg_loader()
-    if _pg_la:
-        try:
-            return _pg_la.carregar_lista_abas()
-        except Exception:
-            pass
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return []
-        return [ws.title for ws in sh.worksheets()]
-    except Exception:
-        return []
-
-@st.cache_data(ttl=60)
-def load_ordem_remunerados() -> pd.DataFrame:
-    """Carrega ordem_remunerados com cache de 60s."""
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return pd.DataFrame()
-        ws = sh.worksheet("ordem_remunerados")
-        vals = ws.get_all_values()
-        if len(vals) <= 1:
-            return pd.DataFrame()
-        hdrs = [_nc(c) for c in vals[0]]
-        return pd.DataFrame(vals[1:], columns=hdrs)
-    except Exception:
-        return pd.DataFrame()
-
-
-@st.cache_data(ttl=120)
-def load_trocas() -> pd.DataFrame:
-    """Carrega registos_trocas com cache de 120s."""
-    for tentativa in range(3):
-        try:
-            sh = get_sheet()
-            if sh is None:
-                return pd.DataFrame()
-            return _df_from_values(sh.worksheet("registos_trocas").get_all_values())
-        except Exception:
-            if tentativa == 2:
-                return pd.DataFrame()
 
 def invalidar_trocas():
     """Limpa cache de trocas."""
@@ -483,65 +375,25 @@ def invalidar_trocas():
 
 @st.cache_data(ttl=300)
 def load_ferias(ano: int) -> pd.DataFrame:
-    """Carrega férias -- PostgreSQL ou Sheets."""
+    """Carrega férias do PostgreSQL."""
     pg = get_pg_loader()
     if pg:
         try:
             return pg.carregar_ferias(ano)
-        except Exception:
-            pass
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return pd.DataFrame()
-        ws = sh.worksheet(f"ferias_{ano}")
-        valores = ws.get_all_values()
-        if not valores or len(valores) < 2:
-            return pd.DataFrame()
-        headers = [str(h).strip() for h in valores[0]]
-        df = pd.DataFrame(valores[1:], columns=headers)
-        df = df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-        return df
-    except Exception:
-        return pd.DataFrame()
+        except Exception as e:
+            st.error(f"Erro PG ferias: {e}")
+    return pd.DataFrame()
 
 @st.cache_data(ttl=60)
 def load_licencas(ano: int) -> pd.DataFrame:
-    """Carrega dispensas/licenças -- PostgreSQL ou Sheets."""
+    """Carrega dispensas do PostgreSQL."""
     pg = get_pg_loader()
     if pg:
         try:
             return pg.carregar_licencas()
-        except Exception:
-            pass
-    try:
-        sh = get_sheet()
-        if sh is None: return pd.DataFrame()
-        ws = sh.worksheet("Licenças")
-        vals = ws.get_all_values()
-        if not vals or len(vals) < 2: return pd.DataFrame()
-        hdrs = [h.strip() for h in vals[0]]
-        df = pd.DataFrame(vals[1:], columns=hdrs)
-        df = df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-        # Normalizar tipo (substituir Baixa/Doente por Convalescença)
-        col_tipo = next((c for c in df.columns if 'tipo' in c.lower()), None)
-        if col_tipo:
-            df[col_tipo] = df[col_tipo].apply(norm_servico)
-        return df
-    except:
-        return pd.DataFrame()
-
-# Mapa de códigos de dispensa de serviço/horário
-DISPENSA_SLOTS = {
-    'A1':  ('atendimento',           '00-08'),
-    'A2':  ('atendimento',           '08-16'),
-    'A3':  ('atendimento',           '16-24'),
-    'PO1': ('patrulha ocorrências',  '00-08'),
-    'PO2': ('patrulha ocorrências',  '08-16'),
-    'PO3': ('patrulha ocorrências',  '16-24'),
-    'AA2': ('apoio ao atendimento',  '08-16'),
-    'AA3': ('apoio ao atendimento',  '16-24'),
-}
+        except Exception as e:
+            st.error(f"Erro PG licencas: {e}")
+    return pd.DataFrame()
 
 def militar_tem_dispensa_slot(mid: str, data, df_licencas: pd.DataFrame, servico: str, horario: str) -> bool:
     """Verifica se um militar tem dispensa de serviço/horário activa numa data.
@@ -629,247 +481,68 @@ def militar_de_licenca(mid: str, data, df_licencas: pd.DataFrame) -> str:
 
 @st.cache_data(ttl=3600)
 def load_folgas(ano: int) -> pd.DataFrame:
-    """Carrega aba folgas_YYYY -- id, fds, grupo, serviço, exceções."""
-    try:
-        sh = get_sheet()
-        if sh is None: return pd.DataFrame()
-        ws = sh.worksheet(f"folgas_{ano}")
-        vals = ws.get_all_values()
-        if not vals or len(vals) < 2: return pd.DataFrame()
-        hdrs = [h.strip() for h in vals[0]]
-        df = pd.DataFrame(vals[1:], columns=hdrs)
-        # Normalizar nomes de colunas — garantir que 'serviço' e 'exceções' são reconhecidos
-        rename_map = {}
-        for col in df.columns:
-            col_n = col.strip().lower()
-            if col_n in ('servico', 'serviço', 'service'): rename_map[col] = 'serviço'
-            elif col_n in ('excecoes', 'exceções', 'exceçoes'): rename_map[col] = 'exceções'
-            elif col_n in ('grupo', 'group'): rename_map[col] = 'grupo'
-            elif col_n in ('fds',): rename_map[col] = 'fds'
-        if rename_map:
-            df = df.rename(columns=rename_map)
-        return df[df.apply(lambda r: any(str(v).strip() for v in r), axis=1)]
-    except:
-        return pd.DataFrame()
+    """Carrega folgas -- derivadas da escala no PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_folgas(ano)
+        except Exception:
+            pass
+    return pd.DataFrame()
 
 @st.cache_data(ttl=86400)
 def load_grupos_folga() -> dict:
-    """Carrega aba grupos_folga -- {grupo: {tipo_folga: [dias DD-MM]}}."""
-    try:
-        sh = get_sheet()
-        if sh is None: return {}
-        ws = sh.worksheet("grupos_folga")
-        vals = ws.get_all_values()
-        if not vals or len(vals) < 2: return {}
-        hdrs = [h.strip() for h in vals[0]]  # ex: ['grupo','Folga Semanal','Folga Complementar']
-        tipos = [h for h in hdrs if h != 'grupo']
-        result = {}
-        for row in vals[1:]:
-            grupo = str(row[0]).strip() if row else ''
-            if not grupo: continue
-            result[grupo] = {}
-            for t in tipos:
-                idx = hdrs.index(t)
-                dias_str = str(row[idx]).strip() if idx < len(row) else ''
-                result[grupo][t] = [d.strip() for d in re.split(r'[;,]+', dias_str) if d.strip()]
-        return result
-    except:
-        return {}
-
-def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict, feriados: list) -> str:
-    """Devolve tipo de folga ('Folga Semanal', 'Folga Complementar') ou '' se não está de folga."""
-    if df_folgas.empty: return ''
-    aba = data.strftime('%d-%m') if hasattr(data, 'strftime') else str(data)
-    data_date = data if hasattr(data, 'weekday') else datetime.strptime(str(data), '%d-%m').replace(year=datetime.now().year)
-
-    col_id = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-    # Comparar IDs sem zeros à esquerda e sem espaços
-    mid_norm = str(mid).strip().lstrip('0') or '0'
-    linha = df_folgas[df_folgas[col_id].astype(str).str.strip().str.lstrip('0').apply(lambda x: x or '0') == mid_norm]
-    if linha.empty: return ''
-    row = linha.iloc[0]
-
-    # Verificar exceções individuais -- formato: "06-04(Folga Semanal)→09-04;..."
-    excecoes_str = str(row.get('exceções', '') or row.get('excecoes', '')).strip()
-    if excecoes_str and excecoes_str != 'nan':
-        for exc in re.split(r'[;]+', excecoes_str):
-            exc = exc.strip()
-            if not exc: continue
-            # Formato: DD-MM(Tipo)→DD-MM
-            m_exc = re.match(r'(\d{2}-\d{2})\(([^)]+)\)→(\d{2}-\d{2})', exc)
-            if m_exc:
-                dia_orig, tipo_exc, dia_novo = m_exc.group(1), m_exc.group(2), m_exc.group(3)
-                if dia_novo == aba:
-                    return tipo_exc  # novo dia de folga
-                if dia_orig == aba:
-                    return ''  # dia original foi movido -- não folga aqui
-
-    # Verificar FDS
-    fds = str(row.get('fds', '')).strip().lower()
-    if fds in ('sim', 'yes', '1', 'true'):
-        if data_date.weekday() >= 5:
-            return 'Folga Semanal'
-        if aba in [f.strftime('%d-%m') if hasattr(f, 'strftime') else str(f) for f in feriados]:
-            return 'Folga Semanal'
-
-    # Verificar grupo
-    grupo = str(row.get('grupo', '')).strip()
-    if grupo and grupo in grupos_folga:
-        for tipo, dias in grupos_folga[grupo].items():
-            if aba in dias:
-                return tipo
-    return ''
+    """Carrega grupos de folga do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_grupos_folga()
+        except Exception:
+            pass
+    return {}
 
 @st.cache_data(ttl=120)
 def load_dias_publicados() -> set:
-    """Carrega datas publicadas -- PostgreSQL ou Sheets."""
+    """Carrega dias publicados do PostgreSQL."""
     pg = get_pg_loader()
     if pg:
         try:
             return pg.carregar_dias_publicados()
-        except Exception:
-            pass
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return set()
-        ws = sh.worksheet("escala_publicada")
-        valores = ws.col_values(1)
-        return set(str(v).strip() for v in valores if str(v).strip() and str(v).strip() != 'data')
-    except Exception:
-        return set()
+        except Exception as e:
+            st.error(f"Erro PG dias pub: {e}")
+    return set()
 
 @st.cache_data(ttl=300)
 def load_servicos() -> dict:
-    """Carrega aba serviços -- dict {militar_id: [servicos]}."""
-    try:
-        sh = get_sheet()
-        if sh is None: return {}
-        vals = sh.worksheet("serviços").get_all_values()
-        headers = [str(h).strip() for h in vals[0]]
-        result = {}
-        for col in headers:
-            idx = headers.index(col)
-            for row in vals[1:]:
-                mid = str(row[idx]).strip() if idx < len(row) else ''
-                if mid and mid != 'nan':
-                    if mid not in result: result[mid] = []
-                    result[mid].append(col)
-        return result
-    except:
-        return {}
+    """Carrega serviços por militar do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_servicos()
+        except Exception:
+            pass
+    return {}
 
 @st.cache_data(ttl=300)
 def load_listas() -> dict:
-    """Carrega aba listas -- dict {coluna: [valores]}."""
-    try:
-        sh = get_sheet()
-        if sh is None: return {}
-        vals = sh.worksheet("listas").get_all_values()
-        if not vals: return {}
-        hdrs = [h.strip() for h in vals[0]]
-        result = {}
-        for h in hdrs:
-            idx = hdrs.index(h)
-            result[h] = [''] + [str(row[idx]).strip() for row in vals[1:] if idx < len(row) and str(row[idx]).strip()]
-        return result
-    except Exception as e:
-        st.warning(f"⚠️ Erro ao carregar listas: {e}")
-        return {}
+    """Carrega listas do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_listas()
+        except Exception:
+            pass
+    return {}
 
 @st.cache_data(ttl=86400)
-def load_feriados(ano: int) -> list:
-    """Carrega feriados de um ano da aba 'feriados' -- cache 24h."""
-    try:
-        sh = get_sheet()
-        if sh is None:
-            return []
-        ws = sh.worksheet("feriados")
-        valores = ws.get_all_values()
-        if not valores:
-            return []
-        # Debug temporário -- guardar em session_state para mostrar
-        feriados = []
-        num_cols = max(len(r) for r in valores)
-        for ci in range(num_cols):
-            col = [str(r[ci]).strip() if ci < len(r) else '' for r in valores]
-            col = [v for v in col if v]
-            if not col:
-                continue
-            try:
-                ano_col = int(col[0])
-            except:
-                continue
-            if ano_col != ano:
-                continue
-            for v in col[1:]:
-                for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y', '%Y/%m/%d'):
-                    try:
-                        feriados.append(datetime.strptime(v, fmt).date())
-                        break
-                    except:
-                        pass
-        return feriados
-    except Exception as e:
-        return []
-
-def _parse_data_ferias(s, ano=None):
-    """Tenta parsear uma data em vários formatos."""
-    s = str(s).strip()
-    for fmt in ('%d/%m/%Y', '%d/%m/%y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d', '%m/%d/%Y'):
-        try:
-            return datetime.strptime(s, fmt).date()
-        except:
-            pass
-    # Formato MM/DD sem ano
-    try:
-        d = datetime.strptime(s, '%m/%d').date()
-        return d.replace(year=ano if ano else datetime.now().year)
-    except:
-        pass
-    return None
-
-def _fim_ferias_real(fim_d, feriados_list):
-    """Estende o fim das férias para incluir fins de semana e feriados subsequentes."""
-    fim_ext = fim_d
-    while True:
-        proximo = fim_ext + timedelta(days=1)
-        if proximo.weekday() >= 5 or proximo in feriados_list:
-            fim_ext = proximo
-        else:
-            break
-    return fim_ext
-
-def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: list = None) -> bool:
-    """Verifica se um militar está de férias numa data (incluindo extensão de fds e feriados)."""
-    if df_ferias.empty:
-        return False
-    if feriados_list is None:
-        feriados_list = []
-    cols = df_ferias.columns.tolist()
-    ini_cols = [c for c in cols if 'ini' in c.lower()]
-    fim_cols  = [c for c in cols if 'fim' in c.lower()]
-    id_col = 'id' if 'id' in cols else cols[0]
-    mil = df_ferias[df_ferias[id_col].astype(str).str.strip() == str(u_id).strip()]
-    if mil.empty:
-        return False
-    if isinstance(data, datetime):
-        data = data.date()
-    ano_data = data.year if data else datetime.now().year
-    for ini_c, fim_c in zip(ini_cols, fim_cols):
-        for _, row in mil.iterrows():
-            ini_s = str(row.get(ini_c, '')).strip()
-            fim_s = str(row.get(fim_c, '')).strip()
-            if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan':
-                continue
-            ini_d = _parse_data_ferias(ini_s, ano_data)
-            fim_d = _parse_data_ferias(fim_s, ano_data)
-            if not ini_d or not fim_d:
-                continue
-            fim_real = _fim_ferias_real(fim_d, feriados_list)
-            if ini_d <= data <= fim_real:
-                return True
-    return False
+def carregar_feriados(ano: int) -> list:
+    """Carrega feriados -- lista fixos portugueses."""
+    from datetime import date as _date
+    return [
+        _date(ano,1,1), _date(ano,4,25), _date(ano,5,1),
+        _date(ano,6,10), _date(ano,8,15), _date(ano,10,5),
+        _date(ano,11,1), _date(ano,12,1), _date(ano,12,8), _date(ano,12,25),
+    ]
 
 @st.cache_data(ttl=86400)
 def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
@@ -1072,144 +745,27 @@ def verificar_descanso_troca(u_id, id_d, dt_s, meu_serv_nome, meu_hor_val, serv_
     return erros
 
 def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str = "") -> bool:
-    """Atualiza o status de uma troca na Google Sheet -- batch update numa chamada."""
+    """Actualiza status de troca no PostgreSQL."""
     try:
-        sh = get_sheet()
-        aba = sh.worksheet("registos_trocas")
-        row = index_linha + 2  # +1 cabeçalho, +1 índice base-0
-        if admin_nome:
-            dt_agora = datetime.now().strftime("%d/%m/%Y %H:%M")
-            aba.batch_update([
-                {"range": f"F{row}", "values": [[novo_status]]},
-                {"range": f"G{row}", "values": [[admin_nome]]},
-                {"range": f"H{row}", "values": [[dt_agora]]},
-            ])
-        else:
-            _pg_tr = get_pg_loader()
-            if _pg_tr:
+        pg = get_pg_loader()
+        if pg:
+            # index_linha é o índice do DataFrame (0-based), id no PG pode ser diferente
+            df_tr = load_trocas()
+            if not df_tr.empty and 'id' in df_tr.columns:
                 try:
-                    _pg_tr.actualizar_status_troca(int(row), novo_status)
-                    _pg_tr.limpar_cache()
+                    troca_id = int(df_tr.iloc[index_linha]['id'])
+                    pg.actualizar_status_troca(troca_id, novo_status)
+                    pg.limpar_cache()
                     load_trocas.clear()
+                    return True
                 except Exception:
-                    aba.update_cell(row, 6, novo_status)
-            else:
-                aba.update_cell(row, 6, novo_status)
-
-        # ── Se troca de folga aprovada → atualizar folgas_2026 ──
-        if novo_status == "Aprovada":
-            try:
-                todos = aba.get_all_values()
-                hdrs_t = [h.strip().lower() for h in todos[0]]
-                row_t  = todos[index_linha + 1]  # +1 para header
-                serv_o = str(row_t[hdrs_t.index('servico_origem')]).strip() if 'servico_origem' in hdrs_t else ''
-                serv_d = str(row_t[hdrs_t.index('servico_destino')]).strip() if 'servico_destino' in hdrs_t else ''
-                id_o   = str(row_t[hdrs_t.index('id_origem')]).strip() if 'id_origem' in hdrs_t else ''
-                id_d   = str(row_t[hdrs_t.index('id_destino')]).strip() if 'id_destino' in hdrs_t else ''
-
-                # Detetar troca de folga pelo formato "Folga DD/MM/YYYY (tipo)"
-                if serv_o.startswith('Folga ') and serv_d.startswith('Folga '):
-                    import re as _re
-                    def _extrair_dia(s):
-                        m = _re.search(r'(\d{2}/\d{2}/\d{4})', s)
-                        return datetime.strptime(m.group(1), '%d/%m/%Y').strftime('%d-%m') if m else None
-                    dia_o = _extrair_dia(serv_o)  # dia original do id_o → passa para id_d
-                    dia_d = _extrair_dia(serv_d)  # dia original do id_d → passa para id_o
-
-                    if dia_o and dia_d:
-                        ano_f = datetime.now().year
-                        # Leitura via cache
-                        df_folgas_troca = load_folgas(ano_f)
-                        grupos_folga_troca = load_grupos_folga()
-
-                        # Reconstruir vals_f para compatibilidade com código abaixo
-                        if not df_folgas_troca.empty:
-                            vals_f = [list(df_folgas_troca.columns)] + df_folgas_troca.astype(str).values.tolist()
-                        else:
-                            vals_f = [[]]
-                        hdrs_f   = [h.strip().lower() for h in vals_f[0]]
-                        ix_id_f  = hdrs_f.index('id') if 'id' in hdrs_f else 0
-                        ix_grp_f = hdrs_f.index('grupo') if 'grupo' in hdrs_f else None
-
-                        # Para escrita ainda precisamos das worksheets
-                        ws_f   = sh.worksheet(f"folgas_{ano_f}")
-                        ws_grp = sh.worksheet("grupos_folga")
-                        vals_grp  = ws_grp.get_all_values()
-                        hdrs_grp  = [h.strip() for h in vals_grp[0]]
-                        tipos_grp = [h for h in hdrs_grp if h != 'grupo']
-
-                        # Encontrar grupo do militar
-                        def _get_grupo(mid):
-                            for row_f in vals_f[1:]:
-                                if str(row_f[ix_id_f]).strip() == mid and ix_grp_f:
-                                    return str(row_f[ix_grp_f]).strip()
-                            return None
-
-                        if id_o == id_d:
-                            # Mudança de folga -- guardar exceção na coluna 'exceções' do folgas_2026
-                            # Determinar tipo da folga original
-                            tipo_orig = ''
-                            m_tipo = re.search(r'\(([^)]+)\)', serv_o)
-                            if m_tipo: tipo_orig = m_tipo.group(1)
-
-                            grp = _get_grupo(id_o)
-                            # Adicionar exceção: dia_o(tipo)→dia_d
-                            nova_exc = f"{dia_o}({tipo_orig})→{dia_d}"
-                            # Encontrar linha do militar no folgas_2026
-                            col_exc = 'exceções' if 'exceções' in hdrs_f else ('excecoes' if 'excecoes' in hdrs_f else None)
-                            if col_exc:
-                                ix_exc = hdrs_f.index(col_exc)
-                                for i_f, row_f in enumerate(vals_f[1:], start=2):
-                                    if str(row_f[ix_id_f]).strip() == id_o:
-                                        exc_atual = str(row_f[ix_exc]).strip() if ix_exc < len(row_f) else ''
-                                        exc_atual = '' if exc_atual == 'nan' else exc_atual
-                                        nova_lista = (exc_atual + ';' + nova_exc).strip(';')
-                                        cl_exc = chr(ord('A') + ix_exc)
-                                        ws_f.update(f'{cl_exc}{i_f}', [[nova_lista]])
-                                        break
-                        else:
-                            # Troca entre dois militares -- lógica original
-                            def _trocar_dia_grupo(mid_from, dia_from, mid_to, dia_to):
-                                grp_from = _get_grupo(mid_from)
-                                grp_to   = _get_grupo(mid_to)
-                                upds_grp = []
-                                for i_grp, row_grp in enumerate(vals_grp[1:], start=2):
-                                    grp_nome = str(row_grp[0]).strip()
-                                    for tipo_g in tipos_grp:
-                                        ix_t = hdrs_grp.index(tipo_g)
-                                        dias_str = str(row_grp[ix_t]).strip() if ix_t < len(row_grp) else ''
-                                        dias_list = [d.strip() for d in re.split(r'[;,]+', dias_str) if d.strip()]
-                                        mudou = False
-                                        if grp_from and grp_nome == grp_from and dia_from in dias_list:
-                                            dias_list.remove(dia_from)
-                                            dias_list.append(dia_to)
-                                            mudou = True
-                                        if grp_to and grp_nome == grp_to and dia_to in dias_list:
-                                            dias_list.remove(dia_to)
-                                            dias_list.append(dia_from)
-                                            mudou = True
-                                        if mudou:
-                                            cl_g = chr(ord('A') + ix_t)
-                                            upds_grp.append({'range': f'{cl_g}{i_grp}', 'values': [[';'.join(sorted(dias_list))]]})
-                                if upds_grp:
-                                    ws_grp.batch_update(upds_grp)
-                            _trocar_dia_grupo(id_o, dia_o, id_d, dia_d)
-
-                        load_grupos_folga.clear()
-                        load_folgas.clear()
-            except Exception as _ef:
-                pass  # não bloquear se falhar a atualização das folgas
-
-        invalidar_trocas()
-        return True
-    except Exception as e:
-        st.error(f"Erro ao atualizar: {e}")
+                    pass
         return False
-
+    except Exception:
+        return False
 def salvar_troca_gsheet(linha: list) -> bool:
     """Adiciona uma nova linha de troca na Google Sheet."""
     try:
-        sh = get_sheet()
         _pg_tr2 = get_pg_loader()
         if _pg_tr2:
             try:
@@ -1225,10 +781,9 @@ def salvar_troca_gsheet(linha: list) -> bool:
                 })
                 _pg_tr2.limpar_cache()
                 load_trocas.clear()
-            except Exception:
-                sh.worksheet("registos_trocas").append_row(linha)
-        else:
-            sh.worksheet("registos_trocas").append_row(linha)
+            except Exception as _e_tr:
+                st.error(f"Erro ao guardar troca: {_e_tr}")
+                return False
         invalidar_trocas()
         return True
     except Exception as e:
@@ -1248,130 +803,76 @@ _SLOTS_AUTO = {
 
 def _atualizar_ordem_escala_dia(sh, aba_dia: str, d_gerar):
     """
-    Atualiza o ordem_escala do dia seguinte com base no que ficou escalado no aba_dia.
-    - Parte SEMPRE do ordem_escala do próprio dia (imutável -- criado ao confirmar o anterior)
-    - Move para o fim TODOS os militares escalados nos slots auto
-    - Grava como ordem_escala do dia seguinte (sobrescreve se já existir)
+    Atualiza o ordem_escala do dia seguinte no PostgreSQL.
     """
     try:
-        abas = load_lista_abas()
-        aba_ord = f"ordem_escala {aba_dia}"
-        aba_ord_ant = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
-
-        # Ler base -- próprio dia > anterior (nunca modificar este)
-        ws_base = None
-        for nome in [aba_ord, aba_ord_ant]:
-            if nome in abas:
-                ws_base = sh.worksheet(nome)
-                break
-        if not ws_base:
+        pg = get_pg_loader()
+        if not pg:
             return
 
-        vals = ws_base.get_all_values()
-        if not vals: return
-        hdrs = [h.strip() for h in vals[0]]
-        # Fazer cópia limpa da ordem base
-        ordem = {h: [] for h in hdrs}
-        for row in vals[1:]:
-            for i, h in enumerate(hdrs):
-                v = str(row[i]).strip() if i < len(row) else ''
-                if v: ordem[h].append(v)
+        # Ler ordem base do próprio dia ou do anterior
+        aba_ord_ant = (d_gerar - timedelta(days=1)).strftime('%d-%m')
+        ordem = pg.carregar_ordem_escala(aba_dia)
+        if not ordem:
+            ordem = pg.carregar_ordem_escala(aba_ord_ant)
+        if not ordem:
+            return
 
-        # Ler aba do dia para saber quem ficou escalado
-        time.sleep(1)
-        for _tentativa in range(3):
-            try:
-                ws_dia = sh.worksheet(aba_dia)
-                vals_dia = ws_dia.get_all_values()
-                break
-            except Exception as _ex:
-                if '429' in str(_ex) and _tentativa < 2:
-                    time.sleep(20)
-                else:
-                    return
-        if not vals_dia: return
-        hdrs_dia = [h.strip().lower() for h in vals_dia[0]]
-        ix_id = hdrs_dia.index('id')      if 'id'      in hdrs_dia else 0
-        ix_sv = hdrs_dia.index('serviço') if 'serviço' in hdrs_dia else 1
-        ix_hr = hdrs_dia.index('horário') if 'horário' in hdrs_dia else 2
+        # Ler escala do dia para saber quem ficou escalado nos slots auto
+        df_dia = load_data(aba_dia)
+        ids_escalados = {}
+        SLOTS_AUTO = [
+            'Atendimento 00-08', 'Atendimento 08-16', 'Atendimento 16-24',
+            'Patrulha Ocorrências 00-08', 'Patrulha Ocorrências 08-16', 'Patrulha Ocorrências 16-24',
+            'Apoio Atendimento 08-16', 'Apoio Atendimento 16-24',
+        ]
+        if not df_dia.empty and 'serviço' in df_dia.columns:
+            for _, row_d in df_dia.iterrows():
+                sv = str(row_d.get('serviço', '')).strip()
+                hor = str(row_d.get('horário', '')).strip()
+                slot_key = f"{sv} {hor}".strip() if hor else sv
+                for s in SLOTS_AUTO:
+                    sv_s = s.rsplit(' ', 1)[0]
+                    hor_s = s.rsplit(' ', 1)[1]
+                    if sv.lower() == sv_s.lower() and hor == hor_s:
+                        for mid in [m.strip() for m in str(row_d.get('id', '')).split(';') if m.strip()]:
+                            if s not in ids_escalados:
+                                ids_escalados[s] = []
+                            if mid not in ids_escalados[s]:
+                                ids_escalados[s].append(mid)
 
-        # Recolher todos os escalados por slot
-        escalados_por_slot = {}
-        for row in vals_dia[1:]:
-            sv  = norm(str(row[ix_sv]).strip()) if ix_sv < len(row) else ''
-            hr  = str(row[ix_hr]).strip()        if ix_hr < len(row) else ''
-            ids = str(row[ix_id]).strip()         if ix_id < len(row) else ''
-            col_key = _SLOTS_AUTO.get((sv, hr))
-            if not col_key or not ids or ids == 'nan':
-                continue
-            for mid in re.split(r'[;,]+', ids):
-                mid = mid.strip()
-                if mid:
-                    escalados_por_slot.setdefault(col_key, []).append(mid)
+        # Mover escalados para o fim em cada slot
+        nova_ordem = {}
+        for slot, ids in ordem.items():
+            escalados_slot = ids_escalados.get(slot, [])
+            nao_escalados = [i for i in ids if i not in escalados_slot]
+            nova_ordem[slot] = nao_escalados + escalados_slot
 
-        # Mover escalados para o fim da fila -- por slot
-        for col_key, mids in escalados_por_slot.items():
-            if col_key not in ordem:
-                continue
-            for mid in mids:
-                if mid in ordem[col_key]:
-                    ordem[col_key].remove(mid)
-                    ordem[col_key].append(mid)
+        # Guardar como ordem do dia seguinte
+        nome_prox = (d_gerar + timedelta(days=1)).strftime('%d-%m')
+        pg.guardar_ordem_escala(nome_prox, nova_ordem)
 
-        # Gravar ordem_escala do dia seguinte (sempre sobrescrever)
-        nome_prox = f"ordem_escala {(d_gerar + timedelta(days=1)).strftime('%d-%m')}"
-        nova = [hdrs]
-        ml = max((len(v) for v in ordem.values()), default=1)
-        for i in range(ml):
-            nova.append([ordem[h][i] if i < len(ordem[h]) else '' for h in hdrs])
-
-        if nome_prox in abas:
-            ws_p = sh.worksheet(nome_prox)
-            ws_p.clear()
-            ws_p.update('A1', nova)
-            ws_p.hide()
-        else:
-            ws_p = sh.add_worksheet(title=nome_prox, rows=100, cols=len(hdrs))
-            ws_p.update('A1', nova)
-            ws_p.hide()
     except Exception as e:
-        st.error(f"Erro ao atualizar ordem_escala: {e}")
+        st.error(f"Erro ao actualizar ordem_escala: {e}")
 
 def _atualizar_ordem_escala_em_cadeia(sh, aba_dia: str, d_gerar, max_dias=9):
-    """
-    Usado ao EDITAR escala existente.
-    Actualiza em cadeia os ordem_escala dos dias seguintes que já têm aba de escala.
-    """
+    """Actualiza em cadeia os ordem_escala dos dias seguintes."""
     abas = load_lista_abas()
-
-    # Sempre gerar ordem_escala do dia seguinte
     _atualizar_ordem_escala_dia(sh, aba_dia, d_gerar)
-    time.sleep(1)
-
-    # Continuar em cadeia apenas para dias que já têm aba de escala criada
     d_atual = d_gerar + timedelta(days=1)
     for _ in range(max_dias - 1):
         aba_atual = d_atual.strftime('%d-%m')
         if aba_atual not in abas:
             break
         _atualizar_ordem_escala_dia(sh, aba_atual, d_atual)
-        time.sleep(1)
-        d_atual = d_atual + timedelta(days=1)
-        load_lista_abas.clear()
-        abas = load_lista_abas()
+        d_atual += timedelta(days=1)
+
 
 def _gerar_ordem_escala_dia_seguinte(sh, aba_dia: str, d_gerar):
-    """
-    Usado ao CONFIRMAR escala nova.
-    Gera apenas o ordem_escala do dia seguinte — sem cadeia.
-    """
+    """Gera apenas o ordem_escala do dia seguinte."""
     _atualizar_ordem_escala_dia(sh, aba_dia, d_gerar)
 
-# ============================================================
-# 5. FUNÇÕES PDF
-# ============================================================
-def s(txt) -> str:
-    return str(txt)
+
 
 def _rl_header(c_obj, titulo):
     from reportlab.lib.colors import HexColor
@@ -4255,8 +3756,8 @@ else:
                 # Recolher todos os serviços únicos de todas as abas em cache
                 # Usar os serviços da aba "serviços"
                 try:
-                    ws_serv_h = get_sheet().worksheet("serviços")
-                    serv_vals_h = ws_serv_h.get_all_values()
+                    _df_serv_h = pd.DataFrame()  # Serviços carregados do PG
+                    serv_vals_h = []
                     servicos_disponiveis = [str(h).strip() for h in serv_vals_h[0] if str(h).strip()]
                 except:
                     servicos_disponiveis = []
@@ -4284,7 +3785,7 @@ else:
                     if st.button("🔍 Pesquisar último", key="btn_hist_serv", use_container_width=True):
                         mid_h = str(mil_opts_h[mil_sel_h]).strip()
                         with st.spinner("A pesquisar..."):
-                            sh_h = get_sheet()
+                            pass  # histórico no PG
                             # Ordenar abas do mais recente para o mais antigo
                             abas_h = sorted(
                                 [t for t in load_lista_abas() if re.match(r'^\d{2}-\d{2}$', t)],
@@ -4340,7 +3841,8 @@ else:
         try:
             client = get_gsheet_client()
             sh = client.open_by_url(st.secrets["gsheet_url"])
-            ws = sh.worksheet("giros")
+            # Giros carregados do PostgreSQL via load_utilizadores
+        return
             valores = ws.get_all_values()
             if not valores or len(valores) < 2:
                 st.info("Não existem giros definidos.")
@@ -4523,77 +4025,21 @@ else:
             resultados_c  = dados_multi_c['resultados']
             ordem_headers_c = dados_multi_c['ordem_headers']
             try:
-                sh2 = get_sheet()
+                _pg_conf = get_pg_loader()
                 from collections import defaultdict
                 for idx_res, res in enumerate(resultados_c):
-                    # Pausa entre dias para evitar quota
-                    if idx_res > 0:
-                        time.sleep(8)
                     aba_r = res['aba']
                     escalados_r = res['escalados']
                     ordem_r = res['ordem_atualizada']
                     data_r = res['data']
 
-                    # Retry em caso de quota
-                    for _t in range(3):
-                        try:
-                            ws_dia_r = sh2.worksheet(aba_r)
-                            break
-                        except Exception as _e:
-                            if _t < 2:
-                                time.sleep(20)
-                            else:
-                                raise _e
-                    todas_linhas_r = ws_dia_r.get_all_values()
-                    hdrs_r = [h.strip().lower() for h in todas_linhas_r[0]]
-                    ix_id_r   = hdrs_r.index('id')      if 'id'      in hdrs_r else 0
-                    ix_serv_r = hdrs_r.index('serviço') if 'serviço' in hdrs_r else 1
-                    ix_hor_r  = hdrs_r.index('horário') if 'horário' in hdrs_r else 2
+                    # Guardar escala no PostgreSQL
+                    df_escala_r = res.get('df_escala')
+                    if df_escala_r is not None and not df_escala_r.empty:
+                        _pg_conf.guardar_escala(aba_r, df_escala_r)
 
-                    agrupados_r = defaultdict(list)
-                    simples_r = []
-                    for mid, serv, hor in escalados_r:
-                        if serv == "Patrulha Ocorrências":
-                            agrupados_r[(serv, hor)].append(mid)
-                        else:
-                            simples_r.append((mid, serv, hor))
-                    emap_r = {}
-                    for (serv, hor), ids in agrupados_r.items():
-                        emap_r[(norm(serv), hor.strip())] = ';'.join(ids)
-                    for mid, serv, hor in simples_r:
-                        emap_r[(norm(serv), hor.strip())] = mid
-
-                    upds_r = []
-                    for i, row in enumerate(todas_linhas_r[1:], start=2):
-                        sc = norm(row[ix_serv_r].strip()) if ix_serv_r < len(row) else ''
-                        hc = str(row[ix_hor_r]).strip()  if ix_hor_r < len(row) else ''
-                        ic = str(row[ix_id_r]).strip()   if ix_id_r  < len(row) else ''
-                        ch = (sc, hc)
-                        if ch in emap_r and not ic:
-                            cl = chr(ord('A') + ix_id_r)
-                            upds_r.append({'range': f'{cl}{i}', 'values': [[emap_r[ch]]]})
-                            del emap_r[ch]
-                    if upds_r:
-                        ws_dia_r.batch_update(upds_r)
-
-                    # Escrever disponíveis na linha "Disponíveis" da aba
-                    disp_r = res.get('disponiveis', [])
-                    if disp_r:
-                        ids_disp_str = ';'.join(disp_r)
-                        for i, row in enumerate(todas_linhas_r[1:], start=2):
-                            sc_d = norm(row[ix_serv_r].strip()) if ix_serv_r < len(row) else ''
-                            ic_d = str(row[ix_id_r]).strip() if ix_id_r < len(row) else ''
-                            if sc_d == norm('Disponíveis') or sc_d == norm('Disponiveis'):
-                                cl_d = chr(ord('A') + ix_id_r)
-                                ws_dia_r.update(f'{cl_d}{i}', [[ids_disp_str]])
-                                break
-
-                    # ── Atualizar ordem_escala do dia seguinte ──
-                    # Sempre parte do ordem_escala do dia atual (que vem da geração)
-                    # ignorando qualquer ordem_escala existente para o dia seguinte
-                    nome_prox = f"ordem_escala {(data_r + timedelta(days=1)).strftime('%d-%m')}"
-                    abas_existentes = load_lista_abas()
-
+                    # Actualizar ordem_escala do dia seguinte
+                    nome_prox = (data_r + timedelta(days=1)).strftime('%d-%m')
                     _slots_map_r = {
                         (norm("Atendimento"),          "00-08"): "Atendimento 00-08",
                         (norm("Atendimento"),          "08-16"): "Atendimento 08-16",
@@ -4604,52 +4050,14 @@ else:
                         (norm("Apoio Atendimento"),    "08-16"): "Apoio Atendimento 08-16",
                         (norm("Apoio Atendimento"),    "16-24"): "Apoio Atendimento 16-24",
                     }
-
-                    # Usar ordem_r que já vem do dia anterior com os escalados movidos
                     ordem_base = {h: list(v) for h, v in ordem_r.items()}
-                    hdrs_prox  = ordem_headers_c
-
-                    # Mover militares escalados automaticamente para o fim
                     ids_auto_r = set(m for m, _, _ in escalados_r)
                     for col_key_p, lista_p in ordem_base.items():
                         for mid_p in list(ids_auto_r):
                             if mid_p in lista_p:
                                 lista_p.remove(mid_p)
                                 lista_p.append(mid_p)
-
-                    # Mover militares manuais para o fim também
-                    for row_m in todas_linhas_r[1:]:
-                        serv_m = norm(row_m[ix_serv_r].strip()) if ix_serv_r < len(row_m) else ''
-                        hor_m  = str(row_m[ix_hor_r]).strip()   if ix_hor_r  < len(row_m) else ''
-                        id_m   = str(row_m[ix_id_r]).strip()    if ix_id_r   < len(row_m) else ''
-                        if not id_m or id_m == 'nan':
-                            continue
-                        col_key_m = _slots_map_r.get((serv_m, hor_m))
-                        if not col_key_m or col_key_m not in ordem_base:
-                            continue
-                        for mid_m in re.split(r'[;,]', id_m):
-                            mid_m = mid_m.strip()
-                            if not mid_m or mid_m in ids_auto_r:
-                                continue
-                            if mid_m in ordem_base[col_key_m]:
-                                ordem_base[col_key_m].remove(mid_m)
-                                ordem_base[col_key_m].append(mid_m)
-
-                    # Escrever ordem -- substituir sempre
-                    nova_o_r = [hdrs_prox]
-                    ml_r = max((len(v) for v in ordem_base.values()), default=1)
-                    for i in range(ml_r):
-                        nova_o_r.append([ordem_base[h][i] if i < len(ordem_base[h]) else '' for h in hdrs_prox])
-
-                    if nome_prox in abas_existentes:
-                        ws_prox_exist = sh2.worksheet(nome_prox)
-                        ws_prox_exist.clear()
-                        ws_prox_exist.update('A1', nova_o_r)
-                        ws_prox_exist.hide()
-                    else:
-                        ws_prox = sh2.add_worksheet(title=nome_prox, rows=100, cols=len(hdrs_prox))
-                        ws_prox.update('A1', nova_o_r)
-                        ws_prox.hide()
+                    _pg_conf.guardar_ordem_escala(nome_prox, ordem_base)
 
                 load_data.clear()
                 del st.session_state['escala_gerada_multi']
@@ -4672,33 +4080,47 @@ else:
 
             # ── Botão para carregar/resetar tabela ──
             if st.button("📋 Carregar tabela do dia", key="btn_carregar_tabela", use_container_width=True):
-                sh_tab = get_sheet()
-                # Criar aba do dia se não existir, copiando estrutura de outra aba
-                abas_existentes_tab = load_lista_abas()
-                if aba_dia not in abas_existentes_tab:
-                    # Encontrar aba modelo (outro dia)
-                    aba_modelo_t = next((t for t in abas_existentes_tab if re.match(r'^\d{2}-\d{2}$', t)), None)
-                    if aba_modelo_t:
-                        hdrs_modelo = sh_tab.worksheet(aba_modelo_t).row_values(1)
-                        # Garantir colunas obrigatórias
-                        hdrs_modelo_nc = [_nc(h) for h in hdrs_modelo]
-                        if 'giro' not in hdrs_modelo_nc:
-                            hdrs_modelo.append('giro')
-                        if 'viatura' not in hdrs_modelo_nc:
-                            hdrs_modelo.append('viatura')
-                        ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_modelo))
-                        ws_nova.update('A1', [hdrs_modelo])
-                    else:
-                        # Criar com cabeçalhos padrão
-                        hdrs_pad = ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
-                        ws_nova = sh_tab.add_worksheet(title=aba_dia, rows=200, cols=len(hdrs_pad))
-                        ws_nova.update('A1', [hdrs_pad])
-
-                # Ler aba do dia diretamente para apanhar IDs múltiplos
-                mapa_existente = {}  # mid -> lista de dados (pode ter remunerado + serviço normal)
+                # Ler escala do dia do PostgreSQL — IDs múltiplos já estão separados
+                mapa_existente = {}
                 try:
-                    ws_dia_tab = sh_tab.worksheet(aba_dia)
-                    vals_tab = ws_dia_tab.get_all_values()
+                    df_tab = load_data(aba_dia)
+                    if not df_tab.empty:
+                        vals_tab_rows = []
+                        # Simular formato vals_tab para reutilizar código abaixo
+                        for _, row_t2 in df_tab.iterrows():
+                            vals_tab_rows.append(row_t2.to_dict())
+                        # Construir mapa_existente directamente do DataFrame
+                        for row_t2 in vals_tab_rows:
+                            id_raw = str(row_t2.get('id', '')).strip()
+                            if not id_raw: continue
+                            sv_t = str(row_t2.get('serviço', '')).strip()
+                            if not sv_t: continue
+                            dados_t = {
+                                'serviço': sv_t,
+                                'horário': str(row_t2.get('horário', '')).strip(),
+                                'indicativo': str(row_t2.get('indicativo rádio', '')).strip(),
+                                'rádio': str(row_t2.get('rádio', '')).strip(),
+                                'giro': str(row_t2.get('giro', '')).strip(),
+                                'viatura': str(row_t2.get('viatura', '')).strip(),
+                                'observações': str(row_t2.get('observações', '')).strip(),
+                            }
+                            e_remun = bool(re.search(r'remun|gratif', norm(sv_t)))
+                            ids_linha = [m.strip() for m in re.split(r'[;,
+]+', id_raw) if m.strip()]
+                            if len(ids_linha) > 1 and e_remun:
+                                chave = id_raw.strip()
+                                if chave not in mapa_existente:
+                                    mapa_existente[chave] = []
+                                mapa_existente[chave].append(dados_t)
+                            else:
+                                for mid in ids_linha:
+                                    if mid:
+                                        if mid not in mapa_existente:
+                                            mapa_existente[mid] = []
+                                        mapa_existente[mid].append(dados_t)
+
+                if True:  # substituir try antigo
+                    vals_tab = []  # não usado
                     if vals_tab and len(vals_tab) > 1:
                         hdrs_tab = [h.strip().lower() for h in vals_tab[0]]
                         ix_id_t  = hdrs_tab.index('id')      if 'id'      in hdrs_tab else 0
@@ -5042,8 +4464,6 @@ else:
                     if st.button("⚙️ Gerar escala automática", use_container_width=True, key="btn_gerar_auto"):
                         with st.spinner("A gerar..."):
                             try:
-                                sh_g = get_sheet()
-
                                 # Aplicar horários das abreviaturas no df_editado ANTES de calcular slots
                                 _abrev_hor = {
                                     'A1': ('Atendimento', '00-08'),
@@ -5074,31 +4494,17 @@ else:
                                     if serv and serv != 'nan' and not any(x in serv_norm for x in ['remu','grat']):
                                         ids_indisponiveis.add(mid)
 
-                                # Carregar ordem_escala
-                                aba_ordem = f"ordem_escala {aba_dia}"
-                                aba_ordem_ant = f"ordem_escala {(d_gerar - timedelta(days=1)).strftime('%d-%m')}"
-                                try:
-                                    ws_ordem_g = sh_g.worksheet(aba_ordem)
-                                except:
-                                    try:
-                                        ws_ordem_g = sh_g.worksheet(aba_ordem_ant)
-                                    except:
-                                        # Listar abas disponíveis para debug
-                                        abas_disp = load_lista_abas()
-                                        abas_ord = [a for a in abas_disp if 'ordem' in a.lower()]
-                                        st.error(f"Não encontrei ordem_escala. A procurar: '{aba_ordem}' ou '{aba_ordem_ant}'. Abas ordem disponíveis: {abas_ord}")
-                                        st.stop()
+                                # Carregar ordem_escala do PostgreSQL
+                                _pg_g = get_pg_loader()
+                                ordem_g = _pg_g.carregar_ordem_escala(aba_dia)
+                                if not ordem_g:
+                                    aba_ordem_ant = (d_gerar - timedelta(days=1)).strftime('%d-%m')
+                                    ordem_g = _pg_g.carregar_ordem_escala(aba_ordem_ant)
+                                if not ordem_g:
+                                    st.error(f"Não encontrei ordem_escala para {aba_dia} no PostgreSQL. Precisa de migrar os dados da ordem_escala do Sheets.")
+                                    st.stop()
 
-                                ordem_vals_g = ws_ordem_g.get_all_values()
-                                ordem_headers_g = [str(h).strip() for h in ordem_vals_g[0]]
-                                ordem_g = {h: [] for h in ordem_headers_g}
-                                for row_o in ordem_vals_g[1:]:
-                                    for i, h in enumerate(ordem_headers_g):
-                                        val = str(row_o[i]).strip() if i < len(row_o) else ''
-                                        if val:
-                                            ordem_g[h].append(val)
-
-                                df_ant_g2 = load_data_direto(sh_g, (d_gerar - timedelta(days=1)).strftime("%d-%m"))
+                                df_ant_g2 = load_data((d_gerar - timedelta(days=1)).strftime("%d-%m"))
 
                                 SLOTS = [
                                     ("Atendimento",         "00-08", 1),
@@ -5258,67 +4664,7 @@ else:
                                         _guardou_pg = True
                                     except Exception as _e_pg_esc:
                                         st.warning(f"PostgreSQL falhou: {_e_pg_esc}")
-                                if not _guardou_pg:
-                                    sh_c = get_sheet()
-                                ws_dia_c = sh_c.worksheet(aba_dia)
-                                todas_linhas_c = ws_dia_c.get_all_values()
-                                hdrs_c_raw = [h.strip() for h in todas_linhas_c[0]] if todas_linhas_c else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
-                                hdrs_c = [h.lower() for h in hdrs_c_raw]
-
-                                # Guardar linhas de remunerado existentes antes de limpar
-                                linhas_rem_preservar = []
-                                if len(todas_linhas_c) > 1:
-                                    ix_sv_p = hdrs_c.index('serviço') if 'serviço' in hdrs_c else 1
-                                    for row_p in todas_linhas_c[1:]:
-                                        sv_p = norm(str(row_p[ix_sv_p]).strip()) if ix_sv_p < len(row_p) else ''
-                                        if any(x in sv_p for x in ['remu','grat']):
-                                            linhas_rem_preservar.append(row_p)
-
-                                # Limpar aba — manter só cabeçalho
-                                ws_dia_c.resize(rows=1)
-                                if not todas_linhas_c:
-                                    ws_dia_c.update('A1', [hdrs_c_raw])
-
-                                # Agrupar militares por serviço+horário+observações
-                                grupos_sv = {}  # (serviço, horário, obs) -> {ids, indicativo, rádio, giro, viatura, observações}
-                                for _, row_e in df_editado.iterrows():
-                                    sv_e = str(row_e.get('serviço','')).strip()
-                                    if not sv_e or sv_e == 'nan': continue
-                                    mid_e = str(row_e['id']).strip()
-                                    if not mid_e or mid_e == 'nan': continue
-                                    hr_e  = str(row_e.get('horário','')).strip()
-                                    obs_e = str(row_e.get('observações','')).strip()
-                                    chave = (sv_e, hr_e, obs_e)
-                                    if chave not in grupos_sv:
-                                        grupos_sv[chave] = {'ids': [], 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': obs_e}
-                                    grupos_sv[chave]['ids'].append(mid_e)
-                                    # Guardar outros campos do primeiro militar
-                                    for campo in ['indicativo','rádio','giro','viatura']:
-                                        val = str(row_e.get(campo,'')).strip()
-                                        if val and val != 'nan' and not grupos_sv[chave][campo]:
-                                            grupos_sv[chave][campo] = val
-
-                                nova_data = []
-                                for (sv_e, hr_e, obs_e), dados_g in grupos_sv.items():
-                                    linha_nova = [''] * len(hdrs_c_raw)
-                                    for col_nome, val in [
-                                        ('id', ';'.join(dados_g['ids'])),
-                                        ('serviço', sv_e), ('horário', hr_e),
-                                        ('indicativo', dados_g['indicativo']),
-                                        ('rádio', dados_g['rádio']),
-                                        ('giro', dados_g['giro']),
-                                        ('viatura', dados_g['viatura']),
-                                        ('observações', dados_g['observações'])
-                                    ]:
-                                        idx_col = next((i for i,h in enumerate(hdrs_c) if col_nome in h), None)
-                                        if idx_col is not None:
-                                            linha_nova[idx_col] = val
-                                    nova_data.append(linha_nova)
-                                if nova_data:
-                                    ws_dia_c.append_rows(nova_data)
-                                # Restaurar remunerados preservados
-                                if linhas_rem_preservar:
-                                    ws_dia_c.append_rows(linhas_rem_preservar)
+                                # Escala guardada no PostgreSQL acima
 
                                 # Gravar "Disponível" para militares do efetivo sem serviço escalado
                                 # Gravar "Férias" ou tipo de licença para quem está ausente
@@ -5349,7 +4695,7 @@ else:
                                     if idx_sv_c is not None: linha_disp[idx_sv_c] = sv_reg
                                     linhas_disp.append(linha_disp)
                                 if linhas_disp:
-                                    ws_dia_c.append_rows(linhas_disp)
+                                    # No PostgreSQL já guardado acima
 
                                 # Gerar ordem_escala do dia seguinte
                                 _gerar_ordem_escala_dia_seguinte(sh_c, aba_dia, d_gerar)
@@ -5389,8 +4735,9 @@ else:
             def _adicionar_lista(campo, valor):
                 """Adiciona valor novo à aba listas se não existir."""
                 try:
-                    sh_l = get_sheet()
-                    ws_l = sh_l.worksheet("listas")
+                    pass  # Listas não usadas no PostgreSQL
+                    ws_l = None
+                    if False:
                     vals_l = ws_l.get_all_values()
                     if not vals_l: return
                     hdrs_l = [h.strip() for h in vals_l[0]]
@@ -5418,24 +4765,7 @@ else:
 
             if st.button("📋 Carregar dias", key="btn_carregar_editar", use_container_width=True):
                 st.session_state['ord_editar'] = _ord_carregar
-                sh_e = get_sheet()
-                abas_existentes_e = load_lista_abas()
-                # Criar abas que não existam
-                aba_modelo_e = next((t for t in abas_existentes_e if re.match(r'^\d{2}-\d{2}$', t)), None)
-                if aba_modelo_e:
-                    hdrs_modelo_e = sh_e.worksheet(aba_modelo_e).row_values(1)
-                    hdrs_modelo_e_nc = [_nc(h) for h in hdrs_modelo_e]
-                    if 'giro' not in hdrs_modelo_e_nc:
-                        hdrs_modelo_e.append('giro')
-                    if 'viatura' not in hdrs_modelo_e_nc:
-                        hdrs_modelo_e.append('viatura')
-                else:
-                    hdrs_modelo_e = ['id','serviço','horário','indicativo rádio','rádio','viatura','giro','observações']
-                for d_e_chk in dias_editar:
-                    aba_chk = d_e_chk.strftime("%d-%m")
-                    if aba_chk not in abas_existentes_e:
-                        ws_chk = sh_e.add_worksheet(title=aba_chk, rows=200, cols=len(hdrs_modelo_e))
-                        ws_chk.update('A1', [hdrs_modelo_e])
+                # No PostgreSQL não precisamos de criar abas — as escalas são criadas ao guardar
                 # Pré-calcular férias uma vez para todos os dias/militares
                 ferias_cache_e = {}
                 if 'id' not in df_util.columns:
@@ -5454,8 +4784,8 @@ else:
                     # Ler aba diretamente sem explodir IDs
                     mapa_e = {}
                     try:
-                        ws_e_raw = sh_e.worksheet(aba_e)
-                        vals_e_raw = ws_e_raw.get_all_values()
+                        _df_e_raw = load_data(aba_e)
+                        vals_e_raw = [list(_df_e_raw.columns)] + _df_e_raw.values.tolist() if not _df_e_raw.empty else []
                         if vals_e_raw and len(vals_e_raw) > 1:
                             hdrs_e_raw = [h.strip().lower() for h in vals_e_raw[0]]
                             ix_id_r  = hdrs_e_raw.index('id')      if 'id'      in hdrs_e_raw else 0
@@ -5663,181 +4993,7 @@ else:
                         load_data.clear()
                         return
 
-                    sh_gc = get_sheet()
-                    for aba_g, df_g in editados_dict.items():
-                        # Retry em caso de 429
-                        for tentativa in range(3):
-                            try:
-                                ws_g = sh_gc.worksheet(aba_g)
-                                todas_g = ws_g.get_all_values()
-                                break
-                            except Exception as ex:
-                                if '429' in str(ex) and tentativa < 2:
-                                    time.sleep(20 * (tentativa + 1))
-                                else:
-                                    raise
-                        if not todas_g: continue
-                        hdrs_g = [h.strip().lower() for h in todas_g[0]]
-                        ix_id_g  = hdrs_g.index('id')      if 'id'      in hdrs_g else 0
-                        ix_sv_g  = hdrs_g.index('serviço') if 'serviço' in hdrs_g else 1
-                        ix_hr_g  = hdrs_g.index('horário') if 'horário' in hdrs_g else 2
-                        ix_ind_g = next((i for i,h in enumerate(hdrs_g) if 'indicat' in h), None)
-                        ix_rad_g = next((i for i,h in enumerate(hdrs_g) if h in ('rádio','radio')), None)
-                        ix_gir_g = hdrs_g.index('giro') if 'giro' in hdrs_g else None
-                        ix_vtr_g = hdrs_g.index('viatura') if 'viatura' in hdrs_g else None
-                        ix_obs_g = next((i for i,h in enumerate(hdrs_g) if 'obs' in h), None)
-
-                        # Converter editor para dict id -> dados
-                        # Remunerados novos (adicionados manualmente) são guardados à parte
-                        editor_map = {}
-                        editor_remu_novos = []  # linhas de remunerado adicionadas no editor
-                        for _, r in df_g.iterrows():
-                            mid = str(r['id']).strip()
-                            if not mid or mid == 'nan':
-                                continue
-                            serv_r = str(r.get('serviço','') or '').strip()
-                            if re.search(r'remu|grat', norm(serv_r)):
-                                # Remunerado manual — guardar como linha raw para o Sheets
-                                editor_remu_novos.append(mid)
-                                continue
-                            editor_map[mid] = {
-                                'serviço':     serv_r,
-                                'horário':     str(r.get('horário','') or '').strip() or ('09-17' if 'fcaa' in norm(serv_r) else ''),
-                                'indicativo':  str(r.get('indicativo','') or '').strip(),
-                                'rádio':       str(r.get('rádio','') or '').strip(),
-                                'giro':        str(r.get('giro','') or '').strip(),
-                                'viatura':     str(r.get('viatura','') or '').strip(),
-                                'observações': str(r.get('observações','') or '').strip(),
-                            }
-
-                        def _agrupar_e_escrever(editor_map, ws, hdrs_raw, hdrs):
-                            """Agrupa militares por serviço+horário e escreve no Sheets."""
-                            grupos = {}
-                            for mid, dados in editor_map.items():
-                                sv = dados['serviço']
-                                if not sv: continue
-                                hr = dados['horário']
-                                chave = (sv, hr, dados['indicativo'], dados['rádio'], dados['giro'], dados['viatura'], dados['observações'])
-                                if chave not in grupos:
-                                    grupos[chave] = {'ids': [], 'indicativo': dados['indicativo'], 'rádio': dados['rádio'], 'giro': dados['giro'], 'viatura': dados['viatura'], 'observações': dados['observações']}
-                                grupos[chave]['ids'].append(mid)
-                            hdrs_l = [_nc(h) for h in hdrs_raw]
-                            mapa_c = {
-                                'id':        next((i for i,h in enumerate(hdrs_l) if h == 'id'), 0),
-                                'servico':   next((i for i,h in enumerate(hdrs_l) if 'servi' in h), 1),
-                                'horario':   next((i for i,h in enumerate(hdrs_l) if h == 'horario'), 2),
-                                'indicativo':next((i for i,h in enumerate(hdrs_l) if h in ('indicativo','indicativo radio')), None),
-                                'radio':     next((i for i,h in enumerate(hdrs_l) if h == 'radio'), None),
-                                'viatura':   next((i for i,h in enumerate(hdrs_l) if h == 'viatura'), None),
-                                'giro':      next((i for i,h in enumerate(hdrs_l) if h == 'giro'), None),
-                                'obs':       next((i for i,h in enumerate(hdrs_l) if 'obs' in h), None),
-                            }
-                            nova_data = []
-                            for (sv, hr, ind_g, rad_g, gir_g, vtr_g, obs_g), d in grupos.items():
-                                linha = [''] * len(hdrs_raw)
-                                for chave_c, val in [
-                                    ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
-                                    ('indicativo', d['indicativo']), ('radio', d['rádio']),
-                                    ('giro', d['giro']), ('viatura', d['viatura']), ('obs', d['observações'])
-                                ]:
-                                    idx_col = mapa_c.get(chave_c)
-                                    if idx_col is not None:
-                                        linha[idx_col] = val
-                                nova_data.append(linha)
-                            if nova_data:
-                                ws.append_rows(nova_data)
-
-                        if len(todas_g) <= 1:
-                            # Aba vazia — escrever agrupado
-                            hdrs_raw = [h.strip() for h in todas_g[0]] if todas_g else ['id','serviço','horário','indicativo','rádio','giro','viatura','observações']
-                            if not todas_g:
-                                ws_g.update('A1', [hdrs_raw])
-                            _agrupar_e_escrever(editor_map, ws_g, hdrs_raw, hdrs_g)
-                        else:
-                            # Aba com dados — preservar remunerados, construir tudo e escrever atomicamente
-                            hdrs_raw = [h.strip() for h in todas_g[0]]
-                            hdrs_g_lower = [h.lower() for h in hdrs_raw]
-                            ix_sv_g2 = hdrs_g_lower.index('serviço') if 'serviço' in hdrs_g_lower else 1
-                            # Remunerados: reconstruir totalmente a partir do editor
-                            # (o editor já tem todas as linhas de remunerado carregadas do Sheets)
-                            hdrs_nc2 = [_nc(h) for h in hdrs_raw]
-                            _mc2 = {
-                                'id':        next((i for i,h in enumerate(hdrs_nc2) if h == 'id'), 0),
-                                'servico':   next((i for i,h in enumerate(hdrs_nc2) if 'servi' in h), 1),
-                                'horario':   next((i for i,h in enumerate(hdrs_nc2) if h == 'horario'), 2),
-                                'indicativo':next((i for i,h in enumerate(hdrs_nc2) if h in ('indicativo','indicativo radio')), None),
-                                'radio':     next((i for i,h in enumerate(hdrs_nc2) if h == 'radio'), None),
-                                'viatura':   next((i for i,h in enumerate(hdrs_nc2) if h == 'viatura'), None),
-                                'giro':      next((i for i,h in enumerate(hdrs_nc2) if h == 'giro'), None),
-                                'obs':       next((i for i,h in enumerate(hdrs_nc2) if 'obs' in h), None),
-                            }
-                            linhas_rem_g = []
-                            for _, r_novo in df_g.iterrows():
-                                id_raw_n = str(r_novo.get('id','') or '').strip()
-                                serv_n   = str(r_novo.get('serviço','') or '').strip()
-                                if not id_raw_n or id_raw_n == 'nan' or not re.search(r'remu|grat', norm(serv_n)):
-                                    continue
-                                linha_nova = [''] * len(hdrs_raw)
-                                for chave_n, val_n in [
-                                    ('id', id_raw_n), ('servico', serv_n),
-                                    ('horario', str(r_novo.get('horário','') or '').strip()),
-                                    ('indicativo', str(r_novo.get('indicativo','') or '').strip()),
-                                    ('radio', str(r_novo.get('rádio','') or '').strip()),
-                                    ('giro', str(r_novo.get('giro','') or '').strip()),
-                                    ('viatura', str(r_novo.get('viatura','') or '').strip()),
-                                    ('obs', str(r_novo.get('observações','') or '').strip()),
-                                ]:
-                                    idx_n = _mc2.get(chave_n)
-                                    if idx_n is not None:
-                                        linha_nova[idx_n] = val_n
-                                linhas_rem_g.append(linha_nova)
-                            # Construir novas linhas em memória
-                            hdrs_nc = [_nc(h) for h in hdrs_raw]
-                            # mapa fixo por posição — mais robusto que contains
-                            _mc = {
-                                'id':        next((i for i,h in enumerate(hdrs_nc) if h == 'id'), 0),
-                                'servico':   next((i for i,h in enumerate(hdrs_nc) if 'servi' in h), 1),
-                                'horario':   next((i for i,h in enumerate(hdrs_nc) if h == 'horario'), 2),
-                                'indicativo':next((i for i,h in enumerate(hdrs_nc) if h in ('indicativo','indicativo radio')), None),
-                                'radio':     next((i for i,h in enumerate(hdrs_nc) if h == 'radio'), None),
-                                'viatura':   next((i for i,h in enumerate(hdrs_nc) if h == 'viatura'), None),
-                                'giro':      next((i for i,h in enumerate(hdrs_nc) if h == 'giro'), None),
-                                'obs':       next((i for i,h in enumerate(hdrs_nc) if 'obs' in h), None),
-                            }
-                            grupos_novos = {}
-                            for mid, dados in editor_map.items():
-                                sv = dados['serviço']
-                                if not sv: continue
-                                hr = dados['horário']
-                                chave = (sv, hr, dados['indicativo'], dados['rádio'], dados['giro'], dados['viatura'], dados['observações'])
-                                if chave not in grupos_novos:
-                                    grupos_novos[chave] = {'ids': [], 'indicativo': dados['indicativo'], 'rádio': dados['rádio'], 'giro': dados['giro'], 'viatura': dados['viatura'], 'observações': dados['observações']}
-                                grupos_novos[chave]['ids'].append(mid)
-                            novas_linhas = []
-                            for (sv, hr, ind_g, rad_g, gir_g, vtr_g, obs_g), d in grupos_novos.items():
-                                linha = [''] * len(hdrs_raw)
-                                for chave_mc, val in [
-                                    ('id', ';'.join(d['ids'])), ('servico', sv), ('horario', hr),
-                                    ('indicativo', d['indicativo']), ('radio', d['rádio']),
-                                    ('giro', d['giro']), ('viatura', d['viatura']), ('obs', d['observações'])
-                                ]:
-                                    idx_col = _mc.get(chave_mc)
-                                    if idx_col is not None:
-                                        linha[idx_col] = val
-                                novas_linhas.append(linha)
-                            # Escrever tudo de uma vez: cabeçalho + serviços + remunerados
-                            tudo = [hdrs_raw] + novas_linhas + linhas_rem_g
-                            ws_g.clear()
-                            ws_g.update('A1', tudo)
-
-                        # Atualizar ordem_escala em cadeia (com delay para evitar 429)
-                        try:
-                            time.sleep(2)
-                            aba_data_g = datetime.strptime(f"{aba_g}-{datetime.now().year}", "%d-%m-%Y")
-                            _atualizar_ordem_escala_em_cadeia(sh_gc, aba_g, aba_data_g)
-                        except:
-                            pass
-
+                    # Guardado no PostgreSQL acima
                 dias_pt = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 
                 if len(abas_lista) == 2:
@@ -5957,28 +5113,21 @@ else:
 
                                     if ids_alterados:
                                         data_aba_e = f"{aba_e[3:5]}/{aba_e[:2]}/{datetime.now().year}"
+                                        _pg_tr_e = get_pg_loader()
                                         df_tr_e = load_trocas()
-                                        sh_tr_e = get_sheet()
-                                        ws_tr_e = sh_tr_e.worksheet("registos_trocas")
-                                        rows_tr_e = ws_tr_e.get_all_values()
-                                        hdrs_tr_e = rows_tr_e[0] if rows_tr_e else []
-                                        def _ci(name):
-                                            try: return [h.lower().strip() for h in hdrs_tr_e].index(name)
-                                            except: return None
-                                        ci_data   = _ci('data')
-                                        ci_status = _ci('status')
-                                        ci_orig   = _ci('id_origem')
-                                        ci_dest   = _ci('id_destino')
                                         canceladas_e = []
-                                        for ri, row_tr in enumerate(rows_tr_e[1:], start=2):
-                                            if len(row_tr) <= max(ci_data, ci_status, ci_orig, ci_dest): continue
-                                            if str(row_tr[ci_data]).strip() != data_aba_e: continue
-                                            if str(row_tr[ci_status]).strip() != 'Aprovada': continue
-                                            id_o = str(row_tr[ci_orig]).strip()
-                                            id_d = str(row_tr[ci_dest]).strip()
-                                            if id_o in ids_alterados or id_d in ids_alterados:
-                                                ws_tr_e.update_cell(ri, ci_status + 1, 'Cancelada')
-                                                canceladas_e.append((id_o, id_d))
+                                        if _pg_tr_e and not df_tr_e.empty and 'id' in df_tr_e.columns:
+                                            matches_tr_e = df_tr_e[
+                                                (df_tr_e['data'].astype(str) == data_aba_e) &
+                                                (df_tr_e['status'].astype(str) == 'Aprovada') &
+                                                (df_tr_e['id_origem'].astype(str).isin(ids_alterados) |
+                                                 df_tr_e['id_destino'].astype(str).isin(ids_alterados))
+                                            ]
+                                            for _, tr_e in matches_tr_e.iterrows():
+                                                _pg_tr_e.actualizar_status_troca(int(tr_e['id']), 'Cancelada')
+                                                canceladas_e.append((str(tr_e['id_origem']), str(tr_e['id_destino'])))
+                                            if canceladas_e:
+                                                load_trocas.clear()
                                         # Notificar militares afectados
                                         if canceladas_e:
                                             try:
@@ -6069,8 +5218,7 @@ else:
                         st.stop()
 
                     aba_rem = d_rem.strftime("%d-%m")
-                    sh_rem_dia = get_sheet()
-                    df_dia_rem = load_data_direto(sh_rem_dia, aba_rem)
+                    df_dia_rem = load_data(aba_rem)
                     data_str_rem = d_rem.strftime("%d/%m/%Y")
 
                     is_fds = d_rem.weekday() >= 5
@@ -6306,106 +5454,46 @@ else:
                     st.info(f"📋 Pronto a confirmar: {resumo} — {dados_rem['data']}")
                     if st.button("✅ CONFIRMAR NOMEAÇÃO E ESCREVER NA ESCALA", use_container_width=True, type="primary", key="btn_conf_rem"):
                         try:
-                            sh_conf = get_sheet()
-                            ws_dia_rem = sh_conf.worksheet(dados_rem['aba'])
-                            ws_ord = sh_conf.worksheet("ordem_remunerados")
-                            todos_vals = ws_ord.get_all_values()
-                            hdrs_ord = [_nc(h) for h in todos_vals[0]]
-                            col_id_idx  = hdrs_ord.index('id') if 'id' in hdrs_ord else 0
-                            col_tot_idx = hdrs_ord.index(dados_rem['col_total']) if dados_rem['col_total'] in hdrs_ord else None
-                            col_ult_idx = hdrs_ord.index(dados_rem['col_ultimo']) if dados_rem['col_ultimo'] in hdrs_ord else None
-                            ws_hist = sh_conf.worksheet("historico_remunerados")
-                            upds_ord = []
-
-                            # Ler linhas actuais para verificar duplicados
-                            linhas_dia_rem = ws_dia_rem.get_all_values()
-                            hdrs_dia_rem = [_nc(h) for h in (linhas_dia_rem[0] if linhas_dia_rem else [])]
-                            col_serv_r = hdrs_dia_rem.index('servico') if 'servico' in hdrs_dia_rem else (hdrs_dia_rem.index('serviço') if 'serviço' in hdrs_dia_rem else 1)
-                            col_hor_r  = hdrs_dia_rem.index('horario') if 'horario' in hdrs_dia_rem else (hdrs_dia_rem.index('horário') if 'horário' in hdrs_dia_rem else 2)
+                            _pg_rem = get_pg_loader()
+                            df_dia_actual = load_data(dados_rem['aba'])
 
                             for res in dados_rem['resultados']:
                                 if not res['nomeados']: continue
                                 slot = res['slot']
                                 ids_nomeados = [n['id'] for n in res['nomeados']]
-                                ids_str = ", ".join(ids_nomeados)
+                                ids_str = ";".join(ids_nomeados)
                                 tab_slot = slot.get('tab', 'A')
                                 serv_novo = f"Svç Remunerado - Tabela {tab_slot}"
                                 hor_novo  = slot['hor']
-                                # Verificar se já existe linha com mesmo serviço e horário
-                                ja_existe = any(
-                                    _nc(str(row[col_serv_r])) == _nc(serv_novo) and
-                                    str(row[col_hor_r]).strip() == hor_novo.strip()
-                                    for row in linhas_dia_rem[1:]
-                                    if len(row) > max(col_serv_r, col_hor_r)
-                                )
+
+                                # Verificar duplicado
+                                ja_existe = False
+                                if not df_dia_actual.empty and 'serviço' in df_dia_actual.columns:
+                                    ja_existe = not df_dia_actual[
+                                        (df_dia_actual['serviço'].astype(str).str.strip() == serv_novo) &
+                                        (df_dia_actual['horário'].astype(str).str.strip() == hor_novo)
+                                    ].empty
                                 if ja_existe:
-                                    st.warning(f"⚠️ Remunerado {tab_slot} ({hor_novo}) já existe na escala — linha não duplicada.")
+                                    st.warning(f"⚠️ Remunerado {tab_slot} ({hor_novo}) já existe — não duplicado.")
                                     continue
-                                ws_dia_rem.append_row([
-                                    ids_str,
-                                    serv_novo,
-                                    hor_novo,
-                                    "", "", "",
-                                    slot['obs'],
-                                ])
+
+                                # Adicionar linha ao PostgreSQL
+                                _pg_rem.adicionar_linha_escala(dados_rem['aba'], {
+                                    'id': ids_str, 'serviço': serv_novo, 'horário': hor_novo,
+                                    'viatura': '', 'rádio': '', 'indicativo rádio': '',
+                                    'giro': '', 'observações': slot.get('obs', ''),
+                                })
+
+                                # Actualizar ordem remunerados
                                 hi_s, hf_s = _parse_horario(slot['hor'])
                                 horas_add = round((hf_s - hi_s) / 60, 1) if hf_s and hi_s and hf_s > hi_s else round((1440 - hi_s + hf_s) / 60, 1) if hi_s and hf_s else 1
-                                col_t_slot = slot.get('col_total', dados_rem['col_total'])
-                                col_u_slot = slot.get('col_ultimo', dados_rem['col_ultimo'])
-                                col_tot_idx_s = hdrs_ord.index(col_t_slot) if col_t_slot in hdrs_ord else None
-                                col_ult_idx_s = hdrs_ord.index(col_u_slot) if col_u_slot in hdrs_ord else None
-
-                                for i, row_o in enumerate(todos_vals[1:], start=2):
-                                    mid_o = str(row_o[col_id_idx]).strip() if col_id_idx < len(row_o) else ''
-                                    if mid_o in ids_nomeados:
-                                        if col_tot_idx_s is not None:
-                                            total_atual = float(str(row_o[col_tot_idx_s]).strip() or 0) if col_tot_idx_s < len(row_o) else 0
-                                            cl = chr(ord('A') + col_tot_idx_s)
-                                            upds_ord.append({'range': f'{cl}{i}', 'values': [[total_atual + horas_add]]})
-                                        if col_ult_idx_s is not None:
-                                            cl2 = chr(ord('A') + col_ult_idx_s)
-                                            upds_ord.append({'range': f'{cl2}{i}', 'values': [[dados_rem['data']]]})
-                                for mid_h in ids_nomeados:
-                                    ws_hist.append_row([mid_h, dados_rem['data'], col_u_slot])
-
-                            if upds_ord:
-                                ws_ord.batch_update(upds_ord)
-
-                            # ── Notificar militares nomeados via Railway ──────
-                            try:
-                                import requests as _req
-                                _railway_url = "https://portal-escalas-gnr-production.up.railway.app"
-                                _railway_secret = os.environ.get("RAILWAY_NOTIFY_SECRET", "")
-                                for res in dados_rem['resultados']:
-                                    if not res['nomeados']: continue
-                                    slot = res['slot']
-                                    ids_notif = [n['id'] for n in res['nomeados']]
-                                    tab_slot = slot.get('tab', 'A')
-                                    obs_slot = slot.get('obs', '')
-                                    corpo = f"Foste nomeado para Remunerado Tabela {tab_slot} — {slot['hor']} — {dados_rem['data']}."
-                                    if obs_slot:
-                                        corpo += f" ({obs_slot})"
-                                    _req.post(
-                                        f"{_railway_url}/api/notificacoes/notificar-interno",
-                                        json={
-                                            "secret": _railway_secret,
-                                            "u_ids": ids_notif,
-                                            "titulo": "💶 Nomeação para Remunerado",
-                                            "corpo": corpo,
-                                            "url": "/home",
-                                            "tag": "remunerado",
-                                        },
-                                        timeout=5,
-                                    )
-                            except Exception:
-                                pass
+                                from datetime import datetime as _dt_rem
+                                for mid_n in ids_nomeados:
+                                    _pg_rem.actualizar_ordem_remunerado(mid_n, tab_slot, horas_add, _dt_rem.now())
 
                             load_data.clear()
-                            load_ordem_remunerados.clear()
-                            load_lista_abas.clear()
-                            del st.session_state['rem_nomeados']
-                            st.session_state['rem_slots'] = [{'hor': '', 'n': 2, 'obs': ''}]
-                            st.success("✅ Nomeação confirmada e escala atualizada!")
+                            st.session_state.pop('rem_nomeados', None)
+                            st.success("✅ Nomeação confirmada!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Erro: {e}")
@@ -6450,8 +5538,7 @@ else:
                             cl_r = chr(ord('A') + col_ult_idx_r)
                             upds_r.append({'range': f'{cl_r}{i_r}', 'values': [[data_repor]]})
                             break
-                    if upds_r:
-                        ws_ord_r.batch_update(upds_r)
+                    pass  # actualizado no PG
         
                 st.divider()
                 st.markdown("#### 📋 Remunerados Nomeados (hoje em diante)")
@@ -6465,27 +5552,27 @@ else:
                     st.info("Clica em **🔄 Carregar lista** para ver os remunerados nomeados.")
                 else:
                     hoje = date.today()
-                    sh_gest = get_sheet()
                     abas_existentes_g = load_lista_abas()
                     remunerados_lista = []  # [{data, aba, linha_idx, ids, horario, tabela, obs}]
         
                     with st.spinner("A carregar remunerados..."):
-                        sh_gest = get_sheet()
                         for delta in range(15):
                             d_g = hoje + timedelta(days=delta)
                             aba_g = d_g.strftime("%d-%m")
                             if aba_g not in abas_existentes_g:
                                 continue
                             try:
-                                vals_g = sh_gest.worksheet(aba_g).get_all_values()
-                                if not vals_g:
+                                df_g = load_data(aba_g)
+                                if df_g.empty:
                                     continue
-                                hdrs_g = [_nc(c) for c in vals_g[0]]
-                                idx_id   = hdrs_g.index('id')          if 'id'          in hdrs_g else 0
-                                idx_serv = hdrs_g.index('servico')     if 'servico'     in hdrs_g else 1
-                                idx_hor  = hdrs_g.index('horario')     if 'horario'     in hdrs_g else 2
-                                idx_obs  = hdrs_g.index('observacoes') if 'observacoes' in hdrs_g else 6
-                                for i, row_g in enumerate(vals_g[1:], start=2):  # start=2 = linha real Sheets
+                                # Simular formato vals_g para reutilizar código
+                                for i, row_dict in enumerate(df_g.to_dict('records'), start=2):
+                                    row_g = [str(row_dict.get(c, '')) for c in df_g.columns]
+                                    hdrs_g = [_nc(h) for h in df_g.columns]
+                                    idx_id   = hdrs_g.index('id')       if 'id'       in hdrs_g else 0
+                                    idx_serv = hdrs_g.index('servico')  if 'servico'  in hdrs_g else (hdrs_g.index('servico') if 'servico' in hdrs_g else 1)
+                                    idx_hor  = hdrs_g.index('horario')  if 'horario'  in hdrs_g else 2
+                                    idx_obs  = hdrs_g.index('observacoes') if 'observacoes' in hdrs_g else 6
                                     if len(row_g) <= idx_serv:
                                         continue
                                     serv_g = norm(str(row_g[idx_serv]))
@@ -6541,286 +5628,71 @@ else:
                                     st.warning("Tens a certeza que queres cancelar este remunerado? As horas serão subtraídas.")
                                     if st.button("✅ Confirmar cancelamento", key=f"conf_canc_{chave_base}", use_container_width=True, type="primary"):
                                         try:
-                                            sh_c = get_sheet()
-                                            ws_c = sh_c.worksheet(rem_g['aba'])
-                                            # Apagar linha (substituir por linha vazia ou delete)
-                                            ws_c.delete_rows(rem_g['linha_idx'])  # já é 1-based
-            
-                                            # Subtrair horas
-                                            is_fds_c = rem_g['data_obj'].weekday() >= 5
-                                            if rem_g['tabela'] == 'B':
-                                                col_tot_c = 'total_ano_b'
-                                            elif is_fds_c:
-                                                col_tot_c = 'total_ano_a_fds'
-                                            else:
-                                                col_tot_c = 'total_ano_a_semana'
-            
+                                            _pg_canc = get_pg_loader()
+                                            # Remover linha da escala
+                                            df_aba_c = load_data(rem_g['aba'])
+                                            if not df_aba_c.empty:
+                                                ids_rem_c = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
+                                                serv_c = rem_g.get('serv_orig', '')
+                                                hor_c  = rem_g['horario']
+                                                # Filtrar todas as linhas excepto a do remunerado a cancelar
+                                                mask_canc = ~(
+                                                    df_aba_c['serviço'].astype(str).str.contains('remun|gratif', case=False, na=False) &
+                                                    (df_aba_c['horário'].astype(str).str.strip() == hor_c)
+                                                )
+                                                df_sem_rem = df_aba_c[mask_canc]
+                                                _pg_canc.guardar_escala(rem_g['aba'], df_sem_rem)
+
+                                            # Subtrair horas da ordem remunerados
                                             horas_c = 0
                                             if '-' in rem_g['horario']:
                                                 try:
                                                     hi_c = int(rem_g['horario'].split('-')[0].strip())
                                                     hf_c = int(rem_g['horario'].split('-')[1].strip())
                                                     horas_c = hf_c - hi_c if hf_c > hi_c else (24 - hi_c + hf_c)
-                                                except:
-                                                    pass
-            
-                                            ws_ord_c = sh_c.worksheet("ordem_remunerados")
-                                            vals_ord_c = ws_ord_c.get_all_values()
-                                            hdrs_c = [_nc(h) for h in vals_ord_c[0]]
-                                            col_id_c = hdrs_c.index('id') if 'id' in hdrs_c else 0
-                                            col_tot_c_idx = hdrs_c.index(col_tot_c) if col_tot_c in hdrs_c else None
-                                            ids_c = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
-                                            upds_c = []
-                                            for i_c, row_c in enumerate(vals_ord_c[1:], start=2):
-                                                mid_c = str(row_c[col_id_c]).strip() if col_id_c < len(row_c) else ''
-                                                if mid_c in ids_c and col_tot_c_idx is not None:
-                                                    tot_c = max(0, int(str(row_c[col_tot_c_idx]).strip() or 0) - horas_c)
-                                                    cl_c = chr(ord('A') + col_tot_c_idx)
-                                                    upds_c.append({'range': f'{cl_c}{i_c}', 'values': [[tot_c]]})
-                                            if upds_c:
-                                                ws_ord_c.batch_update(upds_c)
-            
-                                            # Repor data do último a partir do histórico
-                                            is_fds_c2 = rem_g['data_obj'].weekday() >= 5
-                                            if rem_g['tabela'] == 'B':
-                                                col_ult_c = 'ultimo_b'
-                                            elif is_fds_c2:
-                                                col_ult_c = 'ultimo_a_fds'
-                                            else:
-                                                col_ult_c = 'ultimo_a_semana'
-            
-                                            hdrs_c2 = [_nc(h) for h in vals_ord_c[0]]
-                                            ws_hist_c = sh_c.worksheet("historico_remunerados")
-            
-                                            # Remover linha do histórico para cada militar cancelado
-                                            hist_vals_c = ws_hist_c.get_all_values()
-                                            data_cancel = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
-                                            linhas_apagar = []
-                                            for i_hc, row_hc in enumerate(hist_vals_c[1:], start=2):
-                                                if (len(row_hc) >= 3 and
-                                                    str(row_hc[0]).strip() in ids_c and
-                                                    str(row_hc[1]).strip() == data_cancel and
-                                                    str(row_hc[2]).strip() == col_ult_c):
-                                                    linhas_apagar.append(i_hc)
-                                            for ln in reversed(linhas_apagar):
-                                                ws_hist_c.delete_rows(ln)
-            
-                                            # Repor data do último para cada militar
-                                            for mid_c2 in ids_c:
-                                                _repor_data_ultimo(ws_ord_c, hdrs_c2, ws_hist_c, mid_c2, col_ult_c, data_cancel)
-            
+                                                except: pass
+                                            is_fds_c = rem_g['data_obj'].weekday() >= 5
+                                            tab_c = rem_g.get('tabela', 'A')
+                                            from datetime import datetime as _dt_canc
+                                            for mid_c in [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]:
+                                                _pg_canc.actualizar_ordem_remunerado(mid_c, tab_c, -horas_c, _dt_canc.now())
+
                                             load_data.clear()
-                                            load_ordem_remunerados.clear()
-                                            load_lista_abas.clear()
-                                            del st.session_state[f'gest_acao_{chave_base}']
-                                            st.success("✅ Remunerado cancelado e horas subtraídas.")
+                                            st.session_state.pop(f'gest_acao_{chave_base}', None)
+                                            st.session_state['gest_carregado'] = False
+                                            st.success("✅ Remunerado cancelado!")
                                             st.rerun()
                                         except Exception as e:
                                             st.error(f"Erro: {e}")
-            
+
                                 # ── SUBSTITUIR ──
                                 elif acao_g == 'substituir':
                                     ids_atuais = [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]
                                     nomes_atuais = {mid: get_nome_curto(df_util, mid) for mid in ids_atuais}
-            
-                                    mid_sair = st.selectbox(
-                                        "Militar que sai:",
-                                        ids_atuais,
-                                        format_func=lambda x: f"{nomes_atuais.get(x, x)} ({x})",
-                                        key=f"sair_{chave_base}"
-                                    )
-            
-                                    # Calcular elegíveis para substituição (mesma lógica da nomeação)
-                                    is_fds_s = rem_g['data_obj'].weekday() >= 5
-                                    if rem_g['tabela'] == 'B':
-                                        col_tot_s = 'total_ano_b'
-                                        col_ult_s = 'ultimo_b'
-                                    elif is_fds_s:
-                                        col_tot_s = 'total_ano_a_fds'
-                                        col_ult_s = 'ultimo_a_fds'
-                                    else:
-                                        col_tot_s = 'total_ano_a_semana'
-                                        col_ult_s = 'ultimo_a_semana'
-            
-                                    # Carregar dados do dia para verificar elegibilidade
-                                    df_dia_s = load_data(rem_g['aba'])
-                                    _IMP_S = r'ferias|licen|convalesc|dilig|tribunal|inquer|secretaria|fcaa|cter|adm'
-                                    ausentes_s = set()
-                                    militares_folga_s = set()
-                                    servicos_s = {}
-                                    militares_servico_s = set()
-                                    if not df_dia_s.empty:
-                                        for _, rs in df_dia_s.iterrows():
-                                            mid_s = str(rs['id']).strip()
-                                            if not mid_s:
-                                                continue
-                                            sn = norm(str(rs.get('serviço', '')))
-                                            if re.search(_IMP_S, sn):
-                                                ausentes_s.add(mid_s)
-                                            elif 'folga semanal' in sn or 'folga complementar' in sn:
-                                                militares_folga_s.add(mid_s)
-                                            elif not re.search(r'remu|grat', sn):
-                                                hs = str(rs.get('horário', '')).strip()
-                                                hi_s2, hf_s2 = None, None
-                                                if '-' in hs:
-                                                    try:
-                                                        hi_s2 = int(hs.split('-')[0])
-                                                        hf_s2 = int(hs.split('-')[1])
-                                                    except:
-                                                        pass
-                                                servicos_s.setdefault(mid_s, []).append((hi_s2, hf_s2, str(rs.get('serviço',''))))
-                                                militares_servico_s.add(mid_s)
-            
-                                    hi_rem_s, hf_rem_s = None, None
-                                    if '-' in rem_g['horario']:
+                                    mid_sair = st.selectbox("Militar que sai:", ids_atuais,
+                                        format_func=lambda x: f"{nomes_atuais.get(x,x)} ({x})", key=f"sair_{chave_base}")
+                                    militares_disponiveis_s = [m for m in df_util['id'].astype(str).tolist() if m not in ids_atuais]
+                                    mid_entra = st.selectbox("Militar que entra:", militares_disponiveis_s,
+                                        format_func=lambda x: get_nome_curto(df_util, x), key=f"entra_{chave_base}")
+                                    if st.button("✅ Confirmar substituição", key=f"conf_sub_{chave_base}", use_container_width=True, type="primary"):
                                         try:
-                                            hi_rem_s = int(rem_g['horario'].split('-')[0].strip())
-                                            hf_rem_s = int(rem_g['horario'].split('-')[1].strip())
-                                        except:
-                                            pass
-            
-                                    # Reutilizar df_ord_rem já carregado
-                                    elegiveis_s = []
-                                    df_disp_s = df_ord_rem[df_ord_rem['disponivel'] == True].copy()
-                                    df_disp_s[col_tot_s] = pd.to_numeric(df_disp_s[col_tot_s], errors='coerce').fillna(0)
-                                    if col_ult_s not in df_disp_s.columns:
-                                        df_disp_s[col_ult_s] = pd.NaT
-                                    else:
-                                        df_disp_s[col_ult_s] = pd.to_datetime(df_disp_s[col_ult_s], dayfirst=True, errors='coerce')
-                                    df_disp_s = df_disp_s.sort_values(
-                                        [col_ult_s, col_tot_s],
-                                        ascending=[True, True],
-                                        na_position='first'
-                                    )
-            
-                                    for _, row_s in df_disp_s.iterrows():
-                                        mid_s2 = str(row_s.get('id', '')).strip()
-                                        if not mid_s2 or mid_s2 in ids_atuais:
-                                            continue  # já está nomeado
-                                        if mid_s2 in ausentes_s:
-                                            continue
-                                        is_vol_s = bool(row_s['voluntario'])
-                                        aceita_folga_s = bool(row_s['folga'])
-                                        if mid_s2 in militares_folga_s:
-                                            if not is_vol_s or not aceita_folga_s:
-                                                continue
-                                        # Verificar sobreposição
-                                        sobreposto_s = False
-                                        for hi_x, hf_x, _ in servicos_s.get(mid_s2, []):
-                                            if hi_rem_s and hf_rem_s and hi_x and hf_x:
-                                                def _sm(h, b=0): return h*60+(1440 if h<b else 0)
-                                                if _sm(hi_rem_s) < _sm(hf_rem_s, hi_rem_s) and _sm(hi_x) < _sm(hf_x, hi_x):
-                                                    if _sm(hi_rem_s) < _sm(hf_x, hi_x) and _sm(hi_x) < _sm(hf_rem_s, hi_rem_s):
-                                                        sobreposto_s = True
-                                                        break
-                                        if sobreposto_s:
-                                            continue
-                                        elegiveis_s.append({
-                                            'id': mid_s2,
-                                            'nome': get_nome_curto(df_util, mid_s2),
-                                            'voluntario': is_vol_s,
-                                            'total': int(row_s[col_tot_s]),
-                                        })
-            
-                                    if elegiveis_s:
-                                        sugerido = elegiveis_s[0]
-                                        st.info(f"💡 Sugerido: **{sugerido['nome']} ({sugerido['id']})** — {sugerido['total']}h acumuladas")
-                                        opcoes_s = [f"{e['nome']} ({e['id']}) — {e['total']}h" for e in elegiveis_s]
-                                        escolha_s = st.selectbox("Confirmar ou escolher outro:", opcoes_s, key=f"esc_{chave_base}")
-                                        mid_entra = elegiveis_s[opcoes_s.index(escolha_s)]['id']
-                                    else:
-                                        st.warning("Não há substitutos elegíveis disponíveis.")
-                                        mid_entra = None
-            
-                                    if mid_entra and st.button("✅ Confirmar substituição", key=f"conf_subs_{chave_base}", use_container_width=True, type="primary"):
-                                        try:
-                                            sh_s = get_sheet()
-                                            ws_s = sh_s.worksheet(rem_g['aba'])
-                                            vals_s = ws_s.get_all_values()
-                                            linha_s = rem_g['linha_idx']  # já é 1-based
-            
-                                            # Atualizar IDs na linha
-                                            ids_novos = [mid_entra if x == mid_sair else x for x in ids_atuais]
-                                            ws_s.update_cell(linha_s, 1, ', '.join(ids_novos))
-            
-                                            # Atualizar horas
-                                            horas_s = 0
-                                            if '-' in rem_g['horario']:
-                                                try:
-                                                    hi_ss = int(rem_g['horario'].split('-')[0].strip())
-                                                    hf_ss = int(rem_g['horario'].split('-')[1].strip())
-                                                    horas_s = hf_ss - hi_ss if hf_ss > hi_ss else (24 - hi_ss + hf_ss)
-                                                except:
-                                                    pass
-            
-                                            ws_ord_s = sh_s.worksheet("ordem_remunerados")
-                                            vals_ord_s = ws_ord_s.get_all_values()
-                                            hdrs_s = [_nc(h) for h in vals_ord_s[0]]
-                                            col_id_s = hdrs_s.index('id') if 'id' in hdrs_s else 0
-                                            col_tot_s_idx = hdrs_s.index(col_tot_s) if col_tot_s in hdrs_s else None
-                                            upds_s = []
-                                            for i_s, row_ss in enumerate(vals_ord_s[1:], start=2):
-                                                mid_ss = str(row_ss[col_id_s]).strip() if col_id_s < len(row_ss) else ''
-                                                if col_tot_s_idx is None:
-                                                    continue
-                                                tot_ss = int(str(row_ss[col_tot_s_idx]).strip() or 0) if col_tot_s_idx < len(row_ss) else 0
-                                                cl_s = chr(ord('A') + col_tot_s_idx)
-                                                if mid_ss == mid_sair:
-                                                    upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[max(0, tot_ss - horas_s)]]})
-                                                elif mid_ss == mid_entra:
-                                                    upds_s.append({'range': f'{cl_s}{i_s}', 'values': [[tot_ss + horas_s]]})
-                                            if upds_s:
-                                                ws_ord_s.batch_update(upds_s)
-            
-                                            # Histórico: remover linha do que saiu e repor data; adicionar linha ao que entrou
-                                            hdrs_s2 = [_nc(h) for h in vals_ord_s[0]]
-                                            ws_hist_s = sh_s.worksheet("historico_remunerados")
-                                            hist_vals_s = ws_hist_s.get_all_values()
-                                            data_subs = rem_g['data'].strip() if isinstance(rem_g['data'], str) else rem_g['data_obj'].strftime('%d/%m/%Y')
-            
-                                            # Remover linha do que saiu
-                                            linhas_apagar_s = []
-                                            for i_hs, row_hs in enumerate(hist_vals_s[1:], start=2):
-                                                if (len(row_hs) >= 3 and
-                                                    str(row_hs[0]).strip() == mid_sair and
-                                                    str(row_hs[1]).strip() == data_subs and
-                                                    str(row_hs[2]).strip() == col_ult_s):
-                                                    linhas_apagar_s.append(i_hs)
-                                            for ln in reversed(linhas_apagar_s):
-                                                ws_hist_s.delete_rows(ln)
-            
-                                            # Repor data do último para o que saiu
-                                            _repor_data_ultimo(ws_ord_s, hdrs_s2, ws_hist_s, mid_sair, col_ult_s, data_subs)
-            
-                                            # Adicionar linha ao que entrou e atualizar data
-                                            ws_hist_s.append_row([mid_entra, data_subs, col_ult_s])
-                                            col_ult_s_idx2 = hdrs_s2.index(col_ult_s) if col_ult_s in hdrs_s2 else None
-                                            if col_ult_s_idx2 is not None:
-                                                ord_vals_s2 = ws_ord_s.get_all_values()
-                                                col_id_s2 = hdrs_s2.index('id') if 'id' in hdrs_s2 else 0
-                                                for i_s2, row_s2 in enumerate(ord_vals_s2[1:], start=2):
-                                                    if str(row_s2[col_id_s2]).strip() == mid_entra:
-                                                        cl_s2 = chr(ord('A') + col_ult_s_idx2)
-                                                        ws_ord_s.update_cell(i_s2, col_ult_s_idx2 + 1, data_subs)
-                                                        break
-            
+                                            _pg_sub = get_pg_loader()
+                                            df_aba_s = load_data(rem_g['aba'])
+                                            if not df_aba_s.empty and 'serviço' in df_aba_s.columns:
+                                                # Actualizar a linha do remunerado com novo ID
+                                                ids_novos = [mid_entra if m == mid_sair else m for m in ids_atuais]
+                                                ids_novos_str = ";".join(ids_novos)
+                                                hor_s = rem_g['horario']
+                                                mask_rem_s = df_aba_s['serviço'].astype(str).str.contains('remun|gratif', case=False, na=False) & (df_aba_s['horário'].astype(str).str.strip() == hor_s)
+                                                df_aba_s.loc[mask_rem_s, 'id'] = ids_novos_str
+                                                _pg_sub.guardar_escala(rem_g['aba'], df_aba_s)
                                             load_data.clear()
-                                            load_ordem_remunerados.clear()
-                                            load_lista_abas.clear()
-                                            del st.session_state[f'gest_acao_{chave_base}']
-                                            st.success(f"✅ {nomes_atuais.get(mid_sair, mid_sair)} substituído por {get_nome_curto(df_util, mid_entra)}.")
+                                            st.session_state.pop(f'gest_acao_{chave_base}', None)
+                                            st.session_state['gest_carregado'] = False
+                                            st.success("✅ Substituição efectuada!")
                                             st.rerun()
                                         except Exception as e:
                                             st.error(f"Erro: {e}")
-            
-    # --- 🏥 LICENÇAS (ADMIN) ---
-    elif menu == "🏥 Dispensas":
-        df_licencas = load_licencas(ano_atual)
-        df_folgas = load_folgas(ano_atual)
-        st.title("🏥 Dispensas")
-        if not is_admin:
-            st.warning("Acesso restrito a administradores.")
-            st.stop()
 
         tab_disp_normal, tab_disp_slot = st.tabs(["📋 Dispensas Gerais", "🔒 Serviços/Horários"])
 
@@ -6876,13 +5748,7 @@ else:
             if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_lic"):
                 try:
                     mid_l = mil_opts_l[mil_sel_l]
-                    _pg_lic = get_pg_loader()
-                    if _pg_lic:
-                        _pg_lic.adicionar_licenca({"id": mid_l, "tipo": tipo_l, "inicio": ini_l.strftime('%d/%m/%Y'), "fim": fim_l.strftime('%d/%m/%Y'), "obs": obs_l.strip()})
-                    else:
-                        sh_l = get_sheet()
-                        ws_l = sh_l.worksheet("Licenças")
-                        ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y'), obs_l.strip()])
+                    get_pg_loader().adicionar_licenca({"id": mid_l, "tipo": tipo_l, "inicio": ini_l.strftime('%d/%m/%Y'), "fim": fim_l.strftime('%d/%m/%Y'), "obs": obs_l.strip()})
                     load_licencas.clear()
                     st.success("✅ Registo adicionado!")
                     st.rerun()
@@ -6901,23 +5767,16 @@ else:
                 rem_sel_l = st.selectbox("Registo:", list(opts_rem_l.keys()), key="lic_rem")
                 if st.button("🗑️ Remover", key="btn_rem_lic", use_container_width=True):
                     try:
-                        _pg_rem_lic = get_pg_loader()
-                        if _pg_rem_lic:
-                            # Obter o id real da dispensa do df
-                            _idx_rem = opts_rem_l[rem_sel_l]
-                            _row_rem = df_lic_show.iloc[_idx_rem]
-                            _id_rem = int(_row_rem.get("__row", _row_rem.get("id", 0))) if "__row" in _row_rem else 0
-                            if _id_rem:
-                                _pg_rem_lic.remover_licenca(_id_rem)
-                            else:
-                                st.error("Não foi possível identificar o registo")
+                        _idx_rem = opts_rem_l[rem_sel_l]
+                        _row_rem = df_lic_show.iloc[_idx_rem]
+                        _id_rem = int(_row_rem.get("id", 0)) if "id" in _row_rem.index else 0
+                        if _id_rem:
+                            get_pg_loader().remover_licenca(_id_rem)
+                            load_licencas.clear()
+                            st.success("✅ Removido!")
+                            st.rerun()
                         else:
-                            sh_l = get_sheet()
-                            ws_l = sh_l.worksheet("Licenças")
-                            ws_l.delete_rows(opts_rem_l[rem_sel_l] + 2)
-                        load_licencas.clear()
-                        st.success("✅ Removido!")
-                        st.rerun()
+                            st.error("Não foi possível identificar o registo")
                     except Exception as e:
                         st.error(f"Erro: {e}")
 
@@ -6983,11 +5842,9 @@ else:
                     st.warning("Selecciona pelo menos um slot.")
                 else:
                     try:
-                        sh_sl = get_sheet()
-                        ws_sl = sh_sl.worksheet("Licenças")
                         mid_sl = mil_opts_sl[mil_sel_sl]
                         codigos_sl = ','.join(slots_opts[s] for s in slots_sel)
-                        ws_sl.append_row([mid_sl, codigos_sl, ini_sl.strftime('%d/%m/%Y'), fim_sl.strftime('%d/%m/%Y'), ''])
+                        get_pg_loader().adicionar_licenca({"id": mid_sl, "tipo": codigos_sl, "inicio": ini_sl.strftime('%d/%m/%Y'), "fim": fim_sl.strftime('%d/%m/%Y'), "obs": ""})
                         load_licencas.clear()
                         st.success(f"✅ Dispensa de slot adicionada: {codigos_sl}")
                         st.rerun()
@@ -7005,9 +5862,10 @@ else:
                 rem_sel_sl = st.selectbox("Registo:", list(opts_rem_sl.keys()), key="slot_rem")
                 if st.button("🗑️ Remover", key="btn_rem_slot", use_container_width=True):
                     try:
-                        sh_sl = get_sheet()
-                        ws_sl = sh_sl.worksheet("Licenças")
-                        ws_sl.delete_rows(opts_rem_sl[rem_sel_sl] + 2)
+                        _idx_sl = opts_rem_sl[rem_sel_sl]
+                        _row_sl = df_disp_slot.iloc[_idx_sl] if not df_disp_slot.empty else None
+                        if _row_sl is not None and "id" in _row_sl.index:
+                            get_pg_loader().remover_licenca(int(_row_sl.get("id", 0)))
                         load_licencas.clear()
                         st.success("✅ Removido!")
                         st.rerun()
@@ -7068,15 +5926,7 @@ else:
             )
             if st.button("🔒 Despublicar este dia", key="btn_despub", use_container_width=True):
                 try:
-                    _pg_pub = get_pg_loader()
-                    if _pg_pub:
-                        _pg_pub.despublicar_dia(aba_pub)
-                    else:
-                        sh_p = get_sheet()
-                        ws_p = sh_p.worksheet("escala_publicada")
-                        todos = ws_p.col_values(1)
-                        if aba_pub in todos:
-                            ws_p.delete_rows(todos.index(aba_pub) + 1)
+                    get_pg_loader().despublicar_dia(aba_pub)
                     load_dias_publicados.clear()
                     load_data.clear()
                     st.success("✅ Despublicado!")
@@ -7094,13 +5944,7 @@ else:
             )
             if st.button("📢 PUBLICAR ESCALA", key="btn_pub", use_container_width=True, type="primary"):
                 try:
-                    _pg_pub = get_pg_loader()
-                    if _pg_pub:
-                        _pg_pub.publicar_dia(aba_pub)
-                    else:
-                        sh_p = get_sheet()
-                        ws_p = sh_p.worksheet("escala_publicada")
-                        ws_p.append_row([aba_pub])
+                    get_pg_loader().publicar_dia(aba_pub)
                     load_dias_publicados.clear()
                     load_data.clear()
                     st.success(f"✅ Escala de **{d_pub.strftime('%d/%m/%Y')}** publicada!")
@@ -7170,25 +6014,11 @@ else:
                                 st.error("❌ Este PIN já está a ser usado por outro militar.")
                             else:
                                 try:
-                                    sh_u = get_sheet()
-                                    ws_u = sh_u.worksheet("utilizadores")
-                                    headers_u = [h.strip().lower() for h in ws_u.row_values(1)]
-                                    col_pin_u = headers_u.index('pin') + 1
-                                    col_id_u = headers_u.index('id') + 1 if 'id' in headers_u else 1
+                                    h_u, salt_u = hash_pin(novo_pin)
                                     id_u = str(row_u.get('id', '')).strip()
-                                    ids_col = ws_u.col_values(col_id_u)
-                                    linha_u = None
-                                    for i, iv in enumerate(ids_col):
-                                        if iv.strip() == id_u:
-                                            linha_u = i + 1
-                                            break
-                                    if linha_u:
-                                        h_u, salt_u = hash_pin(novo_pin)
-                                        ws_u.update_cell(linha_u, col_pin_u, f"{h_u}:{salt_u}")
-                                        load_utilizadores.clear()
-                                        st.success(f"✅ PIN de **{row_u.get('nome','')}** atualizado!")
-                                    else:
-                                        st.error("❌ Utilizador não encontrado na Sheet.")
+                                    get_pg_loader().actualizar_pin(id_u, f"{h_u}:{salt_u}")
+                                    load_utilizadores.clear()
+                                    st.success(f"✅ PIN de **{row_u.get('nome','')}** atualizado!")
                                 except Exception as e:
                                     st.error(f"Erro: {e}")
 
@@ -7196,19 +6026,11 @@ else:
                     st.markdown("---")
                     if st.button("🗑️ Remover PIN", use_container_width=True, key="btn_rem_pin"):
                         try:
-                            sh_u = get_sheet()
-                            ws_u = sh_u.worksheet("utilizadores")
-                            headers_u = [h.strip().lower() for h in ws_u.row_values(1)]
-                            col_pin_u = headers_u.index('pin') + 1
-                            col_email_u = headers_u.index('email') + 1
-                            emails_col = ws_u.col_values(col_email_u)
-                            for i, ev in enumerate(emails_col):
-                                if ev.strip().lower() == email_u.lower():
-                                    ws_u.update_cell(i + 1, col_pin_u, "")
-                                    load_utilizadores.clear()
-                                    st.success("✅ PIN removido.")
-                                    st.rerun()
-                                    break
+                            id_u = str(row_u.get('id', '')).strip()
+                            get_pg_loader().actualizar_pin(id_u, "")
+                            load_utilizadores.clear()
+                            st.success("✅ PIN removido.")
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Erro: {e}")
 
@@ -7231,38 +6053,32 @@ else:
                     st.error(f"❌ Já existe um militar com o ID {novo_id.strip()}.")
                 else:
                     try:
-                        sh_add = get_sheet()
-                        ws_util_add = sh_add.worksheet("utilizadores")
-                        hdrs_add = [h.strip().lower() for h in ws_util_add.row_values(1)]
-                        nova_linha_add = [''] * len(hdrs_add)
-                        for campo, valor in [('id', novo_id.strip()), ('nome', novo_nome.strip()),
-                                             ('posto', novo_posto.strip()), ('email', novo_email.strip())]:
-                            if campo in hdrs_add:
-                                nova_linha_add[hdrs_add.index(campo)] = valor
-                        ws_util_add.append_row(nova_linha_add)
+                        # Adicionar no PostgreSQL
+                        import psycopg2, os as _os_add
+                        _db_url_add = str(st.secrets.get("DATABASE_URL", _os_add.environ.get("DATABASE_URL","")))
+                        with psycopg2.connect(_db_url_add) as _conn_add:
+                            with _conn_add.cursor() as _cur_add:
+                                _cur_add.execute("""
+                                    INSERT INTO utilizadores (id, nome, posto, email)
+                                    VALUES (%s, %s, %s, %s)
+                                    ON CONFLICT (id) DO UPDATE SET nome=EXCLUDED.nome, posto=EXCLUDED.posto, email=EXCLUDED.email
+                                """, (novo_id.strip(), novo_nome.strip(), novo_posto.strip(), novo_email.strip()))
+                            _conn_add.commit()
 
                         # Adicionar ao topo do ordem_escala mais recente
-                        abas_todas = load_lista_abas()
-                        abas_ordem = sorted([a for a in abas_todas if a.startswith('ordem_escala ')],
-                                            key=lambda x: datetime.strptime(x.replace('ordem_escala ', '') + f"-{datetime.now().year}", '%d-%m-%Y'),
-                                            reverse=True)
-                        if abas_ordem:
-                            ws_ord_add = sh_add.worksheet(abas_ordem[0])
-                            vals_ord = ws_ord_add.get_all_values()
-                            if vals_ord:
-                                hdrs_ord = vals_ord[0]
-                                # Inserir ID no topo de cada coluna (slot)
-                                nova_rows = [hdrs_ord]
-                                # Primeira linha com o novo ID em todos os slots
-                                nova_rows.append([novo_id.strip()] * len(hdrs_ord))
-                                nova_rows.extend(vals_ord[1:])
-                                ws_ord_add.clear()
-                                ws_ord_add.update('A1', nova_rows)
-                                ws_ord_add.hide()
+                        _pg_add = get_pg_loader()
+                        aba_ord_mais_recente = sorted(load_lista_abas(), reverse=True)
+                        if aba_ord_mais_recente:
+                            aba_ord = aba_ord_mais_recente[0]
+                            ordem_atual = _pg_add.carregar_ordem_escala(aba_ord)
+                            if ordem_atual:
+                                for slot in ordem_atual:
+                                    if novo_id.strip() not in ordem_atual[slot]:
+                                        ordem_atual[slot].insert(0, novo_id.strip())
+                                _pg_add.guardar_ordem_escala(aba_ord, ordem_atual)
 
                         load_utilizadores.clear()
-                        load_lista_abas.clear()
-                        st.success(f"✅ Militar **{novo_nome.strip()}** (ID: {novo_id.strip()}) adicionado com sucesso!")
+                        st.success(f"✅ Militar **{novo_nome.strip()}** (ID: {novo_id.strip()}) adicionado!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao adicionar: {e}")
@@ -7287,49 +6103,25 @@ else:
 
                 if st.button("🗑️ CONFIRMAR REMOÇÃO", use_container_width=True, type="primary", key="btn_conf_rem"):
                     try:
-                        sh_rem = get_sheet()
+                        import psycopg2, os as _os_rem
+                        _db_url_rem = str(st.secrets.get("DATABASE_URL", _os_rem.environ.get("DATABASE_URL","")))
+                        with psycopg2.connect(_db_url_rem) as _conn_rem:
+                            with _conn_rem.cursor() as _cur_rem:
+                                _cur_rem.execute("DELETE FROM utilizadores WHERE id = %s", (mid_rem,))
+                            _conn_rem.commit()
 
-                        # Remover da aba utilizadores
-                        ws_util_rem = sh_rem.worksheet("utilizadores")
-                        vals_util_rem = ws_util_rem.get_all_values()
-                        hdrs_util_rem = [h.strip().lower() for h in vals_util_rem[0]]
-                        ix_id_rem = hdrs_util_rem.index('id') if 'id' in hdrs_util_rem else 0
-                        linha_rem = None
-                        for i, row_v in enumerate(vals_util_rem[1:], start=2):
-                            if str(row_v[ix_id_rem]).strip() == mid_rem:
-                                linha_rem = i
-                                break
-                        if linha_rem:
-                            ws_util_rem.delete_rows(linha_rem)
-
-                        # Remover do ordem_escala mais recente
-                        abas_todas_rem = load_lista_abas()
-                        abas_ordem_rem = sorted([a for a in abas_todas_rem if a.startswith('ordem_escala ')],
-                                                key=lambda x: datetime.strptime(x.replace('ordem_escala ', '') + f"-{datetime.now().year}", '%d-%m-%Y'),
-                                                reverse=True)
-                        if abas_ordem_rem:
-                            ws_ord_rem = sh_rem.worksheet(abas_ordem_rem[0])
-                            vals_ord_rem = ws_ord_rem.get_all_values()
-                            if vals_ord_rem:
-                                hdrs_ord_rem = vals_ord_rem[0]
-                                # Remover o ID de todas as colunas
-                                novas_cols = {h: [] for h in hdrs_ord_rem}
-                                for row_v in vals_ord_rem[1:]:
-                                    for ci, h in enumerate(hdrs_ord_rem):
-                                        val = str(row_v[ci]).strip() if ci < len(row_v) else ''
-                                        if val and val != mid_rem:
-                                            novas_cols[h].append(val)
-                                ml_rem = max((len(v) for v in novas_cols.values()), default=1)
-                                nova_ord = [hdrs_ord_rem]
-                                for i in range(ml_rem):
-                                    nova_ord.append([novas_cols[h][i] if i < len(novas_cols[h]) else '' for h in hdrs_ord_rem])
-                                ws_ord_rem.clear()
-                                ws_ord_rem.update('A1', nova_ord)
-                                ws_ord_rem.hide()
+                        # Remover do ordem_escala
+                        _pg_rem2 = get_pg_loader()
+                        aba_ord_rem = sorted(load_lista_abas(), reverse=True)
+                        if aba_ord_rem:
+                            ordem_rem = _pg_rem2.carregar_ordem_escala(aba_ord_rem[0])
+                            if ordem_rem:
+                                for slot in ordem_rem:
+                                    ordem_rem[slot] = [m for m in ordem_rem[slot] if m != mid_rem]
+                                _pg_rem2.guardar_ordem_escala(aba_ord_rem[0], ordem_rem)
 
                         load_utilizadores.clear()
-                        load_lista_abas.clear()
-                        st.success(f"✅ **{nome_rem}** removido do efetivo e do ordem_escala.")
+                        st.success(f"✅ Militar **{nome_rem}** removido!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao remover: {e}")

@@ -124,5 +124,16 @@ CREATE TABLE IF NOT EXISTS servicos (
     tipo    TEXT   -- 'patrulha', 'atendimento', 'adm', 'ausencia', etc.
 );
 
+-- ── Ordem Escala ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS ordem_escala (
+    id          SERIAL PRIMARY KEY,
+    aba         TEXT NOT NULL,
+    slot        TEXT NOT NULL,
+    militar_id  TEXT NOT NULL,
+    posicao     INTEGER NOT NULL DEFAULT 0
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ordem_escala_unique ON ordem_escala(aba, slot, militar_id);
+CREATE INDEX IF NOT EXISTS idx_ordem_escala_aba ON ordem_escala(aba);
+
 COMMENT ON TABLE escalas IS 'Uma linha por entrada na escala diária. militar_id pode conter múltiplos IDs separados por ;';
 COMMENT ON TABLE dias_publicados IS 'Dias visíveis para os militares na app';
