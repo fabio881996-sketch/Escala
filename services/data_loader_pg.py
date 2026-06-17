@@ -293,7 +293,7 @@ class DataLoader:
             return val
         rows = _query("SELECT aba FROM dias_publicados")
         dias = {r["aba"] for r in rows}
-        _cache.set("dias_pub", dias, 30)
+        _cache.set("dias_pub", dias, 10)
         return dias
 
     def publicar_dia(self, aba: str):
@@ -415,6 +415,48 @@ class DataLoader:
         _cache.set("ordem_rem", df, 120)
         return df
 
+
+    # ── Ordem Escala ─────────────────────────────────────────
+    def carregar_ordem_escala(self, aba_dia: str) -> dict:
+        """Carrega ordem_escala de um dia. Devolve dict {slot: [ids]}."""
+        key = f"ordem_escala:{aba_dia}"
+        val, hit = _cache.get(key)
+        if hit:
+            return val
+        try:
+            rows = _query("""
+                SELECT slot, militar_id, posicao
+                FROM ordem_escala
+                WHERE aba = %s
+                ORDER BY slot, posicao
+            """, (aba_dia,))
+            result = {}
+            for r in rows:
+                slot = r["slot"]
+                if slot not in result:
+                    result[slot] = []
+                result[slot].append(r["militar_id"])
+            _cache.set(key, result, 60)
+            return result
+        except Exception:
+            return {}
+
+    def guardar_ordem_escala(self, aba_dia: str, ordem: dict):
+        """Guarda ordem_escala de um dia. ordem = {slot: [ids]}."""
+        try:
+            _execute("DELETE FROM ordem_escala WHERE aba = %s", (aba_dia,))
+            rows = []
+            for slot, ids in ordem.items():
+                for pos, mid in enumerate(ids):
+                    rows.append((aba_dia, slot, str(mid), pos))
+            if rows:
+                _execute_many("""
+                    INSERT INTO ordem_escala (aba, slot, militar_id, posicao)
+                    VALUES %s
+                """, rows)
+            _cache.clear(f"ordem_escala:{aba_dia}")
+        except Exception as e:
+            logger.warning(f"Erro ao guardar ordem_escala: {e}")
     def actualizar_ordem_remunerado(self, militar_id: str, tabela: str, horas: float, data_ultimo: datetime):
         col_total = f"total_ano_{tabela.lower()}"
         col_ultimo = f"ultimo_{tabela.lower()}"
