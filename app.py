@@ -293,11 +293,22 @@ def get_pg_loader():
         _sys.path.insert(0, '/mount/src/escala')
         _os.environ["DATABASE_URL"] = _db_url
         from services.data_loader_pg import DataLoader as _DL_PG
-        return _DL_PG()
+        loader = _DL_PG()
+        return loader
     except Exception as _e:
-        st.warning(f"PostgreSQL não disponível: {_e}")
+        import traceback
+        print(f"[PG ERROR] {_e}\n{traceback.format_exc()}")
         return None
 
+
+# DEBUG PG — remover depois
+if 'pg_debug_shown' not in st.session_state:
+    _pg_test = get_pg_loader()
+    st.session_state['pg_debug_shown'] = True
+    if _pg_test is None:
+        st.sidebar.error(f"⚠️ PG loader é None. DB URL: {bool(_get_database_url())}")
+    else:
+        st.sidebar.success("✅ PG conectado!")
 
 @st.cache_resource
 def get_gsheet_client():
