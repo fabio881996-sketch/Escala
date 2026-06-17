@@ -538,12 +538,15 @@ async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(ob
         df = loader.carregar_trocas()
         troca = None
         if not df.empty and "id" in df.columns:
-            matches = df[df["id"] == payload.row_index]
+            try:
+                matches = df[df["id"].astype(int) == int(payload.row_index)]
+            except Exception:
+                matches = df[df["id"].astype(str) == str(payload.row_index)]
             if not matches.empty:
                 troca = matches.iloc[0]
         if troca is None:
             raise HTTPException(status_code=404, detail="Troca não encontrada")
-        if str(troca.get("id_origem","")).strip() != u_id:
+        if str(troca.get("id_origem","")).strip() != str(u_id).strip():
             raise HTTPException(status_code=403, detail="Só o autor pode cancelar")
         loader.actualizar_status_troca(int(troca["id"]), "Cancelada")
         loader.limpar_cache()
@@ -573,11 +576,14 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
         df = loader.carregar_trocas()
         troca = None
         if not df.empty and "id" in df.columns:
-            matches = df[df["id"] == resposta.row_index]
+            try:
+                matches = df[df["id"].astype(int) == int(resposta.row_index)]
+            except Exception:
+                matches = df[df["id"].astype(str) == str(resposta.row_index)]
             if not matches.empty:
                 troca = matches.iloc[0]
         if troca is None:
-            raise HTTPException(status_code=404, detail="Troca não encontrada")
+            raise HTTPException(status_code=404, detail=f"Troca não encontrada (row_index={resposta.row_index})")
         if str(troca.get("id_destino","")).strip() != str(u_id).strip():
             raise HTTPException(status_code=403, detail=f"Não és o destinatário. Esperado: {str(troca.get('id_destino','')).strip()}, Tu: {str(u_id).strip()}")
 
