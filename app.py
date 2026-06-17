@@ -285,7 +285,10 @@ def _get_database_url():
 @st.cache_resource
 def get_pg_loader():
     """DataLoader PostgreSQL — usado quando DATABASE_URL está definido."""
-    _db_url = _get_database_url()
+    try:
+        _db_url = str(st.secrets["DATABASE_URL"])
+    except Exception:
+        _db_url = _os.environ.get("DATABASE_URL", "")
     if not _db_url:
         return None
     try:
@@ -293,27 +296,14 @@ def get_pg_loader():
         _sys.path.insert(0, '/mount/src/escala')
         _os.environ["DATABASE_URL"] = _db_url
         from services.data_loader_pg import DataLoader as _DL_PG
-        loader = _DL_PG()
-        return loader
+        return _DL_PG()
     except Exception as _e:
         import traceback
         print(f"[PG ERROR] {_e}\n{traceback.format_exc()}")
         return None
 
 
-# DEBUG PG — remover depois
-try:
-    _db_url_t = str(st.secrets["DATABASE_URL"])
-    import os as _os2; _os2.environ["DATABASE_URL"] = _db_url_t
-    import sys as _sys2; _sys2.path.insert(0, '/mount/src/escala')
-    from services.data_loader_pg import DataLoader as _DL_T
-    _pg_t = _DL_T()
-    _dias_t = _pg_t.carregar_dias_publicados()
-    st.sidebar.success(f"✅ PG ok! {len(_dias_t)} dias publicados")
-except Exception as _ex_t:
-    import traceback as _tb
-    st.sidebar.error(f"PG erro: {_ex_t}")
-    st.sidebar.code(_tb.format_exc()[:500])
+
 
 @st.cache_resource
 def get_gsheet_client():
