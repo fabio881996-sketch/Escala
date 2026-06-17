@@ -448,6 +448,17 @@ def load_licencas(ano: int) -> pd.DataFrame:
             st.error(f"Erro PG licencas: {e}")
     return pd.DataFrame()
 
+DISPENSA_SLOTS = {
+    'A1':  ('atendimento',           '00-08'),
+    'A2':  ('atendimento',           '08-16'),
+    'A3':  ('atendimento',           '16-24'),
+    'PO1': ('patrulha ocorrências',  '00-08'),
+    'PO2': ('patrulha ocorrências',  '08-16'),
+    'PO3': ('patrulha ocorrências',  '16-24'),
+    'AA2': ('apoio ao atendimento',  '08-16'),
+    'AA3': ('apoio ao atendimento',  '16-24'),
+}
+
 def militar_tem_dispensa_slot(mid: str, data, df_licencas: pd.DataFrame, servico: str, horario: str) -> bool:
     """Verifica se um militar tem dispensa de serviço/horário activa numa data.
     servico e horario são comparados com DISPENSA_SLOTS após normalização."""
