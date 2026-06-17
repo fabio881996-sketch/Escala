@@ -4682,25 +4682,9 @@ else:
                 opts_hor_e = ['', '00-08', '08-16', '16-24']
 
             def _adicionar_lista(campo, valor):
-                """Adiciona valor novo à aba listas se não existir."""
-                try:
-                    pass  # Listas não usadas no PostgreSQL
-                    ws_l = None
-                    if False:
-                    vals_l = ws_l.get_all_values()
-                    if not vals_l: return
-                    hdrs_l = [h.strip() for h in vals_l[0]]
-                    if campo not in hdrs_l: return
-                    col_idx = hdrs_l.index(campo)
-                    col_vals = [str(row[col_idx]).strip() for row in vals_l[1:] if col_idx < len(row)]
-                    if valor not in col_vals:
-                        # Encontrar próxima linha vazia nesta coluna
-                        next_row = len([v for v in col_vals if v]) + 2  # +2 para header
-                        cl = chr(ord('A') + col_idx)
-                        ws_l.update(f'{cl}{next_row}', [[valor]])
-                        load_listas.clear()
-                except:
-                    pass
+                """Listas não usadas no PostgreSQL."""
+                pass
+
 
             col_e1, col_e2, col_e3 = st.columns([2, 2, 1])
             with col_e1:
