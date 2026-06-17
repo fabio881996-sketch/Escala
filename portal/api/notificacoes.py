@@ -44,48 +44,72 @@ def _get_firebase():
         return None
 
 
-# ── Sheet helpers ────────────────────────────────────────────
+# ── Subscription helpers ─────────────────────────────────────
 
-def _sheet_subscriptions():
-    from core.database import get_sheet
-    sh = get_sheet()
-    try:
-        return sh.worksheet("push_subscriptions")
-    except Exception:
-        ws = sh.add_worksheet("push_subscriptions", rows=500, cols=4)
-        ws.append_row(["u_id", "subscription_json", "fcm_token", "updated_at"])
-        return ws
+def _get_loader():
+    from services.data_loader_factory import get_data_loader
+    return get_data_loader()
 
 def _now():
     from datetime import datetime
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 def _guardar_subscription(u_id: str, sub_json: str = "", fcm_token: str = "") -> None:
-    ws = _sheet_subscriptions()
-    rows = ws.get_all_values()
-    for i, row in enumerate(rows[1:], start=2):
-        if str(row[0]).strip() == str(u_id):
-            if sub_json:
-                ws.update(f"B{i}", [[sub_json]])
-            if fcm_token:
-                ws.update(f"C{i}", [[fcm_token]])
-            ws.update(f"D{i}", [[_now()]])
-            return
-    ws.append_row([u_id, sub_json, fcm_token, _now()])
+    try:
+        loader = _get_loader()
+        # Extrair endpoint, p256dh, auth do JSON
+        import json as _json
+        _endpoint = sub_json
+        _p256dh = ""
+        _auth = ""
+        try:
+            _sub_dict = _json.loads(sub_json) if sub_json else {}
+            _endpoint = _sub_dict.get("endpoint", sub_json)
+            _keys = _sub_dict.get("keys", {})
+            _p256dh = _keys.get("p256dh", "")
+            _auth = _keys.get("auth", "")
+        except Exception:
+            pass
+        loader.guardar_push_subscription(u_id, _endpoint, _p256dh, _auth, "web")
+    except Exception as e:
+        # Fallback Sheets
+        try:
+            from core.database import get_sheet
+            sh = get_sheet()
+            try:
+                ws = sh.worksheet("push_subscriptions")
+            except Exception:
+                ws = sh.add_worksheet("push_subscriptions", rows=500, cols=4)
+                ws.append_row(["u_id", "subscription_json", "fcm_token", "updated_at"])
+            rows = ws.get_all_values()
+            for i, row in enumerate(rows[1:], start=2):
+                if str(row[0]).strip() == str(u_id):
+                    if sub_json: ws.update(f"B{i}", [[sub_json]])
+                    if fcm_token: ws.update(f"C{i}", [[fcm_token]])
+                    ws.update(f"D{i}", [[_now()]])
+                    return
+            ws.append_row([u_id, sub_json, fcm_token, _now()])
+        except Exception:
+            pass
 
 def _get_subscriptions(u_ids: list[str] | None = None):
     try:
-        ws = _sheet_subscriptions()
-        rows = ws.get_all_values()[1:]
+        loader = _get_loader()
+        df_subs = loader.carregar_push_subscriptions()
         result = []
-        for row in rows:
-            if len(row) < 1 or not row[0].strip():
-                continue
-            uid = str(row[0]).strip()
-            if u_ids is not None and uid not in u_ids:
-                continue
-            sub_json = row[1].strip() if len(row) > 1 else ""
-            fcm_token = row[2].strip() if len(row) > 2 else ""
+        for _, row in df_subs.iterrows():
+            uid = str(row.get("militar_id","")).strip()
+            if not uid: continue
+            if u_ids is not None and uid not in u_ids: continue
+            sub_json = str(row.get("endpoint","")).strip()
+            # Reconstruir subscription JSON a partir dos campos
+            endpoint = str(row.get("endpoint","")).strip()
+            p256dh = str(row.get("p256dh","")).strip()
+            auth = str(row.get("auth","")).strip()
+            if endpoint:
+                import json
+                sub_json = json.dumps({"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}})
+            fcm_token = ""
             result.append({
                 "u_id": uid,
                 "subscription": json.loads(sub_json) if sub_json else None,
@@ -118,6 +142,7 @@ def enviar_push(u_ids: list[str], titulo: str, corpo: str, url: str = "/", tag: 
                     notification=messaging.AndroidNotification(
                         title=titulo,
                         body=corpo,
+                        click_action="FLUTTER_NOTIFICATION_CLICK",
                         tag=tag,
                     )
                 )
@@ -193,11 +218,12 @@ async def subscribe(payload: SubscriptionPayload, current_user: dict = Depends(o
 async def unsubscribe(current_user: dict = Depends(obter_user_atual)):
     u_id = str(current_user.get("sub"))
     try:
-        ws = _sheet_subscriptions()
-        rows = ws.get_all_values()
-        for i, row in enumerate(rows[1:], start=2):
-            if str(row[0]).strip() == u_id:
-                ws.update(f"B{i}:C{i}", [["", ""]])
+        loader = _get_loader()
+        df_subs = loader.carregar_push_subscriptions(u_id)
+        for _, row in df_subs.iterrows():
+            endpoint = str(row.get("endpoint","")).strip()
+            if endpoint:
+                loader.remover_push_subscription(endpoint)
         return {"ok": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -216,9 +242,8 @@ async def publicar_escala_notif(payload: PublicarEscalaPayload):
     if not expected or payload.secret != expected:
         raise HTTPException(status_code=403, detail="Não autorizado")
     try:
-        from core.database import GoogleSheetsClient
-        from services.data_loader import DataLoader
-        loader = DataLoader(sheets_client=GoogleSheetsClient())
+        from services.data_loader_factory import get_data_loader
+        loader = get_data_loader()
         df_util = loader.carregar_usuarios()
         todos_ids = df_util["id"].astype(str).str.strip().tolist()
         data_fmt = payload.aba.replace("-", "/")
@@ -226,7 +251,7 @@ async def publicar_escala_notif(payload: PublicarEscalaPayload):
             u_ids=todos_ids,
             titulo="📅 Nova escala publicada",
             corpo=f"A escala de {data_fmt} foi publicada.",
-            url="/home",
+            url="/escala-geral",
             tag="escala-publicada",
         )
         return {"ok": True}
@@ -243,29 +268,4 @@ class TestePush(BaseModel):
 @router.post("/teste", dependencies=[Depends(obter_admin)])
 async def teste_push(payload: TestePush):
     enviar_push(payload.u_ids, payload.titulo, payload.corpo)
-    return {"ok": True}
-
-
-class NotifInternaPayload(BaseModel):
-    secret: str
-    u_ids: list[str]
-    titulo: str
-    corpo: str
-    url: str = "/home"
-    tag: str = "gnr-notif"
-
-
-@router.post("/notificar-interno")
-async def notificar_interno(payload: NotifInternaPayload):
-    """Endpoint para notificações internas vindas do Streamlit."""
-    expected = os.environ.get("RAILWAY_NOTIFY_SECRET", "")
-    if not expected or payload.secret != expected:
-        raise HTTPException(status_code=403, detail="Não autorizado")
-    enviar_push(
-        u_ids=payload.u_ids,
-        titulo=payload.titulo,
-        corpo=payload.corpo,
-        url=payload.url,
-        tag=payload.tag,
-    )
     return {"ok": True}

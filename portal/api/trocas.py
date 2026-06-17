@@ -113,7 +113,7 @@ async def minhas_trocas(current_user: dict = Depends(obter_user_atual)):
             (df_reset["id_destino"].astype(str) == str(u_id))
         )
         minhas = df_reset[mask].copy()
-        minhas["__row_index"] = minhas.index + 2
+        minhas["__row_index"] = minhas["id"] if "id" in minhas.columns else minhas.index + 2
         trocas = minhas.fillna("").to_dict(orient="records")
         # Enriquecer com nomes
         df_util = loader.carregar_usuarios()
@@ -144,7 +144,7 @@ async def trocas_pendentes(current_user: dict = Depends(obter_user_atual)):
         )
         pendentes = df_reset[mask].copy()
         # índice na sheet = posição no df + 2 (1 para cabeçalho, 1 para base-1)
-        pendentes["__row_index"] = pendentes.index + 2
+        pendentes["__row_index"] = pendentes["id"] if "id" in pendentes.columns else pendentes.index + 2
         trocas = pendentes.fillna("").to_dict(orient="records")
         df_util = loader.carregar_usuarios()
         nomes = {str(r["id"]).strip(): str(r.get("nome", r.get("id", ""))).strip()
@@ -578,8 +578,8 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
                 troca = matches.iloc[0]
         if troca is None:
             raise HTTPException(status_code=404, detail="Troca não encontrada")
-        if str(troca.get("id_destino","")).strip() != u_id:
-            raise HTTPException(status_code=403, detail="Não és o destinatário desta troca")
+        if str(troca.get("id_destino","")).strip() != str(u_id).strip():
+            raise HTTPException(status_code=403, detail=f"Não és o destinatário. Esperado: {str(troca.get('id_destino','')).strip()}, Tu: {str(u_id).strip()}")
 
         novo_status = "Pendente_Admin" if resposta.acao == "aceitar" else "Rejeitada"
         data_aceitacao = _dt.now().strftime("%d/%m/%Y %H:%M") if resposta.acao == "aceitar" else None
