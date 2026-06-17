@@ -267,7 +267,7 @@ class DataLoader:
             return val
         rows = _query("""
             SELECT d.id AS __row, d.militar_id AS id, u.nome, d.tipo,
-                   d.inicio, d.fim, d.observacoes, d.activa
+                   d.inicio, d.fim, d.observacoes AS obs, d.observacoes AS "observações", d.activa
             FROM dispensas d LEFT JOIN utilizadores u ON d.militar_id = u.id
             ORDER BY d.activa DESC, d.inicio DESC
         """)
