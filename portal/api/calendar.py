@@ -58,41 +58,71 @@ def _criar_evento(access_token: str, evento: dict) -> dict:
     return r.json()
 
 
-# ── Sheet helpers para guardar tokens ────────────────────────
+# ── Token helpers — PostgreSQL ────────────────────────────────
+
+def _get_pg_conn():
+    import os, psycopg2
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
+        return None
+    try:
+        return psycopg2.connect(url)
+    except Exception:
+        return None
+
+def _ensure_table():
+    conn = _get_pg_conn()
+    if not conn: return
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS google_tokens (
+                    militar_id TEXT PRIMARY KEY,
+                    token_json TEXT,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
 
 def _guardar_token(u_id: str, token_data: dict) -> None:
-    try:
-        from core.database import get_sheet
-        sh = get_sheet()
+    conn = _get_pg_conn()
+    if conn:
         try:
-            ws = sh.worksheet("google_tokens")
+            _ensure_table()
+            token_json = json.dumps(token_data)
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO google_tokens (militar_id, token_json, updated_at)
+                    VALUES (%s, %s, NOW())
+                    ON CONFLICT (militar_id) DO UPDATE SET
+                        token_json = EXCLUDED.token_json,
+                        updated_at = NOW()
+                """, (str(u_id), token_json))
+            conn.commit()
         except Exception:
-            ws = sh.add_worksheet("google_tokens", rows=200, cols=3)
-            ws.append_row(["u_id", "token_json", "updated_at"])
-        rows = ws.get_all_values()
-        token_json = json.dumps(token_data)
-        now = datetime.now().strftime("%Y-%m-%d %H:%M")
-        for i, row in enumerate(rows[1:], start=2):
-            if str(row[0]).strip() == str(u_id):
-                ws.update(f"B{i}", [[token_json]])
-                ws.update(f"C{i}", [[now]])
-                return
-        ws.append_row([u_id, token_json, now])
-    except Exception as e:
-        pass
+            pass
+        finally:
+            conn.close()
 
 
 def _get_token(u_id: str) -> dict | None:
-    try:
-        from core.database import get_sheet
-        sh = get_sheet()
-        ws = sh.worksheet("google_tokens")
-        rows = ws.get_all_values()[1:]
-        for row in rows:
-            if str(row[0]).strip() == str(u_id):
-                return json.loads(row[1])
-    except Exception:
-        pass
+    conn = _get_pg_conn()
+    if conn:
+        try:
+            _ensure_table()
+            with conn.cursor() as cur:
+                cur.execute("SELECT token_json FROM google_tokens WHERE militar_id = %s", (str(u_id),))
+                row = cur.fetchone()
+                if row and row[0]:
+                    return json.loads(row[0])
+        except Exception:
+            pass
+        finally:
+            conn.close()
     return None
 
 
@@ -168,8 +198,16 @@ async def google_callback(code: str = Query(None), state: str = Query(None), err
             </body></html>
         """)
 
-    # Redirecionar de volta ao portal com ?gcal=tipo para o JS detectar
-    return RedirectResponse(url=f"https://portal-escalas-gnr-production.up.railway.app/?gcal={tipo}")
+    return HTMLResponse(f"""
+        <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#1A2B4A;color:white">
+            <h2>✅ Conta Google ligada!</h2>
+            <p>A sincronizar eventos...</p>
+            <script>
+                window.opener?.postMessage({{type:'GCAL_AUTH_OK', tipo:'{tipo}'}}, '*');
+                setTimeout(() => window.close(), 1500);
+            </script>
+        </body></html>
+    """)
 
 
 @router.get("/status")
