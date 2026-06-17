@@ -3731,6 +3731,9 @@ else:
 
                 # Remover linhas sem militar para a visualização na escala geral
                 df_at = _limpar_sem_militar(df_at)
+                # DEBUG temporário
+                if is_admin:
+                    st.caption(f"DEBUG: {len(df_at)} linhas, serviços: {df_at['serviço'].unique().tolist() if not df_at.empty else []}")
 
                 # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
                 df_aus, df_res = filtrar_secao(["férias", "licença", "convalescença"], df_at)
