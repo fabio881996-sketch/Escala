@@ -390,8 +390,26 @@ class DataLoader:
 
     # ── Listas ────────────────────────────────────────────────
     def carregar_listas(self) -> dict:
-        # Manter compatibilidade — listas de serviços, viaturas, etc.
-        return {}
+        """Carrega listas do PostgreSQL — devolve dict {coluna: [valores]}."""
+        val, hit = _cache.get("listas")
+        if hit:
+            return val
+        rows = _query("SELECT nome, tipo FROM servicos ORDER BY tipo, nome")
+        result = {}
+        for r in rows:
+            col = r["tipo"].capitalize() if r["tipo"] else "outros"
+            # Mapear tipo para nome de coluna original
+            col_map = {
+                "horário": "Horário", "radio": "Rádio", "rádio": "Rádio",
+                "indicativo": "Indicativo", "viatura": "Viatura",
+                "giro": "Giro", "serviço": "Serviço", "servico": "Serviço",
+            }
+            col_key = col_map.get(r["tipo"].lower().strip(), r["tipo"])
+            if col_key not in result:
+                result[col_key] = []
+            result[col_key].append(r["nome"])
+        _cache.set("listas", result, 3600)
+        return result
 
     # ── Push Subscriptions ────────────────────────────────────
     def carregar_push_subscriptions(self, militar_id: str = None) -> pd.DataFrame:
