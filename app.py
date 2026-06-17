@@ -628,9 +628,6 @@ def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: l
                 return True
     return False
 
-@st.cache_data(ttl=86400)
-
-
 load_feriados = carregar_feriados
 
 
