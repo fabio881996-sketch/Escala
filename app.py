@@ -357,6 +357,59 @@ def _df_from_values(vals) -> pd.DataFrame:
     return df
 
 @st.cache_data(ttl=60)
+def load_utilizadores() -> pd.DataFrame:
+    """Carrega utilizadores do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_usuarios()
+        except Exception as e:
+            st.error(f"Erro PG utilizadores: {e}")
+    return pd.DataFrame()
+
+
+@st.cache_data(ttl=30)
+def load_trocas() -> pd.DataFrame:
+    """Carrega trocas do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_trocas()
+        except Exception as e:
+            st.error(f"Erro PG trocas: {e}")
+    return pd.DataFrame()
+
+
+def invalidar_trocas():
+    """Limpa cache de trocas."""
+    load_trocas.clear()
+
+
+@st.cache_data(ttl=60)
+def load_lista_abas() -> list:
+    """Devolve lista de abas do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_lista_abas()
+        except Exception as e:
+            st.error(f"Erro PG lista abas: {e}")
+    return []
+
+
+@st.cache_data(ttl=60)
+def load_ordem_remunerados() -> pd.DataFrame:
+    """Carrega ordem remunerados do PostgreSQL."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_ordem_remunerados()
+        except Exception:
+            pass
+    return pd.DataFrame()
+
+
+@st.cache_data(ttl=60)
 def load_data(aba_nome: str) -> pd.DataFrame:
     """Carrega escala do dia do PostgreSQL."""
     import re as _re_ld
