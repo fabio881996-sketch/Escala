@@ -597,6 +597,40 @@ def carregar_feriados(ano: int) -> list:
         _date(ano,11,1), _date(ano,12,1), _date(ano,12,8), _date(ano,12,25),
     ]
 
+def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: list = None) -> bool:
+    """Verifica se um militar está de férias numa data (incluindo extensão de fds e feriados)."""
+    if df_ferias.empty:
+        return False
+    if feriados_list is None:
+        feriados_list = []
+    cols = df_ferias.columns.tolist()
+    ini_cols = [c for c in cols if 'ini' in c.lower()]
+    fim_cols  = [c for c in cols if 'fim' in c.lower()]
+    id_col = 'id' if 'id' in cols else cols[0]
+    mil = df_ferias[df_ferias[id_col].astype(str).str.strip() == str(u_id).strip()]
+    if mil.empty:
+        return False
+    if isinstance(data, datetime):
+        data = data.date()
+    ano_data = data.year if data else datetime.now().year
+    for ini_c, fim_c in zip(ini_cols, fim_cols):
+        for _, row in mil.iterrows():
+            ini_s = str(row.get(ini_c, '')).strip()
+            fim_s = str(row.get(fim_c, '')).strip()
+            if not ini_s or not fim_s or ini_s == 'nan' or fim_s == 'nan':
+                continue
+            ini_d = _parse_data_ferias(ini_s, ano_data)
+            fim_d = _parse_data_ferias(fim_s, ano_data)
+            if not ini_d or not fim_d:
+                continue
+            fim_real = _fim_ferias_real(fim_d, feriados_list)
+            if ini_d <= data <= fim_real:
+                return True
+    return False
+
+@st.cache_data(ttl=86400)
+
+
 load_feriados = carregar_feriados
 
 
