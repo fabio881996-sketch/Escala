@@ -11,3 +11,4 @@ requests
 streamlit
 google-api-python-client
 pypdf
+psycopg2-binary
