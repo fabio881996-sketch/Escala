@@ -57,7 +57,6 @@ def _now():
 def _guardar_subscription(u_id: str, sub_json: str = "", fcm_token: str = "") -> None:
     try:
         loader = _get_loader()
-        # Extrair endpoint, p256dh, auth do JSON
         import json as _json
         _endpoint = sub_json
         _p256dh = ""
@@ -72,25 +71,7 @@ def _guardar_subscription(u_id: str, sub_json: str = "", fcm_token: str = "") ->
             pass
         loader.guardar_push_subscription(u_id, _endpoint, _p256dh, _auth, "web")
     except Exception as e:
-        # Fallback Sheets
-        try:
-            from core.database import get_sheet
-            sh = get_sheet()
-            try:
-                ws = sh.worksheet("push_subscriptions")
-            except Exception:
-                ws = sh.add_worksheet("push_subscriptions", rows=500, cols=4)
-                ws.append_row(["u_id", "subscription_json", "fcm_token", "updated_at"])
-            rows = ws.get_all_values()
-            for i, row in enumerate(rows[1:], start=2):
-                if str(row[0]).strip() == str(u_id):
-                    if sub_json: ws.update(f"B{i}", [[sub_json]])
-                    if fcm_token: ws.update(f"C{i}", [[fcm_token]])
-                    ws.update(f"D{i}", [[_now()]])
-                    return
-            ws.append_row([u_id, sub_json, fcm_token, _now()])
-        except Exception:
-            pass
+        logger.warning(f"Erro ao guardar subscription: {e}")
 
 def _get_subscriptions(u_ids: list[str] | None = None):
     try:
