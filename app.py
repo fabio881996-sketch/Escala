@@ -4105,8 +4105,7 @@ else:
                                 'observações': str(row_t2.get('observações', '')).strip(),
                             }
                             e_remun = bool(re.search(r'remun|gratif', norm(sv_t)))
-                            ids_linha = [m.strip() for m in re.split(r'[;,
-]+', id_raw) if m.strip()]
+                            ids_linha = [m.strip() for m in re.split(r'[;,\n]+', id_raw) if m.strip()]
                             if len(ids_linha) > 1 and e_remun:
                                 chave = id_raw.strip()
                                 if chave not in mapa_existente:
