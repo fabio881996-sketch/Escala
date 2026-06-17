@@ -49,20 +49,31 @@ def verificar_pin(pin_input: str, pin_guardado: str) -> bool:
     return pin_guardado.zfill(4) == pin_input
 
 def migrar_pin_para_hash(email: str, pin: str) -> bool:
-    """Migra o PIN de texto simples para hash no Sheets."""
+    """Migra o PIN de texto simples para hash."""
     try:
+        h, salt = hash_pin(pin)
+        pin_hash = f"{h}:{salt}"
+        _pg_pin = get_pg_loader()
+        if _pg_pin:
+            df_u = _pg_pin.carregar_usuarios()
+            if not df_u.empty and 'email' in df_u.columns:
+                matches = df_u[df_u['email'].astype(str).str.lower().str.strip() == email.strip().lower()]
+                if not matches.empty:
+                    mid = str(matches.iloc[0]['id']).strip()
+                    _pg_pin.actualizar_pin(mid, pin_hash)
+                    load_utilizadores.clear()
+                    return True
+        # Fallback Sheets
         sh = get_sheet()
         ws = sh.worksheet("utilizadores")
         records = ws.get_all_records()
         headers = [h.strip().lower() for h in ws.row_values(1)]
         if 'pin' not in headers or 'email' not in headers:
             return False
-        col_pin   = headers.index('pin') + 1
-        col_email = headers.index('email') + 1
+        col_pin = headers.index('pin') + 1
         for i, row in enumerate(records, start=2):
             if str(row.get('email', '')).strip().lower() == email.strip().lower():
-                h, salt = hash_pin(pin)
-                ws.update_cell(i, col_pin, f"{h}:{salt}")
+                ws.update_cell(i, col_pin, pin_hash)
                 load_utilizadores.clear()
                 return True
     except Exception:
@@ -258,6 +269,25 @@ IMPEDIMENTOS_PATTERN = '|'.join(IMPEDIMENTOS).lower()
 # ============================================================
 # 4. FUNÇÕES DE DADOS
 # ============================================================
+# ── PostgreSQL DataLoader ──────────────────────────────────
+import os as _os
+_USE_PG = bool(_os.environ.get("DATABASE_URL"))
+
+@st.cache_resource
+def get_pg_loader():
+    """DataLoader PostgreSQL — usado quando DATABASE_URL está definido."""
+    if not _USE_PG:
+        return None
+    try:
+        import sys as _sys
+        _sys.path.insert(0, '/mount/src/escala')
+        from services.data_loader_pg import DataLoader as _DL_PG
+        return _DL_PG()
+    except Exception as _e:
+        st.warning(f"PostgreSQL não disponível: {_e}")
+        return None
+
+
 @st.cache_resource
 def get_gsheet_client():
     """Cria o cliente gspread uma única vez e reutiliza (cache_resource)."""
@@ -322,9 +352,18 @@ def _df_from_values(vals) -> pd.DataFrame:
         df = df[df['id'] != ''].reset_index(drop=True)
     return df
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_data(aba_nome: str) -> pd.DataFrame:
-    """Carrega dados de uma aba da Google Sheet com cache de 5 minutos."""
+    """Carrega dados de uma aba -- PostgreSQL ou Sheets."""
+    import re as _re_ld
+    # Se for aba de escala diária (DD-MM), usar PostgreSQL
+    if _re_ld.match(r'^\d{2}-\d{2}$', aba_nome.strip()):
+        _pg_ld = get_pg_loader()
+        if _pg_ld:
+            try:
+                return _pg_ld.carregar_escala(aba_nome)
+            except Exception:
+                pass
     for tentativa in range(3):
         try:
             sh = get_sheet()
@@ -351,7 +390,7 @@ def load_data_direto(sh, aba_nome: str) -> pd.DataFrame:
                 return pd.DataFrame()
     return pd.DataFrame()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def load_utilizadores() -> pd.DataFrame:
     """Carrega utilizadores com cache de 5min e retry automático."""
     for tentativa in range(3):
@@ -374,9 +413,15 @@ def load_utilizadores() -> pd.DataFrame:
                 time.sleep(1)
     return pd.DataFrame()
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_lista_abas() -> list:
-    """Devolve lista de títulos de abas do Sheets -- cache 60s."""
+    """Devolve lista de abas de escala -- PostgreSQL ou Sheets."""
+    _pg_la = get_pg_loader()
+    if _pg_la:
+        try:
+            return _pg_la.carregar_lista_abas()
+        except Exception:
+            pass
     try:
         sh = get_sheet()
         if sh is None:
@@ -419,9 +464,15 @@ def invalidar_trocas():
     """Limpa cache de trocas."""
     load_trocas.clear()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def load_ferias(ano: int) -> pd.DataFrame:
-    """Carrega plano de férias de um ano -- cache 5min."""
+    """Carrega férias -- PostgreSQL ou Sheets."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_ferias(ano)
+        except Exception:
+            pass
     try:
         sh = get_sheet()
         if sh is None:
@@ -437,9 +488,15 @@ def load_ferias(ano: int) -> pd.DataFrame:
     except Exception:
         return pd.DataFrame()
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def load_licencas(ano: int) -> pd.DataFrame:
-    """Carrega aba Licenças -- id, tipo, inicio, fim."""
+    """Carrega dispensas/licenças -- PostgreSQL ou Sheets."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_licencas()
+        except Exception:
+            pass
     try:
         sh = get_sheet()
         if sh is None: return pd.DataFrame()
@@ -648,7 +705,13 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
 
 @st.cache_data(ttl=120)
 def load_dias_publicados() -> set:
-    """Carrega datas publicadas da aba 'escala_publicada' -- formato DD-MM."""
+    """Carrega datas publicadas -- PostgreSQL ou Sheets."""
+    pg = get_pg_loader()
+    if pg:
+        try:
+            return pg.carregar_dias_publicados()
+        except Exception:
+            pass
     try:
         sh = get_sheet()
         if sh is None:
@@ -1005,7 +1068,16 @@ def atualizar_status_gsheet(index_linha: int, novo_status: str, admin_nome: str 
                 {"range": f"H{row}", "values": [[dt_agora]]},
             ])
         else:
-            aba.update_cell(row, 6, novo_status)
+            _pg_tr = get_pg_loader()
+            if _pg_tr:
+                try:
+                    _pg_tr.actualizar_status_troca(int(row), novo_status)
+                    _pg_tr.limpar_cache()
+                    load_trocas.clear()
+                except Exception:
+                    aba.update_cell(row, 6, novo_status)
+            else:
+                aba.update_cell(row, 6, novo_status)
 
         # ── Se troca de folga aprovada → atualizar folgas_2026 ──
         if novo_status == "Aprovada":
@@ -1121,7 +1193,25 @@ def salvar_troca_gsheet(linha: list) -> bool:
     """Adiciona uma nova linha de troca na Google Sheet."""
     try:
         sh = get_sheet()
-        sh.worksheet("registos_trocas").append_row(linha)
+        _pg_tr2 = get_pg_loader()
+        if _pg_tr2:
+            try:
+                _pg_tr2.guardar_troca({
+                    "data": linha[0] if len(linha) > 0 else "",
+                    "id_origem": linha[1] if len(linha) > 1 else "",
+                    "servico_origem": linha[2] if len(linha) > 2 else "",
+                    "id_destino": linha[3] if len(linha) > 3 else "",
+                    "servico_destino": linha[4] if len(linha) > 4 else "",
+                    "status": linha[5] if len(linha) > 5 else "Pendente_Militar",
+                    "observacoes": linha[6] if len(linha) > 6 else "",
+                    "data_pedido": linha[8] if len(linha) > 8 else "",
+                })
+                _pg_tr2.limpar_cache()
+                load_trocas.clear()
+            except Exception:
+                sh.worksheet("registos_trocas").append_row(linha)
+        else:
+            sh.worksheet("registos_trocas").append_row(linha)
         invalidar_trocas()
         return True
     except Exception as e:
@@ -5141,6 +5231,13 @@ else:
                                         df_editado.at[idx_c, 'serviço'] = serv_c2
                                         if not hor_c2 or hor_c2 == 'nan':
                                             df_editado.at[idx_c, 'horário'] = hor_def
+                                _pg_esc = get_pg_loader()
+                                if _pg_esc:
+                                    # PostgreSQL — guardar directamente
+                                    _pg_esc.guardar_escala(aba_dia, df_editado)
+                                    load_data.clear()
+                                    st.success(f"✅ Escala de {aba_dia} guardada!")
+                                    continue
                                 sh_c = get_sheet()
                                 ws_dia_c = sh_c.worksheet(aba_dia)
                                 todas_linhas_c = ws_dia_c.get_all_values()
@@ -5516,6 +5613,35 @@ else:
                 abas_lista = list(dados_editar.items())
 
                 def _guardar_sheets(editados_dict):
+                    # Tentar PostgreSQL primeiro
+                    _pg_g = get_pg_loader()
+                    if _pg_g:
+                        for aba_g, df_g in editados_dict.items():
+                            try:
+                                # Agrupar militares por serviço+horário
+                                grupos = {}
+                                for _, r in df_g.iterrows():
+                                    mid = str(r.get('id','')).strip()
+                                    if not mid or mid == 'nan': continue
+                                    sv = str(r.get('serviço','') or '').strip()
+                                    if not sv: continue
+                                    hr = str(r.get('horário','') or '').strip()
+                                    chave = (sv, hr, str(r.get('indicativo','')), str(r.get('rádio','')), str(r.get('giro','')), str(r.get('viatura','')), str(r.get('observações','')))
+                                    if chave not in grupos:
+                                        grupos[chave] = {'ids':[], 'ind':str(r.get('indicativo','')), 'rad':str(r.get('rádio','')), 'giro':str(r.get('giro','')), 'vtr':str(r.get('viatura','')), 'obs':str(r.get('observações',''))}
+                                    grupos[chave]['ids'].append(mid)
+                                # Construir DataFrame para guardar
+                                import pandas as _pd_g
+                                linhas_pg = []
+                                for (sv, hr, ind, rad, giro, vtr, obs), d in grupos.items():
+                                    linhas_pg.append({'id': ';'.join(d['ids']), 'serviço': sv, 'horário': hr, 'indicativo rádio': d['ind'], 'rádio': d['rad'], 'giro': d['giro'], 'viatura': d['vtr'], 'observações': d['obs']})
+                                df_pg = _pd_g.DataFrame(linhas_pg)
+                                _pg_g.guardar_escala(aba_g, df_pg)
+                            except Exception as _e_pg:
+                                st.error(f"Erro PostgreSQL: {_e_pg}")
+                        load_data.clear()
+                        return
+
                     sh_gc = get_sheet()
                     for aba_g, df_g in editados_dict.items():
                         # Retry em caso de 429
@@ -6728,10 +6854,14 @@ else:
 
             if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_lic"):
                 try:
-                    sh_l = get_sheet()
-                    ws_l = sh_l.worksheet("Licenças")
                     mid_l = mil_opts_l[mil_sel_l]
-                    ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y'), obs_l.strip()])
+                    _pg_lic = get_pg_loader()
+                    if _pg_lic:
+                        _pg_lic.adicionar_licenca({"id": mid_l, "tipo": tipo_l, "inicio": ini_l.strftime('%d/%m/%Y'), "fim": fim_l.strftime('%d/%m/%Y'), "obs": obs_l.strip()})
+                    else:
+                        sh_l = get_sheet()
+                        ws_l = sh_l.worksheet("Licenças")
+                        ws_l.append_row([mid_l, tipo_l, ini_l.strftime('%d/%m/%Y'), fim_l.strftime('%d/%m/%Y'), obs_l.strip()])
                     load_licencas.clear()
                     st.success("✅ Registo adicionado!")
                     st.rerun()
@@ -6750,9 +6880,20 @@ else:
                 rem_sel_l = st.selectbox("Registo:", list(opts_rem_l.keys()), key="lic_rem")
                 if st.button("🗑️ Remover", key="btn_rem_lic", use_container_width=True):
                     try:
-                        sh_l = get_sheet()
-                        ws_l = sh_l.worksheet("Licenças")
-                        ws_l.delete_rows(opts_rem_l[rem_sel_l] + 2)
+                        _pg_rem_lic = get_pg_loader()
+                        if _pg_rem_lic:
+                            # Obter o id real da dispensa do df
+                            _idx_rem = opts_rem_l[rem_sel_l]
+                            _row_rem = df_lic_show.iloc[_idx_rem]
+                            _id_rem = int(_row_rem.get("__row", _row_rem.get("id", 0))) if "__row" in _row_rem else 0
+                            if _id_rem:
+                                _pg_rem_lic.remover_licenca(_id_rem)
+                            else:
+                                st.error("Não foi possível identificar o registo")
+                        else:
+                            sh_l = get_sheet()
+                            ws_l = sh_l.worksheet("Licenças")
+                            ws_l.delete_rows(opts_rem_l[rem_sel_l] + 2)
                         load_licencas.clear()
                         st.success("✅ Removido!")
                         st.rerun()
@@ -6906,11 +7047,15 @@ else:
             )
             if st.button("🔒 Despublicar este dia", key="btn_despub", use_container_width=True):
                 try:
-                    sh_p = get_sheet()
-                    ws_p = sh_p.worksheet("escala_publicada")
-                    todos = ws_p.col_values(1)
-                    if aba_pub in todos:
-                        ws_p.delete_rows(todos.index(aba_pub) + 1)
+                    _pg_pub = get_pg_loader()
+                    if _pg_pub:
+                        _pg_pub.despublicar_dia(aba_pub)
+                    else:
+                        sh_p = get_sheet()
+                        ws_p = sh_p.worksheet("escala_publicada")
+                        todos = ws_p.col_values(1)
+                        if aba_pub in todos:
+                            ws_p.delete_rows(todos.index(aba_pub) + 1)
                     load_dias_publicados.clear()
                     load_data.clear()
                     st.success("✅ Despublicado!")
@@ -6928,9 +7073,13 @@ else:
             )
             if st.button("📢 PUBLICAR ESCALA", key="btn_pub", use_container_width=True, type="primary"):
                 try:
-                    sh_p = get_sheet()
-                    ws_p = sh_p.worksheet("escala_publicada")
-                    ws_p.append_row([aba_pub])
+                    _pg_pub = get_pg_loader()
+                    if _pg_pub:
+                        _pg_pub.publicar_dia(aba_pub)
+                    else:
+                        sh_p = get_sheet()
+                        ws_p = sh_p.worksheet("escala_publicada")
+                        ws_p.append_row([aba_pub])
                     load_dias_publicados.clear()
                     load_data.clear()
                     st.success(f"✅ Escala de **{d_pub.strftime('%d/%m/%Y')}** publicada!")
