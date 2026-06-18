@@ -5639,8 +5639,9 @@ else:
                                 hi_s, hf_s = _parse_horario(slot['hor'])
                                 horas_add = round((hf_s - hi_s) / 60, 1) if hf_s and hi_s and hf_s > hi_s else round((1440 - hi_s + hf_s) / 60, 1) if hi_s and hf_s else 1
                                 from datetime import datetime as _dt_rem
+                                _tipo_dia_rem = 'fds' if d_gerar.weekday() >= 5 else 'semana'
                                 for mid_n in ids_nomeados:
-                                    _pg_rem.actualizar_ordem_remunerado(mid_n, tab_slot, horas_add, _dt_rem.now())
+                                    _pg_rem.actualizar_ordem_remunerado(mid_n, tab_slot, horas_add, _dt_rem.now(), _tipo_dia_rem)
 
                             load_data.clear()
                             st.session_state.pop('rem_nomeados', None)
@@ -5805,8 +5806,9 @@ else:
                                             is_fds_c = rem_g['data_obj'].weekday() >= 5
                                             tab_c = rem_g.get('tabela', 'A')
                                             from datetime import datetime as _dt_canc
+                                            _tipo_dia_canc = 'fds' if rem_g['data_obj'].weekday() >= 5 else 'semana'
                                             for mid_c in [x.strip() for x in rem_g['ids'].replace(';',',').split(',') if x.strip()]:
-                                                _pg_canc.actualizar_ordem_remunerado(mid_c, tab_c, -horas_c, _dt_canc.now())
+                                                _pg_canc.actualizar_ordem_remunerado(mid_c, tab_c, -horas_c, _dt_canc.now(), _tipo_dia_canc)
 
                                             load_data.clear()
                                             st.session_state.pop(f'gest_acao_{chave_base}', None)
@@ -6201,7 +6203,7 @@ else:
 
             # ── Migrar todos os dias em falta de uma vez ──
             if st.button("🚀 Migrar TODOS os dias de escala e ordem_escala em falta", key="btn_migrar_todos_dias"):
-                with st.spinner("A migrar todos os dias em falta..."):
+                with st.spinner("A comparar Sheet com PG e a migrar o que falta..."):
                     try:
                         import gspread as _gs4
                         from google.oauth2.service_account import Credentials as _Creds4
@@ -6211,19 +6213,24 @@ else:
                         _client4 = _gs4.authorize(_creds4)
                         _sh4 = _client4.open_by_url(st.secrets["gsheet_url"])
                         _db_url4 = str(st.secrets.get("DATABASE_URL",""))
-                        # Dias já no PG
+
+                        # Dias já no PG (usar psycopg2 simples sem RealDictCursor)
                         with _pg4.connect(_db_url4) as _conn4:
                             with _conn4.cursor() as _cur4:
                                 _cur4.execute("SELECT DISTINCT aba FROM escalas")
-                                _dias_pg = {r['aba'] for r in _cur4.fetchall()}
+                                _dias_pg = {r[0] for r in _cur4.fetchall()}
                                 _cur4.execute("SELECT DISTINCT aba FROM ordem_escala")
-                                _dias_ord_pg = {r['aba'] for r in _cur4.fetchall()}
-                        # Abas da Sheet
-                        _all_abas4 = [(ws.title, ws) for ws in _sh4.worksheets()]
+                                _dias_ord_pg = {r[0] for r in _cur4.fetchall()}
+
+                        _all_abas4 = _sh4.worksheets()
                         _dias_mig4 = 0
                         _ords_mig4 = 0
-                        for _titulo4, _ws4 in _all_abas4:
-                            # Dias de escala DD-MM
+                        _erros4 = []
+
+                        for _ws4 in _all_abas4:
+                            _titulo4 = _ws4.title
+
+                            # ── Dias de escala DD-MM em falta ──
                             if _re4.match(r'^\d{2}-\d{2}$', _titulo4) and _titulo4 not in _dias_pg:
                                 try:
                                     _v4 = _ws4.get_all_values()
@@ -6237,7 +6244,8 @@ else:
                                         for _mid4 in _re4.split(r'[;,]+', _id_raw4):
                                             _mid4 = _mid4.strip()
                                             if not _mid4: continue
-                                            _ins4.append((_titulo4, _mid4,
+                                            _ins4.append((
+                                                _titulo4, _mid4,
                                                 _d4.get("serviço", _d4.get("servico","")),
                                                 _d4.get("horário", _d4.get("horario","")),
                                                 _d4.get("indicativo","") or _d4.get("indicativo rádio","") or None,
@@ -6247,14 +6255,18 @@ else:
                                                 _d4.get("observações", _d4.get("observacoes","")) or None,
                                             ))
                                     if _ins4:
-                                        with _pg4.connect(_db_url4) as _conn4:
-                                            with _conn4.cursor() as _cur4:
-                                                _pgx4.execute_values(_cur4, "INSERT INTO escalas (aba, id, servico, horario, indicativo, radio, viatura, giro, observacoes) VALUES %s ON CONFLICT DO NOTHING", _ins4)
-                                            _conn4.commit()
+                                        with _pg4.connect(_db_url4) as _c4:
+                                            with _c4.cursor() as _cu4:
+                                                _pgx4.execute_values(_cu4, """
+                                                    INSERT INTO escalas (aba, id, servico, horario, indicativo, radio, viatura, giro, observacoes)
+                                                    VALUES %s ON CONFLICT DO NOTHING
+                                                """, _ins4)
+                                            _c4.commit()
                                         _dias_mig4 += 1
                                 except Exception as _e4d:
-                                    st.warning(f"Erro dia {_titulo4}: {_e4d}")
-                            # Ordem escala
+                                    _erros4.append(f"Escala {_titulo4}: {_e4d}")
+
+                            # ── Ordem escala em falta ──
                             elif _titulo4.startswith("ordem_escala "):
                                 _dia4 = _titulo4.replace("ordem_escala ","").strip()
                                 if _dia4 in _dias_ord_pg: continue
@@ -6270,18 +6282,24 @@ else:
                                             if not _m4 or _m4.lower() == "nan": continue
                                             _ins4o.append((_dia4, _sl4, _m4, _pi4))
                                     if _ins4o:
-                                        with _pg4.connect(_db_url4) as _conn4:
-                                            with _conn4.cursor() as _cur4:
-                                                _pgx4.execute_values(_cur4, "INSERT INTO ordem_escala (aba, slot, militar_id, posicao) VALUES %s ON CONFLICT DO NOTHING", _ins4o)
-                                            _conn4.commit()
+                                        with _pg4.connect(_db_url4) as _c4:
+                                            with _c4.cursor() as _cu4:
+                                                _pgx4.execute_values(_cu4, """
+                                                    INSERT INTO ordem_escala (aba, slot, militar_id, posicao)
+                                                    VALUES %s ON CONFLICT DO NOTHING
+                                                """, _ins4o)
+                                            _c4.commit()
                                         _ords_mig4 += 1
                                 except Exception as _e4o:
-                                    st.warning(f"Erro ordem {_titulo4}: {_e4o}")
+                                    _erros4.append(f"Ordem {_titulo4}: {_e4o}")
+
                         load_data.clear()
                         st.success(f"✅ Migrados {_dias_mig4} dias de escala e {_ords_mig4} ordem_escala em falta.")
+                        if _erros4:
+                            st.warning("Erros: " + " | ".join(_erros4))
                     except Exception as _e4:
                         st.error(f"Erro: {_e4}")
-
+                        import traceback; st.code(traceback.format_exc())
             st.markdown("---")
             if st.button("🔄 Migrar aba seleccionada", key="btn_migrar_aba") and _aba_sel.strip():
                 _aba_nome = _aba_sel.strip()
