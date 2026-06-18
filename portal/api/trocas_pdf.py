@@ -112,7 +112,7 @@ def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
         from googleapiclient.http import MediaIoBaseUpload
         import json
 
-        creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON", "")
+        creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON", os.environ.get("gcp_service_account", ""))
         if not creds_json:
             return None
 
