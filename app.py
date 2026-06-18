@@ -3779,9 +3779,9 @@ else:
 
                 # 3. Patrulhas
                 if is_admin:
-                    st.caption(f"DEBUG pat_ocorr: {len(df_pat_ocorr)} linhas, pat: {len(df_pat)} linhas, df_res: {len(df_res)} linhas")
+                    st.caption(f"DEBUG pat_ocorr: {len(df_pat_ocorr)} linhas")
                     if not df_pat_ocorr.empty:
-                        st.caption(f"DEBUG cols: {df_pat_ocorr.columns.tolist()}")
+                        st.dataframe(df_pat_ocorr[['id','serviço','horário','id_disp']].head(3))
                 mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
                 mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
 
