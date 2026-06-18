@@ -6271,6 +6271,33 @@ else:
                                     _conn3.commit()
                                 st.success(f"✅ grupos_folga: {len(_ins3)} linhas inseridas.")
 
+                            # ── folgas_2026: id, fds, grupo, serviço ──
+                            elif _aba_nome == "folgas_2026":
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("""CREATE TABLE IF NOT EXISTS folgas (
+                                            id SERIAL PRIMARY KEY,
+                                            militar_id TEXT NOT NULL,
+                                            fds TEXT,
+                                            grupo TEXT,
+                                            servico TEXT)""")
+                                        _cur3.execute("CREATE UNIQUE INDEX IF NOT EXISTS folgas_militar_idx ON folgas (militar_id)")
+                                        _cur3.execute("DELETE FROM folgas")
+                                        _ins3 = []
+                                        for r in _rows3:
+                                            _mid = str(r.get("id","")).strip()
+                                            if not _mid or _mid == "nan": continue
+                                            _ins3.append((
+                                                _mid,
+                                                str(r.get("fds","")).strip() or None,
+                                                str(r.get("grupo","")).strip() or None,
+                                                str(r.get("serviço", r.get("servico",""))).strip() or None,
+                                            ))
+                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO folgas (militar_id, fds, grupo, servico) VALUES %s ON CONFLICT (militar_id) DO UPDATE SET fds=EXCLUDED.fds, grupo=EXCLUDED.grupo, servico=EXCLUDED.servico", _ins3)
+                                    _conn3.commit()
+                                load_folgas.clear()
+                                st.success(f"✅ folgas_2026: {len(_ins3)} militares migrados.")
+
                             # ── Aba desconhecida: mostrar colunas para análise ──
                             else:
                                 st.info(f"Aba '{_aba_nome}' não tem migração automática definida. Colunas encontradas:")
