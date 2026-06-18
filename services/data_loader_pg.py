@@ -451,8 +451,21 @@ class DataLoader:
 
 
     # ── Ordem Escala ─────────────────────────────────────────
+    # Mapeamento slot formato longo → abreviatura
+    _SLOT_ABREV = {
+        'Atendimento 00-08':          'A1',
+        'Atendimento 08-16':          'A2',
+        'Atendimento 16-24':          'A3',
+        'Patrulha Ocorrências 00-08': 'PO1',
+        'Patrulha Ocorrências 08-16': 'PO2',
+        'Patrulha Ocorrências 16-24': 'PO3',
+        'Apoio Atendimento 08-16':    'AA2',
+        'Apoio Atendimento 16-24':    'AA3',
+    }
+
     def carregar_ordem_escala(self, aba_dia: str) -> dict:
-        """Carrega ordem_escala de um dia. Devolve dict {slot: [ids]}."""
+        """Carrega ordem_escala de um dia. Devolve dict {slot: [ids]}.
+        Converte slots no formato longo (ex: 'Atendimento 00-08') para abreviatura ('A1')."""
         key = f"ordem_escala:{aba_dia}"
         val, hit = _cache.get(key)
         if hit:
@@ -466,7 +479,8 @@ class DataLoader:
             """, (aba_dia,))
             result = {}
             for r in rows:
-                slot = r["slot"]
+                slot_raw = r["slot"]
+                slot = self._SLOT_ABREV.get(slot_raw, slot_raw)
                 if slot not in result:
                     result[slot] = []
                 result[slot].append(r["militar_id"])
