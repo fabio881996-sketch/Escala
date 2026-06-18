@@ -263,7 +263,9 @@ class DataLoader:
 
     def guardar_troca(self, row: dict) -> int:
         """Insere nova troca e devolve o ID."""
-        with _get_conn() as conn:
+        pool = _get_pool()
+        conn = pool.getconn()
+        try:
             with conn.cursor() as cur:
                 cur.execute("""
                     INSERT INTO trocas (data, id_origem, servico_origem, id_destino, servico_destino, status, observacoes, data_pedido)
@@ -276,6 +278,11 @@ class DataLoader:
                 ))
                 new_id = cur.fetchone()[0]
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            pool.putconn(conn)
         _cache.clear("trocas")
         return new_id
 
