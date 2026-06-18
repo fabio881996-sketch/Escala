@@ -756,7 +756,7 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
         if troca is None:
             raise HTTPException(status_code=404, detail="Linha não encontrada")
 
-        novo_status = "Aprovada" if resposta.acao == "aceitar" else "Rejeitada"
+        novo_status = "Aprovada" if resposta.acao in ("aceitar", "aprovar") else "Rejeitada"
         from datetime import datetime as _dt2
         loader.actualizar_status_troca(int(troca["id"]), novo_status, _dt2.now().strftime("%d/%m/%Y %H:%M"))
         loader.limpar_cache()
@@ -778,8 +778,8 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
                 _nome_orig = _id_nome.get(_id_orig, _id_orig)
                 _nome_dest = _id_nome.get(_id_dest, _id_dest)
 
-                from portal.api.trocas_pdf import gerar_pdf_troca
-                gerar_pdf_troca(
+                from portal.api.trocas_pdf import gerar_e_upload
+                gerar_e_upload(
                     data=_data, nome_orig=_nome_orig, serv_orig=_serv_orig,
                     nome_dest=_nome_dest, serv_dest=_serv_dest,
                     data_pedido=_data_ped, data_aceitacao=_data_ace,
