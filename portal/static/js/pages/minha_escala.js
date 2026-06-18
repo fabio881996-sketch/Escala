@@ -43,9 +43,17 @@ const MinhaEscalaPage = {
         el.innerHTML = servicos.map(s => this.card(s)).join('');
     },
 
+    // Limpa valores nulos/nan devolvendo string vazia
+    _val(v) {
+        if (v === null || v === undefined) return '';
+        const s = String(v).trim();
+        return (s === 'nan' || s === 'None' || s === 'NaN' || s === 'none') ? '' : s;
+    },
+
     card(s) {
         const cls = this.cardClass(s.servico);
         const icone = this.icone(s.servico);
+        const v = (x) => this._val(x);
 
         let badge = '';
         if (s.is_hoje) badge = '<span class="badge badge-hoje">🟢 HOJE</span>';
@@ -60,10 +68,26 @@ const MinhaEscalaPage = {
         if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
         if (s.is_remunerado) badge += ' <span style="background:#16a34a;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">💶 REMUNERADO</span>';
 
+        // Horário ao lado do título
+        const horario = v(s.horario);
+        const tituloHorario = horario
+            ? `<span style="font-size:.8rem;font-weight:500;opacity:.75;margin-left:8px">${horario}</span>`
+            : '';
+
         let rows = '';
-        if (s.horario) rows += `<div class="card-row"><span class="card-row-icon">🕒</span>${s.horario}</div>`;
-        if (s.viatura && s.viatura !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">🚔</span>${s.viatura}</div>`;
-        if (s.radio && s.radio !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📻</span>${s.radio}</div>`;
+        const viatura    = v(s.viatura);
+        const radio      = v(s.radio);
+        const indicativo = v(s.indicativo);
+        const obs        = v(s.observacoes);
+
+        if (viatura)    rows += `<div class="card-row"><span class="card-row-icon">🚔</span>${viatura}</div>`;
+
+        // Rádio e indicativo na mesma linha
+        if (radio || indicativo) {
+            const radioInd = [radio, indicativo].filter(Boolean).join(' · ');
+            rows += `<div class="card-row"><span class="card-row-icon">📻</span>${radioInd}</div>`;
+        }
+
         const isAusencia = /folga|férias|ferias|licen|doente|conval|dilig|tribunal|pronto|secretaria|inquér|inquer|baixa/i.test(s.servico);
         if (!isAusencia && s.colegas && s.colegas.length > 0) {
             rows += `<div class="card-row"><span class="card-row-icon">👥</span><span style="font-size:.8rem">${s.colegas.join(' · ')}</span></div>`;
@@ -72,12 +96,12 @@ const MinhaEscalaPage = {
             const label = s.troca_com_label || 'Trocou c/';
             rows += `<div class="card-row"><span class="card-row-icon">🔄</span><span style="font-size:.8rem;color:#d97706;font-weight:600">${label} ${s.troca_com}</span></div>`;
         }
-        if (s.observacoes && s.observacoes !== 'nan') rows += `<div class="card-row"><span class="card-row-icon">📝</span>${s.observacoes}</div>`;
+        if (obs) rows += `<div class="card-row"><span class="card-row-icon">📝</span>${obs}</div>`;
 
         return `
             <div class="card ${cls}">
                 <div class="card-label">${badge}</div>
-                <div class="card-title">${icone} ${s.servico}</div>
+                <div class="card-title">${icone} ${s.servico}${tituloHorario}</div>
                 ${rows}
             </div>`;
     },
