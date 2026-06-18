@@ -8,7 +8,7 @@ from psycopg2.extras import execute_values
 import gspread
 from google.oauth2.service_account import Credentials
 
-# ── Credenciais (igual ao migrate_sheets_to_pg.py original) ──
+# ── Credenciais ───────────────────────────────────────────────
 try:
     import streamlit as st
     creds_info = dict(st.secrets["gcp_service_account"])
@@ -20,11 +20,9 @@ except Exception:
     GSHEET_URL = os.environ["gsheet_url"]
     DATABASE_URL = os.environ["DATABASE_URL"]
 
-# ── O que migrar ──────────────────────────────────────────────
 DIAS_ESCALA = ['27-06', '28-06']
 DIAS_ORDEM  = ['26-06', '27-06', '28-06', '29-06']
 
-# ── Ligar ao Google Sheets ────────────────────────────────────
 print("A ligar ao Google Sheets...")
 creds = Credentials.from_service_account_info(
     creds_info,
@@ -35,11 +33,20 @@ client = gspread.authorize(creds)
 sh = client.open_by_url(GSHEET_URL)
 print(f"  Sheet: {sh.title}")
 
-# ── Ligar ao PostgreSQL ───────────────────────────────────────
 print("A ligar ao PostgreSQL...")
 conn = psycopg2.connect(DATABASE_URL)
+conn.autocommit = False
 cur = conn.cursor()
 print("  Ligado!")
+
+# ── Garantir que id é TEXT ────────────────────────────────────
+try:
+    cur.execute("ALTER TABLE escalas ALTER COLUMN id TYPE TEXT")
+    conn.commit()
+    print("  Coluna id convertida para TEXT")
+except Exception as e:
+    conn.rollback()
+    print(f"  Coluna id já é TEXT ou erro: {e}")
 
 # ── Migrar dias de escala ─────────────────────────────────────
 for dia in DIAS_ESCALA:
@@ -63,13 +70,13 @@ for dia in DIAS_ESCALA:
                     continue
                 rows.append((
                     dia, mid,
-                    d.get('servico', d.get('servico', '')),
-                    d.get('horario', d.get('horario', '')),
+                    d.get('servico', d.get('serviço', '')),
+                    d.get('horario', d.get('horário', '')),
                     d.get('indicativo', '') or None,
-                    d.get('radio', d.get('radio', '')) or None,
+                    d.get('radio', d.get('rádio', '')) or None,
                     d.get('viatura', '') or None,
                     d.get('giro', '') or None,
-                    d.get('observacoes', d.get('observacoes', '')) or None,
+                    d.get('observacoes', d.get('observações', '')) or None,
                 ))
         if rows:
             execute_values(cur, """
@@ -79,8 +86,10 @@ for dia in DIAS_ESCALA:
             conn.commit()
             print(f"  Escala {dia}: {len(rows)} linhas migradas")
         else:
+            conn.rollback()
             print(f"  Escala {dia}: sem linhas validas")
     except Exception as e:
+        conn.rollback()
         print(f"  ERRO escala {dia}: {e}")
 
 # ── Migrar ordem_escala ───────────────────────────────────────
@@ -110,8 +119,10 @@ for dia in DIAS_ORDEM:
             conn.commit()
             print(f"  ordem_escala {dia}: {len(rows)} entradas migradas")
         else:
+            conn.rollback()
             print(f"  ordem_escala {dia}: sem dados")
     except Exception as e:
+        conn.rollback()
         print(f"  ERRO ordem_escala {dia}: {e}")
 
 cur.close()
