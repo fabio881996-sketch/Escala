@@ -13,7 +13,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 COPY requirements_portal.txt .
-RUN pip install --no-cache-dir -r requirements_portal.txt
+RUN pip install --no-cache-dir --timeout 120 --retries 10 -r requirements_portal.txt
 
 COPY . .
 
