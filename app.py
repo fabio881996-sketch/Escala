@@ -5405,6 +5405,14 @@ else:
                     df_ord_rem[col_total] = pd.to_numeric(df_ord_rem[col_total], errors='coerce').fillna(0)
                     df_ord_rem[col_ultimo] = pd.to_datetime(df_ord_rem[col_ultimo], dayfirst=True, errors='coerce')
 
+                    # DEBUG temporário
+                    st.caption(f"DEBUG ord_rem: {len(df_ord_rem)} linhas, colunas: {list(df_ord_rem.columns)}")
+                    if not df_ord_rem.empty:
+                        st.caption(f"DEBUG disponivel vals: {df_ord_rem['disponivel'].unique().tolist() if 'disponivel' in df_ord_rem.columns else 'SEM COLUNA'}")
+                        st.caption(f"DEBUG militar_id sample: {df_ord_rem.get('militar_id', df_ord_rem.get('id', pd.Series())).head(3).tolist()}")
+                        n_disp = df_ord_rem[df_ord_rem['disponivel'] == True].shape[0] if 'disponivel' in df_ord_rem.columns else 0
+                        st.caption(f"DEBUG disponíveis: {n_disp}")
+
                     def _sobreposicao(h1_ini, h1_fim, h2_ini, h2_fim):
                         if None in (h1_ini, h1_fim, h2_ini, h2_fim): return False
                         e1 = h1_fim if h1_fim > h1_ini else h1_fim + 1440
