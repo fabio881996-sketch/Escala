@@ -52,29 +52,59 @@ class _Cache:
 _cache = _Cache()
 
 
-def _get_conn():
-    return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+from psycopg2 import pool as _pg_pool
+import threading as _threading
 
+_pool_lock = _threading.Lock()
+_conn_pool = None
+
+def _get_pool():
+    global _conn_pool
+    if _conn_pool is None:
+        with _pool_lock:
+            if _conn_pool is None:
+                _conn_pool = _pg_pool.ThreadedConnectionPool(
+                    minconn=1, maxconn=10,
+                    dsn=DATABASE_URL,
+                    cursor_factory=psycopg2.extras.RealDictCursor
+                )
+    return _conn_pool
 
 def _query(sql, params=None):
-    with _get_conn() as conn:
+    pool = _get_pool()
+    conn = pool.getconn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
             return cur.fetchall()
-
+    finally:
+        pool.putconn(conn)
 
 def _execute(sql, params=None):
-    with _get_conn() as conn:
+    pool = _get_pool()
+    conn = pool.getconn()
+    try:
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
         conn.commit()
-
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 def _execute_many(sql, rows):
-    with _get_conn() as conn:
+    pool = _get_pool()
+    conn = pool.getconn()
+    try:
         with conn.cursor() as cur:
             psycopg2.extras.execute_values(cur, sql, rows)
         conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 
 # ── DataLoader ────────────────────────────────────────────────
