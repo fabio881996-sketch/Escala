@@ -1965,11 +1965,12 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
     if df_sec.empty:
         return
     df_sec = df_sec.copy()
-    for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
+    for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações', 'serviço', 'horário']:
         if col in df_sec.columns:
-            df_sec[col] = df_sec[col].astype(str).replace({'nan': '', 'None': ''}).str.strip()
+            df_sec[col] = df_sec[col].astype(str).replace({'nan': '', 'None': '', 'NaN': ''}).str.strip()
     if 'id_disp' not in df_sec.columns:
         df_sec['id_disp'] = df_sec.get('id', pd.Series([''] * len(df_sec), index=df_sec.index)).astype(str)
+    df_sec['id_disp'] = df_sec['id_disp'].astype(str).replace({'nan': '', 'None': ''}).str.strip()
     df_sec['_hor_sort'] = pd.to_numeric(df_sec['horário'].str.extract(r'^(\d+)')[0], errors='coerce').fillna(99)
     df_sec = df_sec.sort_values(['_hor_sort', 'serviço'])
     st.markdown(_sec_header(titulo), unsafe_allow_html=True)
@@ -1979,11 +1980,12 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
             if col in df_sec.columns and col not in excluir_cols:
                 cols_ag.append(col)
         cols_ag = [c for c in cols_ag if c in df_sec.columns]
+        df_sec[cols_ag] = df_sec[cols_ag].fillna('')
         try:
-            ag = df_sec.groupby(cols_ag, sort=False).agg({'id_disp': lambda x: ', '.join(str(v) for v in x)}).reset_index()
+            ag = df_sec.groupby(cols_ag, sort=False).agg({'id_disp': lambda x: ', '.join(v for v in x if v)}).reset_index()
         except Exception:
             ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
-                       .apply(lambda x: ', '.join(str(v) for v in x)).reset_index()
+                       .apply(lambda x: ', '.join(v for v in x if v)).reset_index()
         col_order = ['serviço', 'horário', 'id_disp']
         for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
             if col in ag.columns and col not in excluir_cols:
@@ -1991,7 +1993,7 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         ag = ag[[c for c in col_order if c in ag.columns]]
     else:
         ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
-                   .apply(lambda x: ', '.join(str(v) for v in x)).reset_index()
+                   .apply(lambda x: ', '.join(v for v in x if v)).reset_index()
     ag = ag.rename(columns={
         'id_disp': 'Militares', 'serviço': 'Serviço', 'horário': 'Horário',
         'indicativo rádio': 'Indicativo', 'rádio': 'Rádio',
@@ -4385,10 +4387,11 @@ else:
                     df_edit_show = df_edit_abrev.copy()
 
                 # Serviços disponíveis por militar para dropdown
+                # Se militares_servicos vazio (tabela não existe), todos usam lista completa
                 opcoes_servico = {}
                 for row in df_edit.itertuples():
                     mid = str(row.id)
-                    servs_mil = militares_servicos.get(mid, [])
+                    servs_mil = militares_servicos.get(mid, todos_servicos[1:]) if militares_servicos else todos_servicos[1:]
                     opcoes_servico[mid] = [''] + servs_mil
 
                 # Usar st.data_editor
