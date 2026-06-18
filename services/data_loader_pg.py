@@ -584,14 +584,28 @@ class DataLoader:
             _cache.clear(f"ordem_escala:{aba_dia}")
         except Exception as e:
             logger.warning(f"Erro ao guardar ordem_escala: {e}")
-    def actualizar_ordem_remunerado(self, militar_id: str, tabela: str, horas: float, data_ultimo: datetime):
-        col_total = f"total_ano_{tabela.lower()}"
-        col_ultimo = f"ultimo_{tabela.lower()}"
-        _execute(f"""
-            INSERT INTO ordem_remunerados (militar_id, {col_total}, {col_ultimo})
-            VALUES (%s, %s, %s)
-            ON CONFLICT (militar_id) DO UPDATE SET
-                {col_total} = ordem_remunerados.{col_total} + EXCLUDED.{col_total},
-                {col_ultimo} = EXCLUDED.{col_ultimo}
-        """, (militar_id, horas, data_ultimo))
+    def actualizar_ordem_remunerado(self, militar_id: str, tabela: str, horas: float, data_ultimo: datetime, tipo_dia: str = 'semana'):
+        """
+        tabela: 'A' ou 'B'
+        tipo_dia: 'semana' ou 'fds' (para tabela A; tabela B não tem distinção)
+        Colunas na BD: total_ano_a_semana, total_ano_a_fds, total_ano_b, ultimo_a_semana, ultimo_a_fds, ultimo_b
+        """
+        t = tabela.lower()
+        if t == 'a':
+            td = tipo_dia.lower() if tipo_dia else 'semana'
+            col_total = f"total_ano_a_{td}"
+            col_ultimo = f"ultimo_a_{td}"
+        else:
+            col_total = f"total_ano_{t}"
+            col_ultimo = f"ultimo_{t}"
+        try:
+            _execute(f"""
+                INSERT INTO ordem_remunerados (militar_id, {col_total}, {col_ultimo})
+                VALUES (%s, %s, %s)
+                ON CONFLICT (militar_id) DO UPDATE SET
+                    {col_total} = ordem_remunerados.{col_total} + EXCLUDED.{col_total},
+                    {col_ultimo} = EXCLUDED.{col_ultimo}
+            """, (militar_id, horas, data_ultimo))
+        except Exception as e:
+            logger.warning(f"actualizar_ordem_remunerado erro ({col_total}): {e}")
         _cache.clear("ordem_rem")
