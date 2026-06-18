@@ -388,13 +388,13 @@ class DataLoader:
         _cache.set("servicos", result, 3600)
         return result
 
-    # ── Listas ────────────────────────────────────────────────
+    # ── Listas (dropdowns: Horário, Rádio, Indicativo, Viatura, Giro, Serviço) ──
     def carregar_listas(self) -> dict:
-        """Carrega listas de dropdowns da tabela servicos — devolve dict {coluna: [valores]}."""
+        """Carrega listas de dropdowns da tabela servicos.
+        Devolve dict {'Horário': [...], 'Rádio': [...], 'Indicativo': [...], ...}"""
         val, hit = _cache.get("listas")
         if hit:
             return val
-        # Mapeamento tipo (em BD) → chave do dict usada no app
         _tipo_map = {
             "horário": "Horário", "horario": "Horário",
             "rádio": "Rádio", "radio": "Rádio",
@@ -403,11 +403,11 @@ class DataLoader:
             "giro": "Giro",
             "serviço": "Serviço", "servico": "Serviço",
         }
-        rows = _query("SELECT nome, tipo FROM servicos ORDER BY tipo, id")
+        rows = _query("SELECT nome, tipo FROM servicos ORDER BY id")
         result = {}
         for r in rows:
             tipo_raw = (r["tipo"] or "").strip().lower()
-            col_key = _tipo_map.get(tipo_raw, r["tipo"])
+            col_key = _tipo_map.get(tipo_raw)
             if not col_key:
                 continue
             if col_key not in result:
@@ -415,6 +415,34 @@ class DataLoader:
             result[col_key].append(r["nome"])
         _cache.set("listas", result, 3600)
         return result
+
+    # ── Serviços por militar ───────────────────────────────────
+    def carregar_servicos(self) -> dict:
+        """Carrega serviços permitidos por militar.
+        Devolve dict {militar_id: [serviço1, serviço2, ...]}.
+        Se não existir tabela servicos_militar, devolve dict vazio
+        e o app usa todos os serviços disponíveis para qualquer militar."""
+        val, hit = _cache.get("servicos")
+        if hit:
+            return val
+        try:
+            rows = _query("""
+                SELECT militar_id, servico
+                FROM servicos_militar
+                ORDER BY militar_id, servico
+            """)
+            result = {}
+            for r in rows:
+                mid = r["militar_id"]
+                if mid not in result:
+                    result[mid] = []
+                result[mid].append(r["servico"])
+            _cache.set("servicos", result, 3600)
+            return result
+        except Exception:
+            # Tabela não existe ainda — devolver vazio (app usa lista completa)
+            _cache.set("servicos", {}, 3600)
+            return {}
 
     # ── Push Subscriptions ────────────────────────────────────
     def carregar_push_subscriptions(self, militar_id: str = None) -> pd.DataFrame:
