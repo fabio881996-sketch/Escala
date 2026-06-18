@@ -6199,6 +6199,90 @@ else:
                 "escala_publicada": "dias_publicados",
             }
 
+            # ── Migrar todos os dias em falta de uma vez ──
+            if st.button("🚀 Migrar TODOS os dias de escala e ordem_escala em falta", key="btn_migrar_todos_dias"):
+                with st.spinner("A migrar todos os dias em falta..."):
+                    try:
+                        import gspread as _gs4
+                        from google.oauth2.service_account import Credentials as _Creds4
+                        import psycopg2 as _pg4, psycopg2.extras as _pgx4, re as _re4
+                        _scope4 = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+                        _creds4 = _Creds4.from_service_account_info(st.secrets["gcp_service_account"], scopes=_scope4)
+                        _client4 = _gs4.authorize(_creds4)
+                        _sh4 = _client4.open_by_url(st.secrets["gsheet_url"])
+                        _db_url4 = str(st.secrets.get("DATABASE_URL",""))
+                        # Dias já no PG
+                        with _pg4.connect(_db_url4) as _conn4:
+                            with _conn4.cursor() as _cur4:
+                                _cur4.execute("SELECT DISTINCT aba FROM escalas")
+                                _dias_pg = {r[0] for r in _cur4.fetchall()}
+                                _cur4.execute("SELECT DISTINCT aba FROM ordem_escala")
+                                _dias_ord_pg = {r[0] for r in _cur4.fetchall()}
+                        # Abas da Sheet
+                        _all_abas4 = [(ws.title, ws) for ws in _sh4.worksheets()]
+                        _dias_mig4 = 0
+                        _ords_mig4 = 0
+                        for _titulo4, _ws4 in _all_abas4:
+                            # Dias de escala DD-MM
+                            if _re4.match(r'^\d{2}-\d{2}$', _titulo4) and _titulo4 not in _dias_pg:
+                                try:
+                                    _v4 = _ws4.get_all_values()
+                                    if not _v4 or len(_v4) < 2: continue
+                                    _h4 = [str(h).strip().lower() for h in _v4[0]]
+                                    _ins4 = []
+                                    for _row4 in _v4[1:]:
+                                        _d4 = {_h4[i]: (str(_row4[i]).strip() if i < len(_row4) else "") for i in range(len(_h4))}
+                                        _id_raw4 = _d4.get("id", _d4.get("militares",""))
+                                        if not _id_raw4 or _id_raw4 == "nan": continue
+                                        for _mid4 in _re4.split(r'[;,]+', _id_raw4):
+                                            _mid4 = _mid4.strip()
+                                            if not _mid4: continue
+                                            _ins4.append((_titulo4, _mid4,
+                                                _d4.get("serviço", _d4.get("servico","")),
+                                                _d4.get("horário", _d4.get("horario","")),
+                                                _d4.get("indicativo","") or _d4.get("indicativo rádio","") or None,
+                                                _d4.get("rádio", _d4.get("radio","")) or None,
+                                                _d4.get("viatura","") or None,
+                                                _d4.get("giro","") or None,
+                                                _d4.get("observações", _d4.get("observacoes","")) or None,
+                                            ))
+                                    if _ins4:
+                                        with _pg4.connect(_db_url4) as _conn4:
+                                            with _conn4.cursor() as _cur4:
+                                                _pgx4.execute_values(_cur4, "INSERT INTO escalas (aba, id, servico, horario, indicativo, radio, viatura, giro, observacoes) VALUES %s ON CONFLICT DO NOTHING", _ins4)
+                                            _conn4.commit()
+                                        _dias_mig4 += 1
+                                except Exception as _e4d:
+                                    st.warning(f"Erro dia {_titulo4}: {_e4d}")
+                            # Ordem escala
+                            elif _titulo4.startswith("ordem_escala "):
+                                _dia4 = _titulo4.replace("ordem_escala ","").strip()
+                                if _dia4 in _dias_ord_pg: continue
+                                try:
+                                    _v4 = _ws4.get_all_values()
+                                    if not _v4 or len(_v4) < 2: continue
+                                    _h4o = [str(h).strip() for h in _v4[0]]
+                                    _ins4o = []
+                                    for _ci4, _sl4 in enumerate(_h4o):
+                                        if not _sl4 or _sl4.lower() == "nan": continue
+                                        for _pi4, _ro4 in enumerate(_v4[1:]):
+                                            _m4 = str(_ro4[_ci4]).strip() if _ci4 < len(_ro4) else ""
+                                            if not _m4 or _m4.lower() == "nan": continue
+                                            _ins4o.append((_dia4, _sl4, _m4, _pi4))
+                                    if _ins4o:
+                                        with _pg4.connect(_db_url4) as _conn4:
+                                            with _conn4.cursor() as _cur4:
+                                                _pgx4.execute_values(_cur4, "INSERT INTO ordem_escala (aba, slot, militar_id, posicao) VALUES %s ON CONFLICT DO NOTHING", _ins4o)
+                                            _conn4.commit()
+                                        _ords_mig4 += 1
+                                except Exception as _e4o:
+                                    st.warning(f"Erro ordem {_titulo4}: {_e4o}")
+                        load_data.clear()
+                        st.success(f"✅ Migrados {_dias_mig4} dias de escala e {_ords_mig4} ordem_escala em falta.")
+                    except Exception as _e4:
+                        st.error(f"Erro: {_e4}")
+
+            st.markdown("---")
             if st.button("🔄 Migrar aba seleccionada", key="btn_migrar_aba") and _aba_sel.strip():
                 _aba_nome = _aba_sel.strip()
                 with st.spinner(f"A migrar '{_aba_nome}'..."):
@@ -6297,6 +6381,64 @@ else:
                                     _conn3.commit()
                                 load_folgas.clear()
                                 st.success(f"✅ folgas_2026: {len(_ins3)} militares migrados.")
+
+                            # ── Dias de escala DD-MM ──
+                            elif __import__('re').match(r'^\d{2}-\d{2}$', _aba_nome):
+                                import json as _json3
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        # Apagar linhas existentes deste dia
+                                        _cur3.execute("DELETE FROM escalas WHERE aba = %s", (_aba_nome,))
+                                        _ins3 = []
+                                        for _r3 in _rows3:
+                                            _id_raw = str(_r3.get("id", _r3.get("militares", ""))).strip()
+                                            if not _id_raw or _id_raw == "nan": continue
+                                            # IDs separados por ; ou ,
+                                            _ids = [x.strip() for x in __import__('re').split(r'[;,]+', _id_raw) if x.strip()]
+                                            for _mid3 in _ids:
+                                                _ins3.append((
+                                                    _aba_nome,
+                                                    _mid3,
+                                                    str(_r3.get("serviço", _r3.get("servico", ""))).strip(),
+                                                    str(_r3.get("horário", _r3.get("horario", ""))).strip(),
+                                                    str(_r3.get("indicativo", _r3.get("indicativo rádio", ""))).strip() or None,
+                                                    str(_r3.get("rádio", _r3.get("radio", ""))).strip() or None,
+                                                    str(_r3.get("viatura", ""))).strip() or None,
+                                                    str(_r3.get("giro", "")).strip() or None,
+                                                    str(_r3.get("observações", _r3.get("observacoes", ""))).strip() or None,
+                                                ))
+                                        if _ins3:
+                                            _pgx3.execute_values(_cur3, """
+                                                INSERT INTO escalas (aba, id, servico, horario, indicativo, radio, viatura, giro, observacoes)
+                                                VALUES %s
+                                            """, _ins3)
+                                    _conn3.commit()
+                                load_data.clear()
+                                st.success(f"✅ Escala {_aba_nome}: {len(_ins3)} linhas inseridas.")
+
+                            # ── Ordem escala ordem_escala DD-MM ──
+                            elif _aba_nome.startswith("ordem_escala "):
+                                _dia3 = _aba_nome.replace("ordem_escala ", "").strip()
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("DELETE FROM ordem_escala WHERE aba = %s", (_dia3,))
+                                        _ins3 = []
+                                        # Estrutura: cada coluna é um slot, cada linha é um militar por ordem
+                                        _hdrs_orig3 = [str(h).strip() for h in _vals3[0]]
+                                        for _ci3, _slot3 in enumerate(_hdrs_orig3):
+                                            if not _slot3 or _slot3.lower() == "nan": continue
+                                            for _pos3, _row3 in enumerate(_vals3[1:]):
+                                                _mid3 = str(_row3[_ci3]).strip() if _ci3 < len(_row3) else ""
+                                                if not _mid3 or _mid3.lower() == "nan": continue
+                                                _ins3.append((_dia3, _slot3, _mid3, _pos3))
+                                        if _ins3:
+                                            _pgx3.execute_values(_cur3, """
+                                                INSERT INTO ordem_escala (aba, slot, militar_id, posicao)
+                                                VALUES %s
+                                                ON CONFLICT DO NOTHING
+                                            """, _ins3)
+                                    _conn3.commit()
+                                st.success(f"✅ ordem_escala {_dia3}: {len(_ins3)} entradas inseridas.")
 
                             # ── Aba desconhecida: mostrar colunas para análise ──
                             else:
