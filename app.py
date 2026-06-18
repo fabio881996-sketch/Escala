@@ -648,6 +648,114 @@ load_feriados = carregar_feriados
 
 
 @st.cache_data(ttl=86400)
+def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict, feriados_list: list = None) -> str:
+    """Determina se um militar tem folga num dado dia.
+    Devolve 'Folga Semanal', 'Folga Complementar' ou '' se não tiver folga.
+
+    Lógica baseada nos grupos de folga (A, B, C, D, ...):
+    - Cada grupo folga em dias diferentes da semana de forma rotativa
+    - df_folgas: DataFrame com colunas 'id', 'grupo', 'dia_folga' (opcional)
+    - grupos_folga: dict {'grupos': {'A': [ids...], 'B': [ids...], ...}}
+    """
+    if feriados_list is None:
+        feriados_list = []
+
+    # Converter data para date
+    if hasattr(data, 'date'):
+        d = data.date()
+    elif hasattr(data, 'strftime'):
+        d = data
+    else:
+        try:
+            d = datetime.strptime(str(data), '%d-%m').replace(year=datetime.now().year).date()
+        except Exception:
+            return ''
+
+    mid = str(mid).strip()
+
+    # 1. Verificar em df_folgas (aba folgas_2026) se tem registo direto
+    if not df_folgas.empty:
+        cols = df_folgas.columns.tolist()
+        col_id = 'id' if 'id' in cols else cols[0]
+        linha = df_folgas[df_folgas[col_id].astype(str).str.strip() == mid]
+        if not linha.empty:
+            row = linha.iloc[0]
+            # Verificar se tem coluna de data de folga
+            for col_data in ['data', 'dia', 'date']:
+                if col_data in cols:
+                    val_data = str(row.get(col_data, '')).strip()
+                    if val_data and val_data != 'nan':
+                        try:
+                            if '/' in val_data:
+                                d_folga = datetime.strptime(val_data, '%d/%m/%Y').date()
+                            elif '-' in val_data and len(val_data) > 5:
+                                d_folga = datetime.strptime(val_data, '%Y-%m-%d').date()
+                            else:
+                                d_folga = datetime.strptime(val_data, '%d-%m').replace(year=d.year).date()
+                            if d_folga == d:
+                                tipo = str(row.get('tipo', row.get('serviço', 'Folga Semanal'))).strip()
+                                return tipo if tipo and tipo != 'nan' else 'Folga Semanal'
+                        except Exception:
+                            pass
+
+    # 2. Verificar por grupo de folga rotativo
+    grupos = grupos_folga.get('grupos', {}) if isinstance(grupos_folga, dict) else {}
+    if not grupos:
+        return ''
+
+    # Encontrar grupo do militar
+    grupo_mil = None
+    for grupo, ids in grupos.items():
+        if mid in [str(i).strip() for i in ids]:
+            grupo_mil = str(grupo).strip().upper()
+            break
+
+    if not grupo_mil:
+        return ''
+
+    # Dia da semana (0=segunda, 6=domingo)
+    weekday = d.weekday()
+    is_weekend = weekday >= 5  # sábado ou domingo
+    is_feriado = d in feriados_list
+
+    # Grupos ordenados
+    grupos_ordenados = sorted(grupos.keys())
+    n_grupos = len(grupos_ordenados)
+    if n_grupos == 0:
+        return ''
+
+    try:
+        idx_grupo = grupos_ordenados.index(grupo_mil)
+    except ValueError:
+        return ''
+
+    # Rotação semanal: cada grupo folga num dia diferente
+    # Semana de referência: segunda da semana actual
+    from datetime import timedelta as _td
+    segunda = d - _td(days=weekday)
+    # Número da semana desde época
+    semana_num = (segunda - datetime(2024, 1, 1).date()).days // 7
+
+    # Qual grupo folga hoje? Rotação por dia útil (seg-sex) e fins de semana fixos
+    if is_weekend or is_feriado:
+        # Folga complementar rotativa ao fim de semana
+        # Grupo que folga neste fim de semana = (semana_num + offset_sabado) % n_grupos
+        offset = semana_num % n_grupos
+        grupo_folga_fds = grupos_ordenados[offset]
+        grupo_folga_fds2 = grupos_ordenados[(offset + 1) % n_grupos]
+        if grupo_mil in [grupo_folga_fds, grupo_folga_fds2]:
+            return 'Folga Complementar'
+    else:
+        # Dias úteis: folga semanal rotativa
+        # Cada dia da semana (0-4) = um grupo diferente
+        dia_offset = (semana_num * 5 + weekday) % n_grupos
+        grupo_folga_hoje = grupos_ordenados[dia_offset]
+        if grupo_mil == grupo_folga_hoje:
+            return 'Folga Semanal'
+
+    return ''
+
+
 def contar_servicos_historico(alvo_id_c: str, sheet_id_c: str) -> pd.DataFrame:
     """Conta serviços históricos de um militar -- cache 24h."""
     try:
