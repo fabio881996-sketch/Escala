@@ -525,6 +525,10 @@ class DataLoader:
             return val
         rows = _query("SELECT * FROM ordem_remunerados")
         df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
+        # Normalizar colunas booleanas
+        for col in ['disponivel', 'voluntario', 'folga', 'prescinde_descanso']:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ('true','1','sim','yes'))
         _cache.set("ordem_rem", df, 120)
         return df
 
