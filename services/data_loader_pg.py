@@ -395,19 +395,26 @@ class DataLoader:
         val, hit = _cache.get("listas")
         if hit:
             return val
+
+        import unicodedata
+        def _norm(t):
+            return unicodedata.normalize('NFKD', str(t).lower()).encode('ascii', 'ignore').decode('ascii').strip()
+
+        # Mapeamento sem acentos → chave correta
         _tipo_map = {
-            "horário": "Horário", "horario": "Horário",
-            "rádio": "Rádio", "radio": "Rádio",
-            "indicativo": "Indicativo",
-            "viatura": "Viatura",
-            "giro": "Giro",
-            "serviço": "Serviço", "servico": "Serviço",
+            "horario":   "Horário",
+            "radio":     "Rádio",
+            "indicativo":"Indicativo",
+            "viatura":   "Viatura",
+            "giro":      "Giro",
+            "servico":   "Serviço",
+            "servicos":  "Serviço",
         }
         rows = _query("SELECT nome, tipo FROM servicos ORDER BY id")
         result = {}
         for r in rows:
-            tipo_raw = (r["tipo"] or "").strip().lower()
-            col_key = _tipo_map.get(tipo_raw)
+            tipo_norm = _norm(r["tipo"] or "")
+            col_key = _tipo_map.get(tipo_norm)
             if not col_key:
                 continue
             if col_key not in result:
