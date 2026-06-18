@@ -276,7 +276,7 @@ class DataLoader:
                     row.get("status", "Pendente_Militar"), row.get("observacoes"),
                     row.get("data_pedido"),
                 ))
-                new_id = cur.fetchone()[0]
+                new_id = cur.fetchone()["id"]
             conn.commit()
         except Exception:
             conn.rollback()
