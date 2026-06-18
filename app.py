@@ -6403,7 +6403,7 @@ else:
                                                     str(_r3.get("horário", _r3.get("horario", ""))).strip(),
                                                     str(_r3.get("indicativo", _r3.get("indicativo rádio", ""))).strip() or None,
                                                     str(_r3.get("rádio", _r3.get("radio", ""))).strip() or None,
-                                                    str(_r3.get("viatura", ""))).strip() or None,
+                                                    str(_r3.get("viatura", "")).strip() or None,
                                                     str(_r3.get("giro", "")).strip() or None,
                                                     str(_r3.get("observações", _r3.get("observacoes", ""))).strip() or None,
                                                 ))
