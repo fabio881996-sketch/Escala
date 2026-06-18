@@ -390,8 +390,22 @@ class DataLoader:
 
     # ── Folgas ────────────────────────────────────────────────
     def carregar_folgas(self, ano: int) -> pd.DataFrame:
-        # As folgas derivam da escala — calcular dinamicamente
-        return pd.DataFrame()
+        """Carrega folgas da tabela folgas (migrada de folgas_2026)."""
+        val, hit = _cache.get(f"folgas:{ano}")
+        if hit:
+            return val
+        try:
+            rows = _query("SELECT id, fds, grupo, servico AS servico FROM folgas")
+            df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
+            if not df.empty:
+                # Normalizar nome da coluna serviço
+                if 'servico' in df.columns and 'serviço' not in df.columns:
+                    df = df.rename(columns={'servico': 'serviço'})
+            _cache.set(f"folgas:{ano}", df, 3600)
+            return df
+        except Exception:
+            _cache.set(f"folgas:{ano}", pd.DataFrame(), 3600)
+            return pd.DataFrame()
 
     # ── Feriados ─────────────────────────────────────────────
     def carregar_feriados(self, ano: int) -> list:
