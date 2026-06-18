@@ -390,21 +390,26 @@ class DataLoader:
 
     # ── Listas ────────────────────────────────────────────────
     def carregar_listas(self) -> dict:
-        """Carrega listas do PostgreSQL — devolve dict {coluna: [valores]}."""
+        """Carrega listas de dropdowns da tabela servicos — devolve dict {coluna: [valores]}."""
         val, hit = _cache.get("listas")
         if hit:
             return val
-        rows = _query("SELECT nome, tipo FROM servicos ORDER BY tipo, nome")
+        # Mapeamento tipo (em BD) → chave do dict usada no app
+        _tipo_map = {
+            "horário": "Horário", "horario": "Horário",
+            "rádio": "Rádio", "radio": "Rádio",
+            "indicativo": "Indicativo",
+            "viatura": "Viatura",
+            "giro": "Giro",
+            "serviço": "Serviço", "servico": "Serviço",
+        }
+        rows = _query("SELECT nome, tipo FROM servicos ORDER BY tipo, id")
         result = {}
         for r in rows:
-            col = r["tipo"].capitalize() if r["tipo"] else "outros"
-            # Mapear tipo para nome de coluna original
-            col_map = {
-                "horário": "Horário", "radio": "Rádio", "rádio": "Rádio",
-                "indicativo": "Indicativo", "viatura": "Viatura",
-                "giro": "Giro", "serviço": "Serviço", "servico": "Serviço",
-            }
-            col_key = col_map.get(r["tipo"].lower().strip(), r["tipo"])
+            tipo_raw = (r["tipo"] or "").strip().lower()
+            col_key = _tipo_map.get(tipo_raw, r["tipo"])
+            if not col_key:
+                continue
             if col_key not in result:
                 result[col_key] = []
             result[col_key].append(r["nome"])
