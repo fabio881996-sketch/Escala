@@ -6347,6 +6347,61 @@ else:
                                 load_listas.clear()
                                 st.success(f"✅ listas: {sum(len(v) for v in _listas3.values())} valores em {list(_listas3.keys())}")
 
+                            # ── ordem_remunerados ──
+                            elif _aba_nome == "ordem_remunerados":
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("DELETE FROM ordem_remunerados")
+                                        _ins3 = []
+                                        def _bool3(v): return str(v).strip().lower() in ('sim','true','1','yes')
+                                        def _num3(v):
+                                            try: return float(str(v).strip()) if str(v).strip() else 0
+                                            except: return 0
+                                        def _date3(v):
+                                            v = str(v).strip()
+                                            if not v or v.lower() == 'nan': return None
+                                            for fmt in ('%d/%m/%Y','%Y-%m-%d','%d-%m-%Y'):
+                                                try:
+                                                    from datetime import datetime as _dt3
+                                                    return _dt3.strptime(v, fmt).date()
+                                                except: pass
+                                            return None
+                                        for r in _rows3:
+                                            _mid = str(r.get('id','')).strip()
+                                            if not _mid or _mid == 'nan': continue
+                                            _ins3.append((
+                                                _mid,
+                                                _bool3(r.get('disponível', r.get('disponivel',''))),
+                                                _bool3(r.get('voluntario','') or r.get('voluntário','')),
+                                                _bool3(r.get('folga','')),
+                                                _bool3(r.get('prescinde_descanso', r.get('prescinde_desc',''))),
+                                                _num3(r.get('total_ano_a_semana', r.get('total_ano_a_sem',0))),
+                                                _num3(r.get('total_ano_a_fds',0)),
+                                                _num3(r.get('total_ano_b',0)),
+                                                _date3(r.get('último_a_semana', r.get('ultimo_a_semana',''))),
+                                                _date3(r.get('último_a_fds', r.get('ultimo_a_fds',''))),
+                                                _date3(r.get('último_b', r.get('ultimo_b',''))),
+                                            ))
+                                        if _ins3:
+                                            _pgx3.execute_values(_cur3, """
+                                                INSERT INTO ordem_remunerados
+                                                (militar_id, disponivel, voluntario, folga, prescinde_descanso,
+                                                 total_ano_a_semana, total_ano_a_fds, total_ano_b,
+                                                 ultimo_a_semana, ultimo_a_fds, ultimo_b)
+                                                VALUES %s ON CONFLICT (militar_id) DO UPDATE SET
+                                                    disponivel=EXCLUDED.disponivel, voluntario=EXCLUDED.voluntario,
+                                                    folga=EXCLUDED.folga, prescinde_descanso=EXCLUDED.prescinde_descanso,
+                                                    total_ano_a_semana=EXCLUDED.total_ano_a_semana,
+                                                    total_ano_a_fds=EXCLUDED.total_ano_a_fds,
+                                                    total_ano_b=EXCLUDED.total_ano_b,
+                                                    ultimo_a_semana=EXCLUDED.ultimo_a_semana,
+                                                    ultimo_a_fds=EXCLUDED.ultimo_a_fds,
+                                                    ultimo_b=EXCLUDED.ultimo_b
+                                            """, _ins3)
+                                    _conn3.commit()
+                                load_ordem_remunerados.clear()
+                                st.success(f"✅ ordem_remunerados: {len(_ins3)} militares migrados.")
+
                             # ── historico_remunerados: inserção genérica ──
                             elif _aba_nome == "historico_remunerados":
                                 with _pg3.connect(_db_url3) as _conn3:
