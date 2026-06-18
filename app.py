@@ -1712,8 +1712,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         fill = False
         for hor, grp in df_ocorr.assign(_hor_sort=df_ocorr["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
-            def _v(col): return str(grp[col].iloc[0]).strip() if col in grp.columns else ""
-            def _clean(v): return "" if v in ("nan", "None", "NaN") else v
+            def _clean(v): return "" if str(v).strip() in ("nan", "None", "NaN", "none") else str(v).strip()
+            def _v(col): return _clean(grp[col].iloc[0]) if col in grp.columns else ""
             serv = grp["serviço"].iloc[0]
             ind  = _clean(_v("indicativo rádio"))
             rad  = _clean(_v("rádio"))
@@ -1736,8 +1736,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         for hor, grp in df_outras_pat.assign(_hor_sort=df_outras_pat["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
             serv = grp["serviço"].iloc[0]
-            def _v(col): return str(grp[col].iloc[0]).strip() if col in grp.columns else ""
-            def _clean(v): return "" if v in ("nan", "None", "NaN") else v
+            def _clean(v): return "" if str(v).strip() in ("nan", "None", "NaN", "none") else str(v).strip()
+            def _v(col): return _clean(grp[col].iloc[0]) if col in grp.columns else ""
             ind  = _clean(_v("indicativo rádio"))
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
