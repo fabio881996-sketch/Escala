@@ -5513,7 +5513,7 @@ else:
                         def _nomear_grupo(filtro_fn, grupo_label, aviso_extra=False):
                             for _, row_r in df_disp_sorted.iterrows():
                                 if len(nomeados) >= slot['n']: break
-                                mid_r = str(row_r.get('id', '')).strip()
+                                mid_r = str(row_r.get('militar_id', row_r.get('id', ''))).strip()
                                 if not mid_r or mid_r in ja_neste_slot(): continue
                                 if not filtro_fn(row_r, mid_r): continue
                                 if _pode_nomear_slot(row_r, mid_r, slot, ja_nomeados_ids, skipped):
