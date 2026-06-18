@@ -422,6 +422,10 @@ def load_data(aba_nome: str) -> pd.DataFrame:
                 st.error(f"Erro PG escala {aba_nome}: {e}")
     return pd.DataFrame()
 
+def _s(v):
+    """Converte None/nan para string vazia."""
+    return '' if v is None or str(v).strip() in ('None', 'nan', 'NaN') else str(v).strip()
+
 def invalidar_trocas():
     """Limpa cache de trocas."""
     load_trocas.clear()
@@ -587,15 +591,16 @@ def load_servicos() -> dict:
             pass
     return {}
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=3600)
 def load_listas() -> dict:
-    """Carrega listas do PostgreSQL."""
+    """Carrega listas de dropdowns do PostgreSQL."""
     pg = get_pg_loader()
     if pg:
         try:
             return pg.carregar_listas()
-        except Exception:
-            pass
+        except Exception as _e:
+            import traceback
+            print(f"[LISTAS ERROR] {_e}\n{traceback.format_exc()}")
     return {}
 
 @st.cache_data(ttl=86400)
@@ -1959,27 +1964,12 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
     """Renderiza uma secção da escala com estilo próximo do PDF."""
     if df_sec.empty:
         return
-    # Ordenar cronologicamente pelo início do horário
     df_sec = df_sec.copy()
-
-    # Normalizar nomes de colunas: 'indicativo' → 'indicativo rádio' se necessário
-    col_rename_map = {}
-    if 'indicativo' in df_sec.columns and 'indicativo rádio' not in df_sec.columns:
-        col_rename_map['indicativo'] = 'indicativo rádio'
-    if 'radio' in df_sec.columns and 'rádio' not in df_sec.columns:
-        col_rename_map['radio'] = 'rádio'
-    if col_rename_map:
-        df_sec = df_sec.rename(columns=col_rename_map)
-
-    # Limpar 'nan' nas colunas extras antes de agrupar
     for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
         if col in df_sec.columns:
             df_sec[col] = df_sec[col].astype(str).replace({'nan': '', 'None': ''}).str.strip()
-
-    # Garantir que id_disp existe
     if 'id_disp' not in df_sec.columns:
-        df_sec['id_disp'] = df_sec.get('id', pd.Series([''] * len(df_sec))).astype(str)
-
+        df_sec['id_disp'] = df_sec.get('id', pd.Series([''] * len(df_sec), index=df_sec.index)).astype(str)
     df_sec['_hor_sort'] = pd.to_numeric(df_sec['horário'].str.extract(r'^(\d+)')[0], errors='coerce').fillna(99)
     df_sec = df_sec.sort_values(['_hor_sort', 'serviço'])
     st.markdown(_sec_header(titulo), unsafe_allow_html=True)
@@ -1988,11 +1978,9 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
             if col in df_sec.columns and col not in excluir_cols:
                 cols_ag.append(col)
-        # Garantir que todas as colunas de groupby existem
         cols_ag = [c for c in cols_ag if c in df_sec.columns]
-        agg_dict: dict = {'id_disp': lambda x: ', '.join(str(v) for v in x)}
         try:
-            ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
+            ag = df_sec.groupby(cols_ag, sort=False).agg({'id_disp': lambda x: ', '.join(str(v) for v in x)}).reset_index()
         except Exception:
             ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                        .apply(lambda x: ', '.join(str(v) for v in x)).reset_index()
@@ -2005,14 +1993,9 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
                    .apply(lambda x: ', '.join(str(v) for v in x)).reset_index()
     ag = ag.rename(columns={
-        'id_disp': 'Militares',
-        'serviço': 'Serviço',
-        'horário': 'Horário',
-        'indicativo rádio': 'Indicativo',
-        'rádio': 'Rádio',
-        'viatura': 'Viatura',
-        'giro': 'Giro',
-        'observações': 'Observações',
+        'id_disp': 'Militares', 'serviço': 'Serviço', 'horário': 'Horário',
+        'indicativo rádio': 'Indicativo', 'rádio': 'Rádio',
+        'viatura': 'Viatura', 'giro': 'Giro', 'observações': 'Observações',
     })
     if esconder_servico and 'Serviço' in ag.columns:
         ag = ag.drop(columns=['Serviço'])
@@ -3753,6 +3736,7 @@ else:
                 # Remover linhas sem militar para a visualização na escala geral
                 df_at = _limpar_sem_militar(df_at)
 
+
                 # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
                 df_aus, df_res = filtrar_secao(["férias", "licença", "convalescença"], df_at)
 
@@ -4929,11 +4913,12 @@ else:
                                 dados = {'serviço': _lic_tipo_e, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': _lic_obs_e}
                             else:
                                 dados = {'serviço': 'Disponível', 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                        def _sv(v): return '' if v is None or str(v).strip() in ('None','nan') else str(v).strip()
                         linhas_e_raw.append({'id': mid, 'apelido': apelido,
-                                             'serviço': dados.get('serviço',''), 'horário': dados.get('horário',''),
-                                             'indicativo': dados.get('indicativo',''), 'rádio': dados.get('rádio',''),
-                                             'giro': dados.get('giro',''), 'viatura': dados.get('viatura',''),
-                                             'observações': dados.get('observações','')})
+                                             'serviço': _sv(dados.get('serviço')), 'horário': _sv(dados.get('horário')),
+                                             'indicativo': _sv(dados.get('indicativo')), 'rádio': _sv(dados.get('rádio')),
+                                             'giro': _sv(dados.get('giro')), 'viatura': _sv(dados.get('viatura')),
+                                             'observações': _sv(dados.get('observações'))})
 
                     # Agrupar por serviço+horário (só quando ambos preenchidos)
                     grupos_e = {}
@@ -5109,6 +5094,9 @@ else:
                     st.markdown(f"**📅 {d_e.strftime('%d/%m/%Y')} -- {dias_pt[d_e.weekday()]}**")
                     st.caption("💡 O campo ID aceita vários militares separados por `;` (ex: `507;1185`). Podes adicionar ou remover linhas.")
                     df_s = pd.DataFrame(info_e['linhas'])
+                    for _c in ['horário', 'indicativo', 'rádio', 'giro', 'viatura', 'observações']:
+                        if _c in df_s.columns:
+                            df_s[_c] = df_s[_c].astype(str).replace({'None': '', 'nan': '', 'NaN': ''}).fillna('')
                     _ord_col_s = {'ID': 'id', 'Nome': 'nome', 'Serviço': 'serviço', 'Horário': 'horário'}.get(st.session_state.get('ord_editar', 'ID'), 'id')
                     if _ord_col_s in df_s.columns:
                         if _ord_col_s == 'id':
@@ -6045,6 +6033,144 @@ else:
             st.stop()
 
         df_u_admin = load_utilizadores()
+
+        # ── FERRAMENTAS DE MANUTENÇÃO ─────────────────────────────
+        with st.expander("🔧 Ferramentas de Manutenção", expanded=False):
+            st.caption("Migração completa do Google Sheets → PostgreSQL. Corre uma vez por aba em falta.")
+
+            # ── Passo 1: Listar abas da Sheet ──
+            if st.button("🔍 Ver abas da Sheet e estado no PG", key="btn_ver_abas"):
+                with st.spinner("A ligar à Sheet..."):
+                    try:
+                        import gspread as _gs2
+                        from google.oauth2.service_account import Credentials as _Creds2
+                        import psycopg2 as _pg2b
+                        _scope2 = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+                        _creds2 = _Creds2.from_service_account_info(st.secrets["gcp_service_account"], scopes=_scope2)
+                        _client2 = _gs2.authorize(_creds2)
+                        _sh2 = _client2.open_by_url(st.secrets["gsheet_url"])
+                        _abas_sheet = [ws.title for ws in _sh2.worksheets()]
+                        _db_url2 = str(st.secrets.get("DATABASE_URL",""))
+                        with _pg2b.connect(_db_url2) as _conn2:
+                            with _conn2.cursor() as _cur2:
+                                _cur2.execute("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename")
+                                _tabelas_pg = {r[0] for r in _cur2.fetchall()}
+                        st.session_state["_abas_sheet"] = _abas_sheet
+                        st.session_state["_tabelas_pg"] = _tabelas_pg
+                    except Exception as _e2:
+                        st.error(f"Erro: {_e2}")
+
+            if "_abas_sheet" in st.session_state:
+                _abas_sheet = st.session_state["_abas_sheet"]
+                _tabelas_pg = st.session_state["_tabelas_pg"]
+                st.markdown("**Abas na Sheet:**")
+                for _aba in _abas_sheet:
+                    st.write(f"  • `{_aba}`")
+                st.markdown("**Tabelas no PostgreSQL:**")
+                for _t in sorted(_tabelas_pg):
+                    st.write(f"  • `{_t}`")
+
+            st.markdown("---")
+
+            # ── Passo 2: Migrar aba específica ──
+            st.markdown("**Migrar aba da Sheet para o PG:**")
+            _aba_sel = st.text_input("Nome da aba (ex: listas, historico_remunerados, grupos_folga):", key="inp_aba_mig")
+
+            # Mapeamento aba → tabela PG + lógica de inserção
+            _MAPA_ABAS = {
+                "listas": "listas",
+                "historico_remunerados": "historico_remunerados",
+                "grupos_folga": "grupos_folga",
+                "ferias_2026": "ferias",
+                "ordem_remunerados": "ordem_remunerados",
+                "registos_trocas": "trocas",
+                "utilizadores": "utilizadores",
+                "escala_publicada": "dias_publicados",
+            }
+
+            if st.button("🔄 Migrar aba seleccionada", key="btn_migrar_aba") and _aba_sel.strip():
+                _aba_nome = _aba_sel.strip()
+                with st.spinner(f"A migrar '{_aba_nome}'..."):
+                    try:
+                        import gspread as _gs3
+                        from google.oauth2.service_account import Credentials as _Creds3
+                        import psycopg2 as _pg3, psycopg2.extras as _pgx3
+                        _scope3 = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
+                        _creds3 = _Creds3.from_service_account_info(st.secrets["gcp_service_account"], scopes=_scope3)
+                        _client3 = _gs3.authorize(_creds3)
+                        _sh3 = _client3.open_by_url(st.secrets["gsheet_url"])
+                        _ws3 = _sh3.worksheet(_aba_nome)
+                        _vals3 = _ws3.get_all_values()
+                        if not _vals3 or len(_vals3) < 2:
+                            st.warning(f"Aba '{_aba_nome}' vazia ou só tem cabeçalho.")
+                        else:
+                            _hdrs3 = [str(h).strip().lower() for h in _vals3[0]]
+                            _rows3 = []
+                            for _row3 in _vals3[1:]:
+                                _d3 = {}
+                                for _ci3, _hdr3 in enumerate(_hdrs3):
+                                    _v3 = str(_row3[_ci3]).strip() if _ci3 < len(_row3) else ""
+                                    _d3[_hdr3] = "" if _v3.lower() == "nan" else _v3
+                                _rows3.append(_d3)
+
+                            _db_url3 = str(st.secrets.get("DATABASE_URL",""))
+
+                            # ── listas: colunas = tipos, linhas = valores ──
+                            if _aba_nome == "listas":
+                                _hdrs_orig = [str(h).strip() for h in _vals3[0]]
+                                _listas3 = {}
+                                for _ci3, _hdr3 in enumerate(_hdrs_orig):
+                                    if not _hdr3 or _hdr3.lower() == "nan": continue
+                                    _vs3 = [str(r[_ci3]).strip() for r in _vals3[1:] if _ci3 < len(r) and str(r[_ci3]).strip() and str(r[_ci3]).strip().lower() != "nan"]
+                                    if _vs3: _listas3[_hdr3] = _vs3
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("CREATE TABLE IF NOT EXISTS listas (id SERIAL PRIMARY KEY, coluna TEXT NOT NULL, valor TEXT NOT NULL, ordem INTEGER DEFAULT 0)")
+                                        _cur3.execute("CREATE UNIQUE INDEX IF NOT EXISTS listas_coluna_valor_idx ON listas (coluna, valor)")
+                                        _cur3.execute("DELETE FROM listas")
+                                        _ins3 = [(c, v, o) for c, vs in _listas3.items() for o, v in enumerate(vs)]
+                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO listas (coluna, valor, ordem) VALUES %s ON CONFLICT DO NOTHING", _ins3)
+                                    _conn3.commit()
+                                load_listas.clear()
+                                st.success(f"✅ listas: {sum(len(v) for v in _listas3.values())} valores em {list(_listas3.keys())}")
+
+                            # ── historico_remunerados: inserção genérica ──
+                            elif _aba_nome == "historico_remunerados":
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("""CREATE TABLE IF NOT EXISTS historico_remunerados (
+                                            id SERIAL PRIMARY KEY, militar_id TEXT, data TEXT,
+                                            servico TEXT, horario TEXT, observacoes TEXT)""")
+                                        _cur3.execute("DELETE FROM historico_remunerados")
+                                        _ins3 = [(r.get("id",""), r.get("data",""), r.get("serviço", r.get("servico","")),
+                                                  r.get("horário", r.get("horario","")), r.get("observações", r.get("observacoes",""))) for r in _rows3 if r.get("id","")]
+                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO historico_remunerados (militar_id, data, servico, horario, observacoes) VALUES %s", _ins3)
+                                    _conn3.commit()
+                                st.success(f"✅ historico_remunerados: {len(_ins3)} linhas inseridas.")
+
+                            # ── grupos_folga: id, grupo ──
+                            elif _aba_nome == "grupos_folga":
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("""CREATE TABLE IF NOT EXISTS grupos_folga (
+                                            id SERIAL PRIMARY KEY, militar_id TEXT, grupo TEXT)""")
+                                        _cur3.execute("DELETE FROM grupos_folga")
+                                        _ins3 = [(r.get("id","") or r.get("militar_id",""), r.get("grupo","")) for r in _rows3 if (r.get("id","") or r.get("militar_id",""))]
+                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO grupos_folga (militar_id, grupo) VALUES %s", _ins3)
+                                    _conn3.commit()
+                                st.success(f"✅ grupos_folga: {len(_ins3)} linhas inseridas.")
+
+                            # ── Aba desconhecida: mostrar colunas para análise ──
+                            else:
+                                st.info(f"Aba '{_aba_nome}' não tem migração automática definida. Colunas encontradas:")
+                                st.write(_hdrs3)
+                                st.dataframe(_rows3[:5])
+                                st.caption("Diz ao Claude as colunas e ele faz a migração.")
+
+                    except Exception as _e3:
+                        st.error(f"Erro: {_e3}")
+                        import traceback
+                        st.code(traceback.format_exc())
 
         tab_pin, tab_add, tab_rem = st.tabs(["🔑 Gerir PIN", "➕ Adicionar Militar", "🗑️ Remover Militar"])
 
