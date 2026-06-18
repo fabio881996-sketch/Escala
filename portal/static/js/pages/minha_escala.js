@@ -71,7 +71,7 @@ const MinhaEscalaPage = {
         // Horário ao lado do título
         const horario = v(s.horario);
         const tituloHorario = horario
-            ? `<span style="font-size:.8rem;font-weight:500;opacity:.75;margin-left:8px">${horario}</span>`
+            ? `<span style="font-size:.85rem;font-weight:600;margin-left:8px">${horario}</span>`
             : '';
 
         let rows = '';
