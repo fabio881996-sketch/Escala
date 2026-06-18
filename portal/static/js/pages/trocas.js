@@ -7,12 +7,18 @@ const TrocasPage = {
 
     async render() {
         const content = document.getElementById('content');
+        const user = API.getUser();
+        const isAdmin = user?.is_admin || false;
+        const validarTab = isAdmin
+            ? `<button class="tab-btn" onclick="TrocasPage.setTab('validar', this)">⚖️ Validar</button>`
+            : '';
         content.innerHTML = `
             <div class="section-header">🔄 Trocas de Serviço</div>
             <div class="tabs">
                 <button class="tab-btn" onclick="TrocasPage.setTab('pendentes', this)">📥 Pendentes</button>
                 <button class="tab-btn" onclick="TrocasPage.setTab('historico', this)">📋 Histórico</button>
                 <button class="tab-btn active" onclick="TrocasPage.setTab('solicitar', this)">➕ Solicitar</button>
+                ${validarTab}
             </div>
             <div id="trocas-content">${Components.loading()}</div>
         `;
@@ -25,7 +31,82 @@ const TrocasPage = {
         btn.classList.add('active');
         if (tab === 'pendentes') this.loadPendentes();
         else if (tab === 'historico') this.loadHistorico();
+        else if (tab === 'validar') this.loadValidar();
         else this.renderSolicitar();
+    },
+
+    // ── VALIDAR (ADMIN) ──────────────────────────────────────
+    async loadValidar() {
+        const el = document.getElementById('trocas-content');
+        el.innerHTML = Components.loading();
+        try {
+            const data = await API._get('/api/trocas/pendentes-admin', false);
+            const trocas = data?.trocas || [];
+            if (!trocas.length) {
+                el.innerHTML = `<div class="empty-state"><div class="empty-icon">⚖️</div><p>Sem trocas para validar.</p></div>`;
+                return;
+            }
+
+            const _horFim = (serv) => {
+                const m = serv?.match(/\((\d{2})-(\d{2})\)/);
+                return m ? parseInt(m[2]) : null;
+            };
+            const _horIni = (serv) => {
+                const m = serv?.match(/\((\d{2})-(\d{2})\)/);
+                return m ? parseInt(m[1]) : null;
+            };
+            const _consecutivo = (servFim, servIni) => {
+                const fim = _horFim(servFim);
+                const ini = _horIni(servIni);
+                if (fim === null || ini === null) return false;
+                return (fim === 0 && ini === 0) || (fim === 16 && ini === 0) || (fim === 8 && ini === 16);
+            };
+
+            el.innerHTML = trocas.map(t => {
+                // Usar avisos do backend (mais precisos)
+                const avisosList = t.avisos_consecutivos || [];
+                let avisos = avisosList.map(a =>
+                    `<div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:6px 10px;border-radius:6px;margin-top:8px;font-size:.78rem">${a}</div>`
+                ).join('');
+                return `
+                <div class="card card-amber">
+                    <div class="card-label">⚖️ Aguarda validação • ${t.data}</div>
+                    <div class="card-title">🔄 Troca de Serviço</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                        <div style="background:var(--bg-secondary);padding:8px;border-radius:8px;font-size:.82rem">
+                            <div style="font-weight:600;margin-bottom:4px">📤 ${t.nome_origem || t.id_origem}</div>
+                            <div>${t.servico_origem}</div>
+                        </div>
+                        <div style="background:var(--bg-secondary);padding:8px;border-radius:8px;font-size:.82rem">
+                            <div style="font-weight:600;margin-bottom:4px">📥 ${t.nome_destino || t.id_destino}</div>
+                            <div>${t.servico_destino}</div>
+                        </div>
+                    </div>
+                    ${avisos}
+                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:6px">📝 ${t.observacoes}</div>` : ''}
+                    <div style="display:flex;gap:8px;margin-top:12px">
+                        <button class="btn btn-success btn-sm" onclick="TrocasPage.validar(${t.__row_index || t.id}, 'aprovar', this)">✅ Aprovar</button>
+                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.validar(${t.__row_index || t.id}, 'rejeitar', this)">🚫 Rejeitar</button>
+                    </div>
+                </div>`;
+            }).join('');
+        } catch (e) {
+            el.innerHTML = `<div class="alert alert-error">❌ ${e.message}</div>`;
+        }
+    },
+
+    async validar(id, acao, btn) {
+        const label = acao === 'aprovar' ? 'Aprovar' : 'Rejeitar';
+        if (!confirm(`Tens a certeza que queres ${label.toLowerCase()} esta troca?`)) return;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
+        try {
+            await API._post('/api/trocas/validar', { row_index: id, acao });
+            await this.loadValidar();
+            App.checkPendentes();
+        } catch (e) {
+            alert(`❌ Erro: ${e.message}`);
+            if (btn) { btn.disabled = false; btn.textContent = acao === 'aprovar' ? '✅ Aprovar' : '🚫 Rejeitar'; }
+        }
     },
 
     // ── PENDENTES ────────────────────────────────────────────
