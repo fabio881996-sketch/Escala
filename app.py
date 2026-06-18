@@ -6215,9 +6215,9 @@ else:
                         with _pg4.connect(_db_url4) as _conn4:
                             with _conn4.cursor() as _cur4:
                                 _cur4.execute("SELECT DISTINCT aba FROM escalas")
-                                _dias_pg = {r[0] for r in _cur4.fetchall()}
+                                _dias_pg = {r['aba'] for r in _cur4.fetchall()}
                                 _cur4.execute("SELECT DISTINCT aba FROM ordem_escala")
-                                _dias_ord_pg = {r[0] for r in _cur4.fetchall()}
+                                _dias_ord_pg = {r['aba'] for r in _cur4.fetchall()}
                         # Abas da Sheet
                         _all_abas4 = [(ws.title, ws) for ws in _sh4.worksheets()]
                         _dias_mig4 = 0
