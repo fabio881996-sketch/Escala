@@ -21,7 +21,6 @@ except Exception:
     DATABASE_URL = os.environ["DATABASE_URL"]
 
 DIAS_ESCALA = ['27-06', '28-06']
-DIAS_ORDEM  = ['26-06', '27-06', '28-06', '29-06']
 
 print("A ligar ao Google Sheets...")
 creds = Credentials.from_service_account_info(
@@ -37,16 +36,12 @@ print("A ligar ao PostgreSQL...")
 conn = psycopg2.connect(DATABASE_URL)
 conn.autocommit = False
 cur = conn.cursor()
-print("  Ligado!")
 
-# ── Garantir que id é TEXT ────────────────────────────────────
-try:
-    cur.execute("ALTER TABLE escalas ALTER COLUMN id TYPE TEXT")
-    conn.commit()
-    print("  Coluna id convertida para TEXT")
-except Exception as e:
-    conn.rollback()
-    print(f"  Coluna id já é TEXT ou erro: {e}")
+# Ver colunas reais da tabela escalas
+cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name='escalas' ORDER BY ordinal_position")
+colunas = [r[0] for r in cur.fetchall()]
+print(f"  Colunas escalas: {colunas}")
+conn.commit()
 
 # ── Migrar dias de escala ─────────────────────────────────────
 for dia in DIAS_ESCALA:
@@ -69,7 +64,8 @@ for dia in DIAS_ESCALA:
                 if not mid:
                     continue
                 rows.append((
-                    dia, mid,
+                    dia,
+                    mid,  # militar_id
                     d.get('servico', d.get('serviço', '')),
                     d.get('horario', d.get('horário', '')),
                     d.get('indicativo', '') or None,
@@ -80,7 +76,7 @@ for dia in DIAS_ESCALA:
                 ))
         if rows:
             execute_values(cur, """
-                INSERT INTO escalas (aba, id, servico, horario, indicativo, radio, viatura, giro, observacoes)
+                INSERT INTO escalas (aba, militar_id, servico, horario, indicativo, radio, viatura, giro, observacoes)
                 VALUES %s ON CONFLICT DO NOTHING
             """, rows)
             conn.commit()
@@ -91,39 +87,6 @@ for dia in DIAS_ESCALA:
     except Exception as e:
         conn.rollback()
         print(f"  ERRO escala {dia}: {e}")
-
-# ── Migrar ordem_escala ───────────────────────────────────────
-for dia in DIAS_ORDEM:
-    try:
-        ws = sh.worksheet(f'ordem_escala {dia}')
-        vals = ws.get_all_values()
-        if not vals or len(vals) < 2:
-            print(f"  ordem_escala {dia}: vazio, ignorado")
-            continue
-        hdrs = [h.strip() for h in vals[0]]
-        cur.execute("DELETE FROM ordem_escala WHERE aba=%s", (dia,))
-        rows = []
-        for ci, slot in enumerate(hdrs):
-            if not slot or slot.lower() == 'nan':
-                continue
-            for pi, row in enumerate(vals[1:]):
-                mid = row[ci].strip() if ci < len(row) else ''
-                if not mid or mid.lower() == 'nan':
-                    continue
-                rows.append((dia, slot, mid, pi))
-        if rows:
-            execute_values(cur, """
-                INSERT INTO ordem_escala (aba, slot, militar_id, posicao)
-                VALUES %s ON CONFLICT DO NOTHING
-            """, rows)
-            conn.commit()
-            print(f"  ordem_escala {dia}: {len(rows)} entradas migradas")
-        else:
-            conn.rollback()
-            print(f"  ordem_escala {dia}: sem dados")
-    except Exception as e:
-        conn.rollback()
-        print(f"  ERRO ordem_escala {dia}: {e}")
 
 cur.close()
 conn.close()
