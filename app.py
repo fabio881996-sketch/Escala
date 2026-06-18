@@ -1961,10 +1961,25 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         return
     # Ordenar cronologicamente pelo início do horário
     df_sec = df_sec.copy()
+
+    # Normalizar nomes de colunas: 'indicativo' → 'indicativo rádio' se necessário
+    col_rename_map = {}
+    if 'indicativo' in df_sec.columns and 'indicativo rádio' not in df_sec.columns:
+        col_rename_map['indicativo'] = 'indicativo rádio'
+    if 'radio' in df_sec.columns and 'rádio' not in df_sec.columns:
+        col_rename_map['radio'] = 'rádio'
+    if col_rename_map:
+        df_sec = df_sec.rename(columns=col_rename_map)
+
     # Limpar 'nan' nas colunas extras antes de agrupar
     for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
         if col in df_sec.columns:
             df_sec[col] = df_sec[col].astype(str).replace({'nan': '', 'None': ''}).str.strip()
+
+    # Garantir que id_disp existe
+    if 'id_disp' not in df_sec.columns:
+        df_sec['id_disp'] = df_sec.get('id', pd.Series([''] * len(df_sec))).astype(str)
+
     df_sec['_hor_sort'] = pd.to_numeric(df_sec['horário'].str.extract(r'^(\d+)')[0], errors='coerce').fillna(99)
     df_sec = df_sec.sort_values(['_hor_sort', 'serviço'])
     st.markdown(_sec_header(titulo), unsafe_allow_html=True)
@@ -1973,16 +1988,22 @@ def mostrar_secao(titulo: str, df_sec: pd.DataFrame, mostrar_extras: bool = Fals
         for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
             if col in df_sec.columns and col not in excluir_cols:
                 cols_ag.append(col)
-        agg_dict: dict = {'id_disp': lambda x: ', '.join(x)}
-        ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
+        # Garantir que todas as colunas de groupby existem
+        cols_ag = [c for c in cols_ag if c in df_sec.columns]
+        agg_dict: dict = {'id_disp': lambda x: ', '.join(str(v) for v in x)}
+        try:
+            ag = df_sec.groupby(cols_ag, sort=False).agg(agg_dict).reset_index()
+        except Exception:
+            ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
+                       .apply(lambda x: ', '.join(str(v) for v in x)).reset_index()
         col_order = ['serviço', 'horário', 'id_disp']
         for col in ['indicativo rádio', 'rádio', 'viatura', 'giro', 'observações']:
             if col in ag.columns and col not in excluir_cols:
                 col_order.append(col)
-        ag = ag[col_order]
+        ag = ag[[c for c in col_order if c in ag.columns]]
     else:
         ag = df_sec.groupby(['serviço', 'horário'], sort=False)['id_disp'] \
-                   .apply(lambda x: ', '.join(x)).reset_index()
+                   .apply(lambda x: ', '.join(str(v) for v in x)).reset_index()
     ag = ag.rename(columns={
         'id_disp': 'Militares',
         'serviço': 'Serviço',
@@ -3731,9 +3752,6 @@ else:
 
                 # Remover linhas sem militar para a visualização na escala geral
                 df_at = _limpar_sem_militar(df_at)
-                # DEBUG temporário
-                if is_admin:
-                    st.caption(f"DEBUG: {len(df_at)} linhas, serviços: {df_at['serviço'].unique().tolist() if not df_at.empty else []}")
 
                 # Separar ausências primeiro (inclui férias, licenças, doentes, diligências)
                 df_aus, df_res = filtrar_secao(["férias", "licença", "convalescença"], df_at)
@@ -3778,10 +3796,6 @@ else:
                 mostrar_secao("Apoio ao Atendimento",      df_apoi,       esconder_servico=True)
 
                 # 3. Patrulhas
-                if is_admin:
-                    st.caption(f"DEBUG pat_ocorr: {len(df_pat_ocorr)} linhas")
-                    if not df_pat_ocorr.empty:
-                        st.dataframe(df_pat_ocorr[['id','serviço','horário','id_disp']].head(3))
                 mostrar_secao("Patrulha Ocorrências",      df_pat_ocorr,  mostrar_extras=True, esconder_servico=True)
                 mostrar_secao("Patrulhas",                 df_pat_outras, mostrar_extras=True)
 
