@@ -282,7 +282,11 @@ def get_pg_loader():
         import sys as _sys
         _sys.path.insert(0, '/mount/src/escala')
         _os.environ["DATABASE_URL"] = _db_url
-        from services.data_loader_pg import DataLoader as _DL_PG
+        # Importar da raiz do repo (data_loader_pg.py), não de services/
+        try:
+            from data_loader_pg import DataLoader as _DL_PG
+        except ImportError:
+            from services.data_loader_pg import DataLoader as _DL_PG
         return _DL_PG()
     except Exception as _e:
         import traceback
