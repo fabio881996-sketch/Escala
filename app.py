@@ -5862,6 +5862,31 @@ else:
                                 load_ordem_remunerados.clear()
                                 st.success(f"✅ ordem_remunerados: {len(_ins3)} militares migrados.")
 
+                            # ── ferias_2026 ──
+                            elif _aba_nome == "ferias_2026":
+                                with _pg3.connect(_db_url3) as _conn3:
+                                    with _conn3.cursor() as _cur3:
+                                        _cur3.execute("""CREATE TABLE IF NOT EXISTS ferias (
+                                            id SERIAL PRIMARY KEY, militar_id TEXT NOT NULL, ano INTEGER,
+                                            inicio TEXT, fim TEXT, dias INTEGER, periodo INTEGER, obs TEXT)""")
+                                        _cur3.execute("DELETE FROM ferias WHERE ano=2026")
+                                        _ins3 = []
+                                        for r in _rows3:
+                                            _mid = str(r.get('id','')).strip()
+                                            if not _mid or _mid == 'nan': continue
+                                            for _n in range(1, 9):
+                                                _ini = str(r.get(f'p{_n}_ini','')).strip()
+                                                _fim = str(r.get(f'p{_n}_fim','')).strip()
+                                                _dias = str(r.get(f'dias_{_n}','')).strip()
+                                                if not _ini or _ini == 'nan': continue
+                                                try: _dias_int = int(float(_dias)) if _dias and _dias != 'nan' else 0
+                                                except: _dias_int = 0
+                                                _ins3.append((_mid, 2026, _ini, _fim or _ini, _dias_int, _n, ''))
+                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO ferias (militar_id, ano, inicio, fim, dias, periodo, obs) VALUES %s", _ins3)
+                                    _conn3.commit()
+                                load_ferias.clear()
+                                st.success(f"✅ ferias_2026: {len(_ins3)} períodos migrados.")
+
                             # ── historico_remunerados: inserção genérica ──
                             elif _aba_nome == "historico_remunerados":
                                 with _pg3.connect(_db_url3) as _conn3:
