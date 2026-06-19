@@ -6177,7 +6177,7 @@ else:
 
         for tab_l, (nome_display, tipo_bd) in zip(tabs_listas, _TIPOS.items()):
             with tab_l:
-                valores_atuais = _listas_atuais.get(nome_display, [])
+                valores_atuais = sorted(_listas_atuais.get(nome_display, []))
                 st.markdown(f"**{len(valores_atuais)} valores**")
 
                 for i, val in enumerate(valores_atuais):
@@ -6188,7 +6188,7 @@ else:
                         if st.button("🗑️", key=f"rm_{tipo_bd}_{i}", help=f"Remover {val}"):
                             try:
                                 _exec_lista(
-                                    "DELETE FROM servicos WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND LOWER(TRIM(tipo))=LOWER(TRIM(%s))",
+                                    "DELETE FROM servicos WHERE nome=%s AND LOWER(tipo)=LOWER(%s)",
                                     (val, tipo_bd)
                                 )
                                 load_listas.clear()
@@ -6210,10 +6210,15 @@ else:
                     if st.button("➕ Adicionar", key=f"btn_add_{tipo_bd}"):
                         if novo_val.strip():
                             try:
-                                _exec_lista(
-                                    "INSERT INTO servicos (nome, tipo, ordem) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                                    (novo_val.strip(), tipo_bd, len(valores_atuais))
-                                )
+                                # Verificar se já existe antes de inserir
+                                with _pg_l.connect(_db_url_l) as _cc:
+                                    with _cc.cursor() as _ccu:
+                                        _ccu.execute("SELECT COUNT(*) FROM servicos WHERE LOWER(nome)=LOWER(%s) AND LOWER(tipo)=LOWER(%s)", (novo_val.strip(), tipo_bd))
+                                        _exists = _ccu.fetchone()[0] > 0
+                                if _exists:
+                                    st.warning(f"'{novo_val.strip()}' já existe.")
+                                else:
+                                    _exec_lista("INSERT INTO servicos (nome, tipo) VALUES (%s, %s)", (novo_val.strip(), tipo_bd))
                                 load_listas.clear()
                                 st.success(f"✅ '{novo_val.strip()}' adicionado.")
                                 st.rerun()
