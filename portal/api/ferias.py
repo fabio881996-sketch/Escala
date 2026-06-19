@@ -55,15 +55,15 @@ async def minhas_ferias(current_user: dict = Depends(obter_user_atual)):
             return {"ano": ano, "periodos": [], "total_dias_uteis": 0}
 
         # Encontrar linha do utilizador
-        # PG: tabela ferias tem militar_id, ano, inicio, fim, dias, periodo
-        linha = df[df["id"].astype(str).str.strip() == u_id]
-        if linha.empty:
+        # PG: usar método específico para períodos individuais
+        periodos_raw = loader.carregar_ferias_periodos(ano, u_id)
+        if not periodos_raw:
             return {"ano": ano, "periodos": [], "total_dias_uteis": 0}
 
         periodos: list[dict[str, Any]] = []
         total_uteis = 0
 
-        for _, row in linha.sort_values("periodo").iterrows() if "periodo" in linha.columns else linha.iterrows():
+        for row in periodos_raw:
             ini_raw = str(row.get("inicio", "")).strip()
             fim_raw = str(row.get("fim", "")).strip()
             if not ini_raw or ini_raw == "nan":
