@@ -300,13 +300,37 @@ class DataLoader:
         if hit:
             return val
         rows = _query("""
-            SELECT f.militar_id AS id, u.nome, f.inicio, f.fim, f.dias, f.obs
+            SELECT f.militar_id AS id, u.nome, f.inicio, f.fim, f.dias, f.periodo
             FROM ferias f LEFT JOIN utilizadores u ON f.militar_id = u.id
-            WHERE f.ano = %s ORDER BY f.inicio
+            WHERE f.ano = %s ORDER BY f.militar_id, f.periodo
         """, (ano,))
-        df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
+        if not rows:
+            _cache.set(key, pd.DataFrame(), 300)
+            return pd.DataFrame()
+
+        # Pivotar: uma linha por militar com colunas p1_ini, p1_fim, dias_1, ...
+        from collections import defaultdict
+        militares = defaultdict(dict)
+        for r in rows:
+            mid = r["id"]
+            n = int(r["periodo"] or 1)
+            militares[mid][f"p{n}_ini"] = r["inicio"] or ""
+            militares[mid][f"p{n}_fim"] = r["fim"] or ""
+            militares[mid][f"dias_{n}"] = r["dias"] or 0
+            militares[mid]["id"] = mid
+            militares[mid]["nome"] = r["nome"] or ""
+
+        df = pd.DataFrame(list(militares.values()))
         _cache.set(key, df, 300)
         return df
+
+    def carregar_ferias_periodos(self, ano: int, militar_id: str) -> list:
+        """Devolve lista de períodos de férias de um militar — para o portal PWA."""
+        rows = _query("""
+            SELECT inicio, fim, dias, periodo
+            FROM ferias WHERE ano = %s AND militar_id = %s ORDER BY periodo
+        """, (ano, str(militar_id)))
+        return [dict(r) for r in rows] if rows else []
 
     # ── Licenças / Dispensas ──────────────────────────────────
     def carregar_licencas(self) -> pd.DataFrame:
