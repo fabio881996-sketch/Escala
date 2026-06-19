@@ -7,15 +7,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from core.database import GoogleSheetsClient
-from services.data_loader import DataLoader
 from portal.api.auth import obter_user_atual
+from services.data_loader_pg import DataLoader
 
 router = APIRouter()
 
 
 def get_loader() -> DataLoader:
-    return DataLoader(sheets_client=GoogleSheetsClient())
+    return DataLoader()
 
 
 def _parse_data(valor: str, ano: int) -> str | None:
@@ -56,48 +55,31 @@ async def minhas_ferias(current_user: dict = Depends(obter_user_atual)):
             return {"ano": ano, "periodos": [], "total_dias_uteis": 0}
 
         # Encontrar linha do utilizador
+        # PG: tabela ferias tem militar_id, ano, inicio, fim, dias, periodo
         linha = df[df["id"].astype(str).str.strip() == u_id]
         if linha.empty:
             return {"ano": ano, "periodos": [], "total_dias_uteis": 0}
 
-        row = linha.iloc[0]
-        cols = [str(c).strip() for c in df.columns]
-
         periodos: list[dict[str, Any]] = []
         total_uteis = 0
-        n = 1
 
-        while True:
-            col_ini  = next((c for c in cols if c.lower() == f"p{n}_ini"),  None)
-            col_fim  = next((c for c in cols if c.lower() == f"p{n}_fim"),  None)
-            col_dias = next((c for c in cols if c.lower() == f"dias_{n}"), None)
-
-            if not col_ini or not col_fim:
-                break
-
-            ini_raw = str(row.get(col_ini, "")).strip()
-            fim_raw = str(row.get(col_fim, "")).strip()
-
+        for _, row in linha.sort_values("periodo").iterrows() if "periodo" in linha.columns else linha.iterrows():
+            ini_raw = str(row.get("inicio", "")).strip()
+            fim_raw = str(row.get("fim", "")).strip()
             if not ini_raw or ini_raw == "nan":
-                break
-
+                continue
             ini_fmt = _parse_data(ini_raw, ano)
             fim_fmt = _parse_data(fim_raw, ano) if fim_raw and fim_raw != "nan" else ini_fmt
-
             if not ini_fmt:
-                n += 1
                 continue
-
             dias_uteis = 0
-            if col_dias:
-                try:
-                    dias_uteis = int(float(str(row.get(col_dias, 0))))
-                except (ValueError, TypeError):
-                    dias_uteis = 0
-
+            try:
+                dias_uteis = int(float(str(row.get("dias", 0))))
+            except (ValueError, TypeError):
+                dias_uteis = 0
+            n = int(row.get("periodo", len(periodos) + 1))
             dias_corr = _dias_corridos(ini_fmt, fim_fmt, ano)
             total_uteis += dias_uteis
-
             periodos.append({
                 "numero": n,
                 "inicio": ini_fmt,
@@ -105,7 +87,6 @@ async def minhas_ferias(current_user: dict = Depends(obter_user_atual)):
                 "dias_corridos": dias_corr,
                 "dias_uteis": dias_uteis,
             })
-            n += 1
 
         return {
             "ano": ano,
@@ -235,12 +216,14 @@ async def folgas_ics(token: str = None, current_user: dict = Depends(obter_user_
         df_folgas = loader.carregar_folgas(ano)
         grupos_folga = loader.carregar_grupos_folga()
 
-        # Feriados
+        # Feriados (PG devolve lista de date objects)
         feriados = []
         try:
-            df_fer = loader.carregar_feriados(ano)
-            if not df_fer.empty:
-                for _, r in df_fer.iterrows():
+            feriados_raw = loader.carregar_feriados(ano)
+            if isinstance(feriados_raw, list):
+                feriados = feriados_raw
+            elif hasattr(feriados_raw, 'iterrows'):
+                for _, r in feriados_raw.iterrows():
                     try:
                         feriados.append(datetime.strptime(str(r.get("data", "")), "%d-%m").replace(year=ano).date())
                     except Exception:
