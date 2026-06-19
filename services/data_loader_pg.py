@@ -402,7 +402,7 @@ class DataLoader:
         if hit:
             return val
         try:
-            rows = _query("SELECT id, fds, grupo, servico AS servico FROM folgas")
+            rows = _query("SELECT militar_id AS id, fds, grupo, servico AS servico FROM folgas")
             df = pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
             if not df.empty:
                 # Normalizar nome da coluna serviço
