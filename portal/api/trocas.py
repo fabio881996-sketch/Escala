@@ -249,12 +249,19 @@ async def disponiveis(
             )]
             for _, row in minha_linha.iterrows():
                 sv = str(row.get("serviço","")).strip()
-                # Ignorar remunerado se cedeu, ou sempre ignorar remunerado para meu_servico
-                if re.search(r"remun|gratif", sv.lower()):
-                    continue
-                meu_servico = sv
-                meu_horario = str(row.get("horário","")).strip()
-                break
+                # Para dar_remunerado, queremos mostrar o serviço remunerado
+                if tipo == "dar_remunerado":
+                    if re.search(r"remun|gratif", sv.lower()):
+                        meu_servico = sv
+                        meu_horario = str(row.get("horário","")).strip()
+                        break
+                else:
+                    # Nos outros tipos ignorar remunerado para meu_servico
+                    if re.search(r"remun|gratif", sv.lower()):
+                        continue
+                    meu_servico = sv
+                    meu_horario = str(row.get("horário","")).strip()
+                    break
 
         # ── Filtrar disponíveis consoante o tipo ──
         disponiveis_lista = []
