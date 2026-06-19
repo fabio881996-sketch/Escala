@@ -364,21 +364,25 @@ class DataLoader:
 
     # ── Grupos de folga ───────────────────────────────────────
     def carregar_grupos_folga(self) -> dict:
+        """Carrega grupos de folga.
+        Devolve dict com duas estruturas:
+        - 'folgas': {'I': {'semanal': ['05-01','10-01',...], 'complementar': ['22-01',...]}, ...}
+        - 'grupos': {'I': [militar_ids...], 'II': [...]} — construído do df_folgas
+        """
         val, hit = _cache.get("grupos_folga")
         if hit:
             return val
-        # Fallback para Sheets se não estiver no PG
         try:
-            rows = _query("SELECT militar_id, grupo FROM grupos_folga")
-            grupos: dict = {}
+            rows = _query("SELECT grupo, folga_semanal, folga_complementar FROM grupos_folga ORDER BY grupo")
+            folgas = {}
             for r in rows:
                 g = r["grupo"]
-                if g not in grupos:
-                    grupos[g] = []
-                grupos[g].append(r["militar_id"])
-            result = {"grupos": grupos}
+                fs = [d.strip() for d in (r["folga_semanal"] or "").split(";") if d.strip()]
+                fc = [d.strip() for d in (r["folga_complementar"] or "").split(";") if d.strip()]
+                folgas[g] = {"semanal": fs, "complementar": fc}
+            result = {"folgas": folgas, "grupos": {}}
         except Exception:
-            result = {"grupos": {}}
+            result = {"folgas": {}, "grupos": {}}
         _cache.set("grupos_folga", result, 3600)
         return result
 
