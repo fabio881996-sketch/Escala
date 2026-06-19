@@ -656,106 +656,58 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
     """Determina se um militar tem folga num dado dia.
     Devolve 'Folga Semanal', 'Folga Complementar' ou '' se não tiver folga.
 
-    Lógica baseada nos grupos de folga (A, B, C, D, ...):
-    - Cada grupo folga em dias diferentes da semana de forma rotativa
-    - df_folgas: DataFrame com colunas 'id', 'grupo', 'dia_folga' (opcional)
-    - grupos_folga: dict {'grupos': {'A': [ids...], 'B': [ids...], ...}}
+    Usa:
+    - df_folgas: tem colunas 'id', 'fds', 'grupo', 'serviço'
+    - grupos_folga: {'folgas': {'I': {'semanal': ['05-01',...], 'complementar': ['22-01',...]}, ...}}
     """
     if feriados_list is None:
         feriados_list = []
 
     # Converter data para date
+    from datetime import date as _date
     if hasattr(data, 'date'):
         d = data.date()
-    elif hasattr(data, 'strftime'):
+    elif isinstance(data, _date):
         d = data
     else:
         try:
-            d = datetime.strptime(str(data), '%d-%m').replace(year=datetime.now().year).date()
+            from datetime import datetime as _dt
+            d = _dt.strptime(str(data), '%d-%m').replace(year=_dt.now().year).date()
         except Exception:
             return ''
 
     mid = str(mid).strip()
+    dia_str = d.strftime('%d-%m')
+    is_fds = d.weekday() >= 5  # sábado ou domingo
 
-    # 1. Verificar em df_folgas (aba folgas_2026) se tem registo direto
-    if not df_folgas.empty:
-        cols = df_folgas.columns.tolist()
-        col_id = 'id' if 'id' in cols else cols[0]
-        linha = df_folgas[df_folgas[col_id].astype(str).str.strip() == mid]
-        if not linha.empty:
-            row = linha.iloc[0]
-            # Verificar se tem coluna de data de folga
-            for col_data in ['data', 'dia', 'date']:
-                if col_data in cols:
-                    val_data = str(row.get(col_data, '')).strip()
-                    if val_data and val_data != 'nan':
-                        try:
-                            if '/' in val_data:
-                                d_folga = datetime.strptime(val_data, '%d/%m/%Y').date()
-                            elif '-' in val_data and len(val_data) > 5:
-                                d_folga = datetime.strptime(val_data, '%Y-%m-%d').date()
-                            else:
-                                d_folga = datetime.strptime(val_data, '%d-%m').replace(year=d.year).date()
-                            if d_folga == d:
-                                tipo = str(row.get('tipo', row.get('serviço', 'Folga Semanal'))).strip()
-                                return tipo if tipo and tipo != 'nan' else 'Folga Semanal'
-                        except Exception:
-                            pass
-
-    # 2. Verificar por grupo de folga rotativo
-    grupos = grupos_folga.get('grupos', {}) if isinstance(grupos_folga, dict) else {}
-    if not grupos:
+    # Encontrar dados do militar no df_folgas
+    if df_folgas.empty:
         return ''
 
-    # Encontrar grupo do militar
-    grupo_mil = None
-    for grupo, ids in grupos.items():
-        if mid in [str(i).strip() for i in ids]:
-            grupo_mil = str(grupo).strip().upper()
-            break
-
-    if not grupo_mil:
+    col_id = 'id' if 'id' in df_folgas.columns else ('militar_id' if 'militar_id' in df_folgas.columns else df_folgas.columns[0])
+    linha = df_folgas[df_folgas[col_id].astype(str).str.strip() == mid]
+    if linha.empty:
         return ''
 
-    # Dia da semana (0=segunda, 6=domingo)
-    weekday = d.weekday()
-    is_weekend = weekday >= 5  # sábado ou domingo
-    is_feriado = d in feriados_list
+    row = linha.iloc[0]
+    fds_val = str(row.get('fds', '')).strip().lower()
+    grupo = str(row.get('grupo', '')).strip()
 
-    # Grupos ordenados
-    grupos_ordenados = sorted(grupos.keys())
-    n_grupos = len(grupos_ordenados)
-    if n_grupos == 0:
-        return ''
+    # Folga Complementar — fds=sim e dia é fim de semana ou feriado
+    if fds_val == 'sim' and (is_fds or d in feriados_list):
+        return 'Folga Complementar'
 
-    try:
-        idx_grupo = grupos_ordenados.index(grupo_mil)
-    except ValueError:
-        return ''
-
-    # Rotação semanal: cada grupo folga num dia diferente
-    # Semana de referência: segunda da semana actual
-    from datetime import timedelta as _td
-    segunda = d - _td(days=weekday)
-    # Número da semana desde época
-    semana_num = (segunda - datetime(2024, 1, 1).date()).days // 7
-
-    # Qual grupo folga hoje? Rotação por dia útil (seg-sex) e fins de semana fixos
-    if is_weekend or is_feriado:
-        # Folga complementar rotativa ao fim de semana
-        # Grupo que folga neste fim de semana = (semana_num + offset_sabado) % n_grupos
-        offset = semana_num % n_grupos
-        grupo_folga_fds = grupos_ordenados[offset]
-        grupo_folga_fds2 = grupos_ordenados[(offset + 1) % n_grupos]
-        if grupo_mil in [grupo_folga_fds, grupo_folga_fds2]:
-            return 'Folga Complementar'
-    else:
-        # Dias úteis: folga semanal rotativa
-        # Cada dia da semana (0-4) = um grupo diferente
-        dia_offset = (semana_num * 5 + weekday) % n_grupos
-        grupo_folga_hoje = grupos_ordenados[dia_offset]
-        if grupo_mil == grupo_folga_hoje:
+    # Folga Semanal — verificar nas datas do grupo
+    if grupo:
+        folgas_dict = grupos_folga.get('folgas', {})
+        datas_grupo = folgas_dict.get(grupo, {})
+        datas_semanal = datas_grupo.get('semanal', [])
+        if dia_str in datas_semanal:
             return 'Folga Semanal'
+        # Também verificar Folga Complementar pelas datas do grupo
+        datas_comp = datas_grupo.get('complementar', [])
+        if dia_str in datas_comp:
+            return 'Folga Complementar'
 
     return ''
 
@@ -5907,17 +5859,33 @@ else:
                                     _conn3.commit()
                                 st.success(f"✅ historico_remunerados: {len(_ins3)} linhas inseridas.")
 
-                            # ── grupos_folga: id, grupo ──
+                            # ── grupos_folga: grupo, folga_semanal (datas), folga_complementar (datas) ──
                             elif _aba_nome == "grupos_folga":
+                                # Estrutura da Sheet: grupo | Folga Semanal (datas DD-MM;...) | Folga Complementar (datas DD-MM;...)
+                                _hdrs_orig3 = [str(h).strip() for h in _vals3[0]]
                                 with _pg3.connect(_db_url3) as _conn3:
                                     with _conn3.cursor() as _cur3:
                                         _cur3.execute("""CREATE TABLE IF NOT EXISTS grupos_folga (
-                                            id SERIAL PRIMARY KEY, militar_id TEXT, grupo TEXT)""")
+                                            id SERIAL PRIMARY KEY,
+                                            grupo TEXT NOT NULL,
+                                            folga_semanal TEXT,
+                                            folga_complementar TEXT)""")
+                                        _cur3.execute("CREATE UNIQUE INDEX IF NOT EXISTS grupos_folga_grupo_idx ON grupos_folga (grupo)")
                                         _cur3.execute("DELETE FROM grupos_folga")
-                                        _ins3 = [(r.get("id","") or r.get("militar_id",""), r.get("grupo","")) for r in _rows3 if (r.get("id","") or r.get("militar_id",""))]
-                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO grupos_folga (militar_id, grupo) VALUES %s", _ins3)
+                                        _ins3 = []
+                                        # Encontrar colunas
+                                        _ci_grupo = next((i for i,h in enumerate(_hdrs_orig3) if 'grupo' in h.lower()), 0)
+                                        _ci_sem   = next((i for i,h in enumerate(_hdrs_orig3) if 'semanal' in h.lower()), 1)
+                                        _ci_comp  = next((i for i,h in enumerate(_hdrs_orig3) if 'complementar' in h.lower()), 2)
+                                        for _row3 in _vals3[1:]:
+                                            _g = str(_row3[_ci_grupo]).strip() if _ci_grupo < len(_row3) else ''
+                                            if not _g or _g.lower() == 'nan': continue
+                                            _fs = str(_row3[_ci_sem]).strip() if _ci_sem < len(_row3) else ''
+                                            _fc = str(_row3[_ci_comp]).strip() if _ci_comp < len(_row3) else ''
+                                            _ins3.append((_g, _fs or None, _fc or None))
+                                        if _ins3: _pgx3.execute_values(_cur3, "INSERT INTO grupos_folga (grupo, folga_semanal, folga_complementar) VALUES %s ON CONFLICT (grupo) DO UPDATE SET folga_semanal=EXCLUDED.folga_semanal, folga_complementar=EXCLUDED.folga_complementar", _ins3)
                                     _conn3.commit()
-                                st.success(f"✅ grupos_folga: {len(_ins3)} linhas inseridas.")
+                                st.success(f"✅ grupos_folga: {len(_ins3)} grupos migrados com datas de folga.")
 
                             # ── folgas_2026: id, fds, grupo, serviço ──
                             elif _aba_nome == "folgas_2026":
