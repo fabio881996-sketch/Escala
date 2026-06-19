@@ -693,18 +693,17 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
     fds_val = str(row.get('fds', '')).strip().lower()
     grupo = str(row.get('grupo', '')).strip()
 
-    # Folga Complementar — fds=sim e dia é fim de semana ou feriado
+    # fds=sim → Folga Semanal apenas em sábado, domingo ou feriado
     if fds_val == 'sim' and (is_fds or d in feriados_list):
-        return 'Folga Complementar'
+        return 'Folga Semanal'
 
-    # Folga Semanal — verificar nas datas do grupo
+    # fds=não → folga determinada pelas datas do grupo
     if grupo:
         folgas_dict = grupos_folga.get('folgas', {})
         datas_grupo = folgas_dict.get(grupo, {})
         datas_semanal = datas_grupo.get('semanal', [])
         if dia_str in datas_semanal:
             return 'Folga Semanal'
-        # Também verificar Folga Complementar pelas datas do grupo
         datas_comp = datas_grupo.get('complementar', [])
         if dia_str in datas_comp:
             return 'Folga Complementar'
