@@ -276,8 +276,10 @@ const TrocasPage = {
                 alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens serviço escalado neste dia.</div>`;
             } else if (tipo === 'folga' && meu_servico && !meu_servico.toLowerCase().includes('folga')) {
                 alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens folga neste dia (tens: ${meu_servico}).</div>`;
-            } else if ((tipo === 'dar_remunerado') && meu_servico && !/(remun|gratif)/i.test(meu_servico)) {
-                alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens remunerado neste dia.</div>`;
+            } else if (tipo === 'dar_remunerado' && (!meu_servico || !/(remun|gratif|svç rem)/i.test(meu_servico))) {
+                alertaMeuServico = `<div class="alert alert-warning">⚠️ Não tens remunerado neste dia para ceder.</div>`;
+            } else if (tipo === 'fazer_remunerado' && meu_servico && /(remun|gratif|svç rem)/i.test(meu_servico)) {
+                alertaMeuServico = `<div class="alert alert-warning">⚠️ Já tens remunerado neste dia.</div>`;
             }
 
             const meuServicoHTML = meu_servico

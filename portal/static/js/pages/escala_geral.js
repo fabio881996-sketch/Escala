@@ -41,6 +41,26 @@ const EscalaGeralPage = {
         }
     },
 
+    _abrevPosto(nomeCompleto) {
+        const map = {
+            'Guarda Pr.': 'Grd Pr.', 'Guarda Principal': 'Grd Pr.',
+            'Guarda': 'Grd', 'Cabo Chefe': 'Cb Ch.', 'Cabo Mor': 'Cb Mr.',
+            'Cabo': 'Cb', 'Furriel': 'Fur.', 'Sargento-Ajudante': 'Sarg. Aj.',
+            'Sargento-Mor': 'Sarg. Mr.', '2º Sargento': '2º Sarg.',
+            '1º Sargento': '1º Sarg.', 'Sargento': 'Sarg.',
+            'Alferes': 'Alf.', 'Tenente': 'Ten.', 'Capitão': 'Cap.',
+            'Major': 'Maj.', 'Tenente-Coronel': 'Ten. Cor.', 'Coronel': 'Cor.',
+        };
+        let nome = nomeCompleto || '';
+        for (const [posto, abrev] of Object.entries(map)) {
+            if (nome.startsWith(posto + ' ') || nome === posto) {
+                nome = abrev + ' ' + nome.slice(posto.length).trim();
+                break;
+            }
+        }
+        return nome.trim();
+    },
+
     // Ordena linhas cronologicamente pelo horário (ex: "08-16" → hora de início)
     sortHorario(linhas) {
         const ordem = { '00': 0, '07': 1, '08': 2, '09': 3, '15': 4, '16': 5, '20': 6 };
@@ -138,7 +158,7 @@ const EscalaGeralPage = {
                 const obs = e['observacoes'] || e['observações'] || e['obs'] || '';
                 const key = obs ? `${h}||${obs}` : h;
                 if (!mapa[key]) mapa[key] = { h, obs, nomes:[], vtrs:[] };
-                const nomeMil = e['nome_fmt'] || e['id'] || '';
+                const nomeMil = this._abrevPosto(e['nome_fmt'] || e['id'] || '');
                 const trocaCom = e['troca_com'] || '';
                 mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
                 if (e['viatura'] && e['viatura'] !== 'nan' && !mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']);
@@ -180,7 +200,7 @@ const EscalaGeralPage = {
                 // Incluir observação na chave para distinguir grupos com mesmo horário/serviço mas obs diferente
                 const key = comServico ? `${h}||${sv}` : (obs ? `${h}||${obs}` : h);
                 if (!mapa[key]) mapa[key] = { h, sv, obs, nomes:[], vtr:'', rad:'', ind:'' };
-                const nomeMil = e['nome_fmt'] || e['id'] || '';
+                const nomeMil = this._abrevPosto(e['nome_fmt'] || e['id'] || '');
                 const trocaCom = e['troca_com'] || '';
                 mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
                 if (e['viatura'] && e['viatura'] !== 'nan') { if(!mapa[key].vtrs) mapa[key].vtrs=[]; if(!mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']); mapa[key].vtr = mapa[key].vtrs.join(' / '); }
