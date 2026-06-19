@@ -47,46 +47,46 @@ const TrocasPage = {
                 return;
             }
 
-            const _horFim = (serv) => {
-                const m = serv?.match(/\((\d{2})-(\d{2})\)/);
-                return m ? parseInt(m[2]) : null;
-            };
-            const _horIni = (serv) => {
-                const m = serv?.match(/\((\d{2})-(\d{2})\)/);
-                return m ? parseInt(m[1]) : null;
-            };
-            const _consecutivo = (servFim, servIni) => {
-                const fim = _horFim(servFim);
-                const ini = _horIni(servIni);
-                if (fim === null || ini === null) return false;
-                return (fim === 0 && ini === 0) || (fim === 16 && ini === 0) || (fim === 8 && ini === 16);
-            };
-
             el.innerHTML = trocas.map(t => {
-                // Usar avisos do backend (mais precisos)
+                // Avisos de consecutivos do backend
                 const avisosList = t.avisos_consecutivos || [];
-                let avisos = avisosList.map(a =>
-                    `<div style="background:#fef3c7;border-left:3px solid #f59e0b;padding:6px 10px;border-radius:6px;margin-top:8px;font-size:.78rem">${a}</div>`
-                ).join('');
+                const avisos = avisosList.map(a => `
+                    <div style="background:#fff7e6;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:.8rem;color:#92400e">
+                        ⚠️ ${a}
+                    </div>`).join('');
+
+                // Após troca: origem fica com serv_dest, destino fica com serv_orig
+                const servOrigFmt  = t.servico_origem  || '—';
+                const servDestFmt  = t.servico_destino || '—';
+
                 return `
                 <div class="card card-amber">
-                    <div class="card-label">⚖️ Aguarda validação • ${t.data}</div>
-                    <div class="card-title">🔄 Troca de Serviço</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-                        <div style="background:var(--bg-secondary);padding:8px;border-radius:8px;font-size:.82rem">
-                            <div style="font-weight:600;margin-bottom:4px">📤 ${t.nome_origem || t.id_origem}</div>
-                            <div>${t.servico_origem}</div>
+                    <div class="card-label">⚖️ AGUARDA VALIDAÇÃO • ${t.data}</div>
+                    <div class="card-title" style="margin-bottom:10px">🔄 Troca de Serviço</div>
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                        <!-- Militar que solicita -->
+                        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:700;color:#1d4ed8;letter-spacing:.05em;margin-bottom:6px">🙋 SOLICITA</div>
+                            <div style="font-weight:700;font-size:.85rem;color:#1e3a5f;margin-bottom:6px">${t.nome_origem || t.id_origem}</div>
+                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${servOrigFmt}</span></div>
+                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${servDestFmt}</span></div>
                         </div>
-                        <div style="background:var(--bg-secondary);padding:8px;border-radius:8px;font-size:.82rem">
-                            <div style="font-weight:600;margin-bottom:4px">📥 ${t.nome_destino || t.id_destino}</div>
-                            <div>${t.servico_destino}</div>
+                        <!-- Militar que aceita -->
+                        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:700;color:#16a34a;letter-spacing:.05em;margin-bottom:6px">✅ ACEITA</div>
+                            <div style="font-weight:700;font-size:.85rem;color:#1e3a5f;margin-bottom:6px">${t.nome_destino || t.id_destino}</div>
+                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${servDestFmt}</span></div>
+                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${servOrigFmt}</span></div>
                         </div>
                     </div>
+
                     ${avisos}
-                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:6px">📝 ${t.observacoes}</div>` : ''}
-                    <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" onclick="TrocasPage.validar(${t.__row_index || t.id}, 'aprovar', this)">✅ Aprovar</button>
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.validar(${t.__row_index || t.id}, 'rejeitar', this)">🚫 Rejeitar</button>
+                    ${t.observacoes ? `<div style="margin-top:8px;font-size:.8rem;color:#6b7280">📝 ${t.observacoes}</div>` : ''}
+
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+                        <button class="btn btn-success" onclick="TrocasPage.validar(${t.__row_index || t.id}, 'aprovar', this)">✅ Aprovar</button>
+                        <button class="btn btn-danger" onclick="TrocasPage.validar(${t.__row_index || t.id}, 'rejeitar', this)">🚫 Rejeitar</button>
                     </div>
                 </div>`;
             }).join('');
