@@ -4241,6 +4241,14 @@ else:
             todos_servicos = [''] + sorted(set(serv_headers))
 
             # ── Botão para carregar/resetar tabela ──
+            # DEBUG temporário
+            if not df_folgas.empty:
+                st.caption(f"DEBUG folgas: {len(df_folgas)} linhas, colunas: {list(df_folgas.columns)}, sample id: {df_folgas.iloc[0].get('id', df_folgas.iloc[0].get('militar_id','?'))}")
+            else:
+                st.caption("DEBUG folgas: VAZIO")
+            _gf = grupos_folga.get('folgas', {})
+            st.caption(f"DEBUG grupos_folga: {len(_gf)} grupos, keys: {list(_gf.keys())[:5]}")
+
             if st.button("📋 Carregar tabela do dia", key="btn_carregar_tabela", use_container_width=True):
                 # Ler escala do dia do PostgreSQL — IDs múltiplos já estão separados
                 mapa_existente = {}
@@ -5864,13 +5872,13 @@ else:
                                 _hdrs_orig3 = [str(h).strip() for h in _vals3[0]]
                                 with _pg3.connect(_db_url3) as _conn3:
                                     with _conn3.cursor() as _cur3:
-                                        _cur3.execute("""CREATE TABLE IF NOT EXISTS grupos_folga (
+                                        _cur3.execute("DROP TABLE IF EXISTS grupos_folga")
+                                        _cur3.execute("""CREATE TABLE grupos_folga (
                                             id SERIAL PRIMARY KEY,
                                             grupo TEXT NOT NULL,
                                             folga_semanal TEXT,
                                             folga_complementar TEXT)""")
-                                        _cur3.execute("CREATE UNIQUE INDEX IF NOT EXISTS grupos_folga_grupo_idx ON grupos_folga (grupo)")
-                                        _cur3.execute("DELETE FROM grupos_folga")
+                                        _cur3.execute("CREATE UNIQUE INDEX grupos_folga_grupo_idx ON grupos_folga (grupo)")
                                         _ins3 = []
                                         # Encontrar colunas
                                         _ci_grupo = next((i for i,h in enumerate(_hdrs_orig3) if 'grupo' in h.lower()), 0)
