@@ -4401,12 +4401,15 @@ else:
                         else:
                             # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
                             serv_defeito = ''
-                            if not df_folgas.empty and 'serviço' in df_folgas.columns:
-                                col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-                                linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
-                                if not linha_f.empty:
-                                    sv_f = str(linha_f.iloc[0].get('serviço', '')).strip()
-                                    if sv_f and sv_f != 'nan': serv_defeito = sv_f
+                            if not df_folgas.empty:
+                                # Suportar coluna com ou sem acento
+                                col_serv_f = 'serviço' if 'serviço' in df_folgas.columns else ('servico' if 'servico' in df_folgas.columns else None)
+                                col_id_f = 'id' if 'id' in df_folgas.columns else ('militar_id' if 'militar_id' in df_folgas.columns else df_folgas.columns[0])
+                                if col_serv_f:
+                                    linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
+                                    if not linha_f.empty:
+                                        sv_f = str(linha_f.iloc[0][col_serv_f]).strip()
+                                        if sv_f and sv_f.lower() != 'nan': serv_defeito = sv_f
                             dados = {'serviço': serv_defeito, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
 
                     linhas.append({
@@ -4708,11 +4711,13 @@ else:
                                 # ── Regra da Secretaria ──────────────────────────────────
                                 # Identificar militares da secretaria
                                 ids_secretaria = set()
-                                if not df_folgas.empty and 'serviço' in df_folgas.columns:
-                                    col_id_f = 'id' if 'id' in df_folgas.columns else df_folgas.columns[0]
-                                    for _, row_f in df_folgas.iterrows():
-                                        if norm(str(row_f.get('serviço', ''))) == 'secretaria':
-                                            ids_secretaria.add(str(row_f.get(col_id_f, '')).strip())
+                                if not df_folgas.empty:
+                                    _col_serv_sec = 'serviço' if 'serviço' in df_folgas.columns else ('servico' if 'servico' in df_folgas.columns else None)
+                                    _col_id_sec = 'id' if 'id' in df_folgas.columns else ('militar_id' if 'militar_id' in df_folgas.columns else df_folgas.columns[0])
+                                    if _col_serv_sec:
+                                        for _, row_f in df_folgas.iterrows():
+                                            if norm(str(row_f.get(_col_serv_sec, ''))) == 'secretaria':
+                                                ids_secretaria.add(str(row_f.get(_col_id_sec, '')).strip())
 
                                 # Contar secretaria disponíveis nesse dia
                                 # (não ausentes, não já indisponíveis por dispensa/férias)
