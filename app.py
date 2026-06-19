@@ -1317,9 +1317,10 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             return partes[0]
         return str(mid)
 
-    # Efetivo -- ordem da aba utilizadores
+    # Efetivo -- ordenado por ID numérico
     if not df_util.empty and 'id' in df_util.columns:
-        todos_ids = [str(r).strip() for r in df_util['id'] if str(r).strip() and str(r).strip() != 'nan']
+        _ids_raw = [str(r).strip() for r in df_util['id'] if str(r).strip() and str(r).strip() != 'nan']
+        todos_ids = sorted(_ids_raw, key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else 9999)
     else:
         todos_ids = sorted(set(
             str(r).strip() for r in df_raw['id']
@@ -5866,10 +5867,10 @@ else:
                             elif _aba_nome == "ferias_2026":
                                 with _pg3.connect(_db_url3) as _conn3:
                                     with _conn3.cursor() as _cur3:
-                                        _cur3.execute("""CREATE TABLE IF NOT EXISTS ferias (
+                                        _cur3.execute("DROP TABLE IF EXISTS ferias")
+                                        _cur3.execute("""CREATE TABLE ferias (
                                             id SERIAL PRIMARY KEY, militar_id TEXT NOT NULL, ano INTEGER,
                                             inicio TEXT, fim TEXT, dias INTEGER, periodo INTEGER, obs TEXT)""")
-                                        _cur3.execute("DELETE FROM ferias WHERE ano=2026")
                                         _ins3 = []
                                         for r in _rows3:
                                             _mid = str(r.get('id','')).strip()
