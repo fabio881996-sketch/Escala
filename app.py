@@ -4731,12 +4731,23 @@ else:
                                 # Ao escalar para atendimento, verificar que ainda sobra 1
                                 sec_escalados_atend = set()  # conta quantos da sec já foram escalados
 
+                                # Mapeamento nome_longo → abreviatura (para lookup na ordem_g)
+                                _slot_to_abrev = {
+                                    'Atendimento 00-08': 'A1', 'Atendimento 08-16': 'A2', 'Atendimento 16-24': 'A3',
+                                    'Patrulha Ocorrências 00-08': 'PO1', 'Patrulha Ocorrências 08-16': 'PO2', 'Patrulha Ocorrências 16-24': 'PO3',
+                                    'Apoio Atendimento 08-16': 'AA2', 'Apoio Atendimento 16-24': 'AA3',
+                                }
                                 for servico, horario, num in SLOTS_AJUSTADOS:
-                                    col_key = f"{servico} {horario}"
+                                    col_key_longo = f"{servico} {horario}"
+                                    # Tentar abreviatura primeiro, depois nome longo
+                                    col_key = _slot_to_abrev.get(col_key_longo, col_key_longo)
                                     if col_key not in ordem_g:
-                                        if servico == "Atendimento" and horario == "00-08":
-                                            st.warning(f"⚠️ A1: coluna '{col_key}' não existe. Colunas: {list(ordem_g.keys())}")
-                                        continue
+                                        # Tentar também pelo nome longo directamente
+                                        if col_key_longo in ordem_g:
+                                            col_key = col_key_longo
+                                        else:
+                                            st.warning(f"⚠️ Slot '{col_key_longo}' ({col_key}) não encontrado. Colunas: {list(ordem_g.keys())}")
+                                            continue
                                     colocados = []
                                     for mid in ordem_g[col_key]:
                                         if len(colocados) >= num: break
@@ -4798,7 +4809,7 @@ else:
 
                                 st.session_state['tabela_escala'] = list(novas_linhas.values())
                                 st.session_state['ordem_gerada'] = ordem_g
-                                st.session_state['ordem_headers_gerada'] = ordem_headers_g
+                                st.session_state['ordem_headers_gerada'] = list(ordem_g.keys())
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Erro ao gerar: {e}")
