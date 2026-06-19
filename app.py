@@ -6145,3 +6145,78 @@ else:
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao remover: {e}")
+
+    elif menu == "📋 Gerir Listas":
+        st.title("📋 Gerir Listas")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        import psycopg2 as _pg_l, psycopg2.extras as _pgx_l
+        _db_url_l = str(st.secrets.get("DATABASE_URL", ""))
+
+        def _exec_lista(sql, params=()):
+            with _pg_l.connect(_db_url_l) as _c:
+                with _c.cursor() as _cu:
+                    _cu.execute(sql, params)
+                _c.commit()
+
+        _listas_atuais = load_listas()
+
+        _TIPOS = {
+            'Horário':    'horário',
+            'Rádio':      'rádio',
+            'Indicativo': 'indicativo',
+            'Viatura':    'viatura',
+            'Giro':       'giro',
+            'Serviço':    'serviço',
+        }
+
+        tabs_listas = st.tabs(list(_TIPOS.keys()))
+
+        for tab_l, (nome_display, tipo_bd) in zip(tabs_listas, _TIPOS.items()):
+            with tab_l:
+                valores_atuais = _listas_atuais.get(nome_display, [])
+                st.markdown(f"**{len(valores_atuais)} valores**")
+
+                for i, val in enumerate(valores_atuais):
+                    col_v, col_r = st.columns([5, 1])
+                    with col_v:
+                        st.text(val)
+                    with col_r:
+                        if st.button("🗑️", key=f"rm_{tipo_bd}_{i}", help=f"Remover {val}"):
+                            try:
+                                _exec_lista(
+                                    "DELETE FROM servicos WHERE LOWER(TRIM(nome))=LOWER(TRIM(%s)) AND LOWER(TRIM(tipo))=LOWER(TRIM(%s))",
+                                    (val, tipo_bd)
+                                )
+                                load_listas.clear()
+                                st.success(f"✅ '{val}' removido.")
+                                st.rerun()
+                            except Exception as _e_rm:
+                                st.error(f"Erro ao remover: {_e_rm}")
+
+                if not valores_atuais:
+                    st.info("Sem valores. Adiciona abaixo.")
+
+                st.markdown("---")
+                col_add1, col_add2 = st.columns([3, 1])
+                with col_add1:
+                    novo_val = st.text_input("Novo valor", key=f"add_{tipo_bd}",
+                                            placeholder="ex: 09-17" if tipo_bd == 'horário' else "novo valor")
+                with col_add2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("➕ Adicionar", key=f"btn_add_{tipo_bd}"):
+                        if novo_val.strip():
+                            try:
+                                _exec_lista(
+                                    "INSERT INTO servicos (nome, tipo, ordem) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+                                    (novo_val.strip(), tipo_bd, len(valores_atuais))
+                                )
+                                load_listas.clear()
+                                st.success(f"✅ '{novo_val.strip()}' adicionado.")
+                                st.rerun()
+                            except Exception as _e_add:
+                                st.error(f"Erro ao adicionar: {_e_add}")
+                        else:
+                            st.warning("Escreve um valor primeiro.")
