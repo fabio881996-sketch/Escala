@@ -4756,7 +4756,7 @@ else:
                                         elif mid in ids_escalados_g: motivo = 'ja_escalado'
                                         elif mid in sec_disponiveis and _e_atendimento(servico) and (len(sec_disponiveis) - len(sec_escalados_atend) <= 1): motivo = 'reservado_secretaria'
                                         elif militar_tem_dispensa_slot(mid, d_gerar, df_licencas, servico, horario): motivo = 'dispensa_slot'
-                                        elif servico not in militares_servicos.get(mid, []): motivo = f'sem_servico:{militares_servicos.get(mid,[])}'
+                                        elif militares_servicos and servico not in militares_servicos.get(mid, []): motivo = f'sem_servico:{militares_servicos.get(mid,[])}'
                                         elif horario == '00-08' and (servico == 'Atendimento' or servico == 'Patrulha Ocorrências') and militar_de_ferias(mid, d_gerar - timedelta(days=1), df_ferias, feriados): motivo = 'vem_de_ferias'
                                         else:
                                             ini_novo, _ = _parse_horario(horario)
