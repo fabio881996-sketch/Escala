@@ -617,6 +617,35 @@ def carregar_feriados(ano: int) -> list:
         _date(ano,11,1), _date(ano,12,1), _date(ano,12,8), _date(ano,12,25),
     ]
 
+def _parse_data_ferias(valor: str, ano: int):
+    """Converte data de férias (MM/DD, DD/MM, DD-MM, etc.) para date."""
+    from datetime import date as _date
+    v = str(valor).strip()
+    if not v or v in ('', 'nan', 'None'):
+        return None
+    for fmt in ('%m/%d', '%d/%m', '%m-%d', '%d-%m', '%d/%m/%Y', '%Y-%m-%d'):
+        try:
+            from datetime import datetime as _dt
+            d = _dt.strptime(v, fmt)
+            return _date(ano if d.year == 1900 else d.year, d.month, d.day)
+        except ValueError:
+            continue
+    return None
+
+
+def _fim_ferias_real(fim_d, feriados_list: list):
+    """Estende o fim das férias por fds e feriados consecutivos."""
+    from datetime import timedelta as _td
+    d = fim_d
+    while True:
+        prox = d + _td(days=1)
+        if prox.weekday() >= 5 or prox in feriados_list:
+            d = prox
+        else:
+            break
+    return d
+
+
 def militar_de_ferias(u_id: str, data, df_ferias: pd.DataFrame, feriados_list: list = None) -> bool:
     """Verifica se um militar está de férias numa data (incluindo extensão de fds e feriados)."""
     if df_ferias.empty:
