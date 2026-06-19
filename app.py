@@ -2348,6 +2348,7 @@ else:
             "⚙️ Gerar Escala",
             "📢 Publicar Escala",
             "👤 Gerir Utilizadores",
+            "📋 Gerir Listas",
         ]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
