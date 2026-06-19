@@ -4302,7 +4302,15 @@ else:
                                         'observações': d_multi['observações'],
                                     })
 
-                for _, row_u in df_util.iterrows():
+                # Ordenar por ID numérico
+                def _sort_id(r):
+                    try: return int(''.join(filter(str.isdigit, str(r.get('id','')))))
+                    except: return 9999
+                df_util_sorted = df_util.copy()
+                df_util_sorted['_sort'] = df_util_sorted.apply(_sort_id, axis=1)
+                df_util_sorted = df_util_sorted.sort_values('_sort').drop(columns=['_sort'])
+
+                for _, row_u in df_util_sorted.iterrows():
                     mid = str(row_u.get('id', '')).strip()
                     if not mid or mid == 'nan':
                         continue
@@ -4311,10 +4319,11 @@ else:
 
                     # Verificar férias e dispensas — aparecem na tabela com serviço preenchido
                     serv_ferias_disp = ''
-                    if militar_de_ferias(mid, d_gerar, df_ferias, feriados):
+                    d_gerar_date = d_gerar if hasattr(d_gerar, 'year') and not hasattr(d_gerar, 'hour') else d_gerar.date()
+                    if militar_de_ferias(mid, d_gerar_date, df_ferias, feriados):
                         serv_ferias_disp = 'Férias'
                     else:
-                        _lic = militar_de_licenca(mid, d_gerar, df_licencas)
+                        _lic = militar_de_licenca(mid, d_gerar_date, df_licencas)
                         if _lic:
                             # militar_de_licenca devolve 'Tipo|obs' ou 'Tipo'
                             serv_ferias_disp = _lic.split('|')[0].strip() if '|' in _lic else _lic
