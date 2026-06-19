@@ -4241,14 +4241,6 @@ else:
             todos_servicos = [''] + sorted(set(serv_headers))
 
             # ── Botão para carregar/resetar tabela ──
-            # DEBUG temporário
-            if not df_folgas.empty:
-                st.caption(f"DEBUG folgas: {len(df_folgas)} linhas, colunas: {list(df_folgas.columns)}, sample id: {df_folgas.iloc[0].get('id', df_folgas.iloc[0].get('militar_id','?'))}")
-            else:
-                st.caption("DEBUG folgas: VAZIO")
-            _gf = grupos_folga.get('folgas', {})
-            st.caption(f"DEBUG grupos_folga: {len(_gf)} grupos, keys: {list(_gf.keys())[:5]}")
-
             if st.button("📋 Carregar tabela do dia", key="btn_carregar_tabela", use_container_width=True):
                 # Ler escala do dia do PostgreSQL — IDs múltiplos já estão separados
                 mapa_existente = {}
@@ -4315,13 +4307,21 @@ else:
                         continue
                     nome  = str(row_u.get('nome', '')).strip()
                     posto = str(row_u.get('posto', '')).strip()
-                    # Filtrar militares de férias e dispensas (não mostrar na tabela)
+
+                    # Verificar férias e dispensas — aparecem na tabela com serviço preenchido
+                    serv_ferias_disp = ''
                     if militar_de_ferias(mid, d_gerar, df_ferias, feriados):
-                        continue
-                    if militar_de_licenca(mid, d_gerar, df_licencas):
-                        continue
+                        serv_ferias_disp = 'Férias'
+                    else:
+                        _lic = militar_de_licenca(mid, d_gerar, df_licencas)
+                        if _lic:
+                            # militar_de_licenca devolve 'Tipo|obs' ou 'Tipo'
+                            serv_ferias_disp = _lic.split('|')[0].strip() if '|' in _lic else _lic
                     # Dados existentes, folgas, serviço por defeito ou vazio
-                    if mid in mapa_existente:
+                    if serv_ferias_disp:
+                        # Férias ou dispensa — mostrar directamente
+                        dados = {'serviço': serv_ferias_disp, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
+                    elif mid in mapa_existente:
                         lista_dados = mapa_existente[mid]
                         # Separar remunerados dos serviços normais
                         servs_normais = [d for d in lista_dados if not re.search(r'remu|grat', norm(d.get('serviço','')))]
