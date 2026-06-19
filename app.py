@@ -4400,6 +4400,7 @@ else:
                             dados = {'serviço': tipo_folga, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
                         else:
                             # Serviço por defeito da coluna 'serviço' em folgas_2026 (ex: Pronto, Inquéritos)
+                            # Secretaria NÃO é atribuída aqui — é resultado do algoritmo automático
                             serv_defeito = ''
                             if not df_folgas.empty:
                                 # Suportar coluna com ou sem acento
@@ -4409,7 +4410,8 @@ else:
                                     linha_f = df_folgas[df_folgas[col_id_f].astype(str).str.strip() == mid]
                                     if not linha_f.empty:
                                         sv_f = str(linha_f.iloc[0][col_serv_f]).strip()
-                                        if sv_f and sv_f.lower() != 'nan': serv_defeito = sv_f
+                                        if sv_f and sv_f.lower() != 'nan' and norm(sv_f) != 'secretaria':
+                                            serv_defeito = sv_f
                             dados = {'serviço': serv_defeito, 'horário': '', 'indicativo': '', 'rádio': '', 'giro': '', 'viatura': '', 'observações': ''}
 
                     linhas.append({
