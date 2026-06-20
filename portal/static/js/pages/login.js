@@ -3,6 +3,7 @@
 const LoginPage = {
     _pin: '',
     _erro: false,
+    _loading: false,
 
     render() {
         const appEl = document.getElementById('app');
@@ -31,12 +32,18 @@ const LoginPage = {
                                     transition:all 0.15s ease"></div>`).join('')}
                         </div>
 
+                        <!-- Spinner de loading -->
+                        <div id="pin-loading" style="display:none;text-align:center;margin-bottom:16px">
+                            <div style="display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);
+                                border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite"></div>
+                        </div>
+
                         <!-- Erro -->
                         <div id="pin-error" style="display:none;text-align:center;color:#fca5a5;
                             font-size:.8rem;margin-bottom:16px">PIN incorreto. Tenta novamente.</div>
 
                         <!-- Teclado -->
-                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                        <div id="pin-teclado" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
                             ${[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(n => `
                                 <button onclick="LoginPage._press('${n}')"
                                     style="aspect-ratio:1;border-radius:50%;border:none;font-size:1.4rem;font-weight:500;
@@ -56,13 +63,15 @@ const LoginPage = {
                     <p style="text-align:center;color:rgba(255,255,255,0.25);font-size:.7rem;margin-top:20px">© 2026 fferr</p>
                 </div>
             </div>
+            <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
         `;
         this._pin = '';
         this._erro = false;
+        this._loading = false;
     },
 
     _press(val) {
-        if (val === '') return;
+        if (val === '' || this._loading) return;
         const errEl = document.getElementById('pin-error');
 
         if (val === '⌫') {
@@ -87,6 +96,9 @@ const LoginPage = {
             if (this._erro) {
                 dot.style.background = '#EF4444';
                 dot.style.borderColor = '#EF4444';
+            } else if (this._loading) {
+                dot.style.background = 'rgba(255,255,255,0.4)';
+                dot.style.borderColor = 'rgba(255,255,255,0.4)';
             } else if (i < this._pin.length) {
                 dot.style.background = '#fff';
                 dot.style.borderColor = '#fff';
@@ -99,13 +111,27 @@ const LoginPage = {
 
     async _submit() {
         const errEl = document.getElementById('pin-error');
+        const loadEl = document.getElementById('pin-loading');
+        const tecladoEl = document.getElementById('pin-teclado');
+
+        // Mostrar loading, esconder teclado
+        this._loading = true;
+        this._updateDots();
+        if (loadEl) loadEl.style.display = 'block';
+        if (tecladoEl) tecladoEl.style.opacity = '0.4';
+        if (tecladoEl) tecladoEl.style.pointerEvents = 'none';
+
         try {
             await API.login(this._pin);
             App.initUI();
             Router.go('home');
         } catch(e) {
+            this._loading = false;
             this._erro = true;
             this._updateDots();
+            if (loadEl) loadEl.style.display = 'none';
+            if (tecladoEl) tecladoEl.style.opacity = '1';
+            if (tecladoEl) tecladoEl.style.pointerEvents = '';
             if (errEl) errEl.style.display = 'block';
             setTimeout(() => {
                 this._pin = '';
