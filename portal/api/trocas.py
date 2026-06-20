@@ -713,14 +713,21 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
             # No PostgreSQL, o id da troca é o identificador real
             real_row = int(row.get("id", idx)) if row.get("id") else int(idx)
 
+            import re as _re_hor
+            def _extrair_hor(sv):
+                m = _re_hor.search(r'\((\d{2}[-:]\d{2})\)', str(sv))
+                return m.group(1) if m else ''
+
             trocas.append({
                 "data":            data_str,
                 "id_origem":       id_orig,
                 "nome_origem":     nome_orig,
                 "servico_origem":  serv_orig,
+                "horario_origem":  _extrair_hor(serv_orig),
                 "id_destino":      id_dest,
                 "nome_destino":    nome_dest,
                 "servico_destino": serv_dest,
+                "horario_destino": _extrair_hor(serv_dest),
                 "observacoes":     str(row.get("observacoes", "")),
                 "data_pedido":     str(row.get("data_pedido", "")),
                 "data_aceitacao":  str(row.get("data_aceitacao", "")),
