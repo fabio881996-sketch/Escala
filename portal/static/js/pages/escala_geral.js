@@ -42,19 +42,31 @@ const EscalaGeralPage = {
     },
 
     _abrevPosto(nomeCompleto) {
-        const map = {
-            'Guarda Pr.': 'Grd Pr.', 'Guarda Principal': 'Grd Pr.',
-            'Guarda': 'Grd', 'Cabo Chefe': 'Cb Ch.', 'Cabo Mor': 'Cb Mr.',
-            'Cabo': 'Cb', 'Furriel': 'Fur.', 'Sargento-Ajudante': 'Sarg. Aj.',
-            'Sargento-Mor': 'Sarg. Mr.', '2º Sargento': '2º Sarg.',
-            '1º Sargento': '1º Sarg.', 'Sargento': 'Sarg.',
-            'Alferes': 'Alf.', 'Tenente': 'Ten.', 'Capitão': 'Cap.',
-            'Major': 'Maj.', 'Tenente-Coronel': 'Ten. Cor.', 'Coronel': 'Cor.',
-        };
+        // Substituições ordenadas do mais longo para o mais curto para evitar conflitos
+        const subs = [
+            ['Guarda Principal', 'Grd Pr.'],
+            ['Guarda Pr.', 'Grd Pr.'],
+            ['Cabo Chefe', 'Cb Ch.'],
+            ['Cabo Mor', 'Cb Mr.'],
+            ['Sargento-Ajudante', 'Sarg. Aj.'],
+            ['Sargento-Mor', 'Sarg. Mr.'],
+            ['2º Sargento', '2º Sarg.'],
+            ['1º Sargento', '1º Sarg.'],
+            ['Tenente-Coronel', 'Ten. Cor.'],
+            ['Sargento', 'Sarg.'],
+            ['Furriel', 'Fur.'],
+            ['Alferes', 'Alf.'],
+            ['Tenente', 'Ten.'],
+            ['Capitão', 'Cap.'],
+            ['Coronel', 'Cor.'],
+            ['Major', 'Maj.'],
+            ['Guarda', 'Grd'],
+            ['Cabo', 'Cb'],
+        ];
         let nome = nomeCompleto || '';
-        for (const [posto, abrev] of Object.entries(map)) {
-            if (nome.startsWith(posto + ' ') || nome === posto) {
-                nome = abrev + ' ' + nome.slice(posto.length).trim();
+        for (const [posto, abrev] of subs) {
+            if (nome.includes(posto)) {
+                nome = nome.split(posto).join(abrev);
                 break;
             }
         }

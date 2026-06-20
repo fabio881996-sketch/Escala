@@ -56,8 +56,9 @@ const TrocasPage = {
                     </div>`).join('');
 
                 // Após troca: origem fica com serv_dest, destino fica com serv_orig
-                const servOrigFmt  = t.servico_origem  || '—';
-                const servDestFmt  = t.servico_destino || '—';
+                const _fmt = (sv, hor) => sv && hor ? `${sv} (${hor})` : (sv || '—');
+                const servOrigFmt  = _fmt(t.servico_origem,  t.horario_origem);
+                const servDestFmt  = _fmt(t.servico_destino, t.horario_destino);
 
                 return `
                 <div class="card card-amber">
