@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 from config.settings import ADMINS, get_secret
 from core.auth import verify_pin
-from services.data_loader_pg import DataLoader
 
 router = APIRouter()
 
@@ -68,7 +67,8 @@ def obter_admin(current_user: dict = Depends(obter_user_atual)) -> dict:
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """Login só por PIN — percorre todos os utilizadores e encontra o match."""
     try:
-        loader = DataLoader()
+        from services.data_loader_factory import get_data_loader
+        loader = get_data_loader()
         df_util = loader.carregar_usuarios()
     except Exception:
         raise HTTPException(status_code=503, detail="Erro ao ligar ao servidor")
