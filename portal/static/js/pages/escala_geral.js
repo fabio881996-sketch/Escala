@@ -108,7 +108,7 @@ const EscalaGeralPage = {
 
         for (const e of entradas) {
             const sv = (e['serviço'] || '').toLowerCase().trim();
-            const nome = e['nome_fmt'] || e['id'] || '';
+            const nome = this._abrevPosto(e['nome_fmt'] || e['id'] || '');
 
             if (AUSENCIA.some(t => sv.includes(t))) {
                 const tipo = (e['serviço'] || sv).trim();
@@ -172,7 +172,7 @@ const EscalaGeralPage = {
                 if (!mapa[key]) mapa[key] = { h, obs, nomes:[], vtrs:[] };
                 const nomeMil = this._abrevPosto(e['nome_fmt'] || e['id'] || '');
                 const trocaCom = e['troca_com'] || '';
-                mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
+                mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${this._abrevPosto(trocaCom)}</span>` : nomeMil);
                 if (e['viatura'] && e['viatura'] !== 'nan' && !mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']);
             }
             const hasVtr = linhas.some(e => e['viatura'] && e['viatura'] !== 'nan');
@@ -214,7 +214,7 @@ const EscalaGeralPage = {
                 if (!mapa[key]) mapa[key] = { h, sv, obs, nomes:[], vtr:'', rad:'', ind:'' };
                 const nomeMil = this._abrevPosto(e['nome_fmt'] || e['id'] || '');
                 const trocaCom = e['troca_com'] || '';
-                mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${trocaCom}</span>` : nomeMil);
+                mapa[key].nomes.push(trocaCom ? `${nomeMil} <span style="font-size:.68rem;color:#d97706;font-weight:700">🔄 c/ ${this._abrevPosto(trocaCom)}</span>` : nomeMil);
                 if (e['viatura'] && e['viatura'] !== 'nan') { if(!mapa[key].vtrs) mapa[key].vtrs=[]; if(!mapa[key].vtrs.includes(e['viatura'])) mapa[key].vtrs.push(e['viatura']); mapa[key].vtr = mapa[key].vtrs.join(' / '); }
                 if (e['rádio'] && e['rádio'] !== 'nan') mapa[key].rad = e['rádio'];
                 if (e['indicativo rádio'] && e['indicativo rádio'] !== 'nan') mapa[key].ind = e['indicativo rádio'];
