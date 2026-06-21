@@ -1,8 +1,6 @@
 """Camada de serviços de negócio."""
 
-from .data_loader import DataLoader
-from .escala_service import EscalaService
-from .troca_service import TrocaService
+from .data_loader_pg import DataLoader
 from .validation_service import ValidationService
 
-__all__ = ["DataLoader", "ValidationService", "EscalaService", "TrocaService"]
+__all__ = ["DataLoader", "ValidationService"]
