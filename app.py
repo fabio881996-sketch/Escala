@@ -1543,26 +1543,39 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     CW2 = TW/2 - 1*mm           # atendimento/apoio -- 50/50
     GAP = 2*mm
 
-    # Recolher grupos
-    grupos_aus = {}
+    # Campos fixos para Ausências (aparecem sempre, mesmo vazios)
+    _CAMPOS_AUS = ["Folga Semanal", "Folga Complementar", "Férias", "Convalescença", "Outras Licenças"]
+    # Campos fixos para ADM (aparecem sempre, mesmo vazios)
+    _CAMPOS_ADM = ["Pronto", "Secretaria", "Inquéritos", "Diligência"]
+
+    # Recolher grupos — com campos fixos sempre presentes
+    grupos_aus = {c: [] for c in _CAMPOS_AUS}
     for _, row in df_aus.iterrows():
         serv = str(row.get("serviço", "")).strip()
         mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
-        grupos_aus.setdefault(serv, []).append(mid)
+        if serv not in grupos_aus:
+            grupos_aus[serv] = []
+        grupos_aus[serv].append(mid)
+    # Ordenar alfabeticamente, campos fixos primeiro depois extras
+    _extras_aus = sorted(k for k in grupos_aus if k not in _CAMPOS_AUS)
+    grupos_aus = {k: grupos_aus[k] for k in _CAMPOS_AUS + _extras_aus}
 
-    grupos_adm = {}
+    grupos_adm = {c: [] for c in _CAMPOS_ADM}
     for _, row in df_adm.iterrows():
         serv = str(row.get("serviço", "")).strip()
         mid  = str(row.get("id_fmt", row.get("id", ""))).strip()
-        grupos_adm.setdefault(serv, []).append(mid)
+        if serv not in grupos_adm:
+            grupos_adm[serv] = []
+        grupos_adm[serv].append(mid)
+    _extras_adm = sorted(k for k in grupos_adm if k not in _CAMPOS_ADM)
+    grupos_adm = {k: grupos_adm[k] for k in _CAMPOS_ADM + _extras_adm}
 
     # Títulos das duas colunas
     y_col = y
     y_aus_top = y_col
     sec_title(y_col, "Ausências, Folgas e Licenças", x=LM, w=CW_ESQ)
     y_adm_top = y_col
-    if grupos_adm:
-        sec_title(y_col, "Outras Situações / ADM", x=LM+CW_ESQ+GAP, w=CW_DIR)
+    sec_title(y_col, "Outras Situações / ADM", x=LM+CW_ESQ+GAP, w=CW_DIR)
     y_col -= 6.5*mm
 
     # Linhas esquerda
@@ -1637,8 +1650,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     # Fechar blocos Ausências e ADM
     y_aus_bottom = min(y_esq, y_dir)
     close_section(y_aus_top, y_aus_bottom, x=LM, w=CW_ESQ)
-    if grupos_adm:
-        close_section(y_adm_top, y_aus_bottom, x=LM+CW_ESQ+GAP, w=CW_DIR)
+    close_section(y_adm_top, y_aus_bottom, x=LM+CW_ESQ+GAP, w=CW_DIR)
 
     # Avançar y para o máximo das duas colunas
     y = y_aus_bottom - 2*mm
