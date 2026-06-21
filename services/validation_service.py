@@ -12,7 +12,10 @@ import pandas as pd
 from config.settings import IMPEDIMENTOS_PATTERN
 from core.utils import e_servico_atendimento, norm, parse_horario
 from models.escala import EntradaEscala
-from services.data_loader import DataLoader
+try:
+    from services.data_loader_pg import DataLoader
+except ImportError:
+    from services.data_loader import DataLoader
 
 logger = logging.getLogger(__name__)
 
