@@ -220,13 +220,15 @@ const EscalaGeralPage = {
                 if (e['indicativo rádio'] && e['indicativo rádio'] !== 'nan') mapa[key].ind = e['indicativo rádio'];
             }
             const hasInd = temInd(linhas), hasRad = temRad(linhas), hasVtr = temVtr(linhas);
+            const hasObs = !comServico && Object.values(mapa).some(g => g.obs);
             let t = `<div class="card" style="padding:0;overflow:hidden;margin-bottom:8px">
                 <div style="font-size:.68rem;font-weight:800;color:#fff;background:var(--azul);padding:7px 14px;text-transform:uppercase;letter-spacing:.06em">${titulo}</div>
                 <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:280px">
                 <thead><tr style="background:#EFF6FF">
                     <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Horário</th>
                     <th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Militares</th>
-                    ${comServico ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Serviço</th>' : '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Observação</th>'}
+                    ${comServico ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Serviço</th>' : ''}
+                    ${hasObs ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Observação</th>' : ''}
                     ${hasInd ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda);white-space:nowrap">Indicativo</th>' : ''}
                     ${hasRad ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Rádio</th>' : ''}
                     ${hasVtr ? '<th style="padding:7px 10px;font-size:.68rem;font-weight:700;color:var(--azul);text-align:left;border-bottom:1px solid var(--cinza-borda)">Viatura</th>' : ''}
@@ -237,7 +239,8 @@ const EscalaGeralPage = {
                 t += `<tr style="background:${bg};border-bottom:1px solid #F1F5F9">
                     <td style="padding:8px 10px;font-size:.78rem;font-weight:700;color:var(--azul);white-space:nowrap">${h || '—'}</td>
                     <td style="padding:8px 10px;font-size:.75rem;color:#1E293B">${nomes.join('<br>')}</td>
-                    ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : (obs ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${obs}</td>` : '')}
+                    ${comServico ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${sv}</td>` : ''}
+                    ${hasObs ? `<td style="padding:8px 10px;font-size:.72rem;color:var(--azul-vivo)">${obs || ''}</td>` : ''}
                     ${hasInd ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${ind}</td>` : ''}
                     ${hasRad ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${rad}</td>` : ''}
                     ${hasVtr ? `<td style="padding:8px 10px;font-size:.75rem;color:#475569">${vtr}</td>` : ''}
