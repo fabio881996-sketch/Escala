@@ -2,15 +2,14 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from core.database import GoogleSheetsClient
-from services.data_loader import DataLoader
+from services.data_loader_pg import DataLoader
 from portal.api.auth import obter_user_atual, obter_admin
 
 router = APIRouter()
 
 
 def get_loader() -> DataLoader:
-    return DataLoader(sheets_client=GoogleSheetsClient())
+    return DataLoader()
 
 
 @router.get("/")
