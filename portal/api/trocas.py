@@ -233,6 +233,40 @@ async def disponiveis(
         except Exception:
             pass
 
+        # ── Aplicar trocas aprovadas ao df_dia antes de tudo ──
+        if not df_trocas.empty and data_fmt and not df_dia.empty:
+            tr_aprov = df_trocas[
+                (df_trocas["data"] == data_fmt) &
+                (df_trocas["status"] == "Aprovada") &
+                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+            ]
+            for _, t in tr_aprov.iterrows():
+                id_o = str(t["id_origem"]).strip()
+                id_d = str(t["id_destino"]).strip()
+                s_o  = str(t["servico_origem"])
+                s_d  = str(t["servico_destino"])
+                serv_o = s_o.rsplit("(",1)[0].strip()
+                hor_o  = s_o.rsplit("(",1)[1].rstrip(")") if "(" in s_o else ""
+                serv_d = s_d.rsplit("(",1)[0].strip()
+                hor_d  = s_d.rsplit("(",1)[1].rstrip(")") if "(" in s_d else ""
+                mask_o = df_dia["id"].astype(str).str.strip() == id_o
+                mask_d = df_dia["id"].astype(str).str.strip() == id_d
+                if mask_o.any() and mask_d.any():
+                    idx_o = df_dia[mask_o].index[0]
+                    idx_d = df_dia[mask_d].index[0]
+                    for col, val_o, val_d in [
+                        ("serviço", serv_d, serv_o),
+                        ("horário", hor_d, hor_o),
+                        ("viatura", df_dia.at[idx_d, "viatura"] if "viatura" in df_dia.columns else "", df_dia.at[idx_o, "viatura"] if "viatura" in df_dia.columns else ""),
+                        ("rádio", df_dia.at[idx_d, "rádio"] if "rádio" in df_dia.columns else "", df_dia.at[idx_o, "rádio"] if "rádio" in df_dia.columns else ""),
+                        ("indicativo rádio", df_dia.at[idx_d, "indicativo rádio"] if "indicativo rádio" in df_dia.columns else "", df_dia.at[idx_o, "indicativo rádio"] if "indicativo rádio" in df_dia.columns else ""),
+                    ]:
+                        if col in df_dia.columns:
+                            df_dia.at[idx_o, col] = val_o
+                            df_dia.at[idx_d, col] = val_d
+            # Remover ids_com_troca — após aplicar trocas já não precisamos de excluir
+            ids_com_troca = set()
+
         # ── Meu serviço no dia ──
         meu_servico = None
         meu_horario = None
