@@ -139,13 +139,15 @@ def _clean(v):
 
 def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
     """Devolve colegas correctos após aplicar trocas."""
-    serv_map = {}
+    serv_map = {}  # mid -> lista de (sv, hor)
     for _, r in df_d.iterrows():
         raw_id = _clean(r.get("id",""))
         sv = _clean(r.get("serviço","") or r.get("servico",""))
         hor = _norm_hor(_clean(r.get("horário","") or r.get("horario","")))
         for mid in [i.strip() for i in raw_id.split(";") if i.strip()]:
-            serv_map[mid] = (sv, hor)
+            if mid not in serv_map:
+                serv_map[mid] = []
+            serv_map[mid].append((sv, hor))
     if not df_trocas.empty and d_s:
         tr = df_trocas[
             (df_trocas["data"] == d_s) &
@@ -157,20 +159,22 @@ def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
             id_d = str(t["id_destino"]).strip()
             s = str(t["servico_destino"])
             serv_novo_o = s.rsplit("(",1)[0].strip()
-            hor_novo_o  = _norm_hor(s.rsplit("(",1)[1].rstrip(")") if "(" in s else serv_map.get(id_o,("",""))[1])
+            hor_novo_o  = _norm_hor(s.rsplit("(",1)[1].rstrip(")") if "(" in s else "")
             s2 = str(t["servico_origem"])
             serv_novo_d = s2.rsplit("(",1)[0].strip()
-            hor_novo_d  = _norm_hor(s2.rsplit("(",1)[1].rstrip(")") if "(" in s2 else serv_map.get(id_d,("",""))[1])
-            if id_o in serv_map: serv_map[id_o] = (serv_novo_o, hor_novo_o)
-            if id_d in serv_map: serv_map[id_d] = (serv_novo_d, hor_novo_d)
+            hor_novo_d  = _norm_hor(s2.rsplit("(",1)[1].rstrip(")") if "(" in s2 else "")
+            if id_o in serv_map: serv_map[id_o].append((serv_novo_o, hor_novo_o))
+            if id_d in serv_map: serv_map[id_d].append((serv_novo_d, hor_novo_d))
     colegas = []
     serv_lower = servico.strip().lower()
     hor_norm = _norm_hor(horario)
-    for mid, (sv, hor) in serv_map.items():
+    for mid, servicos_mid in serv_map.items():
         if mid == str(u_id).strip():
             continue
-        if sv.strip().lower() == serv_lower and hor == hor_norm:
-            colegas.append(id_para_nome.get(mid, mid))
+        for (sv, hor) in servicos_mid:
+            if sv.strip().lower() == serv_lower and hor == hor_norm:
+                colegas.append(id_para_nome.get(mid, mid))
+                break
     return colegas
 
 
