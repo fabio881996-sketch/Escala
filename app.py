@@ -3668,10 +3668,12 @@ else:
             d_sel  = st.date_input("Seleciona a data:", format="DD/MM/YYYY")
             aba_sel = d_sel.strftime("%d-%m")
 
-        # Só ver dias publicados (admins incluídos)
-        if aba_sel not in _dias_pub_global:
+        # Admins vêem todos os dias com escala; não-admins só vêem dias publicados
+        if not is_admin and aba_sel not in _dias_pub_global:
             st.info("A escala para este dia ainda não foi publicada.")
         else:
+            if is_admin and aba_sel not in _dias_pub_global:
+                st.caption("⚠️ Este dia ainda não foi publicado.")
             df_dia = load_data(aba_sel)
 
             if df_dia.empty:
