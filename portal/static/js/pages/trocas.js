@@ -332,7 +332,7 @@ const TrocasPage = {
         if (!milSel) return;
 
         const opt = milSel.options[milSel.selectedIndex];
-        const servicoDestino = opt.dataset.servico || '';
+        const servicoDestinoBase = opt.dataset.servico || '';
         const horarioDestino = opt.dataset.horario || '';
         const idDestino = milSel.value;
         const obs = obsEl?.value || '';
@@ -341,9 +341,13 @@ const TrocasPage = {
         const dt = new Date(dataStr + 'T00:00:00');
         const dataFmt = `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
 
+        // Incluir horário no serviço no formato "Serviço (HH-HH)"
+        const servicoDestino = horarioDestino ? `${servicoDestinoBase} (${horarioDestino})` : servicoDestinoBase;
+
         // Serviço origem: para dar_remunerado usar marcador especial
-        let servicoOrigem = meuServico || 'auto';
+        let servicoOrigem = meuHorario ? `${meuServico} (${meuHorario})` : (meuServico || 'auto');
         if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
+        if (tipo === 'fazer_remunerado') servicoOrigem = 'FAZER_REMUNERADO';
 
         const el = document.getElementById('troca-resultado');
         try {
