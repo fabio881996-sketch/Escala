@@ -131,13 +131,19 @@ def _norm_hor(h):
     return str(h).strip()
 
 
+def _clean(v):
+    """Limpa None/nan para string vazia."""
+    s = str(v).strip() if v is not None else ""
+    return "" if s.lower() in ("nan", "none", "") else s
+
+
 def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
     """Devolve colegas correctos após aplicar trocas."""
     serv_map = {}
     for _, r in df_d.iterrows():
-        raw_id = str(r.get("id","")).strip()
-        sv = str(r.get("serviço","") or r.get("servico","")).strip()
-        hor = _norm_hor(str(r.get("horário","") or r.get("horario","")).strip())
+        raw_id = _clean(r.get("id",""))
+        sv = _clean(r.get("serviço","") or r.get("servico",""))
+        hor = _norm_hor(_clean(r.get("horário","") or r.get("horario","")))
         for mid in [i.strip() for i in raw_id.split(";") if i.strip()]:
             serv_map[mid] = (sv, hor)
     if not df_trocas.empty and d_s:
