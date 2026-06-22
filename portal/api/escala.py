@@ -270,24 +270,26 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
                     ]
                     for _, t in tr.iterrows():
-                        if str(t["id_origem"]).strip() == str(u_id).strip():
+                        id_o = str(t["id_origem"]).strip()
+                        id_d = str(t["id_destino"]).strip()
+                        if id_o == str(u_id).strip():
                             s = str(t["servico_destino"])
-                        elif str(t["id_destino"]).strip() == str(u_id).strip():
+                            outro_id = id_d
+                        elif id_d == str(u_id).strip():
                             s = str(t["servico_origem"])
+                            outro_id = id_o
                         else:
                             continue
                         serv_novo = s.rsplit("(", 1)[0].strip()
                         hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
-                        mask_novo = (
-                            (df_d["serviço"].astype(str).str.strip().str.lower() == serv_novo.lower()) &
-                            (df_d["horário"].astype(str).str.strip() == hor_novo.strip())
-                        )
-                        if mask_novo.any():
-                            row_ref = df_d[mask_novo].iloc[0]
+                        # Ir buscar a linha do outro militar para ter viatura/rádio/etc correctos
+                        mask_outro = df_d["id"].astype(str).str.strip() == outro_id
+                        if mask_outro.any():
+                            row_ref = df_d[mask_outro].iloc[0]
                         servico = serv_novo
                         horario = hor_novo
                         troca_aplicada = True
-                        troca_com_id = str(t["id_destino"]).strip() if str(t["id_origem"]).strip() == str(u_id).strip() else str(t["id_origem"]).strip()
+                        troca_com_id = outro_id
                         break
 
                 servicos.append({
