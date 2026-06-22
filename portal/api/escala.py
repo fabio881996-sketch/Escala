@@ -10,7 +10,7 @@ from portal.api.auth import obter_user_atual, obter_admin
 
 router = APIRouter()
 
-_loader: DataLoader | None = None
+_loader = None
 
 
 def get_loader():
@@ -25,7 +25,6 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
     """Devolve escala de um dia com nomes formatados."""
     try:
         loader = get_loader()
-        # Verificar se o dia está publicado (admins vêem sempre)
         if not current_user.get("is_admin"):
             dias_pub = loader.carregar_dias_publicados()
             if data_str not in dias_pub:
@@ -40,21 +39,12 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             for _, r in df_util.iterrows():
                 uid = str(r.get("id", "")).strip()
                 posto = str(r.get("posto", "")).strip()
-                # Abreviar postos GNR
                 _postos = {
-                    "Guarda Principal": "Grd Pr",
-                    "Cabo Chefe": "Cb Ch",
-                    "Cabo": "Cb",
-                    "Furriel": "Furr",
-                    "Segundo Sargento": "2Sarg",
-                    "Primeiro Sargento": "1Sarg",
-                    "Sargento Ajudante": "Sarg Aj",
-                    "Sargento Chefe": "Sarg Ch",
-                    "Sargento": "2Sarg",
-                    "Guarda": "Grd",
-                    "Alferes": "Alf",
-                    "Tenente": "Ten",
-                    "Capitão": "Cap",
+                    "Guarda Principal": "Grd Pr", "Cabo Chefe": "Cb Ch",
+                    "Cabo": "Cb", "Furriel": "Furr", "Segundo Sargento": "2Sarg",
+                    "Primeiro Sargento": "1Sarg", "Sargento Ajudante": "Sarg Aj",
+                    "Sargento Chefe": "Sarg Ch", "Sargento": "2Sarg",
+                    "Guarda": "Grd", "Alferes": "Alf", "Tenente": "Ten", "Capitão": "Cap",
                 }
                 posto_abrev = posto
                 for _nome, _abrev in _postos.items():
@@ -67,7 +57,6 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                 if uid:
                     id_nome[uid] = nome_fmt
 
-        # Aplicar trocas aprovadas
         df_trocas = loader.carregar_trocas()
         try:
             dt_obj = datetime.strptime(data_str, "%d-%m")
@@ -84,13 +73,11 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             for _, t in trocas_dia.iterrows():
                 id_orig = str(t["id_origem"]).strip()
                 id_dest = str(t["id_destino"]).strip()
-                # Trocar os serviços entre os dois militares no df
                 mask_orig = df["id"].astype(str).str.strip() == id_orig
                 mask_dest = df["id"].astype(str).str.strip() == id_dest
                 if mask_orig.any() and mask_dest.any():
                     idx_orig = df[mask_orig].index[0]
                     idx_dest = df[mask_dest].index[0]
-                    # Guardar valores originais
                     cols_trocar = ["serviço", "horário", "viatura", "rádio", "indicativo rádio", "giro", "observações"]
                     for col in cols_trocar:
                         if col in df.columns:
@@ -98,11 +85,9 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
                             val_dest = df.at[idx_dest, col]
                             df.at[idx_orig, col] = val_dest
                             df.at[idx_dest, col] = val_orig
-                    # Marcar troca_com em ambas as linhas
                     df.at[idx_orig, "__troca_com"] = id_dest
                     df.at[idx_dest, "__troca_com"] = id_orig
 
-        # Aplicar cedência de remunerado (FAZER_REMUNERADO e MATAR_REMUNERADO)
         if not df_trocas.empty and d_s:
             trocas_rem = df_trocas[
                 (df_trocas["data"] == d_s) &
@@ -111,14 +96,12 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             ]
             for _, t in trocas_rem.iterrows():
                 is_fazer = str(t["servico_origem"]).strip() == "FAZER_REMUNERADO"
-                quem_faz   = str(t["id_origem"]).strip() if is_fazer else str(t["id_destino"]).strip()
-                quem_cede  = str(t["id_destino"]).strip() if is_fazer else str(t["id_origem"]).strip()
-                # Encontrar linha do remunerado — onde está quem cede
+                quem_faz  = str(t["id_origem"]).strip() if is_fazer else str(t["id_destino"]).strip()
+                quem_cede = str(t["id_destino"]).strip() if is_fazer else str(t["id_origem"]).strip()
                 for idx_r, row_r in df.iterrows():
                     ids_r = [i.strip() for i in str(row_r.get("id","")).split(";")]
                     serv_r = str(row_r.get("serviço","")).lower()
                     if quem_cede in ids_r and ("remun" in serv_r or "gratif" in serv_r):
-                        # Substituir quem_cede por quem_faz
                         novos_ids = [quem_faz if i == quem_cede else i for i in ids_r]
                         df.at[idx_r, "id"] = ";".join(novos_ids)
                         break
@@ -135,18 +118,28 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _norm_hor(h):
+    """Normaliza horário para comparação: '7-13' == '07-13'."""
+    if not h:
+        return ""
+    try:
+        partes = str(h).strip().split("-")
+        if len(partes) == 2:
+            return f"{int(partes[0]):02d}-{int(partes[1]):02d}"
+    except Exception:
+        pass
+    return str(h).strip()
+
+
 def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
     """Devolve colegas correctos após aplicar trocas."""
-    import re as _re
-    # Construir mapa id -> (servico, horario) após trocas — expandir IDs múltiplos
     serv_map = {}
     for _, r in df_d.iterrows():
         raw_id = str(r.get("id","")).strip()
         sv = str(r.get("serviço","") or r.get("servico","")).strip()
-        hor = str(r.get("horário","") or r.get("horario","")).strip()
+        hor = _norm_hor(str(r.get("horário","") or r.get("horario","")).strip())
         for mid in [i.strip() for i in raw_id.split(";") if i.strip()]:
             serv_map[mid] = (sv, hor)
-    # Aplicar trocas aprovadas ao mapa
     if not df_trocas.empty and d_s:
         tr = df_trocas[
             (df_trocas["data"] == d_s) &
@@ -158,18 +151,19 @@ def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
             id_d = str(t["id_destino"]).strip()
             s = str(t["servico_destino"])
             serv_novo_o = s.rsplit("(",1)[0].strip()
-            hor_novo_o  = s.rsplit("(",1)[1].rstrip(")") if "(" in s else serv_map.get(id_o,("",""))[1]
+            hor_novo_o  = _norm_hor(s.rsplit("(",1)[1].rstrip(")") if "(" in s else serv_map.get(id_o,("",""))[1])
             s2 = str(t["servico_origem"])
             serv_novo_d = s2.rsplit("(",1)[0].strip()
-            hor_novo_d  = s2.rsplit("(",1)[1].rstrip(")") if "(" in s2 else serv_map.get(id_d,("",""))[1]
+            hor_novo_d  = _norm_hor(s2.rsplit("(",1)[1].rstrip(")") if "(" in s2 else serv_map.get(id_d,("",""))[1])
             if id_o in serv_map: serv_map[id_o] = (serv_novo_o, hor_novo_o)
             if id_d in serv_map: serv_map[id_d] = (serv_novo_d, hor_novo_d)
-    # Encontrar quem tem o mesmo serviço/horário
     colegas = []
     serv_lower = servico.strip().lower()
+    hor_norm = _norm_hor(horario)
     for mid, (sv, hor) in serv_map.items():
-        if mid == str(u_id).strip(): continue
-        if sv.strip().lower() == serv_lower and hor.strip() == horario.strip():
+        if mid == str(u_id).strip():
+            continue
+        if sv.strip().lower() == serv_lower and hor == hor_norm:
             colegas.append(id_para_nome.get(mid, mid))
     return colegas
 
@@ -186,7 +180,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         df_trocas = loader.carregar_trocas()
         df_util = loader.carregar_usuarios()
 
-        # Mapa id -> formato "ID Posto PrimeiroNome Apelido"
         id_para_nome = {}
         if not df_util.empty:
             for _, r in df_util.iterrows():
@@ -197,7 +190,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 if uid:
                     id_para_nome[uid] = f"{uid} {posto} {nome_curto}".strip()
 
-        dias_a_mostrar: list[date] = []
+        dias_a_mostrar = []
         for delta in range(90):
             dt = hj.date() + timedelta(days=delta)
             if dt.strftime("%d-%m") in dias_pub:
@@ -208,7 +201,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         if not dias_a_mostrar:
             return {"servicos": []}
 
-        # BATCH — todas as escalas numa única chamada ao Sheets
         escalas = loader.carregar_escalas_batch(dias_a_mostrar)
 
         servicos = []
@@ -230,7 +222,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 lambda x: _uid_str == x or _uid_str in [i.strip() for i in x.split(";")]
             )]
 
-            # Remover linhas de remunerado que foram cedidas via MATAR_REMUNERADO
             if not df_trocas.empty and not meu.empty:
                 d_s_check = dt.strftime("%d/%m/%Y")
                 cedeu_rem = df_trocas[
@@ -248,12 +239,10 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             dias_sem = 0
             d_s = dt.strftime("%d/%m/%Y")
 
-            # Iterar todas as linhas do militar — pode ter serviço normal + remunerado nomeado
             import re as _re
             linhas_normais = meu[~meu["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
             linhas_remun   = meu[meu["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
 
-            # Processar serviços normais
             for _, row in (linhas_normais if not linhas_normais.empty else meu.head(1)).iterrows():
                 servico = str(row.get("serviço", ""))
                 horario = str(row.get("horário", ""))
@@ -306,7 +295,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     "colegas": _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome),
                 })
 
-            # Processar remunerados nomeados directamente (linha multi-ID) — dedupllicar por serviço+horário
             _rem_vistos = set()
             for _, row_rem in linhas_remun.iterrows():
                 _chave_rem = (str(row_rem.get("serviço","")), str(row_rem.get("horário","")), str(row_rem.get("observações","")))
@@ -316,10 +304,8 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 serv_rem = str(row_rem.get("serviço","")).strip()
                 hor_rem  = str(row_rem.get("horário","")).strip()
                 ids_linha = [i.strip() for i in str(row_rem.get("id","")).split(";") if i.strip()]
-                # Se só tem 1 ID na linha, procurar outros com o mesmo remunerado no df_d
                 if len(ids_linha) <= 1:
-                    serv_r = str(row_rem.get("serviço","")).strip().lower()
-                    hor_r  = str(row_rem.get("horário","")).strip()
+                    hor_r = str(row_rem.get("horário","")).strip()
                     for _, r2 in df_d.iterrows():
                         if _re.search(r"remun|gratif", str(r2.get("serviço","")).lower()):
                             if str(r2.get("horário","")).strip() == hor_r:
@@ -336,7 +322,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     "is_hoje": dt == hj.date(), "is_amanha": dt == (hj.date() + timedelta(days=1)),
                     "colegas": colegas_rem, "is_remunerado": True,
                 })
-            # Verificar se há FAZER_REMUNERADO ou MATAR_REMUNERADO aprovado — adicionar remunerado cedido
+
             if not df_trocas.empty:
                 tr_rem = df_trocas[
                     (df_trocas["data"] == d_s) &
@@ -344,24 +330,16 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
                 ]
                 for _, t_rem in tr_rem.iterrows():
-                    # FAZER_REMUNERADO: id_origem é quem faz, id_destino é quem cede
-                    # MATAR_REMUNERADO: id_destino é quem faz, id_origem é quem cede
                     is_fazer = str(t_rem["servico_origem"]).strip() == "FAZER_REMUNERADO"
-                    quem_faz = str(t_rem["id_origem"]).strip() if is_fazer else str(t_rem["id_destino"]).strip()
+                    quem_faz  = str(t_rem["id_origem"]).strip() if is_fazer else str(t_rem["id_destino"]).strip()
                     quem_cede = str(t_rem["id_destino"]).strip() if is_fazer else str(t_rem["id_origem"]).strip()
                     if quem_faz != str(u_id).strip():
                         continue
-                    # Encontrar linha do remunerado na escala do dia
                     serv_rem = str(t_rem.get("servico_destino","")).strip()
-                    hor_rem = ""
-                    vtr_rem = ""
-                    rad_rem = ""
-                    ind_rem = ""
-                    obs_rem = ""
+                    hor_rem = vtr_rem = rad_rem = ind_rem = obs_rem = ""
                     if "(" in serv_rem:
                         hor_rem = serv_rem.rsplit("(",1)[1].rstrip(")")
                         serv_rem = serv_rem.rsplit("(",1)[0].strip()
-                    # Procurar linha do remunerado no df_d pelo id de quem cede
                     mask_rem = df_d["id"].astype(str).str.strip().apply(
                         lambda x: quem_cede == x or quem_cede in [i.strip() for i in x.split(";")]
                     )
@@ -374,12 +352,10 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         rad_rem  = str(r_rem.get("rádio","") or "").replace("nan","")
                         ind_rem  = str(r_rem.get("indicativo rádio","") or "").replace("nan","")
                         obs_rem  = str(r_rem.get("observações","") or "").replace("nan","")
-                    # Colegas do remunerado — outros militares na mesma linha
                     colegas_rem = []
                     if not rem_rows.empty:
                         ids_rem = [i.strip() for i in str(rem_rows.iloc[0].get("id","")).split(";")]
                         colegas_rem = [id_para_nome.get(i, i) for i in ids_rem if i and i != str(u_id).strip() and i != quem_cede]
-                    # Também incluir outros com FAZER_REMUNERADO aprovado no mesmo slot
                     outros_fazer = df_trocas[
                         (df_trocas["data"] == d_s) &
                         (df_trocas["status"] == "Aprovada") &
@@ -391,33 +367,23 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         nome_outro = id_para_nome.get(outro_id, outro_id)
                         if nome_outro not in colegas_rem:
                             colegas_rem.append(nome_outro)
-
                     servicos.append({
-                        "data": d_s,
-                        "aba": aba,
-                        "servico": serv_rem or "Svç Remunerado",
-                        "horario": hor_rem,
+                        "data": d_s, "aba": aba,
+                        "servico": serv_rem or "Svç Remunerado", "horario": hor_rem,
                         "troca_aprovada": False,
                         "troca_com": id_para_nome.get(quem_cede, quem_cede),
                         "troca_com_label": "Cedido por",
-                        "viatura": vtr_rem,
-                        "radio": rad_rem,
-                        "indicativo": ind_rem,
-                        "giro": "",
-                        "observacoes": obs_rem,
-                        "is_hoje": dt == hj.date(),
-                        "is_amanha": dt == (hj.date() + timedelta(days=1)),
-                        "colegas": colegas_rem,
-                        "is_remunerado": True,
+                        "viatura": vtr_rem, "radio": rad_rem, "indicativo": ind_rem,
+                        "giro": "", "observacoes": obs_rem,
+                        "is_hoje": dt == hj.date(), "is_amanha": dt == (hj.date() + timedelta(days=1)),
+                        "colegas": colegas_rem, "is_remunerado": True,
                     })
 
-        # Ordenar por data e depois por horário de início
         def _sort_key(s):
-            from datetime import datetime as _dt2
             try:
-                d = _dt2.strptime(s["data"], "%d/%m/%Y")
+                d = datetime.strptime(s["data"], "%d/%m/%Y")
             except Exception:
-                d = _dt2(2099, 1, 1)
+                d = datetime(2099, 1, 1)
             hor = s.get("horario", "") or ""
             try:
                 h_ini = int(hor.split("-")[0])
@@ -433,7 +399,6 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
 
 @router.get("/aniversarios")
 async def aniversarios(current_user: dict = Depends(obter_user_atual)):
-    """Devolve aniversariantes de hoje."""
     try:
         from datetime import datetime as _dt
         loader = get_loader()
