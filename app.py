@@ -5341,6 +5341,13 @@ else:
 
                                 del st.session_state['editar_escala']
                                 st.session_state.pop('editar_escala_original', None)
+                                # Actualizar ordem_escala do dia seguinte
+                                try:
+                                    _d_e_ord = info_e['data']
+                                    _gerar_ordem_escala_dia_seguinte(None, aba_e, _d_e_ord)
+                                except Exception:
+                                    pass
+
                                 st.success("✅ Guardado!")
                                 st.rerun()
                             except Exception as e:
