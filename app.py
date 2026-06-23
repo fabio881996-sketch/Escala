@@ -5348,6 +5348,26 @@ else:
                                 except Exception:
                                     pass
 
+                                # Notificar militares com serviço/horário alterado
+                                if ids_alterados:
+                                    try:
+                                        import requests as _req_e
+                                        _secret_e = str(st.secrets.get("RAILWAY_NOTIFY_SECRET", ""))
+                                        _data_fmt_e = aba_e.replace("-", "/")
+                                        _req_e.post(
+                                            "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/publicar-escala",
+                                            json={
+                                                "aba": aba_e,
+                                                "secret": _secret_e,
+                                                "u_ids": list(ids_alterados),
+                                                "titulo": "📅 Escala actualizada",
+                                                "corpo": f"O teu serviço de {_data_fmt_e} foi alterado.",
+                                            },
+                                            timeout=5
+                                        )
+                                    except Exception:
+                                        pass
+
                                 st.success("✅ Guardado!")
                                 st.rerun()
                             except Exception as e:
