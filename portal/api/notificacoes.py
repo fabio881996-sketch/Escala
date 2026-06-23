@@ -213,11 +213,14 @@ async def unsubscribe(current_user: dict = Depends(obter_user_atual)):
 class PublicarEscalaPayload(BaseModel):
     aba: str
     secret: str
+    u_ids: list[str] | None = None
+    titulo: str | None = None
+    corpo: str | None = None
 
 
 @router.post("/publicar-escala")
 async def publicar_escala_notif(payload: PublicarEscalaPayload):
-    """Chamado pelo Streamlit após publicar escala — envia push a todos."""
+    """Chamado pelo Streamlit após publicar escala ou editar — envia push."""
     import os
     expected = os.environ.get("RAILWAY_NOTIFY_SECRET", "")
     if not expected or payload.secret != expected:
@@ -225,13 +228,17 @@ async def publicar_escala_notif(payload: PublicarEscalaPayload):
     try:
         from services.data_loader_factory import get_data_loader
         loader = get_data_loader()
-        df_util = loader.carregar_usuarios()
-        todos_ids = df_util["id"].astype(str).str.strip().tolist()
         data_fmt = payload.aba.replace("-", "/")
+        # Se u_ids especificado, notificar só esses; caso contrário todos
+        if payload.u_ids:
+            u_ids = payload.u_ids
+        else:
+            df_util = loader.carregar_usuarios()
+            u_ids = df_util["id"].astype(str).str.strip().tolist()
         enviar_push(
-            u_ids=todos_ids,
-            titulo="📅 Nova escala publicada",
-            corpo=f"A escala de {data_fmt} foi publicada.",
+            u_ids=u_ids,
+            titulo=payload.titulo or "📅 Nova escala publicada",
+            corpo=payload.corpo or f"A escala de {data_fmt} foi publicada.",
             url="/escala-geral",
             tag="escala-publicada",
         )
