@@ -122,13 +122,8 @@ def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
         )
         service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
-        # Encontrar pasta "Trocas GNR"
-        results = service.files().list(
-            q="name='Trocas GNR' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-            fields="files(id)"
-        ).execute()
-        folders = results.get("files", [])
-        folder_id = folders[0]["id"] if folders else None
+        # ID fixo da pasta "Trocas GNR" partilhada com o service account
+        folder_id = "1eiEHKvy9QtJCgVcJmhZl2Zu9o6IG5Wjl"
 
         media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype="application/pdf")
         meta = {"name": filename, **({"parents": [folder_id]} if folder_id else {})}
