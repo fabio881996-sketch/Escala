@@ -56,9 +56,9 @@ const TrocasPage = {
                     </div>`).join('');
 
                 // Após troca: origem fica com serv_dest, destino fica com serv_orig
-                const _fmt = (sv, hor) => sv && hor ? `${sv} (${hor})` : (sv || '—');
-                const servOrigFmt  = _fmt(t.servico_origem,  t.horario_origem);
-                const servDestFmt  = _fmt(t.servico_destino, t.horario_destino);
+                // horário já incluído no serviço formato "Serviço (HH-HH)"
+                const servOrigFmt  = t.servico_origem  || '—';
+                const servDestFmt  = t.servico_destino || '—';
 
                 return `
                 <div class="card card-amber">
@@ -134,13 +134,25 @@ const TrocasPage = {
 
             const htmlPendentes = pendentes.map((t, i) => `
                 <div class="card card-amber">
-                    <div class="card-label">📥 Pedido recebido • ${t.data}</div>
-                    <div class="card-title">🔄 ${t.servico_origem}</div>
-                    <div class="card-subtitle">De: ${t.nome_origem || t.id_origem}</div>
-                    ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
-                    <div style="display:flex;gap:8px;margin-top:12px">
-                        <button class="btn btn-success btn-sm" onclick="TrocasPage.responder(${t.__row_index}, 'aceitar', this)">✅ Aceitar</button>
-                        <button class="btn btn-danger btn-sm" onclick="TrocasPage.responder(${t.__row_index}, 'rejeitar', this)">❌ Recusar</button>
+                    <div class="card-label">📥 PEDIDO RECEBIDO • ${t.data}</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+                        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:700;color:#1d4ed8;margin-bottom:6px">🙋 SOLICITA</div>
+                            <div style="font-weight:700;font-size:.82rem;margin-bottom:6px">${t.nome_origem || t.id_origem}</div>
+                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${t.servico_origem}</span></div>
+                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${t.servico_destino}</span></div>
+                        </div>
+                        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px">
+                            <div style="font-size:.65rem;font-weight:700;color:#16a34a;margin-bottom:6px">✅ ACEITAS</div>
+                            <div style="font-weight:700;font-size:.82rem;margin-bottom:6px">Tu</div>
+                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${t.servico_destino}</span></div>
+                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${t.servico_origem}</span></div>
+                        </div>
+                    </div>
+                    ${t.observacoes ? `<div style="margin-top:8px;font-size:.8rem;color:#6b7280">📝 ${t.observacoes}</div>` : ''}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+                        <button class="btn btn-success" onclick="TrocasPage.responder(${t.__row_index}, 'aceitar', this)">✅ Aceitar</button>
+                        <button class="btn btn-danger" onclick="TrocasPage.responder(${t.__row_index}, 'rejeitar', this)">❌ Recusar</button>
                     </div>
                 </div>`).join('');
 
