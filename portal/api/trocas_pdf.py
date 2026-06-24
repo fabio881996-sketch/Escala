@@ -126,8 +126,13 @@ def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
         folder_id = "1eiEHKvy9QtJCgVcJmhZl2Zu9o6IG5Wjl"
 
         media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype="application/pdf")
-        meta = {"name": filename, **({"parents": [folder_id]} if folder_id else {})}
-        f = service.files().create(body=meta, media_body=media, fields="id, webViewLink").execute()
+        meta = {"name": filename, "parents": [folder_id]}
+        f = service.files().create(
+            body=meta,
+            media_body=media,
+            fields="id, webViewLink",
+            supportsAllDrives=True
+        ).execute()
         return f.get("webViewLink")
 
     except Exception as e:
