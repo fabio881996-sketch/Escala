@@ -630,8 +630,14 @@ class DataLoader:
         Colunas na BD: total_ano_a_semana, total_ano_a_fds, total_ano_b, ultimo_a_semana, ultimo_a_fds, ultimo_b
         """
         t = tabela.lower()
+        td = tipo_dia.lower() if tipo_dia else 'semana'
+        # Whitelist — nunca permitir valores arbitrários em nomes de colunas
+        if t not in ('a', 'b'):
+            logger.warning(f"actualizar_ordem_remunerado: tabela inválida '{tabela}'")
+            return
+        if td not in ('semana', 'fds'):
+            td = 'semana'
         if t == 'a':
-            td = tipo_dia.lower() if tipo_dia else 'semana'
             col_total = f"total_ano_a_{td}"
             col_ultimo = f"ultimo_a_{td}"
         else:
