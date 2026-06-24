@@ -17,7 +17,7 @@ router = APIRouter()
 GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 REDIRECT_URI         = "https://portal-escalas-gnr-production.up.railway.app/api/calendar/callback"
-SCOPES               = "https://www.googleapis.com/auth/calendar.events"
+SCOPES               = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file"
 
 
 def _auth_url(state: str) -> str:

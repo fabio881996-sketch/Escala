@@ -104,35 +104,41 @@ def gerar_pdf_troca(
         return None
 
 
-def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
-    """Faz upload do PDF para a pasta 'Trocas GNR' no Drive. Devolve URL ou None."""
+def upload_drive(pdf_bytes: bytes, filename: str, admin_id: str | None = None) -> str | None:
+    """Faz upload do PDF para a pasta 'Trocas GNR' no Drive usando OAuth do admin."""
     try:
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
-        import json
+        from google.oauth2.credentials import Credentials
+        import json, time
 
-        creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON", os.environ.get("gcp_service_account", ""))
-        if not creds_json:
+        # Buscar token OAuth do admin no PG
+        if not admin_id:
             return None
 
-        creds_data = json.loads(creds_json)
-        creds = service_account.Credentials.from_service_account_info(
-            creds_data, scopes=["https://www.googleapis.com/auth/drive"]
-        )
+        from portal.api.calendar import _get_token, _refresh_token, _guardar_token
+        token_data = _get_token(admin_id)
+        if not token_data:
+            logger.warning("Upload Drive: admin %s não tem token OAuth", admin_id)
+            return None
+
+        # Refresh se necessário
+        if time.time() > token_data.get("expires_at", 0) - 60:
+            try:
+                token_data = _refresh_token(token_data)
+                token_data["expires_at"] = time.time() + token_data.get("expires_in", 3600)
+                _guardar_token(admin_id, token_data)
+            except Exception as e:
+                logger.warning("Upload Drive: refresh token falhou: %s", e)
+                return None
+
+        creds = Credentials(token=token_data["access_token"])
         service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
-        # ID fixo da pasta "Trocas GNR" partilhada com o service account
         folder_id = "1eiEHKvy9QtJCgVcJmhZl2Zu9o6IG5Wjl"
-
         media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype="application/pdf")
         meta = {"name": filename, "parents": [folder_id]}
-        f = service.files().create(
-            body=meta,
-            media_body=media,
-            fields="id, webViewLink",
-            supportsAllDrives=True
-        ).execute()
+        f = service.files().create(body=meta, media_body=media, fields="id, webViewLink").execute()
         return f.get("webViewLink")
 
     except Exception as e:
@@ -141,11 +147,11 @@ def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
 
 
 def gerar_e_upload(data, nome_orig, serv_orig, nome_dest, serv_dest,
-                   data_pedido="", data_aceitacao="", validador="", data_validacao=""):
-    """Gera PDF e faz upload para o Drive."""
+                   data_pedido="", data_aceitacao="", validador="", data_validacao="", admin_id=None):
+    """Gera PDF e faz upload para o Drive usando OAuth do admin."""
     pdf = gerar_pdf_troca(data, nome_orig, serv_orig, nome_dest, serv_dest,
                           data_pedido, data_aceitacao, validador, data_validacao)
     if pdf:
         filename = f"Troca_{data.replace('/','_')}_{nome_orig.split()[-1]}_{nome_dest.split()[-1]}.pdf"
-        return upload_drive(pdf, filename)
+        return upload_drive(pdf, filename, admin_id=admin_id)
     return None
