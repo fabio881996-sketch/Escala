@@ -192,7 +192,8 @@ async def subscribe(payload: SubscriptionPayload, current_user: dict = Depends(o
         _guardar_subscription(u_id, sub_json, fcm_token)
         return {"ok": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.delete("/unsubscribe")
@@ -207,7 +208,8 @@ async def unsubscribe(current_user: dict = Depends(obter_user_atual)):
                 loader.remover_push_subscription(endpoint)
         return {"ok": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 class PublicarEscalaPayload(BaseModel):
@@ -244,7 +246,8 @@ async def publicar_escala_notif(payload: PublicarEscalaPayload):
         )
         return {"ok": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 class TestePush(BaseModel):

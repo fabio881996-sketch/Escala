@@ -124,7 +124,8 @@ async def minhas_trocas(current_user: dict = Depends(obter_user_atual)):
             t["nome_destino"] = nomes.get(str(t.get("id_destino", "")), str(t.get("id_destino", "")))
         return {"trocas": trocas}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/pendentes")
@@ -153,7 +154,8 @@ async def trocas_pendentes(current_user: dict = Depends(obter_user_atual)):
             t["nome_origem"] = nomes.get(str(t.get("id_origem", "")), str(t.get("id_origem", "")))
         return {"trocas": trocas}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 def _consecutivos_permitidos(serv1: str, serv2: str) -> bool:
@@ -467,7 +469,8 @@ async def disponiveis(
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 # ── Solicitar troca ──────────────────────────────────────────
@@ -521,7 +524,8 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
         loader.limpar_cache()
         return {"ok": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.post("/cancelar-aprovada")
@@ -561,7 +565,8 @@ async def cancelar_troca_aprovada(payload: CancelarTroca, current_user: dict = D
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 # ── Cancelar pedido (só o autor pode cancelar) ───────────────
@@ -595,7 +600,8 @@ async def cancelar_troca(payload: CancelarTroca, current_user: dict = Depends(ob
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 # ── Responder a pedido (aceitar/rejeitar) ────────────────────
@@ -656,7 +662,8 @@ async def responder_troca(resposta: RespostaTroca, current_user: dict = Depends(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/pendentes-admin")
@@ -770,7 +777,8 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
             })
         return {"trocas": trocas}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 # ── Admin: validar trocas ────────────────────────────────────
@@ -857,4 +865,5 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")

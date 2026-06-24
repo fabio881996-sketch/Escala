@@ -95,7 +95,8 @@ async def minhas_ferias(current_user: dict = Depends(obter_user_atual)):
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/escala-ics")
@@ -203,7 +204,8 @@ async def escala_ics(token: str = None, current_user: dict = Depends(obter_user_
             headers={"Content-Disposition": f"attachment; filename=escala_{u_id}.ics"},
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/folgas-ics")
@@ -265,4 +267,5 @@ async def folgas_ics(token: str = None, current_user: dict = Depends(obter_user_
             headers={"Content-Disposition": f"attachment; filename=folgas_{u_id}_{ano}.ics"},
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")

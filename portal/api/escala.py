@@ -115,7 +115,8 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
 
         return {"data": data_str, "entradas": entradas}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 def _norm_hor(h):
@@ -406,7 +407,8 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
         servicos.sort(key=_sort_key)
         return {"servicos": servicos}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/aniversarios")
@@ -432,7 +434,8 @@ async def aniversarios(current_user: dict = Depends(obter_user_atual)):
                     continue
         return {"aniversariantes": aniversariantes}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/publicados")
@@ -442,7 +445,8 @@ async def dias_publicados(current_user: dict = Depends(obter_user_atual)):
         dias = sorted(loader.carregar_dias_publicados())
         return {"dias": dias}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.post("/publicar/{aba}")
@@ -467,7 +471,8 @@ async def publicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
             pass
         return {"ok": True, "aba": aba}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.delete("/publicar/{aba}")
@@ -478,4 +483,5 @@ async def despublicar_dia(aba: str, current_user: dict = Depends(obter_admin)):
         loader.limpar_cache()
         return {"ok": True, "aba": aba}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")

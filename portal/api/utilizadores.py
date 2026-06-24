@@ -24,7 +24,8 @@ async def listar_utilizadores(current_user: dict = Depends(obter_admin)):
         cols = [c for c in df.columns if "pin" not in c.lower() and "hash" not in c.lower()]
         return {"utilizadores": df[cols].fillna("").to_dict(orient="records")}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")
 
 
 @router.get("/efetivo")
@@ -39,4 +40,5 @@ async def efetivo(current_user: dict = Depends(obter_user_atual)):
         cols_existentes = [c for c in cols if c in df.columns]
         return {"militares": df[cols_existentes].fillna("").to_dict(orient="records")}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Erro interno: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Erro interno do servidor")

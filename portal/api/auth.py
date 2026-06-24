@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError, jwt
 from pydantic import BaseModel
@@ -63,9 +63,27 @@ def obter_admin(current_user: dict = Depends(obter_user_atual)) -> dict:
     return current_user
 
 
+# Rate limiting simples em memória para o login
+import time as _time
+_login_attempts: dict = {}  # ip -> (count, first_attempt)
+_MAX_ATTEMPTS = 10
+_BLOCK_SECONDS = 300  # 5 minutos
+
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), request: Request = None):
     """Login só por PIN — percorre todos os utilizadores e encontra o match."""
+    # Rate limiting por IP
+    if request:
+        ip = request.client.host if request.client else "unknown"
+        now = _time.time()
+        attempts, first = _login_attempts.get(ip, (0, now))
+        if now - first > _BLOCK_SECONDS:
+            attempts, first = 0, now
+        attempts += 1
+        _login_attempts[ip] = (attempts, first)
+        if attempts > _MAX_ATTEMPTS:
+            raise HTTPException(status_code=429, detail="Demasiadas tentativas. Tenta novamente mais tarde.")
+
     try:
         from services.data_loader_factory import get_data_loader
         loader = get_data_loader()
