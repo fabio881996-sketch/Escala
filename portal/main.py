@@ -17,7 +17,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(title="Portal de Escalas GNR", version="2.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://portal-escalas-gnr-production.up.railway.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Servir ficheiros estáticos
 app.mount("/static", StaticFiles(directory="portal/static"), name="static")
