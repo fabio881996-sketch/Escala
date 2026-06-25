@@ -6419,7 +6419,7 @@ else:
                 _id_fds_gf[_mid] = str(r.get('fds','')).strip()
 
         # Separadores por grupo
-        tabs_gf = st.tabs(_grupos_list + ["📅 Referências", "➕ Alterar Grupo"])
+        tabs_gf = st.tabs(_grupos_list + ["➕ Alterar Grupo"])
 
         for i, grupo in enumerate(_grupos_list):
             with tabs_gf[i]:
@@ -6454,91 +6454,6 @@ else:
                     st.markdown("**Folga FDS (sáb/dom/feriado):**")
                     for mid in sorted(militares_fds, key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else 9999):
                         st.text(f"  {mid} — {_id_nome_gf.get(mid, mid)}")
-
-        # Tab sábados de referência (on-the-fly)
-        with tabs_gf[-2]:
-            st.markdown("#### 📅 Sábados de Referência por Grupo")
-            st.info("Define o sábado de referência de cada grupo — o sistema calcula as folgas automaticamente para todos os anos, sem necessidade de actualização.")
-
-            _refs_actuais = load_grupos_folga().get('refs', {})
-
-            # Criar tabela se não existir
-            try:
-                with _pg_gf.connect(_db_url_gf) as _c:
-                    with _c.cursor() as _cu:
-                        _cu.execute("""CREATE TABLE IF NOT EXISTS grupos_folga_ref (
-                            grupo TEXT PRIMARY KEY, sab_ref DATE NOT NULL,
-                            updated_at TIMESTAMPTZ DEFAULT NOW()
-                        )""")
-                    _c.commit()
-            except Exception:
-                pass
-
-            st.markdown("**Grupos I-IV** (ciclo semanal — introduz o sábado do 1º ciclo):")
-            st.caption("Grupo I → 1º sábado | Grupo II → 1º sábado do ciclo (sáb antes da 1ª sexta) | Grupo III → sáb antes da 1ª quarta | Grupo IV → sáb antes da 1ª terça")
-            col_r1, col_r2 = st.columns(2)
-            with col_r1:
-                ref_I   = st.date_input("Grupo I:", value=_refs_actuais.get('I'), key="ref_I")
-                ref_III = st.date_input("Grupo III:", value=_refs_actuais.get('III'), key="ref_III")
-            with col_r2:
-                ref_II  = st.date_input("Grupo II:", value=_refs_actuais.get('II'), key="ref_II")
-                ref_IV  = st.date_input("Grupo IV:", value=_refs_actuais.get('IV'), key="ref_IV")
-
-            st.markdown("**Grupos V-VII** (apenas fins de semana — 1º sábado onde sáb✅ dom✅):")
-            col_r3, col_r4 = st.columns(2)
-            with col_r3:
-                ref_V   = st.date_input("Grupo V:", value=_refs_actuais.get('V'), key="ref_V")
-                ref_VI  = st.date_input("Grupo VI:", value=_refs_actuais.get('VI'), key="ref_VI")
-            with col_r4:
-                ref_VII = st.date_input("Grupo VII:", value=_refs_actuais.get('VII'), key="ref_VII")
-
-            if st.button("💾 Guardar Sábados de Referência", use_container_width=True, type="primary", key="btn_save_refs"):
-                _refs_novos = {
-                    'I': ref_I, 'II': ref_II, 'III': ref_III, 'IV': ref_IV,
-                    'V': ref_V, 'VI': ref_VI, 'VII': ref_VII
-                }
-                _faltam = [g for g, r in _refs_novos.items() if r is None]
-                if _faltam:
-                    st.warning(f"Faltam os sábados dos grupos: {', '.join(_faltam)}")
-                else:
-                    try:
-                        with _pg_gf.connect(_db_url_gf) as _c:
-                            with _c.cursor() as _cu:
-                                for g, r in _refs_novos.items():
-                                    _cu.execute("""
-                                        INSERT INTO grupos_folga_ref (grupo, sab_ref, updated_at)
-                                        VALUES (%s, %s, NOW())
-                                        ON CONFLICT (grupo) DO UPDATE SET sab_ref=EXCLUDED.sab_ref, updated_at=NOW()
-                                    """, (g, r))
-                            _c.commit()
-                        load_grupos_folga.clear()
-                        st.success("✅ Sábados de referência guardados! O sistema calcula folgas automaticamente para todos os anos.")
-                        st.rerun()
-                    except Exception as _e:
-                        st.error(f"Erro: {_e}")
-
-            # Preview — mostrar próximas folgas de cada grupo
-            if _refs_actuais:
-                st.markdown("---")
-                st.markdown("**Preview — próximas folgas dos grupos:**")
-                from datetime import date as _dt_prev, timedelta as _td_prev
-                _OFFSETS_14p = {0:'S',1:'S',6:'S',11:'S',12:'C',17:'S',18:'C',23:'S'}
-                _OFFSETS_VVp = {0:'S',1:'S',7:'C',8:'S',14:'S',15:'C',21:'S',22:'S'}
-                hoje_prev = _dt_prev.today()
-                for g in sorted(_refs_actuais.keys()):
-                    sab = _refs_actuais[g]
-                    if not sab: continue
-                    offsets_p = _OFFSETS_14p if g in ('I','II','III','IV') else _OFFSETS_VVp
-                    proximas = []
-                    d = hoje_prev
-                    while len(proximas) < 3:
-                        delta = (d - sab).days
-                        pos = delta % 28
-                        t = offsets_p.get(pos, '')
-                        if t:
-                            proximas.append(f"{d.strftime('%d-%m')}({'Sem' if t=='S' else 'Comp'})")
-                        d += _td_prev(days=1)
-                    st.caption(f"Grupo {g}: {' · '.join(proximas)}")
 
         # Tab alterar grupo de um militar
         with tabs_gf[-1]:
