@@ -726,8 +726,35 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
     if fds_val == 'sim' and (is_fds or d in feriados_list):
         return 'Folga Semanal'
 
-    # fds=não → folga determinada pelas datas do grupo
+    # fds=não → folga determinada pelo grupo
     if grupo:
+        # Método novo: sábado de referência para cálculo on-the-fly (funciona para qualquer ano)
+        refs = grupos_folga.get('refs', {})
+        if grupo in refs:
+            sab_ref = refs[grupo]
+            from datetime import date as _date2
+            if not isinstance(sab_ref, _date2):
+                try:
+                    from datetime import datetime as _dt2
+                    sab_ref = _dt2.strptime(str(sab_ref), "%Y-%m-%d").date()
+                except Exception:
+                    sab_ref = None
+            if sab_ref:
+                _OFFSETS_14 = {0:'semanal',1:'semanal',6:'semanal',11:'semanal',
+                               12:'complementar',17:'semanal',18:'complementar',23:'semanal'}
+                _OFFSETS_VV = {0:'semanal',1:'semanal',7:'complementar',8:'semanal',
+                               14:'semanal',15:'complementar',21:'semanal',22:'semanal'}
+                offsets = _OFFSETS_14 if grupo in ('I','II','III','IV') else _OFFSETS_VV
+                delta = (d - sab_ref).days
+                pos = delta % 28
+                tipo = offsets.get(pos, '')
+                if tipo == 'semanal':
+                    return 'Folga Semanal'
+                elif tipo == 'complementar':
+                    return 'Folga Complementar'
+                return ''
+
+        # Método legado: datas específicas guardadas no PG
         folgas_dict = grupos_folga.get('folgas', {})
         datas_grupo = folgas_dict.get(grupo, {})
         datas_semanal = datas_grupo.get('semanal', [])
@@ -2391,6 +2418,7 @@ else:
             "📢 Publicar Escala",
             "👤 Gerir Utilizadores",
             "📋 Gerir Listas",
+            "🏘️ Gerir Grupos de Folga",
         ]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
@@ -6164,13 +6192,25 @@ else:
         with tab_add:
             st.markdown("#### ➕ Adicionar Novo Militar")
             st.caption("O militar é adicionado ao efetivo e colocado no topo de todos os slots do ordem_escala mais recente.")
+
+            # Carregar grupos disponíveis
+            _gf_add = load_grupos_folga().get('folgas', {})
+            _grupos_opts = [''] + sorted(_gf_add.keys())
+
             col_a1, col_a2 = st.columns(2)
             with col_a1:
                 novo_id    = st.text_input("ID:", key="add_id")
                 novo_nome  = st.text_input("Nome:", key="add_nome")
-            with col_a2:
                 novo_posto = st.text_input("Posto:", key="add_posto")
+            with col_a2:
                 novo_email = st.text_input("Email:", key="add_email")
+                novo_grupo = st.selectbox("Grupo de Folga:", _grupos_opts, key="add_grupo",
+                                          help="Grupo de rotação de folgas. Deixa em branco se tiver folga ao fds (fds=sim).")
+                novo_fds   = st.selectbox("Folga fds:", ["não", "sim"], key="add_fds",
+                                          help="'sim' = folga semanal aos sábados, domingos e feriados")
+                novo_serv_defeito = st.selectbox("Serviço fixo:", ["", "Pronto", "Secretaria", "Inquéritos"],
+                                                 key="add_serv_defeito",
+                                                 help="Serviço fixo diário (Pronto, Secretaria, Inquéritos). Deixa em branco se for escalado normalmente.")
 
             if st.button("➕ ADICIONAR", use_container_width=True, type="primary", key="btn_add_mil"):
                 if not novo_id.strip() or not novo_nome.strip():
@@ -6179,16 +6219,22 @@ else:
                     st.error(f"❌ Já existe um militar com o ID {novo_id.strip()}.")
                 else:
                     try:
-                        # Adicionar no PostgreSQL
                         import psycopg2, os as _os_add
                         _db_url_add = str(st.secrets.get("DATABASE_URL", _os_add.environ.get("DATABASE_URL","")))
                         with psycopg2.connect(_db_url_add) as _conn_add:
                             with _conn_add.cursor() as _cur_add:
+                                # Adicionar utilizador
                                 _cur_add.execute("""
                                     INSERT INTO utilizadores (id, nome, posto, email)
                                     VALUES (%s, %s, %s, %s)
                                     ON CONFLICT (id) DO UPDATE SET nome=EXCLUDED.nome, posto=EXCLUDED.posto, email=EXCLUDED.email
                                 """, (novo_id.strip(), novo_nome.strip(), novo_posto.strip(), novo_email.strip()))
+                                # Adicionar à tabela folgas
+                                _cur_add.execute("""
+                                    INSERT INTO folgas (militar_id, fds, grupo, servico)
+                                    VALUES (%s, %s, %s, %s)
+                                    ON CONFLICT (militar_id) DO UPDATE SET fds=EXCLUDED.fds, grupo=EXCLUDED.grupo, servico=EXCLUDED.servico
+                                """, (novo_id.strip(), novo_fds, novo_grupo or None, novo_serv_defeito or None))
                             _conn_add.commit()
 
                         # Adicionar ao topo do ordem_escala mais recente
@@ -6204,7 +6250,10 @@ else:
                                 _pg_add.guardar_ordem_escala(aba_ord, ordem_atual)
 
                         load_utilizadores.clear()
+                        load_folgas.clear()
                         st.success(f"✅ Militar **{novo_nome.strip()}** (ID: {novo_id.strip()}) adicionado!")
+                        if novo_grupo:
+                            st.caption(f"Grupo de folga: {novo_grupo} | fds: {novo_fds}")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao adicionar: {e}")
@@ -6331,3 +6380,197 @@ else:
                                 st.error(f"Erro ao adicionar: {_e_add}")
                         else:
                             st.warning("Escreve um valor primeiro.")
+
+    elif menu == "🏘️ Gerir Grupos de Folga":
+        st.title("🏘️ Gerir Grupos de Folga")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        import psycopg2 as _pg_gf
+        _db_url_gf = str(st.secrets.get("DATABASE_URL", ""))
+
+        df_u_gf = load_utilizadores()
+        df_f_gf = load_folgas(ano_atual)
+        _gf_data = load_grupos_folga().get('folgas', {})
+        _grupos_list = sorted(_gf_data.keys())
+
+        if not _grupos_list:
+            st.warning("Sem grupos definidos. Migra a aba 'grupos_folga' primeiro.")
+            st.stop()
+
+        # Mapa id -> nome
+        _id_nome_gf = {}
+        if not df_u_gf.empty:
+            for _, r in df_u_gf.iterrows():
+                _mid = str(r.get('id','')).strip()
+                _posto = str(r.get('posto','')).strip()
+                _nome = str(r.get('nome','')).strip()
+                _id_nome_gf[_mid] = f"{_posto} {_nome}".strip()
+
+        # Mapa id -> grupo actual
+        _id_grupo_gf = {}
+        _id_fds_gf = {}
+        if not df_f_gf.empty:
+            _col_id_f = 'id' if 'id' in df_f_gf.columns else 'militar_id'
+            for _, r in df_f_gf.iterrows():
+                _mid = str(r.get(_col_id_f,'')).strip()
+                _id_grupo_gf[_mid] = str(r.get('grupo','')).strip()
+                _id_fds_gf[_mid] = str(r.get('fds','')).strip()
+
+        # Separadores por grupo
+        tabs_gf = st.tabs(_grupos_list + ["📅 Referências", "➕ Alterar Grupo"])
+
+        for i, grupo in enumerate(_grupos_list):
+            with tabs_gf[i]:
+                # Militares deste grupo
+                militares_grupo = [mid for mid, g in _id_grupo_gf.items() if g == grupo]
+                militares_fds = [mid for mid, f in _id_fds_gf.items() if f == 'sim']
+
+                st.markdown(f"**Grupo {grupo}** — {len(militares_grupo)} militares com rotação de grupo")
+
+                if militares_grupo:
+                    for mid in sorted(militares_grupo, key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else 9999):
+                        col_n, col_r = st.columns([4, 1])
+                        with col_n:
+                            st.text(f"{mid} — {_id_nome_gf.get(mid, mid)}")
+                        with col_r:
+                            if st.button("🗑️", key=f"rem_gf_{grupo}_{mid}", help="Remover do grupo"):
+                                try:
+                                    with _pg_gf.connect(_db_url_gf) as _c:
+                                        with _c.cursor() as _cu:
+                                            _cu.execute("UPDATE folgas SET grupo=NULL WHERE militar_id=%s", (mid,))
+                                        _c.commit()
+                                    load_folgas.clear()
+                                    st.success(f"✅ {_id_nome_gf.get(mid, mid)} removido do grupo {grupo}.")
+                                    st.rerun()
+                                except Exception as _e:
+                                    st.error(f"Erro: {_e}")
+                else:
+                    st.info("Sem militares neste grupo.")
+
+                if i == 0:
+                    st.markdown("---")
+                    st.markdown("**Folga FDS (sáb/dom/feriado):**")
+                    for mid in sorted(militares_fds, key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else 9999):
+                        st.text(f"  {mid} — {_id_nome_gf.get(mid, mid)}")
+
+        # Tab sábados de referência (on-the-fly)
+        with tabs_gf[-2]:
+            st.markdown("#### 📅 Sábados de Referência por Grupo")
+            st.info("Define o sábado de referência de cada grupo — o sistema calcula as folgas automaticamente para todos os anos, sem necessidade de actualização.")
+
+            _refs_actuais = load_grupos_folga().get('refs', {})
+
+            # Criar tabela se não existir
+            try:
+                with _pg_gf.connect(_db_url_gf) as _c:
+                    with _c.cursor() as _cu:
+                        _cu.execute("""CREATE TABLE IF NOT EXISTS grupos_folga_ref (
+                            grupo TEXT PRIMARY KEY, sab_ref DATE NOT NULL,
+                            updated_at TIMESTAMPTZ DEFAULT NOW()
+                        )""")
+                    _c.commit()
+            except Exception:
+                pass
+
+            st.markdown("**Grupos I-IV** (ciclo semanal — introduz o sábado do 1º ciclo):")
+            st.caption("Grupo I → 1º sábado | Grupo II → 1º sábado do ciclo (sáb antes da 1ª sexta) | Grupo III → sáb antes da 1ª quarta | Grupo IV → sáb antes da 1ª terça")
+            col_r1, col_r2 = st.columns(2)
+            with col_r1:
+                ref_I   = st.date_input("Grupo I:", value=_refs_actuais.get('I'), key="ref_I")
+                ref_III = st.date_input("Grupo III:", value=_refs_actuais.get('III'), key="ref_III")
+            with col_r2:
+                ref_II  = st.date_input("Grupo II:", value=_refs_actuais.get('II'), key="ref_II")
+                ref_IV  = st.date_input("Grupo IV:", value=_refs_actuais.get('IV'), key="ref_IV")
+
+            st.markdown("**Grupos V-VII** (apenas fins de semana — 1º sábado onde sáb✅ dom✅):")
+            col_r3, col_r4 = st.columns(2)
+            with col_r3:
+                ref_V   = st.date_input("Grupo V:", value=_refs_actuais.get('V'), key="ref_V")
+                ref_VI  = st.date_input("Grupo VI:", value=_refs_actuais.get('VI'), key="ref_VI")
+            with col_r4:
+                ref_VII = st.date_input("Grupo VII:", value=_refs_actuais.get('VII'), key="ref_VII")
+
+            if st.button("💾 Guardar Sábados de Referência", use_container_width=True, type="primary", key="btn_save_refs"):
+                _refs_novos = {
+                    'I': ref_I, 'II': ref_II, 'III': ref_III, 'IV': ref_IV,
+                    'V': ref_V, 'VI': ref_VI, 'VII': ref_VII
+                }
+                _faltam = [g for g, r in _refs_novos.items() if r is None]
+                if _faltam:
+                    st.warning(f"Faltam os sábados dos grupos: {', '.join(_faltam)}")
+                else:
+                    try:
+                        with _pg_gf.connect(_db_url_gf) as _c:
+                            with _c.cursor() as _cu:
+                                for g, r in _refs_novos.items():
+                                    _cu.execute("""
+                                        INSERT INTO grupos_folga_ref (grupo, sab_ref, updated_at)
+                                        VALUES (%s, %s, NOW())
+                                        ON CONFLICT (grupo) DO UPDATE SET sab_ref=EXCLUDED.sab_ref, updated_at=NOW()
+                                    """, (g, r))
+                            _c.commit()
+                        load_grupos_folga.clear()
+                        st.success("✅ Sábados de referência guardados! O sistema calcula folgas automaticamente para todos os anos.")
+                        st.rerun()
+                    except Exception as _e:
+                        st.error(f"Erro: {_e}")
+
+            # Preview — mostrar próximas folgas de cada grupo
+            if _refs_actuais:
+                st.markdown("---")
+                st.markdown("**Preview — próximas folgas dos grupos:**")
+                from datetime import date as _dt_prev, timedelta as _td_prev
+                _OFFSETS_14p = {0:'S',1:'S',6:'S',11:'S',12:'C',17:'S',18:'C',23:'S'}
+                _OFFSETS_VVp = {0:'S',1:'S',7:'C',8:'S',14:'S',15:'C',21:'S',22:'S'}
+                hoje_prev = _dt_prev.today()
+                for g in sorted(_refs_actuais.keys()):
+                    sab = _refs_actuais[g]
+                    if not sab: continue
+                    offsets_p = _OFFSETS_14p if g in ('I','II','III','IV') else _OFFSETS_VVp
+                    proximas = []
+                    d = hoje_prev
+                    while len(proximas) < 3:
+                        delta = (d - sab).days
+                        pos = delta % 28
+                        t = offsets_p.get(pos, '')
+                        if t:
+                            proximas.append(f"{d.strftime('%d-%m')}({'Sem' if t=='S' else 'Comp'})")
+                        d += _td_prev(days=1)
+                    st.caption(f"Grupo {g}: {' · '.join(proximas)}")
+
+        # Tab alterar grupo de um militar
+        with tabs_gf[-1]:
+            st.markdown("#### Alterar grupo de folga de um militar")
+            _opts_mil_gf = {f"{mid} — {_id_nome_gf.get(mid, mid)}": mid
+                            for mid in sorted(_id_nome_gf.keys(), key=lambda x: int(''.join(filter(str.isdigit, x))) if any(c.isdigit() for c in x) else 9999)}
+            _sel_mil_gf = st.selectbox("Militar:", list(_opts_mil_gf.keys()), key="sel_mil_gf")
+            _mid_gf = _opts_mil_gf[_sel_mil_gf]
+
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                _grupo_atual = _id_grupo_gf.get(_mid_gf, '')
+                _fds_atual = _id_fds_gf.get(_mid_gf, 'não')
+                st.caption(f"Grupo actual: **{_grupo_atual or '—'}** | fds: **{_fds_atual}**")
+                _novo_grupo_gf = st.selectbox("Novo grupo:", [''] + _grupos_list, key="novo_grupo_gf",
+                                              index=(_grupos_list.index(_grupo_atual) + 1) if _grupo_atual in _grupos_list else 0)
+            with col_g2:
+                _novo_fds_gf = st.selectbox("Folga fds:", ["não", "sim"], key="novo_fds_gf",
+                                            index=0 if _fds_atual != 'sim' else 1)
+
+            if st.button("💾 Guardar alteração", use_container_width=True, type="primary", key="btn_save_gf"):
+                try:
+                    with _pg_gf.connect(_db_url_gf) as _c:
+                        with _c.cursor() as _cu:
+                            _cu.execute("""
+                                INSERT INTO folgas (militar_id, grupo, fds)
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT (militar_id) DO UPDATE SET grupo=EXCLUDED.grupo, fds=EXCLUDED.fds
+                            """, (_mid_gf, _novo_grupo_gf or None, _novo_fds_gf))
+                        _c.commit()
+                    load_folgas.clear()
+                    st.success(f"✅ {_id_nome_gf.get(_mid_gf, _mid_gf)} → Grupo {_novo_grupo_gf or '—'} | fds: {_novo_fds_gf}")
+                    st.rerun()
+                except Exception as _e:
+                    st.error(f"Erro: {_e}")
