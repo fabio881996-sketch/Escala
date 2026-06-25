@@ -389,24 +389,44 @@ class DataLoader:
     # ── Grupos de folga ───────────────────────────────────────
     def carregar_grupos_folga(self) -> dict:
         """Carrega grupos de folga.
-        Devolve dict com duas estruturas:
-        - 'folgas': {'I': {'semanal': ['05-01','10-01',...], 'complementar': ['22-01',...]}, ...}
-        - 'grupos': {'I': [militar_ids...], 'II': [...]} — construído do df_folgas
+        Tenta primeiro a tabela grupos_folga_ref (sábado de referência por grupo).
+        Se não existir, usa a tabela grupos_folga com datas específicas (legado).
+        Devolve dict com:
+        - 'folgas': {'I': {'semanal': [...], 'complementar': [...]}, ...}  (legado)
+        - 'refs': {'I': date(2026,1,10), ...}  (novo — sábado de referência)
+        - 'grupos': {}
         """
         val, hit = _cache.get("grupos_folga")
         if hit:
             return val
+        from datetime import date as _date
+        refs = {}
+        try:
+            rows_ref = _query("SELECT grupo, sab_ref FROM grupos_folga_ref ORDER BY grupo")
+            if rows_ref:
+                for r in rows_ref:
+                    g = r["grupo"]
+                    sab = r["sab_ref"]
+                    if isinstance(sab, str):
+                        from datetime import datetime as _dt
+                        sab = _dt.strptime(sab, "%Y-%m-%d").date()
+                    refs[g] = sab
+        except Exception:
+            pass
+
+        # Legado: carregar datas específicas da tabela grupos_folga
+        folgas = {}
         try:
             rows = _query("SELECT grupo, folga_semanal, folga_complementar FROM grupos_folga ORDER BY grupo")
-            folgas = {}
             for r in rows:
                 g = r["grupo"]
                 fs = [d.strip() for d in (r["folga_semanal"] or "").split(";") if d.strip()]
                 fc = [d.strip() for d in (r["folga_complementar"] or "").split(";") if d.strip()]
                 folgas[g] = {"semanal": fs, "complementar": fc}
-            result = {"folgas": folgas, "grupos": {}}
         except Exception:
-            result = {"folgas": {}, "grupos": {}}
+            pass
+
+        result = {"folgas": folgas, "refs": refs, "grupos": {}}
         _cache.set("grupos_folga", result, 3600)
         return result
 
