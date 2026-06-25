@@ -282,13 +282,16 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         else:
                             continue
                         serv_novo = s.rsplit("(", 1)[0].strip()
-                        hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else horario
+                        hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else ""
                         # Ir buscar a linha do outro militar para ter viatura/rádio/etc correctos
                         mask_outro = df_d["id"].astype(str).str.strip() == outro_id
                         if mask_outro.any():
                             row_ref = df_d[mask_outro].iloc[0]
+                            # Se não tiver horário no servico_destino, usar o do outro militar
+                            if not hor_novo:
+                                hor_novo = str(row_ref.get("horário", "") or "").strip()
                         servico = serv_novo
-                        horario = hor_novo
+                        horario = hor_novo or horario
                         troca_aplicada = True
                         troca_com_id = outro_id
                         break

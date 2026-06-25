@@ -841,7 +841,7 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
                     data_pedido=_data_ped, data_aceitacao=_data_ace,
                     validador=f"{current_user.get('posto','')} {current_user.get('nome','')}".strip(),
                     data_validacao=_dt2.now().strftime("%d/%m/%Y %H:%M"),
-                    admin_id=str(current_user.get("sub","")).strip(),
+                    admin_id="1030",  # OAuth Drive sempre com o admin principal
                 )
             except Exception as _e:
                 pass  # PDF é opcional — não bloquear a validação
