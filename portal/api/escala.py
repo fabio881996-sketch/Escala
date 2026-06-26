@@ -164,8 +164,19 @@ def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
             s2 = str(t["servico_origem"])
             serv_novo_d = s2.rsplit("(",1)[0].strip()
             hor_novo_d  = _norm_hor(s2.rsplit("(",1)[1].rstrip(")") if "(" in s2 else "")
-            if id_o in serv_map: serv_map[id_o].append((serv_novo_o, hor_novo_o))
-            if id_d in serv_map: serv_map[id_d].append((serv_novo_d, hor_novo_d))
+            # Substituir o serviço original pelo novo (não adicionar)
+            if id_o in serv_map:
+                serv_orig_o = serv_map[id_o][0][0].strip().lower() if serv_map[id_o] else ""
+                serv_map[id_o] = [(sv, hor) for (sv, hor) in serv_map[id_o]
+                                  if sv.strip().lower() != serv_orig_o or not serv_orig_o]
+                if serv_novo_o:
+                    serv_map[id_o].append((serv_novo_o, hor_novo_o))
+            if id_d in serv_map:
+                serv_orig_d = serv_map[id_d][0][0].strip().lower() if serv_map[id_d] else ""
+                serv_map[id_d] = [(sv, hor) for (sv, hor) in serv_map[id_d]
+                                  if sv.strip().lower() != serv_orig_d or not serv_orig_d]
+                if serv_novo_d:
+                    serv_map[id_d].append((serv_novo_d, hor_novo_d))
     colegas = []
     serv_lower = servico.strip().lower()
     hor_norm = _norm_hor(horario)
