@@ -6392,11 +6392,12 @@ else:
 
         df_u_gf = load_utilizadores()
         df_f_gf = load_folgas(ano_atual)
-        _gf_data = load_grupos_folga().get('folgas', {})
-        _grupos_list = sorted(_gf_data.keys())
+        _gf_all = load_grupos_folga()
+        # Usar refs (novo) ou folgas (legado) para obter lista de grupos
+        _grupos_list = sorted(set(list(_gf_all.get('refs', {}).keys()) + list(_gf_all.get('folgas', {}).keys())))
 
         if not _grupos_list:
-            st.warning("Sem grupos definidos. Migra a aba 'grupos_folga' primeiro.")
+            st.warning("Sem grupos definidos. Define os sábados de referência primeiro.")
             st.stop()
 
         # Mapa id -> nome
