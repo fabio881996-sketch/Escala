@@ -5314,9 +5314,24 @@ else:
                                     orig_aba_e = orig_dict_e.get(aba_e, {})
                                     ids_alterados = set()
                                     if orig_aba_e and not df_editado_s.empty:
+                                        # Contar linhas por militar no estado novo
+                                        from collections import Counter as _Counter
+                                        ids_novos = [str(r.get('id','')).strip() for _, r in df_editado_s.iterrows() if str(r.get('id','')).strip()]
+                                        contagem_novos = _Counter(ids_novos)
+                                        # Contar linhas por militar no estado original
+                                        contagem_orig = _Counter(orig_aba_e.keys()) if orig_aba_e else _Counter()
+
                                         for _, row_e in df_editado_s.iterrows():
                                             mid_e = str(row_e.get('id','')).strip()
-                                            if not mid_e or mid_e not in orig_aba_e: continue
+                                            if not mid_e: continue
+                                            # Linha nova — militar não existia na escala original
+                                            if mid_e not in orig_aba_e:
+                                                ids_alterados.add(mid_e)
+                                                continue
+                                            # Militar tem mais linhas do que antes (ex: remunerado adicionado)
+                                            if contagem_novos.get(mid_e, 0) > contagem_orig.get(mid_e, 0):
+                                                ids_alterados.add(mid_e)
+                                                continue
                                             orig_r = orig_aba_e[mid_e]
                                             serv_orig_e = str(orig_r.get('serviço','')).strip()
                                             serv_novo_e = str(row_e.get('serviço','')).strip()
