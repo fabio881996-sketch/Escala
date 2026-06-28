@@ -85,15 +85,15 @@ const TrocasPage = {
                         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px">
                             <div style="font-size:.65rem;font-weight:700;color:#1d4ed8;letter-spacing:.05em;margin-bottom:6px">🙋 SOLICITA</div>
                             <div style="font-weight:700;font-size:.85rem;color:#1e3a5f;margin-bottom:6px">${t.nome_origem || t.id_origem}</div>
-                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${servOrigFmt}</span></div>
-                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${servDestFmt}</span></div>
+                            <div style="font-size:.78rem;color:#6b7280">${_isRem ? servOrigFmt : 'Cede: <span style="color:#374151;font-weight:600">' + servOrigFmt + '</span>'}</div>
+                            ${_isRem ? '' : `<div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${servDestFmt}</span></div>`}
                         </div>
                         <!-- Militar que aceita -->
                         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px">
                             <div style="font-size:.65rem;font-weight:700;color:#16a34a;letter-spacing:.05em;margin-bottom:6px">✅ ACEITA</div>
                             <div style="font-weight:700;font-size:.85rem;color:#1e3a5f;margin-bottom:6px">${t.nome_destino || t.id_destino}</div>
-                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${servDestFmt}</span></div>
-                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${servOrigFmt}</span></div>
+                            <div style="font-size:.78rem;color:#6b7280">${_isRem ? servDestFmt : 'Cede: <span style="color:#374151;font-weight:600">' + servDestFmt + '</span>'}</div>
+                            ${_isRem ? '' : `<div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${servOrigFmt}</span></div>`}
                         </div>
                     </div>
 
