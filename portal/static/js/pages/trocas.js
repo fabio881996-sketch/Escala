@@ -182,10 +182,19 @@ const TrocasPage = {
             const htmlMeus = meusAtivos.map(t => {
                 const _isRem_m = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
                 const statusLabel = t.status === 'Pendente_Admin' ? '⏳ Aguarda admin' : '⏳ Aguarda resposta';
+                let _tituloServ = _traduzirServ(t.servico_origem);
+                if (_isRem_m) {
+                    const _hm = t.servico_origem.match(/\(([^)]+)\)/);
+                    if (t.servico_origem.startsWith('MATAR_REMUNERADO')) {
+                        _tituloServ = _hm ? '🎫 Cede remunerado (' + _hm[1] + ')' : '🎫 Cede remunerado';
+                    } else {
+                        _tituloServ = _hm ? '🎫 Faz remunerado (' + _hm[1] + ')' : '🎫 Faz remunerado';
+                    }
+                }
                 return `
                 <div class="card" style="border-left:4px solid #64748b">
                     <div class="card-label">📤 Pedido enviado • ${t.data} • ${statusLabel}</div>
-                    <div class="card-title">🔄 ${_isRem_m ? (t.servico_origem.startsWith('MATAR_REMUNERADO') ? (() => { const h = t.servico_origem.match(/\(([^)]+)\)/); return h ? `🎫 Cede remunerado (${h[1]})` : '🎫 Cede remunerado'; })() : (() => { const h = t.servico_origem.match(/\(([^)]+)\)/); return h ? `🎫 Faz remunerado (${h[1]})` : '🎫 Faz remunerado'; })()) : _traduzirServ(t.servico_origem)}</div>
+                    <div class="card-title">🔄 ${_tituloServ}</div>
                     <div class="card-subtitle">Para: ${t.nome_destino || t.id_destino}</div>
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     ${t.status === 'Pendente_Militar' ? `
