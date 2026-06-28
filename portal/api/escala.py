@@ -68,7 +68,7 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             trocas_dia = df_trocas[
                 (df_trocas["data"] == d_s) &
                 (df_trocas["status"] == "Aprovada") &
-                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
             ]
             for _, t in trocas_dia.iterrows():
                 id_orig = str(t["id_origem"]).strip()
@@ -92,10 +92,10 @@ async def escala_dia(data_str: str, current_user: dict = Depends(obter_user_atua
             trocas_rem = df_trocas[
                 (df_trocas["data"] == d_s) &
                 (df_trocas["status"] == "Aprovada") &
-                (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
             ]
             for _, t in trocas_rem.iterrows():
-                is_fazer = str(t["servico_origem"]).strip() == "FAZER_REMUNERADO"
+                is_fazer = str(t["servico_origem"]).strip().startswith("FAZER_REMUNERADO")
                 quem_faz  = str(t["id_origem"]).strip() if is_fazer else str(t["id_destino"]).strip()
                 quem_cede = str(t["id_destino"]).strip() if is_fazer else str(t["id_origem"]).strip()
                 for idx_r, row_r in df.iterrows():
@@ -153,7 +153,7 @@ def _get_colegas(df_d, servico, horario, u_id, df_trocas, d_s, id_para_nome):
         tr = df_trocas[
             (df_trocas["data"] == d_s) &
             (df_trocas["status"] == "Aprovada") &
-            (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+            (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
         ]
         for _, t in tr.iterrows():
             id_o = str(t["id_origem"]).strip()
@@ -249,7 +249,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 cedeu_rem = df_trocas[
                     (df_trocas["data"] == d_s_check) &
                     (df_trocas["status"] == "Aprovada") &
-                    (df_trocas["servico_origem"] == "MATAR_REMUNERADO") &
+                    (df_trocas["servico_origem"].astype(str).str.startswith("MATAR_REMUNERADO")) &
                     (df_trocas["id_origem"].astype(str).str.strip() == _uid_str)
                 ]
                 if not cedeu_rem.empty:
@@ -279,7 +279,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     tr = df_trocas[
                         (df_trocas["data"] == d_s) &
                         (df_trocas["status"] == "Aprovada") &
-                        (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                        (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
                     ]
                     for _, t in tr.iterrows():
                         id_o = str(t["id_origem"]).strip()
@@ -354,10 +354,10 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                 tr_rem = df_trocas[
                     (df_trocas["data"] == d_s) &
                     (df_trocas["status"] == "Aprovada") &
-                    (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                    (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
                 ]
                 for _, t_rem in tr_rem.iterrows():
-                    is_fazer = str(t_rem["servico_origem"]).strip() == "FAZER_REMUNERADO"
+                    is_fazer = str(t_rem["servico_origem"]).strip().startswith("FAZER_REMUNERADO")
                     quem_faz  = str(t_rem["id_origem"]).strip() if is_fazer else str(t_rem["id_destino"]).strip()
                     quem_cede = str(t_rem["id_destino"]).strip() if is_fazer else str(t_rem["id_origem"]).strip()
                     if quem_faz != str(u_id).strip():
@@ -386,7 +386,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     outros_fazer = df_trocas[
                         (df_trocas["data"] == d_s) &
                         (df_trocas["status"] == "Aprovada") &
-                        (df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
+                        (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO"))) &
                         (df_trocas["id_origem" if is_fazer else "id_destino"].astype(str).str.strip() != str(u_id).strip())
                     ]
                     for _, o in outros_fazer.iterrows():

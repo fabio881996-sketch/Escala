@@ -214,7 +214,7 @@ async def disponiveis(
             aprovadas = df_trocas[
                 (df_trocas["data"] == data_fmt) &
                 (df_trocas["status"] == "Aprovada") &
-                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
             ]
             ids_com_troca = set(
                 aprovadas["id_origem"].astype(str).tolist() +
@@ -240,7 +240,7 @@ async def disponiveis(
             tr_aprov = df_trocas[
                 (df_trocas["data"] == data_fmt) &
                 (df_trocas["status"] == "Aprovada") &
-                (~df_trocas["servico_origem"].isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"]))
+                (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
             ]
             for _, t in tr_aprov.iterrows():
                 id_o = str(t["id_origem"]).strip()
@@ -276,7 +276,7 @@ async def disponiveis(
         _eu_cedi_rem = not df_trocas.empty and data_fmt and not df_trocas[
             (df_trocas["data"] == data_fmt) &
             (df_trocas["status"] == "Aprovada") &
-            (df_trocas["servico_origem"] == "MATAR_REMUNERADO") &
+            (df_trocas["servico_origem"].astype(str).str.startswith("MATAR_REMUNERADO")) &
             (df_trocas["id_origem"].astype(str).str.strip() == u_id)
         ].empty
         if not df_dia.empty:
@@ -335,7 +335,7 @@ async def disponiveis(
                 cedeu = not df_trocas[
                     (df_trocas["data"] == data_fmt) &
                     (df_trocas["status"] == "Aprovada") &
-                    (df_trocas["servico_origem"] == "MATAR_REMUNERADO") &
+                    (df_trocas["servico_origem"].astype(str).str.startswith("MATAR_REMUNERADO")) &
                     (df_trocas["id_origem"].astype(str).str.strip() == mid)
                 ].empty
                 if cedeu:
@@ -357,7 +357,7 @@ async def disponiveis(
                         cedeu = not df_trocas[
                             (df_trocas["data"] == data_fmt) &
                             (df_trocas["status"] == "Aprovada") &
-                            (df_trocas["servico_origem"].str.upper().isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
+                            (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO"))) &
                             (df_trocas["id_destino"].astype(str) == mid)
                         ].empty
                     if not cedeu:
@@ -424,7 +424,7 @@ async def disponiveis(
                     cedeu = not df_trocas[
                         (df_trocas["data"] == data_fmt) &
                         (df_trocas["status"] == "Aprovada") &
-                        (df_trocas["servico_origem"].str.upper().isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
+                        (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO"))) &
                         (df_trocas["id_destino"].astype(str) == mid)
                     ].empty
                 if cedeu:
@@ -444,7 +444,7 @@ async def disponiveis(
                             cedeu_rem = not df_trocas[
                                 (df_trocas["data"] == data_fmt) &
                                 (df_trocas["status"] == "Aprovada") &
-                                (df_trocas["servico_origem"].str.upper().isin(["MATAR_REMUNERADO","FAZER_REMUNERADO"])) &
+                                (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO"))) &
                                 (df_trocas["id_destino"].astype(str) == mid)
                             ].empty
                         if not cedeu_rem:
@@ -747,7 +747,7 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
 
             # Após troca: origem vai fazer serv_dest, destino vai fazer serv_orig
             avisos = []
-            if serv_orig not in ("MATAR_REMUNERADO", "FAZER_REMUNERADO"):
+            if not (serv_orig.startswith("MATAR_REMUNERADO") or serv_orig.startswith("FAZER_REMUNERADO")):
                 avisos += _consecutivo_aviso(id_orig, nome_orig, serv_dest, data_str)
                 avisos += _consecutivo_aviso(id_dest, nome_dest, serv_orig, data_str)
 
