@@ -53,8 +53,8 @@ const TrocasPage = {
                 const avisos = avisosList.map(a => `
                     <div style="background:#fff7e6;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:.8rem;color:#92400e">
                         ⚠️ ${a}
-                    </div>`;
-            }).join('');
+                    </div>`
+                ).join('');
 
                 // Após troca: origem fica com serv_dest, destino fica com serv_orig
                 // horário já incluído no serviço formato "Serviço (HH-HH)"
