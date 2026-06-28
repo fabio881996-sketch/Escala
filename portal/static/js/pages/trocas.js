@@ -53,12 +53,27 @@ const TrocasPage = {
                 const avisos = avisosList.map(a => `
                     <div style="background:#fff7e6;border:1px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:.8rem;color:#92400e">
                         ⚠️ ${a}
-                    </div>`).join('');
+                    </div>`;
+            }).join('');
 
                 // Após troca: origem fica com serv_dest, destino fica com serv_orig
                 // horário já incluído no serviço formato "Serviço (HH-HH)"
-                const servOrigFmt  = t.servico_origem  || '—';
-                const servDestFmt  = t.servico_destino || '—';
+                const _traduzirServ = (s) => {
+                    if (!s) return '—';
+                    if (s.startsWith('MATAR_REMUNERADO')) {
+                        const hor = s.match(/\(([^)]+)\)/);
+                        return hor ? `🎫 Cede remunerado (${hor[1]})` : '🎫 Cede remunerado';
+                    }
+                    if (s.startsWith('FAZER_REMUNERADO')) {
+                        const hor = s.match(/\(([^)]+)\)/);
+                        return hor ? `🎫 Faz remunerado (${hor[1]})` : '🎫 Faz remunerado';
+                    }
+                    return s;
+                };
+                // Para trocas de remunerado, simplificar apresentação
+                const _isRem = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
+                const servOrigFmt  = _isRem ? '🎫 Cede remunerado' : _traduzirServ(t.servico_origem);
+                const servDestFmt  = _isRem ? '🎫 Faz remunerado'  : _traduzirServ(t.servico_destino);
 
                 return `
                 <div class="card card-amber">
@@ -132,21 +147,28 @@ const TrocasPage = {
                 return;
             }
 
-            const htmlPendentes = pendentes.map((t, i) => `
+            const htmlPendentes = pendentes.map((t, i) => {
+                const _isRem_p = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
+                const _traduzirServP = (s) => { if (!s) return '—'; if (s.startsWith('MATAR_REMUNERADO')) { const h = s.match(/\(([^)]+)\)/); return h ? `🎫 Cede remunerado (${h[1]})` : '🎫 Cede remunerado'; } if (s.startsWith('FAZER_REMUNERADO')) { const h = s.match(/\(([^)]+)\)/); return h ? `🎫 Faz remunerado (${h[1]})` : '🎫 Faz remunerado'; } return s; };
+                const _solicitaCede = _isRem_p ? _traduzirServP(t.servico_origem) : `Cede: <span style="color:#374151;font-weight:600">${_traduzirServP(t.servico_origem)}</span>`;
+                const _solicitaFica = _isRem_p ? '' : `Fica com: <span style="font-weight:700">${_traduzirServ(t.servico_destino)}</span>`;
+                const _aceitasCede = _isRem_p ? _traduzirServP(t.servico_origem).replace('Cede', 'Faz').replace('MATAR', 'FAZER') : `Cede: <span style="color:#374151;font-weight:600">${_traduzirServP(t.servico_destino)}</span>`;
+                const _aceitasFica = _isRem_p ? '' : `Fica com: <span style="font-weight:700">${_traduzirServ(t.servico_origem)}</span>`;
+                return `
                 <div class="card card-amber">
                     <div class="card-label">📥 PEDIDO RECEBIDO • ${t.data}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
                         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px">
                             <div style="font-size:.65rem;font-weight:700;color:#1d4ed8;margin-bottom:6px">🙋 SOLICITA</div>
                             <div style="font-weight:700;font-size:.82rem;margin-bottom:6px">${t.nome_origem || t.id_origem}</div>
-                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${t.servico_origem}</span></div>
-                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${t.servico_destino}</span></div>
+                            <div style="font-size:.78rem;color:#6b7280">${_solicitaCede}</div>
+                            ${_solicitaFica ? `<div style="font-size:.78rem;color:#16a34a;margin-top:4px">${_solicitaFica}</div>` : ''}
                         </div>
                         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px">
                             <div style="font-size:.65rem;font-weight:700;color:#16a34a;margin-bottom:6px">✅ ACEITAS</div>
                             <div style="font-weight:700;font-size:.82rem;margin-bottom:6px">Tu</div>
-                            <div style="font-size:.78rem;color:#6b7280">Cede: <span style="color:#374151;font-weight:600">${t.servico_destino}</span></div>
-                            <div style="font-size:.78rem;color:#16a34a;margin-top:4px">Fica com: <span style="font-weight:700">${t.servico_origem}</span></div>
+                            <div style="font-size:.78rem;color:#6b7280">${_aceitasCede}</div>
+                            ${_aceitasFica ? `<div style="font-size:.78rem;color:#16a34a;margin-top:4px">${_aceitasFica}</div>` : ''}
                         </div>
                     </div>
                     ${t.observacoes ? `<div style="margin-top:8px;font-size:.8rem;color:#6b7280">📝 ${t.observacoes}</div>` : ''}
@@ -154,14 +176,16 @@ const TrocasPage = {
                         <button class="btn btn-success" onclick="TrocasPage.responder(${t.__row_index}, 'aceitar', this)">✅ Aceitar</button>
                         <button class="btn btn-danger" onclick="TrocasPage.responder(${t.__row_index}, 'rejeitar', this)">❌ Recusar</button>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
 
             const htmlMeus = meusAtivos.map(t => {
+                const _isRem_m = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
                 const statusLabel = t.status === 'Pendente_Admin' ? '⏳ Aguarda admin' : '⏳ Aguarda resposta';
                 return `
                 <div class="card" style="border-left:4px solid #64748b">
                     <div class="card-label">📤 Pedido enviado • ${t.data} • ${statusLabel}</div>
-                    <div class="card-title">🔄 ${t.servico_origem}</div>
+                    <div class="card-title">🔄 ${_isRem_m ? (t.servico_origem.startsWith('MATAR_REMUNERADO') ? (() => { const h = t.servico_origem.match(/\(([^)]+)\)/); return h ? `🎫 Cede remunerado (${h[1]})` : '🎫 Cede remunerado'; })() : (() => { const h = t.servico_origem.match(/\(([^)]+)\)/); return h ? `🎫 Faz remunerado (${h[1]})` : '🎫 Faz remunerado'; })()) : _traduzirServ(t.servico_origem)}</div>
                     <div class="card-subtitle">Para: ${t.nome_destino || t.id_destino}</div>
                     ${t.observacoes ? `<div class="card-subtitle" style="margin-top:4px">📝 ${t.observacoes}</div>` : ''}
                     ${t.status === 'Pendente_Militar' ? `
@@ -356,10 +380,10 @@ const TrocasPage = {
         // Incluir horário no serviço no formato "Serviço (HH-HH)"
         const servicoDestino = horarioDestino ? `${servicoDestinoBase} (${horarioDestino})` : servicoDestinoBase;
 
-        // Serviço origem: para dar_remunerado usar marcador especial
+        // Serviço origem: para dar_remunerado usar marcador especial com horário
         let servicoOrigem = meuHorario ? `${meuServico} (${meuHorario})` : (meuServico || 'auto');
-        if (tipo === 'dar_remunerado') servicoOrigem = 'MATAR_REMUNERADO';
-        if (tipo === 'fazer_remunerado') servicoOrigem = 'FAZER_REMUNERADO';
+        if (tipo === 'dar_remunerado') servicoOrigem = meuHorario ? `MATAR_REMUNERADO (${meuHorario})` : 'MATAR_REMUNERADO';
+        if (tipo === 'fazer_remunerado') servicoOrigem = horarioDestino ? `FAZER_REMUNERADO (${horarioDestino})` : 'FAZER_REMUNERADO';
 
         const el = document.getElementById('troca-resultado');
         try {
