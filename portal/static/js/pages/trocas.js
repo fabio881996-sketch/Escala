@@ -5,6 +5,19 @@
 const TrocasPage = {
     activeTab: 'solicitar',
 
+    _traduzirServ(s) {
+        if (!s) return '—';
+        if (s.startsWith('MATAR_REMUNERADO')) {
+            const hor = s.match(/\(([^)]+)\)/);
+            return hor ? `🎫 Cede remunerado (${hor[1]})` : '🎫 Cede remunerado';
+        }
+        if (s.startsWith('FAZER_REMUNERADO')) {
+            const hor = s.match(/\(([^)]+)\)/);
+            return hor ? `🎫 Faz remunerado (${hor[1]})` : '🎫 Faz remunerado';
+        }
+        return s;
+    },
+
     async render() {
         const content = document.getElementById('content');
         const user = API.getUser();
@@ -58,22 +71,10 @@ const TrocasPage = {
 
                 // Após troca: origem fica com serv_dest, destino fica com serv_orig
                 // horário já incluído no serviço formato "Serviço (HH-HH)"
-                const _traduzirServ = (s) => {
-                    if (!s) return '—';
-                    if (s.startsWith('MATAR_REMUNERADO')) {
-                        const hor = s.match(/\(([^)]+)\)/);
-                        return hor ? `🎫 Cede remunerado (${hor[1]})` : '🎫 Cede remunerado';
-                    }
-                    if (s.startsWith('FAZER_REMUNERADO')) {
-                        const hor = s.match(/\(([^)]+)\)/);
-                        return hor ? `🎫 Faz remunerado (${hor[1]})` : '🎫 Faz remunerado';
-                    }
-                    return s;
-                };
                 // Para trocas de remunerado, simplificar apresentação
                 const _isRem = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
-                const servOrigFmt  = _isRem ? '🎫 Cede remunerado' : _traduzirServ(t.servico_origem);
-                const servDestFmt  = _isRem ? '🎫 Faz remunerado'  : _traduzirServ(t.servico_destino);
+                const servOrigFmt  = this._traduzirServ(t.servico_origem);
+                const servDestFmt  = this._traduzirServ(t.servico_destino);
 
                 return `
                 <div class="card card-amber">
@@ -149,11 +150,11 @@ const TrocasPage = {
 
             const htmlPendentes = pendentes.map((t, i) => {
                 const _isRem_p = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
-                const _traduzirServP = (s) => { if (!s) return '—'; if (s.startsWith('MATAR_REMUNERADO')) { const h = s.match(/\(([^)]+)\)/); return h ? `🎫 Cede remunerado (${h[1]})` : '🎫 Cede remunerado'; } if (s.startsWith('FAZER_REMUNERADO')) { const h = s.match(/\(([^)]+)\)/); return h ? `🎫 Faz remunerado (${h[1]})` : '🎫 Faz remunerado'; } return s; };
-                const _solicitaCede = _isRem_p ? _traduzirServP(t.servico_origem) : `Cede: <span style="color:#374151;font-weight:600">${_traduzirServP(t.servico_origem)}</span>`;
-                const _solicitaFica = _isRem_p ? '' : `Fica com: <span style="font-weight:700">${_traduzirServ(t.servico_destino)}</span>`;
-                const _aceitasCede = _isRem_p ? _traduzirServP(t.servico_origem).replace('Cede', 'Faz').replace('MATAR', 'FAZER') : `Cede: <span style="color:#374151;font-weight:600">${_traduzirServP(t.servico_destino)}</span>`;
-                const _aceitasFica = _isRem_p ? '' : `Fica com: <span style="font-weight:700">${_traduzirServ(t.servico_origem)}</span>`;
+                
+                const _solicitaCede = _isRem_p ? this._traduzirServ(t.servico_origem) : `Cede: <span style="color:#374151;font-weight:600">${this._traduzirServ(t.servico_origem)}</span>`;
+                const _solicitaFica = _isRem_p ? '' : `Fica com: <span style="font-weight:700">${this._traduzirServ(t.servico_destino)}</span>`;
+                const _aceitasCede = _isRem_p ? this._traduzirServ(t.servico_origem).replace('Cede', 'Faz').replace('MATAR', 'FAZER') : `Cede: <span style="color:#374151;font-weight:600">${this._traduzirServ(t.servico_destino)}</span>`;
+                const _aceitasFica = _isRem_p ? '' : `Fica com: <span style="font-weight:700">${this._traduzirServ(t.servico_origem)}</span>`;
                 return `
                 <div class="card card-amber">
                     <div class="card-label">📥 PEDIDO RECEBIDO • ${t.data}</div>
@@ -182,7 +183,7 @@ const TrocasPage = {
             const htmlMeus = meusAtivos.map(t => {
                 const _isRem_m = t.servico_origem && (t.servico_origem.startsWith('MATAR_REMUNERADO') || t.servico_origem.startsWith('FAZER_REMUNERADO'));
                 const statusLabel = t.status === 'Pendente_Admin' ? '⏳ Aguarda admin' : '⏳ Aguarda resposta';
-                let _tituloServ = _traduzirServ(t.servico_origem);
+                let _tituloServ = this._traduzirServ(t.servico_origem);
                 if (_isRem_m) {
                     const _hm = t.servico_origem.match(/\(([^)]+)\)/);
                     if (t.servico_origem.startsWith('MATAR_REMUNERADO')) {
