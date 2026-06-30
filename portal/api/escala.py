@@ -339,6 +339,21 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                                 ids_extra = [i.strip() for i in str(r2.get("id","")).split(";") if i.strip()]
                                 ids_linha = list(set(ids_linha + ids_extra))
                 colegas_rem = [id_para_nome.get(i, i) for i in ids_linha if i != str(u_id).strip()]
+                # Aplicar trocas de remunerado aprovadas — substituir quem cedeu por quem vai fazer
+                if not df_trocas.empty:
+                    tr_rem_swap = df_trocas[
+                        (df_trocas["data"] == d_s) &
+                        (df_trocas["status"] == "Aprovada") &
+                        (df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
+                    ]
+                    for _, t_swap in tr_rem_swap.iterrows():
+                        _is_f = str(t_swap["servico_origem"]).strip().startswith("FAZER_REMUNERADO")
+                        _quem_faz  = str(t_swap["id_origem"]).strip() if _is_f else str(t_swap["id_destino"]).strip()
+                        _quem_cede = str(t_swap["id_destino"]).strip() if _is_f else str(t_swap["id_origem"]).strip()
+                        _nome_cede = id_para_nome.get(_quem_cede, _quem_cede)
+                        _nome_faz  = id_para_nome.get(_quem_faz, _quem_faz)
+                        if _nome_cede in colegas_rem:
+                            colegas_rem = [_nome_faz if c == _nome_cede else c for c in colegas_rem]
                 servicos.append({
                     "data": d_s, "aba": aba, "servico": serv_rem, "horario": hor_rem,
                     "troca_aprovada": False, "troca_com": "", "troca_com_label": "",
@@ -382,6 +397,7 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                     colegas_rem = []
                     if not rem_rows.empty:
                         ids_rem = [i.strip() for i in str(rem_rows.iloc[0].get("id","")).split(";")]
+                        # Excluir o próprio e quem cedeu (aparece em "Cedido por"), incluir os restantes
                         colegas_rem = [id_para_nome.get(i, i) for i in ids_rem if i and i != str(u_id).strip() and i != quem_cede]
                     outros_fazer = df_trocas[
                         (df_trocas["data"] == d_s) &
