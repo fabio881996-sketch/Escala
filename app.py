@@ -1734,12 +1734,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         wids_oc = [16*mm, 32*mm, 40*mm, _w/3, _w/3, _w/3]
         y = tbl_header(y, cols_oc, wids_oc)
         fill = False
-        for hor, grp in df_ocorr.assign(_hor_sort=df_ocorr["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
+        for (hor, serv, ind_grp), grp in df_ocorr.assign(_hor_sort=df_ocorr["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values(["_hor_sort","serviço"]).groupby(["horário", "serviço", "indicativo rádio"], sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
             def _clean(v): return "" if str(v).strip() in ("nan", "None", "NaN", "none") else str(v).strip()
             def _v(col): return _clean(grp[col].iloc[0]) if col in grp.columns else ""
-            serv = grp["serviço"].iloc[0]
-            ind  = _clean(_v("indicativo rádio"))
+            ind  = _clean(ind_grp)
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
@@ -1757,12 +1756,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         wids_pp = [16*mm, 32*mm, 34*mm, _wp/3, _wp/3, _wp/3, 14*mm]
         y = tbl_header(y, cols_pp, wids_pp)
         fill = False
-        for hor, grp in df_outras_pat.assign(_hor_sort=df_outras_pat["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
+        for (hor, serv, ind_grp), grp in df_outras_pat.assign(_hor_sort=df_outras_pat["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values(["_hor_sort","serviço"]).groupby(["horário", "serviço", "indicativo rádio"], sort=False):
             ids  = ", ".join(grp["id_fmt"].tolist())
-            serv = grp["serviço"].iloc[0]
             def _clean(v): return "" if str(v).strip() in ("nan", "None", "NaN", "none") else str(v).strip()
             def _v(col): return _clean(grp[col].iloc[0]) if col in grp.columns else ""
-            ind  = _clean(_v("indicativo rádio"))
+            ind  = _clean(ind_grp)
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
             giro = _clean(_v("giro"))
