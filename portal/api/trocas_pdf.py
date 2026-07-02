@@ -275,7 +275,7 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
         for assin in assinaturas:
             try:
                 signer = signers.SimpleSigner.load_pkcs12(
-                    pfx_file=io.BytesIO(p12_bytes),
+                    pfx_file=p12_bytes,
                     passphrase=None,
                 )
                 w2 = incremental_writer.IncrementalPdfFileWriter(io.BytesIO(pdf_atual))
