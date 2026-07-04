@@ -362,9 +362,13 @@ async def disponiveis(
                         ].empty
                     if not cedeu:
                         continue
-                # Verificar descanso
+                # Verificar descanso do outro militar com o meu serviço
                 ok, motivo = _verificar_descanso(mid, data_fmt, horario, loader, servico)
                 if not ok:
+                    continue
+                # Verificar descanso do próprio com o serviço que vai fazer
+                ok_eu, _ = _verificar_descanso(u_id, data_fmt, horario, loader, servico)
+                if not ok_eu:
                     continue
                 # Verificar consecutivos ilegais
                 if meu_horario and horario:
@@ -691,6 +695,30 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
             m = _re.search(r'\((\d{2})-(\d{2})\)', str(serv))
             return int(m.group(1)) if m else None
 
+        def _aplicar_trocas_df(df_esc, data_fmt_adj):
+            """Aplica trocas aprovadas a um df de escala para obter serviços reais."""
+            if df_esc.empty or df_trocas.empty: return df_esc
+            tr = df_trocas[
+                (df_trocas["data"] == data_fmt_adj) &
+                (df_trocas["status"] == "Aprovada") &
+                (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
+            ]
+            for _, t in tr.iterrows():
+                id_o = str(t["id_origem"]).strip()
+                id_d = str(t["id_destino"]).strip()
+                mask_o = df_esc["id"].astype(str).str.strip() == id_o
+                mask_d = df_esc["id"].astype(str).str.strip() == id_d
+                if mask_o.any() and mask_d.any():
+                    idx_o = df_esc[mask_o].index[0]
+                    idx_d = df_esc[mask_d].index[0]
+                    for col in ["serviço","horário"]:
+                        if col in df_esc.columns:
+                            v_o = df_esc.at[idx_o, col]
+                            v_d = df_esc.at[idx_d, col]
+                            df_esc.at[idx_o, col] = v_d
+                            df_esc.at[idx_d, col] = v_o
+            return df_esc
+
         def _consecutivo_aviso(id_mil, nome_mil, serv_vai_fazer, data_str):
             """Verifica se o militar vai ficar com serviços consecutivos (16-24 + 00-08 no dia seguinte)."""
             avisos = []
@@ -704,8 +732,10 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
                 # Se vai fazer 00-08, verificar se no dia anterior tem 16-24
                 if hi == 0:
                     aba_ant = (dt - _td(days=1)).strftime("%d-%m")
+                    data_ant_fmt = (dt - _td(days=1)).strftime("%d/%m/%Y")
                     try:
                         df_ant = loader.carregar_escala(aba_ant)
+                        df_ant = _aplicar_trocas_df(df_ant.copy(), data_ant_fmt)
                         if not df_ant.empty:
                             mil_ant = df_ant[df_ant["id"].astype(str).str.strip() == id_mil]
                             for _, r_ant in mil_ant.iterrows():
@@ -720,8 +750,10 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
                 # Se vai fazer 16-24, verificar se no dia seguinte tem 00-08
                 if hf in (0, 24):
                     aba_seg = (dt + _td(days=1)).strftime("%d-%m")
+                    data_seg_fmt = (dt + _td(days=1)).strftime("%d/%m/%Y")
                     try:
                         df_seg = loader.carregar_escala(aba_seg)
+                        df_seg = _aplicar_trocas_df(df_seg.copy(), data_seg_fmt)
                         if not df_seg.empty:
                             mil_seg = df_seg[df_seg["id"].astype(str).str.strip() == id_mil]
                             for _, r_seg in mil_seg.iterrows():
