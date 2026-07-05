@@ -2403,6 +2403,9 @@ else:
             "📢 Publicar Escala",
             "👤 Gerir Utilizadores",
             "📋 Gerir Listas",
+            "🏘️ Gerir Grupos de Folga",
+            "🔄 Gerir Trocas",
+            "🏖️ Gerir Férias",
         ]
 
         menu = st.radio("MENU", menu_opt, label_visibility="collapsed",
@@ -6368,3 +6371,145 @@ else:
                                 st.error(f"Erro ao adicionar: {_e_add}")
                         else:
                             st.warning("Escreve um valor primeiro.")
+
+    elif menu == "🏖️ Gerir Férias":
+        st.title("🏖️ Gerir Férias")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        import psycopg2 as _pg_fer
+        _db_url_fer = str(st.secrets.get("DATABASE_URL", ""))
+        pg_fer = get_pg_loader()
+
+        df_util_fer = load_utilizadores()
+        _id_nome_fer = {}
+        _opts_mil_fer = {}
+        if not df_util_fer.empty:
+            for _, r in df_util_fer.iterrows():
+                _mid = str(r.get('id','')).strip()
+                _posto = str(r.get('posto','')).strip()
+                _nome = str(r.get('nome','')).strip()
+                _label = f"{_mid} — {_posto} {_nome}".strip()
+                _id_nome_fer[_mid] = f"{_posto} {_nome}".strip()
+                _opts_mil_fer[_label] = _mid
+
+        ano_fer = st.selectbox("Ano:", [ano_atual, ano_atual + 1], key="ano_fer")
+
+        tab_ver, tab_add, tab_edit = st.tabs(["📋 Ver", "➕ Adicionar", "✏️ Editar / Remover"])
+
+        # ── Ver ──
+        with tab_ver:
+            df_fer = load_ferias(ano_fer)
+            if df_fer.empty:
+                st.info(f"Sem férias registadas para {ano_fer}.")
+            else:
+                st.dataframe(df_fer, use_container_width=True)
+
+        # ── Adicionar ──
+        with tab_add:
+            st.markdown("#### Adicionar período de férias")
+            _sel_add = st.selectbox("Militar:", list(_opts_mil_fer.keys()), key="add_fer_mil")
+            _mid_add = _opts_mil_fer[_sel_add]
+            col_fa1, col_fa2 = st.columns(2)
+            with col_fa1:
+                _ini_add = st.date_input("Início:", key="add_fer_ini", value=None)
+            with col_fa2:
+                _fim_add = st.date_input("Fim:", key="add_fer_fim", value=None)
+
+            if st.button("➕ Adicionar", use_container_width=True, type="primary", key="btn_add_fer"):
+                if not _ini_add or not _fim_add:
+                    st.warning("Preenche início e fim.")
+                elif _fim_add < _ini_add:
+                    st.error("Fim não pode ser anterior ao início.")
+                else:
+                    try:
+                        # Calcular dias úteis
+                        _feriados_fer = load_feriados(ano_fer)
+                        _dias_fer = sum(1 for i in range((_fim_add - _ini_add).days + 1)
+                                        if (_ini_add + timedelta(days=i)).weekday() < 5
+                                        and (_ini_add + timedelta(days=i)) not in _feriados_fer)
+                        # Determinar próximo número de período
+                        _periodos_exist = pg_fer.carregar_ferias_periodos(ano_fer, _mid_add)
+                        _prox_periodo = max([p.get('periodo', 0) for p in _periodos_exist], default=0) + 1
+
+                        with _pg_fer.connect(_db_url_fer) as _c_fer:
+                            with _c_fer.cursor() as _cu_fer:
+                                _cu_fer.execute("""
+                                    INSERT INTO ferias (militar_id, ano, inicio, fim, dias, periodo)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                """, (_mid_add, ano_fer, _ini_add.strftime('%d/%m/%Y'),
+                                      _fim_add.strftime('%d/%m/%Y'), _dias_fer, _prox_periodo))
+                            _c_fer.commit()
+                        load_ferias.clear()
+                        st.success(f"✅ Período {_prox_periodo} adicionado — {_dias_fer} dias úteis.")
+                        st.rerun()
+                    except Exception as _e_fer:
+                        st.error(f"Erro: {_e_fer}")
+
+        # ── Editar / Remover ──
+        with tab_edit:
+            st.markdown("#### Editar ou remover período")
+            _sel_edit = st.selectbox("Militar:", list(_opts_mil_fer.keys()), key="edit_fer_mil")
+            _mid_edit = _opts_mil_fer[_sel_edit]
+
+            _periodos_edit = pg_fer.carregar_ferias_periodos(ano_fer, _mid_edit)
+            if not _periodos_edit:
+                st.info("Sem períodos de férias para este militar.")
+            else:
+                for p in _periodos_edit:
+                    _per_n = p.get('periodo', '?')
+                    _ini_p = str(p.get('inicio', '')).strip()
+                    _fim_p = str(p.get('fim', '')).strip()
+                    _dias_p = p.get('dias', 0)
+
+                    with st.container(border=True):
+                        st.markdown(f"**Período {_per_n}:** {_ini_p} → {_fim_p} ({_dias_p} dias)")
+                        col_e1, col_e2, col_e3 = st.columns([2, 2, 1])
+                        with col_e1:
+                            try:
+                                _ini_val = datetime.strptime(_ini_p, '%d/%m/%Y').date()
+                            except Exception:
+                                _ini_val = None
+                            _novo_ini = st.date_input("Novo início:", value=_ini_val, key=f"ini_{_mid_edit}_{_per_n}")
+                        with col_e2:
+                            try:
+                                _fim_val = datetime.strptime(_fim_p, '%d/%m/%Y').date()
+                            except Exception:
+                                _fim_val = None
+                            _novo_fim = st.date_input("Novo fim:", value=_fim_val, key=f"fim_{_mid_edit}_{_per_n}")
+                        with col_e3:
+                            st.markdown("&nbsp;", unsafe_allow_html=True)
+                            if st.button("💾", key=f"save_fer_{_mid_edit}_{_per_n}", help="Guardar alteração"):
+                                try:
+                                    _feriados_fer2 = load_feriados(ano_fer)
+                                    _dias_novo = sum(1 for i in range((_novo_fim - _novo_ini).days + 1)
+                                                     if (_novo_ini + timedelta(days=i)).weekday() < 5
+                                                     and (_novo_ini + timedelta(days=i)) not in _feriados_fer2)
+                                    with _pg_fer.connect(_db_url_fer) as _c2:
+                                        with _c2.cursor() as _cu2:
+                                            _cu2.execute("""
+                                                UPDATE ferias SET inicio=%s, fim=%s, dias=%s
+                                                WHERE militar_id=%s AND ano=%s AND periodo=%s
+                                            """, (_novo_ini.strftime('%d/%m/%Y'), _novo_fim.strftime('%d/%m/%Y'),
+                                                  _dias_novo, _mid_edit, ano_fer, _per_n))
+                                        _c2.commit()
+                                    load_ferias.clear()
+                                    st.success("✅ Actualizado!")
+                                    st.rerun()
+                                except Exception as _e2:
+                                    st.error(f"Erro: {_e2}")
+
+                            if st.button("🗑️", key=f"del_fer_{_mid_edit}_{_per_n}", help="Remover período"):
+                                try:
+                                    with _pg_fer.connect(_db_url_fer) as _c3:
+                                        with _c3.cursor() as _cu3:
+                                            _cu3.execute("""
+                                                DELETE FROM ferias WHERE militar_id=%s AND ano=%s AND periodo=%s
+                                            """, (_mid_edit, ano_fer, _per_n))
+                                        _c3.commit()
+                                    load_ferias.clear()
+                                    st.success("Período removido.")
+                                    st.rerun()
+                                except Exception as _e3:
+                                    st.error(f"Erro: {_e3}")
