@@ -4901,10 +4901,13 @@ else:
 
                                 # Gravar "Disponível" para militares do efetivo sem serviço escalado
                                 # Gravar "Férias" ou tipo de licença para quem está ausente
+                                # Gravar ids escalados a partir do df_editado
                                 ids_escalados = set()
-                                for (sv_e, hr_e, obs_e), dados_g in grupos_sv.items():
-                                    for mid_e in dados_g['ids']:
-                                        ids_escalados.add(str(mid_e).strip())
+                                for _, row_esc in df_editado.iterrows():
+                                    mid_e = str(row_esc.get('id', '')).strip()
+                                    if mid_e and mid_e != 'nan':
+                                        for _mid_e in mid_e.split(';'):
+                                            ids_escalados.add(_mid_e.strip())
                                 linhas_disp = []
                                 for _, row_u_c in df_util.iterrows():
                                     mid_u_c = str(row_u_c.get('id', '')).strip()
