@@ -6442,6 +6442,7 @@ else:
                                       _fim_add.strftime('%d/%m/%Y'), _dias_fer, _prox_periodo))
                             _c_fer.commit()
                         load_ferias.clear()
+                        pg_fer.limpar_cache()
                         st.success(f"✅ Período {_prox_periodo} adicionado — {_dias_fer} dias úteis.")
                         st.rerun()
                     except Exception as _e_fer:
@@ -6495,6 +6496,7 @@ else:
                                                   _dias_novo, _mid_edit, ano_fer, _per_n))
                                         _c2.commit()
                                     load_ferias.clear()
+                                    pg_fer.limpar_cache()
                                     st.success("✅ Actualizado!")
                                     st.rerun()
                                 except Exception as _e2:
@@ -6509,6 +6511,7 @@ else:
                                             """, (_mid_edit, ano_fer, _per_n))
                                         _c3.commit()
                                     load_ferias.clear()
+                                    pg_fer.limpar_cache()
                                     st.success("Período removido.")
                                     st.rerun()
                                 except Exception as _e3:
