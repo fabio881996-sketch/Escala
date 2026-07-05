@@ -4933,7 +4933,7 @@ else:
                                 # linhas_disp já guardadas no PostgreSQL acima
 
                                 # Gerar ordem_escala do dia seguinte
-                                _gerar_ordem_escala_dia_seguinte(sh_c, aba_dia, d_gerar)
+                                _gerar_ordem_escala_dia_seguinte(None, aba_dia, d_gerar)
 
                                 load_data.clear()
                                 del st.session_state['tabela_escala']
