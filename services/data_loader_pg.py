@@ -389,44 +389,24 @@ class DataLoader:
     # ── Grupos de folga ───────────────────────────────────────
     def carregar_grupos_folga(self) -> dict:
         """Carrega grupos de folga.
-        Tenta primeiro a tabela grupos_folga_ref (sábado de referência por grupo).
-        Se não existir, usa a tabela grupos_folga com datas específicas (legado).
-        Devolve dict com:
-        - 'folgas': {'I': {'semanal': [...], 'complementar': [...]}, ...}  (legado)
-        - 'refs': {'I': date(2026,1,10), ...}  (novo — sábado de referência)
-        - 'grupos': {}
+        Devolve dict com duas estruturas:
+        - 'folgas': {'I': {'semanal': ['05-01','10-01',...], 'complementar': ['22-01',...]}, ...}
+        - 'grupos': {'I': [militar_ids...], 'II': [...]} — construído do df_folgas
         """
         val, hit = _cache.get("grupos_folga")
         if hit:
             return val
-        from datetime import date as _date
-        refs = {}
-        try:
-            rows_ref = _query("SELECT grupo, sab_ref FROM grupos_folga_ref ORDER BY grupo")
-            if rows_ref:
-                for r in rows_ref:
-                    g = r["grupo"]
-                    sab = r["sab_ref"]
-                    if isinstance(sab, str):
-                        from datetime import datetime as _dt
-                        sab = _dt.strptime(sab, "%Y-%m-%d").date()
-                    refs[g] = sab
-        except Exception:
-            pass
-
-        # Legado: carregar datas específicas da tabela grupos_folga
-        folgas = {}
         try:
             rows = _query("SELECT grupo, folga_semanal, folga_complementar FROM grupos_folga ORDER BY grupo")
+            folgas = {}
             for r in rows:
                 g = r["grupo"]
                 fs = [d.strip() for d in (r["folga_semanal"] or "").split(";") if d.strip()]
                 fc = [d.strip() for d in (r["folga_complementar"] or "").split(";") if d.strip()]
                 folgas[g] = {"semanal": fs, "complementar": fc}
+            result = {"folgas": folgas, "grupos": {}}
         except Exception:
-            pass
-
-        result = {"folgas": folgas, "refs": refs, "grupos": {}}
+            result = {"folgas": {}, "grupos": {}}
         _cache.set("grupos_folga", result, 3600)
         return result
 
@@ -641,6 +621,14 @@ class DataLoader:
                     VALUES %s
                 """, rows)
             _cache.clear(f"ordem_escala:{aba_dia}")
+            # Limpeza automática — apagar entradas com id mais antigo mantendo só as últimas 15000
+            try:
+                _execute("""
+                    DELETE FROM ordem_escala
+                    WHERE id < (SELECT MAX(id) - 15000 FROM ordem_escala)
+                """)
+            except Exception:
+                pass
         except Exception as e:
             logger.warning(f"Erro ao guardar ordem_escala: {e}")
     def actualizar_ordem_remunerado(self, militar_id: str, tabela: str, horas: float, data_ultimo: datetime, tipo_dia: str = 'semana'):
@@ -650,14 +638,8 @@ class DataLoader:
         Colunas na BD: total_ano_a_semana, total_ano_a_fds, total_ano_b, ultimo_a_semana, ultimo_a_fds, ultimo_b
         """
         t = tabela.lower()
-        td = tipo_dia.lower() if tipo_dia else 'semana'
-        # Whitelist — nunca permitir valores arbitrários em nomes de colunas
-        if t not in ('a', 'b'):
-            logger.warning(f"actualizar_ordem_remunerado: tabela inválida '{tabela}'")
-            return
-        if td not in ('semana', 'fds'):
-            td = 'semana'
         if t == 'a':
+            td = tipo_dia.lower() if tipo_dia else 'semana'
             col_total = f"total_ano_a_{td}"
             col_ultimo = f"ultimo_a_{td}"
         else:
