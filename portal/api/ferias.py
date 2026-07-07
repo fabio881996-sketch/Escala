@@ -18,10 +18,18 @@ def get_loader() -> DataLoader:
 
 
 def _parse_data(valor: str, ano: int) -> str | None:
-    """Converte MM/DD ou DD/MM para DD/MM/YYYY."""
+    """Converte qualquer formato de data para DD/MM/YYYY."""
     v = str(valor).strip()
     if not v or v in ("", "nan"):
         return None
+    # Formatos com ano completo primeiro
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y"):
+        try:
+            dt = datetime.strptime(v, fmt)
+            return f"{dt.day:02d}/{dt.month:02d}/{dt.year}"
+        except ValueError:
+            continue
+    # Formatos sem ano
     for fmt in ("%m/%d", "%d/%m", "%m-%d", "%d-%m"):
         try:
             dt = datetime.strptime(v, fmt)
