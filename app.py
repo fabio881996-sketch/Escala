@@ -6443,6 +6443,11 @@ else:
                             _c_fer.commit()
                         load_ferias.clear()
                         pg_fer.limpar_cache()
+                        try:
+                            import requests as _req_fer
+                            _req_fer.post("https://portal-escalas-gnr-production.up.railway.app/api/cache/clear",
+                                         json={"secret": str(st.secrets.get("RAILWAY_NOTIFY_SECRET",""))}, timeout=3)
+                        except Exception: pass
                         st.success(f"✅ Período {_prox_periodo} adicionado — {_dias_fer} dias úteis.")
                         st.rerun()
                     except Exception as _e_fer:
@@ -6468,16 +6473,21 @@ else:
                         st.markdown(f"**Período {_per_n}:** {_ini_p} → {_fim_p} ({_dias_p} dias)")
                         col_e1, col_e2, col_e3 = st.columns([2, 2, 1])
                         with col_e1:
-                            try:
-                                _ini_val = datetime.strptime(_ini_p, '%d/%m/%Y').date()
-                            except Exception:
-                                _ini_val = None
+                            def _parse_fer_date(s, ano):
+                                s = str(s).strip()
+                                for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%m/%d/%Y', '%m/%d'):
+                                    try:
+                                        d = datetime.strptime(s, fmt).date()
+                                        if fmt == '%m/%d':
+                                            d = d.replace(year=ano)
+                                        return d
+                                    except Exception:
+                                        pass
+                                return None
+                            _ini_val = _parse_fer_date(_ini_p, ano_fer)
                             _novo_ini = st.date_input("Novo início:", value=_ini_val, key=f"ini_{_mid_edit}_{_per_n}")
                         with col_e2:
-                            try:
-                                _fim_val = datetime.strptime(_fim_p, '%d/%m/%Y').date()
-                            except Exception:
-                                _fim_val = None
+                            _fim_val = _parse_fer_date(_fim_p, ano_fer)
                             _novo_fim = st.date_input("Novo fim:", value=_fim_val, key=f"fim_{_mid_edit}_{_per_n}")
                         with col_e3:
                             st.markdown("&nbsp;", unsafe_allow_html=True)
@@ -6497,6 +6507,11 @@ else:
                                         _c2.commit()
                                     load_ferias.clear()
                                     pg_fer.limpar_cache()
+                                    try:
+                                        import requests as _req_fer2
+                                        _req_fer2.post("https://portal-escalas-gnr-production.up.railway.app/api/cache/clear",
+                                                      json={"secret": str(st.secrets.get("RAILWAY_NOTIFY_SECRET",""))}, timeout=3)
+                                    except Exception: pass
                                     st.success("✅ Actualizado!")
                                     st.rerun()
                                 except Exception as _e2:
@@ -6512,6 +6527,11 @@ else:
                                         _c3.commit()
                                     load_ferias.clear()
                                     pg_fer.limpar_cache()
+                                    try:
+                                        import requests as _req_fer3
+                                        _req_fer3.post("https://portal-escalas-gnr-production.up.railway.app/api/cache/clear",
+                                                      json={"secret": str(st.secrets.get("RAILWAY_NOTIFY_SECRET",""))}, timeout=3)
+                                    except Exception: pass
                                     st.success("Período removido.")
                                     st.rerun()
                                 except Exception as _e3:
