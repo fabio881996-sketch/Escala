@@ -293,7 +293,6 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
                     field_name=assin["field"],
                     reason=assin["reason"],
                     location="Posto Territorial de Famalicão",
-                    signer_name=f"GNR Famalicão — {assin['signer_name']}",
                     certify=assin.get("certify", False),
                 )
                 out2 = io.BytesIO()
