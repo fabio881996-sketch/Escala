@@ -277,10 +277,17 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
         pdf_atual = pdf_com_campos
         for assin in assinaturas:
             try:
-                signer = signers.SimpleSigner.load_pkcs12(
-                    pfx_file=p12_bytes,
-                    passphrase=None,
-                )
+                import tempfile, os as _os
+                with tempfile.NamedTemporaryFile(suffix='.p12', delete=False) as _tmp:
+                    _tmp.write(p12_bytes)
+                    _tmp_path = _tmp.name
+                try:
+                    signer = signers.SimpleSigner.load_pkcs12(
+                        pfx_file=_tmp_path,
+                        passphrase=None,
+                    )
+                finally:
+                    _os.unlink(_tmp_path)
                 w2 = incremental_writer.IncrementalPdfFileWriter(io.BytesIO(pdf_atual))
                 meta = signers.PdfSignatureMetadata(
                     field_name=assin["field"],
