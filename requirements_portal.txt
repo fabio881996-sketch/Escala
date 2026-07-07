@@ -19,3 +19,4 @@ psycopg2-binary
 pyhanko
 pyhanko-certvalidator
 cryptography
+nest_asyncio
