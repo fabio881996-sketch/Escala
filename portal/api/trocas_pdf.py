@@ -296,7 +296,20 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
                     certify=assin.get("certify", False),
                 )
                 out2 = io.BytesIO()
-                asyncio.run(signers.async_sign_pdf(w2, meta, signer=signer, output=out2))
+                try:
+                    import nest_asyncio
+                    nest_asyncio.apply()
+                    import asyncio
+                    asyncio.get_event_loop().run_until_complete(
+                        signers.async_sign_pdf(w2, meta, signer=signer, output=out2)
+                    )
+                except ImportError:
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    loop.run_until_complete(
+                        signers.async_sign_pdf(w2, meta, signer=signer, output=out2)
+                    )
+                    loop.close()
                 pdf_atual = out2.getvalue()
             except Exception as e_sig:
                 logger.warning("Erro ao assinar campo %s: %s", assin["field"], e_sig)
