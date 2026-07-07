@@ -173,10 +173,13 @@ def gerar_certificado_gnr() -> bytes:
     import datetime
 
     # Usar certificado existente se guardado em variável de ambiente
-    cert_b64 = os.environ.get("GNR_SIGNING_CERT_P12_B64")
+    cert_b64 = os.environ.get("GNR_SIGNING_CERT_P12_B64", "").strip()
     if cert_b64:
         import base64
-        return base64.b64decode(cert_b64)
+        try:
+            return base64.b64decode(cert_b64)
+        except Exception:
+            pass
 
     # Gerar novo certificado
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
