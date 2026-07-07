@@ -17,17 +17,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(title="Portal de Escalas GNR", version="2.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["https://portal-escalas-gnr-production.up.railway.app"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Servir ficheiros estáticos
 app.mount("/static", StaticFiles(directory="portal/static"), name="static")
@@ -89,3 +79,20 @@ async def admin_spa(full_path: str = ""):
 @app.head("/{full_path:path}")
 async def catch_all(full_path: str):
     return FileResponse("portal/templates/index.html")
+
+
+@app.post("/api/cache/clear")
+async def clear_cache(payload: dict):
+    """Limpa o cache interno do loader — chamado pelo Streamlit após alterações."""
+    import os
+    expected = os.environ.get("RAILWAY_NOTIFY_SECRET", "")
+    if not expected or payload.get("secret") != expected:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=403, detail="Não autorizado")
+    try:
+        from portal.api.escala import get_loader
+        loader = get_loader()
+        loader.limpar_cache()
+    except Exception:
+        pass
+    return {"ok": True}
