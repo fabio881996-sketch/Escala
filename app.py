@@ -1831,8 +1831,24 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ind = _clean(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
             rad = _clean(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
             vtr = _clean(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
+            obs = _clean(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill)
             fill = not fill
+            if obs:
+                from reportlab.platypus import Paragraph
+                from reportlab.lib.styles import ParagraphStyle
+                _obs_style3 = ParagraphStyle('obs3', fontName='Helvetica', fontSize=7.5,
+                                             textColor=HexColor("#374151"), leading=10)
+                _obs_p3 = Paragraph(f"📝 {obs}", _obs_style3)
+                _obs_w3 = sum(wids_ot) - 2*mm
+                _obs_h3 = _obs_p3.wrap(_obs_w3, 100*mm)[1] + 2*mm
+                _obs_h3 = max(_obs_h3, 5*mm)
+                c.setFillColor(HexColor("#f8fafc"))
+                c.rect(LM, y-_obs_h3, sum(wids_ot), _obs_h3, fill=1, stroke=0)
+                c.setStrokeColor(CINZA_LN)
+                c.line(LM, y-_obs_h3, LM+sum(wids_ot), y-_obs_h3)
+                _obs_p3.drawOn(c, LM+1*mm, y-_obs_h3+1*mm)
+                y -= _obs_h3
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
         y -= 2*mm
@@ -2011,9 +2027,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         close_section(y_sec_top, y)
         y -= 2*mm
 
-    # ---- OBSERVAÇÕES (só serviços que não têm obs inline — exclui pat e ocorr) ----
+    # ---- OBSERVAÇÕES (só Atendimento e Apoio — Patrulhas e Outros já têm obs inline) ----
     obs_por_ind = {}  # label -> {obs -> set(hors)}
-    for df_sec in [df_at, df_ap, df_outros]:  # excluir df_pat e df_ocorr — obs já inline
+    for df_sec in [df_at, df_ap]:  # excluir df_pat, df_ocorr e df_outros — obs já inline
         if df_sec.empty or "observações" not in df_sec.columns:
             continue
         for _, row in df_sec.iterrows():
