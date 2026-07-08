@@ -1758,7 +1758,20 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
             fill = not fill
             if obs:
-                y = tbl_row(y, ["", f"  📝 {obs}", "", "", "", ""], wids_oc, False)
+                from reportlab.platypus import Paragraph
+                from reportlab.lib.styles import ParagraphStyle
+                _obs_style = ParagraphStyle('obs', fontName='Helvetica', fontSize=7.5,
+                                            textColor=HexColor("#374151"), leading=10)
+                _obs_p = Paragraph(f"📝 {obs}", _obs_style)
+                _obs_w = sum(wids_oc) - wids_oc[0] - 2*mm
+                _obs_h = _obs_p.wrap(_obs_w, 100*mm)[1] + 2*mm
+                _obs_h = max(_obs_h, 5*mm)
+                c.setFillColor(HexColor("#f8fafc"))
+                c.rect(LM, y-_obs_h, sum(wids_oc), _obs_h, fill=1, stroke=0)
+                c.setStrokeColor(CINZA_LN)
+                c.line(LM, y-_obs_h, LM+sum(wids_oc), y-_obs_h)
+                _obs_p.drawOn(c, LM+wids_oc[0]+1*mm, y-_obs_h+1*mm)
+                y -= _obs_h
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
         y -= 2*mm
@@ -1785,7 +1798,20 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill)
             fill = not fill
             if obs:
-                y = tbl_row(y, ["", f"  📝 {obs}", "", "", "", "", ""], wids_pp, False)
+                from reportlab.platypus import Paragraph
+                from reportlab.lib.styles import ParagraphStyle
+                _obs_style2 = ParagraphStyle('obs2', fontName='Helvetica', fontSize=7.5,
+                                             textColor=HexColor("#374151"), leading=10)
+                _obs_p2 = Paragraph(f"📝 {obs}", _obs_style2)
+                _obs_w2 = sum(wids_pp) - wids_pp[0] - 2*mm
+                _obs_h2 = _obs_p2.wrap(_obs_w2, 100*mm)[1] + 2*mm
+                _obs_h2 = max(_obs_h2, 5*mm)
+                c.setFillColor(HexColor("#f8fafc"))
+                c.rect(LM, y-_obs_h2, sum(wids_pp), _obs_h2, fill=1, stroke=0)
+                c.setStrokeColor(CINZA_LN)
+                c.line(LM, y-_obs_h2, LM+sum(wids_pp), y-_obs_h2)
+                _obs_p2.drawOn(c, LM+wids_pp[0]+1*mm, y-_obs_h2+1*mm)
+                y -= _obs_h2
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
         y -= 2*mm
