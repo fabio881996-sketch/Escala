@@ -211,6 +211,19 @@ const TrocasPage = {
         }
     },
 
+    async cancelarAprovada(rowIndex, btn) {
+        if (!confirm('Tens a certeza que queres cancelar esta troca aprovada? Ambos os militares serão notificados.')) return;
+        btn.disabled = true;
+        try {
+            await API._post('/api/trocas/cancelar-aprovada', { row_index: rowIndex });
+            API.clearCache();
+            this.loadHistorico();
+        } catch(e) {
+            alert('Erro ao cancelar: ' + e.message);
+            btn.disabled = false;
+        }
+    },
+
     async cancelar(rowIndex, btn) {
         if (!confirm('Tens a certeza que queres cancelar este pedido?')) return;
         if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
@@ -257,6 +270,18 @@ const TrocasPage = {
                     ? (t.nome_destino || t.id_destino)
                     : (t.nome_origem || t.id_origem);
                 const direcao = souOrigem ? '→' : '←';
+
+                // Verificar se o dia ainda não passou (para mostrar botão cancelar)
+                let podeCancelar = false;
+                if (t.status === 'Aprovada' && t.data) {
+                    try {
+                        const partes = t.data.split('/');
+                        const dataT = new Date(parseInt(partes[2]), parseInt(partes[1])-1, parseInt(partes[0]));
+                        const hoje = new Date(); hoje.setHours(0,0,0,0);
+                        podeCancelar = dataT >= hoje;
+                    } catch(e) {}
+                }
+
                 return `
                     <div class="card card-${cor}">
                         <div class="card-label">${t.data} • ${
@@ -265,9 +290,13 @@ const TrocasPage = {
                             t.status === 'Pendente_Admin' ? '⏳ Aguarda admin' :
                             t.status === 'Cancelada' ? '🚫 Cancelada' : '⏳ Pendente'
                         }</div>
-                        <div class="card-title">🔄 ${t.servico_origem}</div>
+                        <div class="card-title">🔄 ${this._traduzirServ(t.servico_origem)}</div>
                         <div class="card-subtitle">${direcao} ${contraparte}</div>
                         ${t.observacoes ? `<div class="card-subtitle" style="margin-top:2px">📝 ${t.observacoes}</div>` : ''}
+                        ${podeCancelar ? `
+                        <div style="margin-top:10px">
+                            <button class="btn btn-danger btn-sm" onclick="TrocasPage.cancelarAprovada(${t.__row_index}, this)">🗑️ Cancelar troca</button>
+                        </div>` : ''}
                     </div>`;
             }).join('');
         } catch (e) {
