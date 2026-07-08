@@ -5508,8 +5508,9 @@ else:
                                 except Exception:
                                     pass
 
-                                # Notificar militares com serviço/horário alterado
-                                if ids_alterados:
+                                # Notificar militares com serviço/horário alterado (só se dia publicado)
+                                _dias_pub_e = load_dias_publicados()
+                                if ids_alterados and aba_e in _dias_pub_e:
                                     try:
                                         import requests as _req_e
                                         _secret_e = str(st.secrets.get("RAILWAY_NOTIFY_SECRET", ""))
