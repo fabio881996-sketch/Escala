@@ -262,53 +262,63 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
             d_s = dt.strftime("%d/%m/%Y")
 
             import re as _re
-            linhas_normais = meu[~meu["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
-            linhas_remun   = meu[meu["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
 
-            for _, row in (linhas_normais if not linhas_normais.empty else meu.head(1)).iterrows():
+            # Aplicar trocas aprovadas ao df_d antes de tudo (como na Escala Geral)
+            df_d_trocado = df_d.copy()
+            if not df_trocas.empty:
+                tr_aprov = df_trocas[
+                    (df_trocas["data"] == d_s) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
+                ]
+                for _, t in tr_aprov.iterrows():
+                    id_o = str(t["id_origem"]).strip()
+                    id_d = str(t["id_destino"]).strip()
+                    mask_o = df_d_trocado["id"].astype(str).str.strip() == id_o
+                    mask_d = df_d_trocado["id"].astype(str).str.strip() == id_d
+                    if mask_o.any() and mask_d.any():
+                        idx_o = df_d_trocado[mask_o].index[0]
+                        idx_d = df_d_trocado[mask_d].index[0]
+                        for col in ["serviço", "horário", "viatura", "rádio", "indicativo rádio", "giro", "observações"]:
+                            if col in df_d_trocado.columns:
+                                v_o = df_d_trocado.at[idx_o, col]
+                                v_d = df_d_trocado.at[idx_d, col]
+                                df_d_trocado.at[idx_o, col] = v_d
+                                df_d_trocado.at[idx_d, col] = v_o
+
+            # Ler o meu serviço do df_d já com trocas aplicadas
+            meu_trocado = df_d_trocado[df_d_trocado["id"].astype(str).str.strip().apply(
+                lambda x: _uid_str == x or _uid_str in [i.strip() for i in x.split(";")]
+            )]
+
+            linhas_normais = meu_trocado[~meu_trocado["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
+            linhas_remun   = meu_trocado[meu_trocado["serviço"].astype(str).str.lower().str.contains("remun|gratif", na=False)]
+
+            # Verificar se há troca aprovada para saber o id do outro militar
+            troca_map = {}  # u_id -> outro_id
+            if not df_trocas.empty:
+                tr_aprov2 = df_trocas[
+                    (df_trocas["data"] == d_s) &
+                    (df_trocas["status"] == "Aprovada") &
+                    (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
+                ]
+                for _, t in tr_aprov2.iterrows():
+                    id_o = str(t["id_origem"]).strip()
+                    id_d = str(t["id_destino"]).strip()
+                    if id_o == _uid_str:
+                        troca_map[_uid_str] = id_d
+                    elif id_d == _uid_str:
+                        troca_map[_uid_str] = id_o
+
+            for _, row in (linhas_normais if not linhas_normais.empty else meu_trocado.head(1)).iterrows():
                 servico = str(row.get("serviço", ""))
                 horario = str(row.get("horário", ""))
                 if _re.search(r"remun|gratif", servico.lower()):
                     continue
 
-                troca_aplicada = False
-                troca_com_id = ""
+                troca_aplicada = _uid_str in troca_map
+                troca_com_id = troca_map.get(_uid_str, "")
                 row_ref = row
-
-                if not df_trocas.empty:
-                    tr = df_trocas[
-                        (df_trocas["data"] == d_s) &
-                        (df_trocas["status"] == "Aprovada") &
-                        (~df_trocas["servico_origem"].astype(str).str.startswith(("MATAR_REMUNERADO","FAZER_REMUNERADO")))
-                    ]
-                    for _, t in tr.iterrows():
-                        id_o = str(t["id_origem"]).strip()
-                        id_d = str(t["id_destino"]).strip()
-                        if id_o == str(u_id).strip():
-                            s = str(t["servico_destino"])
-                            outro_id = id_d
-                        elif id_d == str(u_id).strip():
-                            s = str(t["servico_origem"])
-                            outro_id = id_o
-                        else:
-                            continue
-                        serv_novo = s.rsplit("(", 1)[0].strip()
-                        hor_novo  = s.rsplit("(", 1)[1].rstrip(")") if "(" in s else ""
-                        # Ir buscar a linha do outro militar para viatura/rádio/indicativo
-                        mask_outro = df_d["id"].astype(str).str.strip() == outro_id
-                        if mask_outro.any():
-                            row_ref = df_d[mask_outro].iloc[0]
-                            # Se não tiver horário na troca, usar o do outro militar
-                            if not hor_novo:
-                                hor_novo = str(row_ref.get("horário", "") or "").strip()
-                        # Usar serviço e horário da TROCA (não da escala actual)
-                        # A escala actual do outro tem o nosso serviço original (já trocado)
-                        if serv_novo:
-                            servico = serv_novo
-                        horario = hor_novo or horario
-                        troca_aplicada = True
-                        troca_com_id = outro_id
-                        break
 
                 servicos.append({
                     "data": d_s, "aba": aba, "servico": servico, "horario": horario,
