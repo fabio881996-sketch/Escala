@@ -1306,7 +1306,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         t = str(txt)
         if "\U0001f504" in t:
             parts = t.split("\U0001f504")
-            return f"{parts[0].strip()} (Troca c/{parts[1].strip()})"
+            return f"{parts[0].strip()} ({parts[1].strip()})"
         return t
 
     df_raw = df_raw.copy()
@@ -1727,8 +1727,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ind  = _clean(_v("indicativo rádio"))
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
+            obs  = _clean(_v("observações"))
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
             fill = not fill
+            if obs:
+                y = tbl_row(y, ["", f"  📝 {obs}", "", "", "", ""], wids_oc, False)
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
         y -= 2*mm
@@ -1751,8 +1754,11 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
             giro = _clean(_v("giro"))
+            obs  = _clean(_v("observações"))
             y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill)
             fill = not fill
+            if obs:
+                y = tbl_row(y, ["", f"  📝 {obs}", "", "", "", "", ""], wids_pp, False)
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
         y -= 2*mm
@@ -1802,6 +1808,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         linhas_rem = []
         vistos = {}  # (hor, obs) -> já processado
         col_vtr = next((c for c in df_rem.columns if norm(c) == 'viatura'), None)
+        col_rad = next((c for c in df_rem.columns if norm(c) == 'radio' or 'radio' in norm(c)), None)
+        col_ind = next((c for c in df_rem.columns if 'indicativo' in norm(c)), None)
         for _, row in df_rem.iterrows():
             hor = str(row.get('horário', '')).strip()
             obs = str(row.get("observações", "")) if "observações" in df_rem.columns else ""
@@ -1814,28 +1822,40 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             if "observações" in df_rem.columns:
                 grp = grp[grp['observações'].astype(str).str.strip().replace('nan','') == obs]
             ids = ", ".join(grp["id_fmt"].tolist())
-            # Viatura -- concatenar viaturas distintas se houver mais que uma
             vtr = ""
             if col_vtr:
                 vtr_vals = grp[col_vtr].dropna().astype(str).str.strip()
                 vtr_vals = vtr_vals[vtr_vals.str.len() > 0].unique().tolist()
                 vtr = " / ".join(vtr_vals) if vtr_vals else ""
-            linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr})
+            rad = ""
+            if col_rad:
+                rad_vals = grp[col_rad].dropna().astype(str).str.strip()
+                rad_vals = [v for v in rad_vals if v and v.lower() not in ('nan','none','')]
+                rad = rad_vals[0] if rad_vals else ""
+            ind = ""
+            if col_ind:
+                ind_vals = grp[col_ind].dropna().astype(str).str.strip()
+                ind_vals = [v for v in ind_vals if v and v.lower() not in ('nan','none','')]
+                ind = ind_vals[0] if ind_vals else ""
+            linhas_rem.append({'hor': hor, 'ids': ids, 'obs': obs, 'vtr': vtr, 'rad': rad, 'ind': ind})
 
         # Largura fixa para viatura -- viaturas múltiplas aparecem em linhas separadas
         _tem_dupla_vtr = any(' / ' in r['vtr'] for r in linhas_rem)
-        _vtr_w = 20*mm if 'viatura' in df_rem.columns else 0
-        _hor_w = 22*mm  # suficiente para 08:30-12:30
-        wids_rm = [_hor_w, 35*mm, _vtr_w, TW-_hor_w-35*mm-_vtr_w]
-        _obs_w = wids_rm[3]
-        cols_rm = ["Horário", "Militares"] + (["Viatura"] if _vtr_w else []) + ["Observação"]
+        _vtr_w = 18*mm if col_vtr else 0
+        _rad_w = 18*mm if col_rad else 0
+        _ind_w = 18*mm if col_ind else 0
+        _hor_w = 22*mm
+        _mil_w = 30*mm
+        _obs_w = TW - _hor_w - _mil_w - _vtr_w - _rad_w - _ind_w
+        wids_rm = [_hor_w, _mil_w] + ([_ind_w] if _ind_w else []) + ([_rad_w] if _rad_w else []) + ([_vtr_w] if _vtr_w else []) + [_obs_w]
+        cols_rm = ["Horário", "Militares"] + (["Indicativo"] if _ind_w else []) + (["Rádio"] if _rad_w else []) + (["Viatura"] if _vtr_w else []) + ["Observação"]
         y = tbl_header(y, cols_rm, wids_rm)
         fill = False
 
-        x_obs_start = LM + wids_rm[0] + wids_rm[1] + _vtr_w + 2*mm
+        x_obs_col   = LM + _hor_w + _mil_w + _ind_w + _rad_w + _vtr_w
+        x_obs_start = x_obs_col + 2*mm
         x_obs_end   = LM + TW - 2*mm
         max_pts_rm  = x_obs_end - x_obs_start
-        x_obs_col   = LM + wids_rm[0] + wids_rm[1] + _vtr_w
 
         # Calcular alturas e grupos de obs
         alturas = []
@@ -1873,20 +1893,24 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             # Fundo linha horário + militares -- primeira branca, depois alterna
             if idx > 0 and idx % 2 == 1:
                 c.setFillColor(FILL_ALT)
-                c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_vtr_w, row_h, fill=1, stroke=0)
+                c.rect(LM, y-row_h, wids_rm[0]+wids_rm[1]+_ind_w+_rad_w+_vtr_w, row_h, fill=1, stroke=0)
             c.setFillColor(black)
             c.setFont("Helvetica", 8.5)
             ids_lines = wrap_text(r['ids'], wids_rm[1] - 2*mm)
             total_ids_h = len(ids_lines) * 5*mm
             row_h_real = max(row_h, 5*mm)
-            # Horário centrado verticalmente (meio da célula menos meia altura do texto ~2mm)
             y_centro = y - row_h_real/2 - 1.5*mm
             c.drawCentredString(LM+wids_rm[0]/2, y_centro, str(r['hor']))
-            # Militares centrados verticalmente
             y_ids_start = y - (row_h_real - total_ids_h) / 2 - 3.5*mm
             for li, id_l in enumerate(ids_lines):
                 c.drawCentredString(LM+wids_rm[0]+wids_rm[1]/2, y_ids_start - (li*5*mm), id_l)
-            # Viatura -- uma por linha se dupla
+            # Indicativo
+            if _ind_w:
+                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_ind_w/2, y_centro, str(r.get('ind','')))
+            # Rádio
+            if _rad_w:
+                c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_ind_w+_rad_w/2, y_centro, str(r.get('rad','')))
+            # Viatura
             if _vtr_w:
                 vtr_txt = r.get('vtr', '')
                 vtr_lines = vtr_txt.split(' / ') if ' / ' in vtr_txt else [vtr_txt]
@@ -1894,17 +1918,20 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 total_vtr_h = len(vtr_lines) * 5*mm
                 y_vtr = y - (row_h_real - total_vtr_h) / 2 - 3.5*mm
                 for li, vl in enumerate(vtr_lines):
-                    c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_vtr_w/2, y_vtr - (li*5*mm), vl)
+                    c.drawCentredString(LM+wids_rm[0]+wids_rm[1]+_ind_w+_rad_w+_vtr_w/2, y_vtr - (li*5*mm), vl)
                 c.setFont("Helvetica", 8.5)
             c.setStrokeColor(CINZA_LN)
-            x_fim_esq = LM + wids_rm[0] + wids_rm[1] + _vtr_w
-            # Linhas horizontais só até ao limite da área esquerda (não invadem a obs)
-            c.line(LM, y, x_fim_esq, y)              # topo
-            c.line(LM, y-row_h, x_fim_esq, y-row_h)  # fundo
-            c.line(LM, y, LM, y-row_h)               # esquerda
-            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)  # sep horário|militares
+            x_fim_esq = LM + wids_rm[0] + wids_rm[1] + _ind_w + _rad_w + _vtr_w
+            c.line(LM, y, x_fim_esq, y)
+            c.line(LM, y-row_h, x_fim_esq, y-row_h)
+            c.line(LM, y, LM, y-row_h)
+            c.line(LM+wids_rm[0], y, LM+wids_rm[0], y-row_h)
+            if _ind_w:
+                c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)
+            if _rad_w:
+                c.line(LM+wids_rm[0]+wids_rm[1]+_ind_w, y, LM+wids_rm[0]+wids_rm[1]+_ind_w, y-row_h)
             if _vtr_w:
-                c.line(LM+wids_rm[0]+wids_rm[1], y, LM+wids_rm[0]+wids_rm[1], y-row_h)  # sep militares|viatura
+                c.line(LM+wids_rm[0]+wids_rm[1]+_ind_w+_rad_w, y, LM+wids_rm[0]+wids_rm[1]+_ind_w+_rad_w, y-row_h)
             y -= row_h
 
         # Agora desenhar as células de observação fundidas por cima
@@ -5173,7 +5200,12 @@ else:
                         })
                 st.session_state['editar_escala'] = dados_editar
                 st.session_state['editar_escala_original'] = {
-                    aba: {mid: dict(r) for r in info['linhas'] for mid in [str(r['id']).strip()]}
+                    aba: {
+                        mid: dict(r)
+                        for info2 in [info]
+                        for r in info2['linhas']
+                        for mid in [m.strip() for m in str(r['id']).split(';') if m.strip()]
+                    }
                     for aba, info in dados_editar.items()
                 }
                 st.rerun()
@@ -5326,16 +5358,35 @@ else:
                                     orig_aba_e = orig_dict_e.get(aba_e, {})
                                     ids_alterados = set()
                                     if orig_aba_e and not df_editado_s.empty:
+                                        from collections import Counter as _Counter
+                                        # Expandir IDs múltiplos separados por ;
+                                        _ids_novos_flat = []
+                                        for _, r in df_editado_s.iterrows():
+                                            for _m in str(r.get('id','')).split(';'):
+                                                _m = _m.strip()
+                                                if _m: _ids_novos_flat.append(_m)
+                                        contagem_novos = _Counter(_ids_novos_flat)
+                                        contagem_orig = _Counter(orig_aba_e.keys())
+
                                         for _, row_e in df_editado_s.iterrows():
-                                            mid_e = str(row_e.get('id','')).strip()
-                                            if not mid_e or mid_e not in orig_aba_e: continue
-                                            orig_r = orig_aba_e[mid_e]
-                                            serv_orig_e = str(orig_r.get('serviço','')).strip()
-                                            serv_novo_e = str(row_e.get('serviço','')).strip()
-                                            hor_orig_e  = str(orig_r.get('horário','')).strip()
-                                            hor_novo_e  = str(row_e.get('horário','')).strip()
-                                            if serv_orig_e != serv_novo_e or hor_orig_e != hor_novo_e:
-                                                ids_alterados.add(mid_e)
+                                            raw_e = str(row_e.get('id','')).strip()
+                                            mids_e = [m.strip() for m in raw_e.split(';') if m.strip()]
+                                            for mid_e in mids_e:
+                                                # Linha nova
+                                                if mid_e not in orig_aba_e:
+                                                    ids_alterados.add(mid_e)
+                                                    continue
+                                                # Mais linhas que antes
+                                                if contagem_novos.get(mid_e, 0) > contagem_orig.get(mid_e, 0):
+                                                    ids_alterados.add(mid_e)
+                                                    continue
+                                                orig_r = orig_aba_e[mid_e]
+                                                serv_orig_e = str(orig_r.get('serviço','')).strip()
+                                                serv_novo_e = str(row_e.get('serviço','')).strip()
+                                                hor_orig_e  = str(orig_r.get('horário','')).strip()
+                                                hor_novo_e  = str(row_e.get('horário','')).strip()
+                                                if serv_orig_e != serv_novo_e or hor_orig_e != hor_novo_e:
+                                                    ids_alterados.add(mid_e)
 
                                     if ids_alterados:
                                         data_aba_e = f"{aba_e[3:5]}/{aba_e[:2]}/{datetime.now().year}"
