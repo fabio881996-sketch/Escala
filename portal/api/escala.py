@@ -298,9 +298,13 @@ async def minha_escala(current_user: dict = Depends(obter_user_atual)):
                         mask_outro = df_d["id"].astype(str).str.strip() == outro_id
                         if mask_outro.any():
                             row_ref = df_d[mask_outro].iloc[0]
-                            # Se não tiver horário no servico_destino, usar o do outro militar
-                            if not hor_novo:
-                                hor_novo = str(row_ref.get("horário", "") or "").strip()
+                            # Usar serviço e horário REAIS da escala actual (não da troca guardada)
+                            serv_real = str(row_ref.get("serviço", "") or "").strip()
+                            hor_real  = str(row_ref.get("horário", "") or "").strip()
+                            if serv_real:
+                                serv_novo = serv_real
+                            if hor_real:
+                                hor_novo = hor_real
                         servico = serv_novo
                         horario = hor_novo or horario
                         troca_aplicada = True
