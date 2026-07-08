@@ -1770,7 +1770,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 c.rect(LM, y-_obs_h, sum(wids_oc), _obs_h, fill=1, stroke=0)
                 c.setStrokeColor(CINZA_LN)
                 c.line(LM, y-_obs_h, LM+sum(wids_oc), y-_obs_h)
-                _obs_p.drawOn(c, LM+wids_oc[0]+1*mm, y-_obs_h+1*mm)
+                _obs_p.drawOn(c, LM+1*mm, y-_obs_h+1*mm)
                 y -= _obs_h
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
@@ -1810,7 +1810,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 c.rect(LM, y-_obs_h2, sum(wids_pp), _obs_h2, fill=1, stroke=0)
                 c.setStrokeColor(CINZA_LN)
                 c.line(LM, y-_obs_h2, LM+sum(wids_pp), y-_obs_h2)
-                _obs_p2.drawOn(c, LM+wids_pp[0]+1*mm, y-_obs_h2+1*mm)
+                _obs_p2.drawOn(c, LM+1*mm, y-_obs_h2+1*mm)
                 y -= _obs_h2
             if y < 20*mm: y = new_page()
         close_section(y_sec_top, y)
@@ -2011,9 +2011,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         close_section(y_sec_top, y)
         y -= 2*mm
 
-    # ---- OBSERVAÇÕES (todos exceto remunerados) ----
+    # ---- OBSERVAÇÕES (só serviços que não têm obs inline — exclui pat e ocorr) ----
     obs_por_ind = {}  # label -> {obs -> set(hors)}
-    for df_sec in [df_pat, df_at, df_ap, df_outros]:
+    for df_sec in [df_at, df_ap, df_outros]:  # excluir df_pat e df_ocorr — obs já inline
         if df_sec.empty or "observações" not in df_sec.columns:
             continue
         for _, row in df_sec.iterrows():
