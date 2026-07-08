@@ -254,23 +254,25 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
         # Assinar sequencialmente os 3 campos
         assinaturas = [
             {
+                "field": "Assinatura_Validador",
+                "reason": f"Validado por {validador}",
+                "signer_name": f"{validador}",
+                "data": data_validacao,
+                "certify": True,
+            },
+            {
                 "field": "Assinatura_Solicitante",
                 "reason": f"Solicitado por {nome_orig}",
                 "signer_name": f"{nome_orig}",
                 "data": data_pedido,
+                "certify": False,
             },
             {
                 "field": "Assinatura_Aceitante",
                 "reason": f"Aceite por {nome_dest}",
                 "signer_name": f"{nome_dest}",
                 "data": data_aceitacao,
-            },
-            {
-                "field": "Assinatura_Validador",
-                "reason": f"Validado por {validador}",
-                "signer_name": f"{validador}",
-                "data": data_validacao,
-                "certify": True,
+                "certify": False,
             },
         ]
 
