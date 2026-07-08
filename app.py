@@ -726,8 +726,35 @@ def militar_de_folga(mid: str, data, df_folgas: pd.DataFrame, grupos_folga: dict
     if fds_val == 'sim' and (is_fds or d in feriados_list):
         return 'Folga Semanal'
 
-    # fds=não → folga determinada pelas datas do grupo
+    # fds=não → folga determinada pelo grupo
     if grupo:
+        # Método novo: sábado de referência para cálculo on-the-fly (funciona para qualquer ano)
+        refs = grupos_folga.get('refs', {})
+        if grupo in refs:
+            sab_ref = refs[grupo]
+            from datetime import date as _date2
+            if not isinstance(sab_ref, _date2):
+                try:
+                    from datetime import datetime as _dt2
+                    sab_ref = _dt2.strptime(str(sab_ref), "%Y-%m-%d").date()
+                except Exception:
+                    sab_ref = None
+            if sab_ref:
+                _OFFSETS_14 = {0:'semanal',1:'semanal',6:'semanal',11:'semanal',
+                               12:'complementar',17:'semanal',18:'complementar',23:'semanal'}
+                _OFFSETS_VV = {0:'semanal',1:'semanal',7:'complementar',8:'semanal',
+                               14:'semanal',15:'complementar',21:'semanal',22:'semanal'}
+                offsets = _OFFSETS_14 if grupo in ('I','II','III','IV') else _OFFSETS_VV
+                delta = (d - sab_ref).days
+                pos = delta % 28
+                tipo = offsets.get(pos, '')
+                if tipo == 'semanal':
+                    return 'Folga Semanal'
+                elif tipo == 'complementar':
+                    return 'Folga Complementar'
+                return ''
+
+        # Método legado: datas específicas guardadas no PG
         folgas_dict = grupos_folga.get('folgas', {})
         datas_grupo = folgas_dict.get(grupo, {})
         datas_semanal = datas_grupo.get('semanal', [])
