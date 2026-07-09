@@ -58,18 +58,22 @@ def _guardar_subscription(u_id: str, sub_json: str = "", fcm_token: str = "") ->
     try:
         loader = _get_loader()
         import json as _json
-        _endpoint = sub_json
-        _p256dh = ""
-        _auth = ""
-        try:
-            _sub_dict = _json.loads(sub_json) if sub_json else {}
-            _endpoint = _sub_dict.get("endpoint", sub_json)
-            _keys = _sub_dict.get("keys", {})
-            _p256dh = _keys.get("p256dh", "")
-            _auth = _keys.get("auth", "")
-        except Exception:
-            pass
-        loader.guardar_push_subscription(u_id, _endpoint, _p256dh, _auth, "web")
+        if fcm_token:
+            # FCM token (APK Android) — guardar como endpoint especial
+            loader.guardar_push_subscription(u_id, f"fcm:{fcm_token}", "", "", "fcm")
+        elif sub_json:
+            _endpoint = sub_json
+            _p256dh = ""
+            _auth = ""
+            try:
+                _sub_dict = _json.loads(sub_json) if sub_json else {}
+                _endpoint = _sub_dict.get("endpoint", sub_json)
+                _keys = _sub_dict.get("keys", {})
+                _p256dh = _keys.get("p256dh", "")
+                _auth = _keys.get("auth", "")
+            except Exception:
+                pass
+            loader.guardar_push_subscription(u_id, _endpoint, _p256dh, _auth, "web")
     except Exception as e:
         logger.warning(f"Erro ao guardar subscription: {e}")
 
@@ -78,24 +82,21 @@ def _get_subscriptions(u_ids: list[str] | None = None):
         loader = _get_loader()
         df_subs = loader.carregar_push_subscriptions()
         result = []
+        import json
         for _, row in df_subs.iterrows():
             uid = str(row.get("militar_id","")).strip()
             if not uid: continue
             if u_ids is not None and uid not in u_ids: continue
-            sub_json = str(row.get("endpoint","")).strip()
-            # Reconstruir subscription JSON a partir dos campos
             endpoint = str(row.get("endpoint","")).strip()
             p256dh = str(row.get("p256dh","")).strip()
             auth = str(row.get("auth","")).strip()
-            if endpoint:
-                import json
+            # FCM token (APK Android)
+            if endpoint.startswith("fcm:"):
+                fcm_token = endpoint[4:]
+                result.append({"u_id": uid, "subscription": None, "fcm_token": fcm_token})
+            elif endpoint:
                 sub_json = json.dumps({"endpoint": endpoint, "keys": {"p256dh": p256dh, "auth": auth}})
-            fcm_token = ""
-            result.append({
-                "u_id": uid,
-                "subscription": json.loads(sub_json) if sub_json else None,
-                "fcm_token": fcm_token,
-            })
+                result.append({"u_id": uid, "subscription": json.loads(sub_json), "fcm_token": ""})
         return result
     except Exception:
         return []
@@ -166,7 +167,19 @@ def enviar_push(u_ids: list[str], titulo: str, corpo: str, url: str = "/", tag: 
                 vapid_claims=VAPID_CLAIMS,
             )
         except Exception as e:
-            logger.warning(f"Web Push falhou para {entry['u_id']}: {e}")
+            err_str = str(e)
+            # Se subscrição inválida/expirada, remover do PG
+            if any(code in err_str for code in ['410', '404', 'Gone', 'Not Found', 'expired']):
+                try:
+                    loader = _get_loader()
+                    endpoint = entry["subscription"].get("endpoint", "")
+                    if endpoint:
+                        loader.remover_push_subscription(endpoint)
+                        logger.info(f"Subscrição removida (expirada) para {entry['u_id']}")
+                except Exception:
+                    pass
+            else:
+                logger.warning(f"Web Push falhou para {entry['u_id']}: {e}")
 
 
 # ── Endpoints ────────────────────────────────────────────────
