@@ -92,23 +92,54 @@ const DefinicoesPage = {
         }
 
         // Web Push (PWA)
-        if (!('Notification' in window)) {
+        if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
             statusEl.innerHTML = '⚠️ Notificações não suportadas neste browser';
             btnEl.style.display = 'none';
             return;
         }
 
         const perm = Notification.permission;
-        if (perm === 'granted') {
-            statusEl.innerHTML = '✅ Notificações activas';
-            btnEl.textContent = '🔕 Desativar Notificações';
-            btnEl.classList.replace('btn-primary', 'btn-secondary');
-        } else if (perm === 'denied') {
+        if (perm === 'denied') {
             statusEl.innerHTML = '❌ Notificações bloqueadas — activa nas definições do browser';
             btnEl.style.display = 'none';
-        } else {
+            return;
+        }
+
+        if (perm !== 'granted') {
             statusEl.innerHTML = '🔔 Notificações não activadas';
             btnEl.textContent = '🔔 Ativar Notificações';
+            btnEl.classList.replace('btn-secondary', 'btn-primary');
+            return;
+        }
+
+        // Permissão OK — verificar se subscrição está activa no servidor
+        try {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            const reg = regs[0];
+            if (!reg) {
+                statusEl.innerHTML = '⚠️ Service Worker não registado — a reactivar...';
+                await App._initPushWeb();
+                statusEl.innerHTML = '✅ Notificações activas';
+                btnEl.textContent = '🔕 Desativar Notificações';
+                btnEl.classList.replace('btn-primary', 'btn-secondary');
+                return;
+            }
+
+            const sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+                // Permissão OK mas subscrição perdida — re-registar automaticamente
+                statusEl.innerHTML = '⚠️ Subscrição perdida — a reactivar...';
+                await App._initPushWeb();
+                statusEl.innerHTML = '✅ Notificações activas';
+                btnEl.textContent = '🔕 Desativar Notificações';
+                btnEl.classList.replace('btn-primary', 'btn-secondary');
+            } else {
+                statusEl.innerHTML = '✅ Notificações activas';
+                btnEl.textContent = '🔕 Desativar Notificações';
+                btnEl.classList.replace('btn-primary', 'btn-secondary');
+            }
+        } catch(e) {
+            statusEl.innerHTML = '⚠️ Erro ao verificar: ' + e.message;
         }
     },
 
