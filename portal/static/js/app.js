@@ -57,6 +57,8 @@ const App = {
         App.checkPendentes();
         App.initPush();
         App.verificarNavPendente();
+        // Re-verificar subscrição periodicamente (a cada 30 min)
+        setInterval(() => App._initPushWeb(), 30 * 60 * 1000);
         GCal.verificarCallbackPendente();
 
         // Ouvir mensagem do SW para navegar após clique na notificação
@@ -130,33 +132,41 @@ const App = {
 
     async _initPushWeb() {
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+        if (Notification.permission === 'denied') return;
 
         try {
-            // Usar getRegistrations para evitar pending quando SW não é controller
             const regs = await navigator.serviceWorker.getRegistrations();
             const reg = regs[0] || await navigator.serviceWorker.ready;
 
-            // Verificar se já está subscrito
-            const existing = await reg.pushManager.getSubscription();
-            if (existing) {
-                await API.push_subscribe({ subscription: existing.toJSON() });
-                return;
-            }
-
-            // Pedir permissão
-            const permission = await Notification.requestPermission();
-            if (permission !== 'granted') return;
-
-            // Buscar chave pública VAPID
+            // Buscar chave pública VAPID primeiro
             const keyData = await API.vapid_public_key();
             if (!keyData?.public_key) return;
-
             const applicationServerKey = App._urlBase64ToUint8Array(keyData.public_key);
+
+            // Verificar subscrição existente
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) {
+                // Re-enviar ao servidor (garante que está actualizada)
+                try {
+                    await API.push_subscribe({ subscription: existing.toJSON() });
+                    return;
+                } catch(e) {
+                    // Se falhar, cancelar e re-subscrever
+                    await existing.unsubscribe();
+                }
+            }
+
+            // Pedir permissão se ainda não foi dada
+            if (Notification.permission !== 'granted') {
+                const permission = await Notification.requestPermission();
+                if (permission !== 'granted') return;
+            }
+
+            // Criar nova subscrição
             const subscription = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey,
             });
-
             await API.push_subscribe({ subscription: subscription.toJSON() });
         } catch (e) {
             console.warn('Web push init falhou:', e);
