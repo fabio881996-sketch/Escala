@@ -127,13 +127,22 @@ const DefinicoesPage = {
 
             const sub = await reg.pushManager.getSubscription();
             if (!sub) {
-                // Permissão OK mas subscrição perdida — re-registar automaticamente
-                statusEl.innerHTML = '⚠️ Subscrição perdida — a reactivar...';
-                await App._initPushWeb();
-                statusEl.innerHTML = '✅ Notificações activas';
-                btnEl.textContent = '🔕 Desativar Notificações';
-                btnEl.classList.replace('btn-primary', 'btn-secondary');
+                // Permissão OK mas subscrição perdida
+                // Só re-registar automaticamente se o utilizador não cancelou manualmente
+                const cancelouManual = localStorage.getItem('notif_desativadas') === '1';
+                if (!cancelouManual) {
+                    statusEl.innerHTML = '⚠️ Subscrição perdida — a reactivar...';
+                    await App._initPushWeb();
+                    statusEl.innerHTML = '✅ Notificações activas';
+                    btnEl.textContent = '🔕 Desativar Notificações';
+                    btnEl.classList.replace('btn-primary', 'btn-secondary');
+                } else {
+                    statusEl.innerHTML = '🔕 Notificações desactivadas';
+                    btnEl.textContent = '🔔 Ativar Notificações';
+                    btnEl.classList.replace('btn-secondary', 'btn-primary');
+                }
             } else {
+                localStorage.removeItem('notif_desativadas');
                 statusEl.innerHTML = '✅ Notificações activas';
                 btnEl.textContent = '🔕 Desativar Notificações';
                 btnEl.classList.replace('btn-primary', 'btn-secondary');
@@ -184,15 +193,18 @@ const DefinicoesPage = {
                         // Tem subscription activa — desativar
                         await existing.unsubscribe();
                         await API.push_unsubscribe();
+                        localStorage.setItem('notif_desativadas', '1');
                         if (statusEl) statusEl.innerHTML = '❌ Notificações desactivadas';
                         if (btnEl) { btnEl.textContent = '🔔 Ativar Notificações'; btnEl.classList.replace('btn-secondary','btn-primary'); }
                     } else {
                         // Permissão mas subscription perdida — re-registar
+                        localStorage.removeItem('notif_desativadas');
                         await App._initPushWeb();
                         if (statusEl) statusEl.innerHTML = '✅ Notificações activas';
                     }
                 }
             } else {
+                localStorage.removeItem('notif_desativadas');
                 await App._initPushWeb();
             }
         } catch(e) {
