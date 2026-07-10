@@ -18,120 +18,151 @@ def gerar_pdf_troca(
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import mm
         from reportlab.lib.colors import HexColor
-        from reportlab.pdfbase import pdfmetrics
-        from reportlab.pdfbase.ttfonts import TTFont
-
-        try:
-            pdfmetrics.registerFont(TTFont('DV', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
-            pdfmetrics.registerFont(TTFont('DV-B', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
-            fn, fb = 'DV', 'DV-B'
-        except Exception:
-            fn, fb = 'Helvetica', 'Helvetica-Bold'
 
         buf = io.BytesIO()
-        cv = _canvas.Canvas(buf, pagesize=A4)
-        w, h = A4
-        y = h - 10*mm
+        W, H = A4
+        c = _canvas.Canvas(buf, pagesize=A4)
+        AZUL = HexColor("#0f2540")
+        AZUL_V = HexColor("#1d6fa8")
+        CINZA = HexColor("#64748b")
+        LM = 20*mm
 
         # Cabeçalho
-        _cab = os.environ.get("PDF_CABECALHO_B64", "")
-        if _cab:
-            try:
-                _cb = base64.b64decode(_cab)
-                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tf:
-                    tf.write(_cb); cp = tf.name
-                cw = 95*mm; ch = cw * (235/398)
-                cv.drawImage(cp, 20*mm, h-8*mm-ch, width=cw, height=ch, preserveAspectRatio=True)
-                os.unlink(cp)
-                cv.setFillColor(HexColor('#000000')); cv.setFont(fb, 14)
-                cv.drawString(20*mm+cw+10*mm, h-8*mm-ch/2, "TROCA DE SERVIÇO")
-                y = h - 8*mm - ch - 10*mm
-            except Exception:
-                cv.setFont(fb, 14); cv.drawCentredString(w/2, h-20*mm, "TROCA DE SERVIÇO")
-                y = h - 35*mm
-        else:
-            cv.setFont(fb, 14); cv.drawCentredString(w/2, h-20*mm, "TROCA DE SERVIÇO")
-            y = h - 35*mm
+        c.setFillColor(AZUL)
+        c.rect(0, H-28*mm, W, 28*mm, fill=1, stroke=0)
+        c.setFillColor(HexColor("#ffffff"))
+        c.setFont("Helvetica-Bold", 13)
+        c.drawCentredString(W/2, H-12*mm, "GUARDA NACIONAL REPUBLICANA")
+        c.setFont("Helvetica", 9)
+        c.drawCentredString(W/2, H-19*mm, "Posto Territorial de Vila Nova de Famalicão")
+        c.setFont("Helvetica-Bold", 11)
+        c.drawCentredString(W/2, H-25*mm, "TROCA DE SERVIÇO")
 
-        # Linha separadora
-        cv.setStrokeColor(HexColor('#0f2540')); cv.setLineWidth(1.5)
-        cv.line(20*mm, y, w-20*mm, y); y -= 12*mm
+        y = H - 38*mm
 
-        # Dados da troca
-        def row(label, value, yy):
-            cv.setFont(fb, 9); cv.setFillColor(HexColor('#6c757d'))
-            cv.drawString(20*mm, yy, label.upper())
-            cv.setFont(fn, 10); cv.setFillColor(HexColor('#212529'))
-            cv.drawString(70*mm, yy, value)
-            return yy - 8*mm
+        # Data
+        c.setFillColor(AZUL)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(LM, y, f"Data do serviço:  {data}")
+        y -= 12*mm
 
-        y = row("Data da Troca", data, y)
-        y -= 3*mm
-        y = row("Militar A", nome_orig, y)
-        y = row("Cede o serviço", serv_orig, y)
-        y -= 3*mm
-        y = row("Militar B", nome_dest, y)
-        y = row("Cede o serviço", serv_dest, y)
-        y -= 6*mm
+        # Box militares
+        def draw_box(y_pos, label, nome, cede, fica, data_acao):
+            c.setFillColor(HexColor("#f0f4f8"))
+            c.rect(LM, y_pos-30*mm, (W-2*LM)/2-3*mm, 30*mm, fill=1, stroke=0)
+            c.setStrokeColor(AZUL_V)
+            c.setLineWidth(0.5)
+            c.rect(LM, y_pos-30*mm, (W-2*LM)/2-3*mm, 30*mm, fill=0, stroke=1)
+            x = LM + 4*mm
+            c.setFillColor(AZUL_V)
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(x, y_pos-5*mm, label)
+            c.setFillColor(AZUL)
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(x, y_pos-11*mm, nome)
+            c.setFillColor(CINZA)
+            c.setFont("Helvetica", 8)
+            c.drawString(x, y_pos-17*mm, f"Cede:  {cede}")
+            c.setFillColor(HexColor("#16a34a"))
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(x, y_pos-23*mm, f"Fica com:  {fica}")
+            c.setFillColor(CINZA)
+            c.setFont("Helvetica", 7.5)
+            c.drawString(x, y_pos-28*mm, data_acao)
 
-        cv.setStrokeColor(HexColor('#dee2e6')); cv.setLineWidth(0.5)
-        cv.line(20*mm, y, w-20*mm, y); y -= 8*mm
+        draw_box(y, "🙋 SOLICITA", nome_orig, serv_orig, serv_dest, f"Pedido: {data_pedido}")
+        x2 = LM + (W-2*LM)/2 + 3*mm
+        c.setFillColor(HexColor("#f0f4f8"))
+        c.rect(x2, y-30*mm, (W-2*LM)/2-3*mm, 30*mm, fill=1, stroke=0)
+        c.setStrokeColor(HexColor("#16a34a"))
+        c.rect(x2, y-30*mm, (W-2*LM)/2-3*mm, 30*mm, fill=0, stroke=1)
+        c.setFillColor(HexColor("#16a34a"))
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(x2+4*mm, y-5*mm, "✅ ACEITA")
+        c.setFillColor(AZUL)
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(x2+4*mm, y-11*mm, nome_dest)
+        c.setFillColor(CINZA)
+        c.setFont("Helvetica", 8)
+        c.drawString(x2+4*mm, y-17*mm, f"Cede:  {serv_dest}")
+        c.setFillColor(HexColor("#16a34a"))
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(x2+4*mm, y-23*mm, f"Fica com:  {serv_orig}")
+        c.setFillColor(CINZA)
+        c.setFont("Helvetica", 7.5)
+        c.drawString(x2+4*mm, y-28*mm, f"Aceite: {data_aceitacao}")
 
-        y = row("Data do Pedido", data_pedido, y)
-        y = row("Data de Aceitação", data_aceitacao, y)
-        y = row("Validado por", validador, y)
-        y = row("Data de Validação", data_validacao, y)
-        y -= 8*mm
+        y -= 36*mm
 
-        # Assinaturas
-        cv.setFont(fb, 9); cv.setFillColor(HexColor('#6c757d'))
-        cv.drawString(20*mm, y, "ASSINATURA MILITAR A")
-        cv.drawString(110*mm, y, "ASSINATURA MILITAR B")
-        y -= 20*mm
-        cv.setLineWidth(0.5)
-        cv.line(20*mm, y, 85*mm, y)
-        cv.line(110*mm, y, 175*mm, y)
+        # Validação
+        c.setFillColor(HexColor("#fef3c7"))
+        c.rect(LM, y-18*mm, W-2*LM, 18*mm, fill=1, stroke=0)
+        c.setStrokeColor(HexColor("#d97706"))
+        c.rect(LM, y-18*mm, W-2*LM, 18*mm, fill=0, stroke=1)
+        c.setFillColor(HexColor("#92400e"))
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(LM+4*mm, y-5*mm, "⚖️ VALIDAÇÃO ADMINISTRATIVA")
+        c.setFont("Helvetica", 8)
+        c.drawString(LM+4*mm, y-11*mm, f"Validado por:  {validador}")
+        c.drawString(LM+4*mm, y-16*mm, f"Data:  {data_validacao}")
+
+        y -= 24*mm
+
+        # Espaço para assinaturas
+        c.setFillColor(AZUL)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(LM, y, "ASSINATURAS DIGITAIS")
+        y -= 2*mm
+        c.setStrokeColor(AZUL)
+        c.setLineWidth(0.5)
+        c.line(LM, y, W-LM, y)
+        y -= 28*mm  # espaço para os campos de assinatura
 
         # Rodapé
-        cv.setFont(fn, 7); cv.setFillColor(HexColor('#adb5bd'))
-        cv.drawRightString(w-20*mm, 12*mm, "Portal de Escalas GNR — Posto Territorial de Famalicão")
+        c.setFillColor(CINZA)
+        c.setFont("Helvetica", 7)
+        c.drawCentredString(W/2, 12*mm, f"Documento gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')} — Portal de Escalas GNR")
 
-        cv.save()
+        c.save()
         return buf.getvalue()
-
     except Exception as e:
-        logger.warning("Erro a gerar PDF troca: %s", e)
+        logger.warning("Erro ao gerar PDF troca: %s", e)
         return None
 
 
-def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
-    """Faz upload do PDF para a pasta 'Trocas GNR' no Drive. Devolve URL ou None."""
+def upload_drive(pdf_bytes: bytes, filename: str, admin_id: str | None = None) -> str | None:
+    """Faz upload do PDF para a pasta 'Trocas GNR' no Drive usando OAuth do admin."""
     try:
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
         from googleapiclient.http import MediaIoBaseUpload
-        import json
+        from google.oauth2.credentials import Credentials
+        import json, time
 
-        creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON", os.environ.get("gcp_service_account", ""))
-        if not creds_json:
+        if not admin_id:
+            admin_id = "1030"
+
+        from portal.api.calendar import _get_token, _refresh_token, _guardar_token
+        token_data = _get_token(admin_id)
+        if not token_data:
+            logger.warning("Upload Drive: admin %s não tem token OAuth", admin_id)
             return None
 
-        creds_data = json.loads(creds_json)
-        creds = service_account.Credentials.from_service_account_info(
-            creds_data, scopes=["https://www.googleapis.com/auth/drive"]
-        )
+        # Refresh se necessário
+        if time.time() > token_data.get("expires_at", 0) - 60:
+            try:
+                token_data = _refresh_token(token_data)
+                token_data["expires_at"] = time.time() + token_data.get("expires_in", 3600)
+                _guardar_token(admin_id, token_data)
+            except Exception as e:
+                logger.warning("Upload Drive: refresh token falhou: %s", e)
+                return None
+
+        creds = Credentials(token=token_data["access_token"])
         service = build("drive", "v3", credentials=creds, cache_discovery=False)
 
-        # Encontrar pasta "Trocas GNR"
-        results = service.files().list(
-            q="name='Trocas GNR' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-            fields="files(id)"
-        ).execute()
-        folders = results.get("files", [])
-        folder_id = folders[0]["id"] if folders else None
-
+        folder_id = "1eiEHKvy9QtJCgVcJmhZl2Zu9o6IG5Wjl"
         media = MediaIoBaseUpload(io.BytesIO(pdf_bytes), mimetype="application/pdf")
-        meta = {"name": filename, **({"parents": [folder_id]} if folder_id else {})}
+        meta = {"name": filename, "parents": [folder_id]}
         f = service.files().create(body=meta, media_body=media, fields="id, webViewLink").execute()
         return f.get("webViewLink")
 
@@ -140,70 +171,42 @@ def upload_drive(pdf_bytes: bytes, filename: str) -> str | None:
         return None
 
 
-def gerar_e_upload(data, nome_orig, serv_orig, nome_dest, serv_dest,
-                   data_pedido="", data_aceitacao="", validador="", data_validacao="", admin_id=None):
-    """Gera PDF, assina digitalmente com 3 campos e faz upload para o Drive."""
-    pdf = gerar_pdf_troca(data, nome_orig, serv_orig, nome_dest, serv_dest,
-                          data_pedido, data_aceitacao, validador, data_validacao)
-    if pdf:
-        # Assinar com 3 campos — solicitante, aceitante e validador
-        pdf = assinar_pdf(
-            pdf,
-            validador=validador or "Admin",
-            data_validacao=data_validacao or "",
-            nome_orig=nome_orig or "",
-            data_pedido=data_pedido or "",
-            nome_dest=nome_dest or "",
-            data_aceitacao=data_aceitacao or "",
-        )
-        filename = f"Troca_{data.replace('/','_')}_{nome_orig.split()[-1]}_{nome_dest.split()[-1]}.pdf"
-        return upload_drive(pdf, filename, admin_id=admin_id or "1030")
-    return None
-
-
 def gerar_certificado_gnr() -> bytes:
     """Gera certificado auto-assinado da GNR em formato PKCS12."""
-    import os
+    cert_b64 = os.environ.get("GNR_SIGNING_CERT_P12_B64", "").strip()
+    if cert_b64:
+        try:
+            return base64.b64decode(cert_b64)
+        except Exception:
+            pass
+
     from cryptography import x509
     from cryptography.x509.oid import NameOID
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
     from cryptography.hazmat.primitives.serialization import pkcs12
     from cryptography.hazmat.backends import default_backend
-    import datetime
+    import datetime as _dt
 
-    # Usar certificado existente se guardado em variável de ambiente
-    cert_b64 = os.environ.get("GNR_SIGNING_CERT_P12_B64", "").strip()
-    if cert_b64:
-        import base64
-        try:
-            return base64.b64decode(cert_b64)
-        except Exception:
-            pass
-
-    # Gerar novo certificado
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, "PT"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "GNR - Posto Territorial de Famalicão"),
-        x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, "Portal de Escalas"),
         x509.NameAttribute(NameOID.COMMON_NAME, "GNR Famalicão - Assinatura Digital"),
     ])
-    now = datetime.datetime.now(datetime.timezone.utc)
+    now = _dt.datetime.now(_dt.timezone.utc)
     cert = (
         x509.CertificateBuilder()
-        .subject_name(subject)
-        .issuer_name(issuer)
+        .subject_name(subject).issuer_name(issuer)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
         .not_valid_before(now)
-        .not_valid_after(now + datetime.timedelta(days=3650))
+        .not_valid_after(now + _dt.timedelta(days=3650))
         .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
         .sign(key, hashes.SHA256(), default_backend())
     )
     p12 = pkcs12.serialize_key_and_certificates(
-        name=b"GNR Portal Escalas",
-        key=key, cert=cert, cas=None,
+        name=b"GNR Portal Escalas", key=key, cert=cert, cas=None,
         encryption_algorithm=serialization.NoEncryption()
     )
     return p12
@@ -212,93 +215,57 @@ def gerar_certificado_gnr() -> bytes:
 def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
                 nome_orig: str = "", data_pedido: str = "",
                 nome_dest: str = "", data_aceitacao: str = "") -> bytes:
-    """Assina digitalmente o PDF com 3 campos — solicitante, aceitante e validador."""
+    """Assina digitalmente o PDF com 3 campos — validador, solicitante e aceitante."""
     try:
-        import io, asyncio
+        import asyncio as _asyncio, concurrent.futures
         from pyhanko.sign import signers, fields
         from pyhanko.pdf_utils import incremental_writer
         from pyhanko.sign.fields import SigFieldSpec
 
         p12_bytes = gerar_certificado_gnr()
 
-        # Definir os 3 campos de assinatura (na última página, em rodapé)
-        # Box: (x1, y1, x2, y2) em pontos — página A4 = 595 x 842 pts
+        # Campos de assinatura (na última página, rodapé)
         sig_fields = [
-            SigFieldSpec(
-                sig_field_name="Assinatura_Solicitante",
-                on_page=-1,
-                box=(36, 36, 190, 90),
-            ),
-            SigFieldSpec(
-                sig_field_name="Assinatura_Aceitante",
-                on_page=-1,
-                box=(203, 36, 357, 90),
-            ),
-            SigFieldSpec(
-                sig_field_name="Assinatura_Validador",
-                on_page=-1,
-                box=(370, 36, 559, 90),
-            ),
+            SigFieldSpec(sig_field_name="Assinatura_Validador",   on_page=-1, box=(36,  36, 190, 90)),
+            SigFieldSpec(sig_field_name="Assinatura_Solicitante", on_page=-1, box=(203, 36, 357, 90)),
+            SigFieldSpec(sig_field_name="Assinatura_Aceitante",   on_page=-1, box=(370, 36, 559, 90)),
         ]
 
         # Adicionar campos ao PDF
         w = incremental_writer.IncrementalPdfFileWriter(io.BytesIO(pdf_bytes))
         for sf in sig_fields:
             fields.append_signature_field(w, sf)
-
-        # Guardar PDF com campos adicionados
         buf = io.BytesIO()
         w.write(buf)
         pdf_com_campos = buf.getvalue()
 
-        # Assinar sequencialmente os 3 campos
+        # Assinar sequencialmente — Validador primeiro (certify=True)
         assinaturas = [
-            {
-                "field": "Assinatura_Validador",
-                "reason": f"Validado por {validador}",
-                "signer_name": f"{validador}",
-                "data": data_validacao,
-                "certify": True,
-            },
-            {
-                "field": "Assinatura_Solicitante",
-                "reason": f"Solicitado por {nome_orig}",
-                "signer_name": f"{nome_orig}",
-                "data": data_pedido,
-                "certify": False,
-            },
-            {
-                "field": "Assinatura_Aceitante",
-                "reason": f"Aceite por {nome_dest}",
-                "signer_name": f"{nome_dest}",
-                "data": data_aceitacao,
-                "certify": False,
-            },
+            {"field": "Assinatura_Validador",   "reason": f"Validado por {validador}",    "certify": True},
+            {"field": "Assinatura_Solicitante", "reason": f"Solicitado por {nome_orig}",  "certify": False},
+            {"field": "Assinatura_Aceitante",   "reason": f"Aceite por {nome_dest}",      "certify": False},
         ]
 
         pdf_atual = pdf_com_campos
         for assin in assinaturas:
             try:
-                import tempfile, os as _os
-                with tempfile.NamedTemporaryFile(suffix='.p12', delete=False) as _tmp:
-                    _tmp.write(p12_bytes)
-                    _tmp_path = _tmp.name
+                import tempfile as _tmp, os as _os
+                with _tmp.NamedTemporaryFile(suffix='.p12', delete=False) as _f:
+                    _f.write(p12_bytes)
+                    _tmp_path = _f.name
                 try:
-                    signer = signers.SimpleSigner.load_pkcs12(
-                        pfx_file=_tmp_path,
-                        passphrase=None,
-                    )
+                    signer = signers.SimpleSigner.load_pkcs12(pfx_file=_tmp_path, passphrase=None)
                 finally:
                     _os.unlink(_tmp_path)
+
                 w2 = incremental_writer.IncrementalPdfFileWriter(io.BytesIO(pdf_atual))
                 meta = signers.PdfSignatureMetadata(
                     field_name=assin["field"],
                     reason=assin["reason"],
                     location="Posto Territorial de Famalicão",
-                    certify=assin.get("certify", False),
+                    certify=assin["certify"],
                 )
                 out2 = io.BytesIO()
-                import concurrent.futures, asyncio as _asyncio
 
                 def _sign_in_thread():
                     loop = _asyncio.new_event_loop()
@@ -311,8 +278,8 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
                         loop.close()
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_sign_in_thread)
-                    future.result(timeout=30)
+                    executor.submit(_sign_in_thread).result(timeout=30)
+
                 pdf_atual = out2.getvalue()
             except Exception as e_sig:
                 logger.warning("Erro ao assinar campo %s: %s", assin["field"], e_sig)
@@ -321,4 +288,24 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
 
     except Exception as e:
         logger.warning("Erro ao assinar PDF: %s", e)
-        return pdf_bytes  # Devolver PDF sem assinatura se falhar
+        return pdf_bytes
+
+
+def gerar_e_upload(data, nome_orig, serv_orig, nome_dest, serv_dest,
+                   data_pedido="", data_aceitacao="", validador="", data_validacao="", admin_id=None):
+    """Gera PDF, assina digitalmente com 3 campos e faz upload para o Drive."""
+    pdf = gerar_pdf_troca(data, nome_orig, serv_orig, nome_dest, serv_dest,
+                          data_pedido, data_aceitacao, validador, data_validacao)
+    if pdf:
+        pdf = assinar_pdf(
+            pdf,
+            validador=validador or "Admin",
+            data_validacao=data_validacao or "",
+            nome_orig=nome_orig or "",
+            data_pedido=data_pedido or "",
+            nome_dest=nome_dest or "",
+            data_aceitacao=data_aceitacao or "",
+        )
+        filename = f"Troca_{data.replace('/','_')}_{nome_orig.split()[-1]}_{nome_dest.split()[-1]}.pdf"
+        return upload_drive(pdf, filename, admin_id=admin_id or "1030")
+    return None
