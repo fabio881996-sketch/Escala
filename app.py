@@ -6457,7 +6457,8 @@ else:
                                     "DELETE FROM servicos WHERE nome=%s AND LOWER(tipo)=LOWER(%s)",
                                     (val, tipo_bd)
                                 )
-                                load_listas.clear()
+                                load_listas.clear() if hasattr(load_listas, 'clear') else None
+                                get_pg_loader().limpar_cache()
                                 st.success(f"✅ '{val}' removido.")
                                 st.rerun()
                             except Exception as _e_rm:
@@ -6485,7 +6486,8 @@ else:
                                     st.warning(f"'{novo_val.strip()}' já existe.")
                                 else:
                                     _exec_lista("INSERT INTO servicos (nome, tipo) VALUES (%s, %s)", (novo_val.strip(), tipo_bd))
-                                load_listas.clear()
+                                load_listas.clear() if hasattr(load_listas, 'clear') else None
+                                get_pg_loader().limpar_cache()
                                 st.success(f"✅ '{novo_val.strip()}' adicionado.")
                                 st.rerun()
                             except Exception as _e_add:
