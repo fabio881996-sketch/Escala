@@ -6495,7 +6495,201 @@ else:
                         else:
                             st.warning("Escreve um valor primeiro.")
 
-    elif menu == "🏖️ Gerir Férias":
+    elif menu == "🏘️ Gerir Grupos de Folga":
+        st.title("🏘️ Gerir Grupos de Folga")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        import psycopg2 as _pg_gf
+        _db_url_gf = str(st.secrets.get("DATABASE_URL", ""))
+
+        df_u_gf = load_utilizadores()
+        df_f_gf = load_folgas(ano_atual)
+        _gf_all = load_grupos_folga()
+        _grupos_list = sorted(set(list(_gf_all.get('refs', {}).keys()) + list(_gf_all.get('folgas', {}).keys())))
+
+        if not _grupos_list:
+            st.warning("Sem grupos definidos. Define os sábados de referência primeiro.")
+            st.stop()
+
+        _id_nome_gf = {}
+        _id_grupo_gf = {}
+        _id_fds_gf = {}
+        if not df_u_gf.empty:
+            for _, r in df_u_gf.iterrows():
+                _mid = str(r.get('id','')).strip()
+                _id_nome_gf[_mid] = f"{str(r.get('posto','')).strip()} {str(r.get('nome','')).strip()}".strip()
+        if not df_f_gf.empty:
+            _col_id_f = 'id' if 'id' in df_f_gf.columns else 'militar_id'
+            for _, r in df_f_gf.iterrows():
+                _mid = str(r.get(_col_id_f,'')).strip()
+                _id_grupo_gf[_mid] = str(r.get('grupo','')).strip()
+                _id_fds_gf[_mid] = str(r.get('fds','')).strip()
+
+        tabs_gf = st.tabs(_grupos_list + ["➕ Alterar Grupo"])
+
+        for i, grupo in enumerate(_grupos_list):
+            with tabs_gf[i]:
+                militares_grupo = [mid for mid, g in _id_grupo_gf.items() if g == grupo]
+                st.markdown(f"**Grupo {grupo}** — {len(militares_grupo)} militares")
+                if militares_grupo:
+                    for mid in sorted(militares_grupo, key=lambda x: int(x) if x.isdigit() else 9999):
+                        col_n, col_r = st.columns([4, 1])
+                        with col_n:
+                            st.text(f"{mid} — {_id_nome_gf.get(mid, mid)}")
+                        with col_r:
+                            if st.button("🗑️", key=f"rem_gf_{grupo}_{mid}", help="Remover do grupo"):
+                                try:
+                                    with _pg_gf.connect(_db_url_gf) as _c:
+                                        with _c.cursor() as _cu:
+                                            _cu.execute("UPDATE folgas SET grupo=NULL WHERE militar_id=%s", (mid,))
+                                        _c.commit()
+                                    load_folgas.clear()
+                                    st.success(f"✅ Removido do grupo {grupo}.")
+                                    st.rerun()
+                                except Exception as _e:
+                                    st.error(f"Erro: {_e}")
+                else:
+                    st.info("Sem militares neste grupo.")
+
+        with tabs_gf[-1]:
+            st.markdown("#### Alterar grupo de folga de um militar")
+            _opts_mil_gf = {f"{mid} — {_id_nome_gf.get(mid, mid)}": mid
+                            for mid in sorted(_id_nome_gf.keys(), key=lambda x: int(x) if x.isdigit() else 9999)}
+            _sel_mil_gf = st.selectbox("Militar:", list(_opts_mil_gf.keys()), key="sel_mil_gf")
+            _mid_gf = _opts_mil_gf[_sel_mil_gf]
+            _grupo_atual = _id_grupo_gf.get(_mid_gf, '')
+            _fds_atual = _id_fds_gf.get(_mid_gf, 'não')
+            st.caption(f"Grupo actual: **{_grupo_atual or '—'}** | fds: **{_fds_atual}**")
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                _novo_grupo_gf = st.selectbox("Novo grupo:", [''] + _grupos_list, key="novo_grupo_gf",
+                                              index=(_grupos_list.index(_grupo_atual) + 1) if _grupo_atual in _grupos_list else 0)
+            with col_g2:
+                _novo_fds_gf = st.selectbox("Folga fds:", ["não", "sim"], key="novo_fds_gf",
+                                            index=0 if _fds_atual != 'sim' else 1)
+            if st.button("💾 Guardar", use_container_width=True, type="primary", key="btn_save_gf"):
+                try:
+                    with _pg_gf.connect(_db_url_gf) as _c:
+                        with _c.cursor() as _cu:
+                            _cu.execute("""
+                                INSERT INTO folgas (militar_id, grupo, fds)
+                                VALUES (%s, %s, %s)
+                                ON CONFLICT (militar_id) DO UPDATE SET grupo=EXCLUDED.grupo, fds=EXCLUDED.fds
+                            """, (_mid_gf, _novo_grupo_gf or None, _novo_fds_gf))
+                        _c.commit()
+                    load_folgas.clear()
+                    st.success(f"✅ {_id_nome_gf.get(_mid_gf, _mid_gf)} → Grupo {_novo_grupo_gf or '—'} | fds: {_novo_fds_gf}")
+                    st.rerun()
+                except Exception as _e:
+                    st.error(f"Erro: {_e}")
+
+    elif menu == "🔄 Gerir Trocas":
+        st.title("🔄 Gerir Trocas")
+        if not is_admin:
+            st.warning("Acesso restrito a administradores.")
+            st.stop()
+
+        import psycopg2 as _pg_tr
+        from datetime import date as _date_tr, datetime as _dt_tr
+        _db_url_tr = str(st.secrets.get("DATABASE_URL", ""))
+        _hoje_tr = _date_tr.today()
+
+        df_util_tr = load_utilizadores()
+        _id_nome_tr = {}
+        if not df_util_tr.empty:
+            for _, r in df_util_tr.iterrows():
+                _mid = str(r.get('id','')).strip()
+                _id_nome_tr[_mid] = f"{str(r.get('posto','')).strip()} {str(r.get('nome','')).strip()}".strip()
+
+        pg_tr = get_pg_loader()
+        df_trocas_tr = pg_tr.carregar_trocas()
+
+        tab_validar, tab_aprovadas = st.tabs(["⚖️ Validar", "✅ Aprovadas"])
+
+        with tab_validar:
+            st.markdown("#### Trocas a aguardar validação")
+            if df_trocas_tr.empty:
+                st.info("Sem trocas para validar.")
+            else:
+                pend_admin = df_trocas_tr[df_trocas_tr["status"] == "Pendente_Admin"].copy()
+                if pend_admin.empty:
+                    st.info("Sem trocas pendentes de validação.")
+                else:
+                    for _, t in pend_admin.iterrows():
+                        _id_o = str(t.get("id_origem","")).strip()
+                        _id_d = str(t.get("id_destino","")).strip()
+                        _serv_o = str(t.get("servico_origem","")).strip()
+                        _serv_d = str(t.get("servico_destino","")).strip()
+                        _data_t = str(t.get("data","")).strip()
+                        _row_id = int(t.get("id", 0))
+                        with st.container(border=True):
+                            st.markdown(f"**📅 {_data_t}**")
+                            col_v1, col_v2 = st.columns(2)
+                            with col_v1:
+                                st.markdown(f"🙋 **{_id_nome_tr.get(_id_o, _id_o)}**")
+                                st.caption(f"Cede: {_serv_o}")
+                            with col_v2:
+                                st.markdown(f"✅ **{_id_nome_tr.get(_id_d, _id_d)}**")
+                                st.caption(f"Cede: {_serv_d}")
+                            col_ap, col_rej = st.columns(2)
+                            with col_ap:
+                                if st.button("✅ Aprovar", key=f"apr_{_row_id}", use_container_width=True, type="primary"):
+                                    try:
+                                        pg_tr.actualizar_status_troca(_row_id, "Aprovada", _dt_tr.now().strftime("%d/%m/%Y %H:%M"))
+                                        pg_tr.limpar_cache()
+                                        st.success("✅ Troca aprovada!")
+                                        st.rerun()
+                                    except Exception as _e:
+                                        st.error(f"Erro: {_e}")
+                            with col_rej:
+                                if st.button("❌ Rejeitar", key=f"rej_{_row_id}", use_container_width=True):
+                                    try:
+                                        pg_tr.actualizar_status_troca(_row_id, "Rejeitada", _dt_tr.now().strftime("%d/%m/%Y %H:%M"))
+                                        pg_tr.limpar_cache()
+                                        st.success("Troca rejeitada.")
+                                        st.rerun()
+                                    except Exception as _e:
+                                        st.error(f"Erro: {_e}")
+
+        with tab_aprovadas:
+            st.markdown("#### Trocas aprovadas — de hoje em diante")
+            if df_trocas_tr.empty:
+                st.info("Sem trocas.")
+            else:
+                aprov = df_trocas_tr[df_trocas_tr["status"] == "Aprovada"].copy()
+                def _parse_data_tr(d):
+                    try:
+                        return _dt_tr.strptime(str(d).strip(), "%d/%m/%Y").date()
+                    except Exception:
+                        return None
+                aprov["_data_dt"] = aprov["data"].apply(_parse_data_tr)
+                aprov = aprov[aprov["_data_dt"] >= _hoje_tr].sort_values("_data_dt")
+                if aprov.empty:
+                    st.info("Sem trocas aprovadas de hoje em diante.")
+                else:
+                    for _, t in aprov.iterrows():
+                        _id_o = str(t.get("id_origem","")).strip()
+                        _id_d = str(t.get("id_destino","")).strip()
+                        _serv_o = str(t.get("servico_origem","")).strip()
+                        _serv_d = str(t.get("servico_destino","")).strip()
+                        _data_t = str(t.get("data","")).strip()
+                        _row_id = int(t.get("id", 0))
+                        with st.container(border=True):
+                            col_info, col_btn = st.columns([4, 1])
+                            with col_info:
+                                st.markdown(f"**📅 {_data_t}** — {_id_nome_tr.get(_id_o, _id_o)} ↔ {_id_nome_tr.get(_id_d, _id_d)}")
+                                st.caption(f"{_serv_o} ↔ {_serv_d}")
+                            with col_btn:
+                                if st.button("🗑️", key=f"can_{_row_id}", use_container_width=True):
+                                    try:
+                                        pg_tr.actualizar_status_troca(_row_id, "Cancelada")
+                                        pg_tr.limpar_cache()
+                                        st.success("Troca cancelada.")
+                                        st.rerun()
+                                    except Exception as _e:
+                                        st.error(f"Erro: {_e}")
         st.title("🏖️ Gerir Férias")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
