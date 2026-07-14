@@ -1888,7 +1888,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
                 continue
             vistos[chave] = True
             grp = df_rem[(df_rem['horário'] == hor)]
-            if "observações" in df_rem.columns:
+            if "observações" in df_rem.columns and obs:
                 grp = grp[grp['observações'].astype(str).str.strip().replace('nan','') == obs]
             ids = ", ".join(grp["id_fmt"].tolist())
             vtr = ""
