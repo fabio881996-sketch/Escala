@@ -366,9 +366,14 @@ def load_utilizadores() -> pd.DataFrame:
     pg = get_pg_loader()
     if pg:
         try:
-            return pg.carregar_usuarios()
+            df = pg.carregar_usuarios()
+            st.session_state['_debug_db'] = f"PG OK: {len(df)} users | DB={str(st.secrets.get('DATABASE_URL',''))[:40]}"
+            return df
         except Exception as e:
+            st.session_state['_debug_db'] = f"PG ERRO: {e}"
             st.error(f"Erro PG utilizadores: {e}")
+    else:
+        st.session_state['_debug_db'] = "SEM PG LOADER"
     return pd.DataFrame()
 
 
@@ -2357,6 +2362,8 @@ if not st.session_state["logged_in"]:
             """, unsafe_allow_html=True)
             if st.session_state["pin_erro"]:
                 st.error("PIN incorreto. Tenta novamente.")
+            if st.session_state.get('_debug_db'):
+                st.caption(f"🔧 {st.session_state['_debug_db']}")
             if bloqueado:
                 resto = int((st.session_state["pin_bloqueado_ate"] - datetime.now()).total_seconds())
                 st.error(f"🔒 Bloqueado. Aguarda {resto}s.")
