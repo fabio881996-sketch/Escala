@@ -5482,7 +5482,7 @@ else:
                                                 for o, d in canceladas_e:
                                                     todos_ids.add(o); todos_ids.add(d)
                                                 _req_e.post(
-                                                    "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/notificar-interno",
+                                                    "https://escalaptvnf.fly.dev/api/notificacoes/notificar-interno",
                                                     json={
                                                         "secret": "gnr-famalicao-2026",
                                                         "u_ids": list(todos_ids),
@@ -5516,7 +5516,7 @@ else:
                                         _secret_e = str(st.secrets.get("RAILWAY_NOTIFY_SECRET", ""))
                                         _data_fmt_e = aba_e.replace("-", "/")
                                         _req_e.post(
-                                            "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/publicar-escala",
+                                            "https://escalaptvnf.fly.dev/api/notificacoes/publicar-escala",
                                             json={
                                                 "aba": aba_e,
                                                 "secret": _secret_e,
@@ -5820,7 +5820,7 @@ else:
                     try:
                         import requests as _req
                         _req.post(
-                            "https://portal-escalas-gnr-production.up.railway.app/api/notificacoes/publicar-escala",
+                            "https://escalaptvnf.fly.dev/api/notificacoes/publicar-escala",
                             json={"aba": aba_pub, "secret": "gnr-famalicao-2026"},
                             timeout=5
                         )
@@ -6690,6 +6690,8 @@ else:
                                         st.rerun()
                                     except Exception as _e:
                                         st.error(f"Erro: {_e}")
+
+    elif menu == "🏖️ Gerir Férias":
         st.title("🏖️ Gerir Férias")
         if not is_admin:
             st.warning("Acesso restrito a administradores.")
@@ -6762,7 +6764,7 @@ else:
                         pg_fer.limpar_cache()
                         try:
                             import requests as _req_fer
-                            _req_fer.post("https://portal-escalas-gnr-production.up.railway.app/api/cache/clear",
+                            _req_fer.post("https://escalaptvnf.fly.dev/api/cache/clear",
                                          json={"secret": str(st.secrets.get("RAILWAY_NOTIFY_SECRET",""))}, timeout=3)
                         except Exception: pass
                         st.success(f"✅ Período {_prox_periodo} adicionado — {_dias_fer} dias úteis.")
@@ -6826,7 +6828,7 @@ else:
                                     pg_fer.limpar_cache()
                                     try:
                                         import requests as _req_fer2
-                                        _req_fer2.post("https://portal-escalas-gnr-production.up.railway.app/api/cache/clear",
+                                        _req_fer2.post("https://escalaptvnf.fly.dev/api/cache/clear",
                                                       json={"secret": str(st.secrets.get("RAILWAY_NOTIFY_SECRET",""))}, timeout=3)
                                     except Exception: pass
                                     st.success("✅ Actualizado!")
@@ -6846,7 +6848,7 @@ else:
                                     pg_fer.limpar_cache()
                                     try:
                                         import requests as _req_fer3
-                                        _req_fer3.post("https://portal-escalas-gnr-production.up.railway.app/api/cache/clear",
+                                        _req_fer3.post("https://escalaptvnf.fly.dev/api/cache/clear",
                                                       json={"secret": str(st.secrets.get("RAILWAY_NOTIFY_SECRET",""))}, timeout=3)
                                     except Exception: pass
                                     st.success("Período removido.")
