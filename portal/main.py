@@ -81,7 +81,20 @@ async def catch_all(full_path: str):
     return FileResponse("portal/templates/index.html")
 
 
-@app.post("/api/cache/clear")
+@app.get("/health")
+@app.head("/health")
+async def health():
+    """Health check — mantém o Neon acordado."""
+    try:
+        from services.data_loader_factory import get_data_loader
+        loader = get_data_loader()
+        loader.carregar_dias_publicados()
+        return {"status": "ok", "db": "connected"}
+    except Exception:
+        return {"status": "ok", "db": "warming"}
+
+
+
 async def clear_cache(payload: dict):
     """Limpa o cache interno do loader — chamado pelo Streamlit após alterações."""
     import os
