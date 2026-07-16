@@ -64,25 +64,48 @@ def _get_pool():
         with _pool_lock:
             if _conn_pool is None:
                 _conn_pool = _pg_pool.ThreadedConnectionPool(
-                    minconn=1, maxconn=10,
+                    minconn=1, maxconn=5,
                     dsn=DATABASE_URL,
-                    cursor_factory=psycopg2.extras.RealDictCursor
+                    cursor_factory=psycopg2.extras.RealDictCursor,
+                    keepalives=1,
+                    keepalives_idle=30,
+                    keepalives_interval=10,
+                    keepalives_count=5,
+                    connect_timeout=10,
                 )
     return _conn_pool
 
-def _query(sql, params=None):
+def _get_conn():
+    """Obtém conexão do pool, reconectando se necessário."""
+    global _conn_pool
     pool = _get_pool()
     conn = pool.getconn()
+    try:
+        # Verificar se a conexão está viva
+        conn.cursor().execute("SELECT 1")
+        conn.commit()
+    except Exception:
+        # Conexão morta — repor e criar nova
+        try:
+            pool.putconn(conn, close=True)
+        except Exception:
+            pass
+        _conn_pool = None
+        pool = _get_pool()
+        conn = pool.getconn()
+    return conn
+
+def _query(sql, params=None):
+    conn = _get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
             return cur.fetchall()
     finally:
-        pool.putconn(conn)
+        _get_pool().putconn(conn)
 
 def _execute(sql, params=None):
-    pool = _get_pool()
-    conn = pool.getconn()
+    conn = _get_conn()
     try:
         with conn.cursor() as cur:
             cur.execute(sql, params or ())
@@ -91,11 +114,10 @@ def _execute(sql, params=None):
         conn.rollback()
         raise
     finally:
-        pool.putconn(conn)
+        _get_pool().putconn(conn)
 
 def _execute_many(sql, rows):
-    pool = _get_pool()
-    conn = pool.getconn()
+    conn = _get_conn()
     try:
         with conn.cursor() as cur:
             psycopg2.extras.execute_values(cur, sql, rows)
@@ -104,10 +126,7 @@ def _execute_many(sql, rows):
         conn.rollback()
         raise
     finally:
-        pool.putconn(conn)
-
-
-# ── DataLoader ────────────────────────────────────────────────
+        _get_pool().putconn(conn)
 class DataLoader:
     """DataLoader com backend PostgreSQL."""
 
