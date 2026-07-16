@@ -108,7 +108,7 @@ def gerar_pdf_troca(
 
         y -= 24*mm
 
-        # Espaço para assinaturas
+        # Espaço para assinaturas com labels
         c.setFillColor(AZUL)
         c.setFont("Helvetica-Bold", 9)
         c.drawString(LM, y, "ASSINATURAS DIGITAIS")
@@ -116,6 +116,35 @@ def gerar_pdf_troca(
         c.setStrokeColor(AZUL)
         c.setLineWidth(0.5)
         c.line(LM, y, W-LM, y)
+        y -= 4*mm
+
+        # Labels dos 3 signatários
+        col_w = (W - 2*LM) / 3
+        labels = [
+            ("⚖️ VALIDADOR", validador),
+            ("🙋 SOLICITANTE", nome_orig),
+            ("✅ ACEITANTE", nome_dest),
+        ]
+        for i, (lbl, nome) in enumerate(labels):
+            x_col = LM + i * col_w
+            c.setFillColor(HexColor("#f0f4f8"))
+            c.rect(x_col, y-22*mm, col_w-2*mm, 22*mm, fill=1, stroke=0)
+            c.setStrokeColor(AZUL_V)
+            c.setLineWidth(0.4)
+            c.rect(x_col, y-22*mm, col_w-2*mm, 22*mm, fill=0, stroke=1)
+            c.setFillColor(AZUL_V)
+            c.setFont("Helvetica-Bold", 7)
+            c.drawString(x_col+2*mm, y-5*mm, lbl)
+            c.setFillColor(AZUL)
+            c.setFont("Helvetica", 7.5)
+            # Wrap nome se longo
+            nome_curto = nome[:30] + "..." if len(nome) > 30 else nome
+            c.drawString(x_col+2*mm, y-10*mm, nome_curto)
+            c.setFillColor(CINZA)
+            c.setFont("Helvetica", 6.5)
+            c.drawString(x_col+2*mm, y-15*mm, "Assinado digitalmente")
+            c.drawString(x_col+2*mm, y-19*mm, "GNR Posto Famalicão")
+
         y -= 28*mm  # espaço para os campos de assinatura
 
         # Rodapé
@@ -224,7 +253,7 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
 
         p12_bytes = gerar_certificado_gnr()
 
-        # Campos de assinatura (na última página, rodapé)
+        # Campos de assinatura com labels visíveis
         sig_fields = [
             SigFieldSpec(sig_field_name="Assinatura_Validador",   on_page=-1, box=(36,  36, 190, 90)),
             SigFieldSpec(sig_field_name="Assinatura_Solicitante", on_page=-1, box=(203, 36, 357, 90)),
@@ -235,6 +264,20 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
         w = incremental_writer.IncrementalPdfFileWriter(io.BytesIO(pdf_bytes))
         for sf in sig_fields:
             fields.append_signature_field(w, sf)
+
+        # Adicionar labels de texto por cima dos campos de assinatura
+        from reportlab.pdfgen import canvas as _rc
+        from reportlab.lib.pagesizes import A4 as _A4
+        from reportlab.lib.units import mm as _mm
+        _buf_lbl = io.BytesIO()
+        _c_lbl = _rc.Canvas(_buf_lbl, pagesize=_A4)
+        _W, _H = _A4
+        _c_lbl.setFont("Helvetica", 6.5)
+        _c_lbl.setFillColorRGB(0.06, 0.15, 0.25)
+        _c_lbl.drawString(36/72*25.4*_mm/25.4*72,  92, f"VALIDADOR: {validador}")
+        _c_lbl.drawString(203/72*25.4*_mm/25.4*72, 92, f"SOLICITANTE: {nome_orig}")
+        _c_lbl.drawString(370/72*25.4*_mm/25.4*72, 92, f"ACEITANTE: {nome_dest}")
+        _c_lbl.save()
         buf = io.BytesIO()
         w.write(buf)
         pdf_com_campos = buf.getvalue()
