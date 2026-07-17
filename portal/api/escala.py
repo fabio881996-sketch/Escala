@@ -1,12 +1,15 @@
 """Router de escala."""
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from services.data_loader_factory import get_data_loader as _get_data_loader
 from portal.api.auth import obter_user_atual, obter_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
