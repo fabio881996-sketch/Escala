@@ -78,22 +78,26 @@ def _get_pool():
 def _get_conn():
     """Obtém conexão do pool, reconectando se necessário."""
     global _conn_pool
-    pool = _get_pool()
-    conn = pool.getconn()
-    try:
-        # Verificar se a conexão está viva
-        conn.cursor().execute("SELECT 1")
-        conn.commit()
-    except Exception:
-        # Conexão morta — repor e criar nova
+    for attempt in range(3):
         try:
-            pool.putconn(conn, close=True)
+            pool = _get_pool()
+            conn = pool.getconn()
+            # Verificar se a conexão está viva
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT 1")
+                conn.commit()
+                return conn
+            except Exception:
+                # Conexão morta — fechar e resetar pool
+                try:
+                    pool.putconn(conn, close=True)
+                except Exception:
+                    pass
+                _conn_pool = None
         except Exception:
-            pass
-        _conn_pool = None
-        pool = _get_pool()
-        conn = pool.getconn()
-    return conn
+            _conn_pool = None
+    raise Exception("Não foi possível obter conexão ao Neon após 3 tentativas")
 
 def _query(sql, params=None):
     conn = _get_conn()
