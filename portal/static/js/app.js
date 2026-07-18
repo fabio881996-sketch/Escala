@@ -6,6 +6,17 @@ const App = {
             const s = document.getElementById('splash');
             if (s) { s.classList.add('hidden'); setTimeout(() => s.remove(), 400); }
         }, 700);
+
+        // Quando o Service Worker publica uma versão nova, recarrega automaticamente
+        // (evita ter de desinstalar/reinstalar a app para ver atualizações)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', e => {
+                if (e.data?.type === 'SW_UPDATED') {
+                    window.location.reload();
+                }
+            });
+        }
+
         Router.init();
     },
 
