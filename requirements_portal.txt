@@ -20,3 +20,4 @@ pyhanko
 pyhanko-certvalidator
 cryptography
 nest_asyncio
+pypdf==5.0.1
