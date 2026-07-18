@@ -2,7 +2,9 @@
    sw.js — Service Worker (PWA) v2
    ============================================ */
 
-const CACHE_NAME = 'gnr-escala-v3';
+// IMPORTANTE: mudar este número em CADA deploy que altere HTML/CSS/JS.
+// É o que força os telemóveis das pessoas a atualizar sem terem de reinstalar a app.
+const CACHE_NAME = 'gnr-escala-v4';
 const STATIC_ASSETS = [
     '/',
     '/static/css/app.css',
@@ -10,10 +12,13 @@ const STATIC_ASSETS = [
     '/static/js/router.js',
     '/static/js/components.js',
     '/static/js/app.js',
+    '/static/js/gcal.js',
     '/static/js/pages/login.js',
     '/static/js/pages/minha_escala.js',
     '/static/js/pages/escala_geral.js',
     '/static/js/pages/trocas.js',
+    '/static/js/pages/ferias.js',
+    '/static/js/pages/definicoes.js',
 ];
 
 // ── Instalar ──────────────────────────────────────────────────
@@ -27,11 +32,19 @@ self.addEventListener('install', event => {
 // ── Activar ───────────────────────────────────────────────────
 self.addEventListener('activate', event => {
     event.waitUntil(
-        caches.keys().then(keys =>
-            Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-        )
+        (async () => {
+            // Apagar caches de versões antigas
+            const keys = await caches.keys();
+            await Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)));
+
+            // Assumir controlo imediato de todas as abas/instalações abertas
+            await self.clients.claim();
+
+            // Avisar as abas já abertas para recarregarem (evita ficarem presas em HTML/CSS antigo)
+            const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+            allClients.forEach(client => client.postMessage({ type: 'SW_UPDATED' }));
+        })()
     );
-    self.clients.claim();
 });
 
 // ── Fetch ─────────────────────────────────────────────────────
@@ -64,7 +77,21 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // CSS e outros estáticos — cache first
+    // Navegação (HTML) e CSS — network first, para nunca ficarem presos numa versão antiga
+    if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.css')) {
+        event.respondWith(
+            fetch(event.request).then(response => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                }
+                return response;
+            }).catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // Restantes estáticos (ícones, imagens, etc.) — cache first
     event.respondWith(
         caches.match(event.request).then(cached => {
             if (cached) return cached;
