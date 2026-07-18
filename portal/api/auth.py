@@ -12,6 +12,9 @@ from pydantic import BaseModel
 from config.settings import ADMINS, get_secret
 from core.auth import verify_pin
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 # Configuração JWT
@@ -88,8 +91,9 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), request: Reque
         from services.data_loader_factory import get_data_loader
         loader = get_data_loader()
         df_util = loader.carregar_usuarios()
-    except Exception:
-        raise HTTPException(status_code=503, detail="Erro ao ligar ao servidor")
+    except Exception as e:
+        logger.exception(f"Erro ao carregar utilizadores no login: {e}")
+        raise HTTPException(status_code=503, detail=f"Erro ao ligar ao servidor: {type(e).__name__}: {e}")
 
     if df_util.empty:
         raise HTTPException(status_code=503, detail="Erro ao carregar utilizadores")
