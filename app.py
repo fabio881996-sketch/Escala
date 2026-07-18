@@ -1524,7 +1524,8 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.line(x, y-5*mm, x+sum(widths), y-5*mm)
         return y - 5*mm
 
-    def tbl_row(y, vals, widths, fill=False, x=LM, h=None):
+    def tbl_row(y, vals, widths, fill=False, x=LM, h=None, bold_cols=None):
+        bold_cols = bold_cols or set()
         # Calcular altura necessária com wrap
         c.setFont("Helvetica", 8.5)
         linhas_por_cel = []
@@ -1547,9 +1548,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             c.setFillColor(FILL_ALT)
             c.rect(x, y-row_h, sum(widths), row_h, fill=1, stroke=0)
         c.setFillColor(black)
-        c.setFont("Helvetica", 8.5)
         xi = x
-        for linhas, w in zip(linhas_por_cel, widths):
+        for col_idx, (linhas, w) in enumerate(zip(linhas_por_cel, widths)):
+            c.setFont("Helvetica-Bold" if col_idx in bold_cols else "Helvetica", 8.5)
             for li, ln in enumerate(linhas):
                 c.drawCentredString(xi + w/2, y-(li*5*mm)-3.5*mm, ln)
             xi += w
@@ -1561,7 +1562,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(AZUL_ESC)
         c.drawString(x+2*mm, y-3.5*mm, f"  {label}:")
-        c.setFont("Helvetica", 8.5)
+        c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(black)
         ids_txt = ", ".join(ids)
         c.drawString(x+35*mm, y-3.5*mm, ids_txt[:80])
@@ -1644,7 +1645,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(AZUL_ESC)
         c.drawString(LM+2*mm, y_esq-3.5*mm, f"  {serv}:")
-        c.setFont("Helvetica", 8.5)
+        c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(black)
         for li, ln in enumerate(linhas_ids):
             indent = LM+label_w_esq if li == 0 else LM+5*mm
@@ -1678,7 +1679,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
         c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(AZUL_ESC)
         c.drawString(x_dir+2*mm, y_dir-3.5*mm, f"  {serv}:")
-        c.setFont("Helvetica", 8.5)
+        c.setFont("Helvetica-Bold", 8.5)
         c.setFillColor(black)
         for li, ln in enumerate(linhas_ids):
             indent = x_dir+label_w_esq if li == 0 else x_dir+5*mm
@@ -1715,7 +1716,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             fill = False
             for hor, grp in df_at.assign(_hor_sort=df_at["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
                 ids = ", ".join(grp["id_fmt"].tolist())
-                y_esq2 = tbl_row(y_esq2, [hor, ids], wids_at_l, fill, x=LM)
+                y_esq2 = tbl_row(y_esq2, [hor, ids], wids_at_l, fill, x=LM, bold_cols={1})
                 fill = not fill
 
         # Coluna direita -- Apoio
@@ -1727,7 +1728,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             fill = False
             for hor, grp in df_ap.assign(_hor_sort=df_ap["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
                 ids = ", ".join(grp["id_fmt"].tolist())
-                y_dir2 = tbl_row(y_dir2, [hor, ids], wids_at_r, fill, x=x_dir2)
+                y_dir2 = tbl_row(y_dir2, [hor, ids], wids_at_r, fill, x=x_dir2, bold_cols={1})
                 fill = not fill
 
         y_at_bottom = min(y_esq2, y_dir2)
@@ -1755,7 +1756,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
             obs  = _clean(_v("observações"))
-            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill)
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill, bold_cols={1})
             fill = not fill
             if obs:
                 from reportlab.platypus import Paragraph
@@ -1795,7 +1796,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             vtr  = _clean(_v("viatura"))
             giro = _clean(_v("giro"))
             obs  = _clean(_v("observações"))
-            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill)
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_pp, fill, bold_cols={1})
             fill = not fill
             if obs:
                 from reportlab.platypus import Paragraph
@@ -1832,7 +1833,7 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             rad = _clean(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
             vtr = _clean(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
             obs = _clean(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
-            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill)
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill, bold_cols={1})
             fill = not fill
             if obs:
                 from reportlab.platypus import Paragraph
