@@ -260,24 +260,46 @@ def assinar_pdf(pdf_bytes: bytes, validador: str, data_validacao: str,
             SigFieldSpec(sig_field_name="Assinatura_Aceitante",   on_page=-1, box=(370, 36, 559, 90)),
         ]
 
+        # Camada de texto com a identificação de cada signatário, desenhada
+        # logo acima de cada campo de assinatura (coordenadas em pontos PDF,
+        # alinhadas com o x0 de cada caixa em sig_fields acima).
+        from reportlab.pdfgen import canvas as _rc
+        from reportlab.lib.pagesizes import A4 as _A4
+        from pypdf import PdfReader as _PdfReader, PdfWriter as _PdfWriter
+
+        _buf_lbl = io.BytesIO()
+        _c_lbl = _rc.Canvas(_buf_lbl, pagesize=_A4)
+        _c_lbl.setFont("Helvetica-Bold", 6.5)
+        _c_lbl.setFillColorRGB(0.06, 0.15, 0.25)
+        _labels_pos = [
+            (36,  f"VALIDADOR: {validador}"),
+            (203, f"SOLICITANTE: {nome_orig}"),
+            (370, f"ACEITANTE: {nome_dest}"),
+        ]
+        for _x0, _texto in _labels_pos:
+            _c_lbl.drawString(_x0 + 2, 92, _texto[:45])
+        _c_lbl.save()
+
+        # Fundir a camada de labels na última página do PDF ANTES de
+        # adicionar os campos de assinatura (para não interferir com a
+        # escrita incremental usada pelo pyhanko ao assinar).
+        _reader_base = _PdfReader(io.BytesIO(pdf_bytes))
+        _reader_overlay = _PdfReader(io.BytesIO(_buf_lbl.getvalue()))
+        _writer_merge = _PdfWriter()
+        _ultima_pagina = len(_reader_base.pages) - 1
+        for _i, _page in enumerate(_reader_base.pages):
+            if _i == _ultima_pagina:
+                _page.merge_page(_reader_overlay.pages[0])
+            _writer_merge.add_page(_page)
+        _buf_merged = io.BytesIO()
+        _writer_merge.write(_buf_merged)
+        pdf_bytes = _buf_merged.getvalue()
+
         # Adicionar campos ao PDF
         w = incremental_writer.IncrementalPdfFileWriter(io.BytesIO(pdf_bytes))
         for sf in sig_fields:
             fields.append_signature_field(w, sf)
 
-        # Adicionar labels de texto por cima dos campos de assinatura
-        from reportlab.pdfgen import canvas as _rc
-        from reportlab.lib.pagesizes import A4 as _A4
-        from reportlab.lib.units import mm as _mm
-        _buf_lbl = io.BytesIO()
-        _c_lbl = _rc.Canvas(_buf_lbl, pagesize=_A4)
-        _W, _H = _A4
-        _c_lbl.setFont("Helvetica", 6.5)
-        _c_lbl.setFillColorRGB(0.06, 0.15, 0.25)
-        _c_lbl.drawString(36/72*25.4*_mm/25.4*72,  92, f"VALIDADOR: {validador}")
-        _c_lbl.drawString(203/72*25.4*_mm/25.4*72, 92, f"SOLICITANTE: {nome_orig}")
-        _c_lbl.drawString(370/72*25.4*_mm/25.4*72, 92, f"ACEITANTE: {nome_dest}")
-        _c_lbl.save()
         buf = io.BytesIO()
         w.write(buf)
         pdf_com_campos = buf.getvalue()
