@@ -4,7 +4,7 @@
 
 // IMPORTANTE: mudar este número em CADA deploy que altere HTML/CSS/JS.
 // É o que força os telemóveis das pessoas a atualizar sem terem de reinstalar a app.
-const CACHE_NAME = 'gnr-escala-v4';
+const CACHE_NAME = 'gnr-escala-v5';
 const STATIC_ASSETS = [
     '/',
     '/static/css/app.css',
