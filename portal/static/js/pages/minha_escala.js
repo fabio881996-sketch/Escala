@@ -55,14 +55,15 @@ const MinhaEscalaPage = {
         const icone = this.icone(s.servico);
         const v = (x) => this._val(x);
 
+        const _diasSem = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+        const _parts = s.data.split('/');
+        const _dObj = new Date(parseInt(_parts[2]), parseInt(_parts[1])-1, parseInt(_parts[0]));
+        const _diaSem = _diasSem[_dObj.getDay()];
+
         let badge = '';
-        if (s.is_hoje) badge = '<span class="badge badge-hoje">🟢 HOJE</span>';
-        else if (s.is_amanha) badge = '<span class="badge badge-amanha">🔵 AMANHÃ</span>';
+        if (s.is_hoje) badge = `<span class="badge badge-hoje">🟢 HOJE · ${_diaSem}</span>`;
+        else if (s.is_amanha) badge = `<span class="badge badge-amanha">🔵 AMANHÃ · ${_diaSem}</span>`;
         else {
-            const _diasSem = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-            const _parts = s.data.split('/');
-            const _dObj = new Date(parseInt(_parts[2]), parseInt(_parts[1])-1, parseInt(_parts[0]));
-            const _diaSem = _diasSem[_dObj.getDay()];
             badge = `<span class="badge badge-neutro">📅 ${_diaSem} ${s.data}</span>`;
         }
         if (s.troca_aprovada) badge += ' <span style="background:#f59e0b;color:#fff;font-size:.6rem;font-weight:700;padding:2px 6px;border-radius:99px;margin-left:4px">🔄 TROCA</span>';
