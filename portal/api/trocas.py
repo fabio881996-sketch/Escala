@@ -6,7 +6,7 @@ import unicodedata
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from services.data_loader_factory import get_data_loader as _get_data_loader
@@ -122,6 +122,21 @@ async def minhas_trocas(current_user: dict = Depends(obter_user_atual)):
         for t in trocas:
             t["nome_origem"] = nomes.get(str(t.get("id_origem", "")), str(t.get("id_origem", "")))
             t["nome_destino"] = nomes.get(str(t.get("id_destino", "")), str(t.get("id_destino", "")))
+
+        def _chave_ordenacao(t):
+            data_str = str(t.get("data", "")).strip()
+            try:
+                d, m, a = data_str.split("/")
+                data_ord = (int(a), int(m), int(d))
+            except Exception:
+                data_ord = (0, 0, 0)
+            try:
+                id_ord = int(t.get("id", 0) or 0)
+            except Exception:
+                id_ord = 0
+            return (data_ord, id_ord)
+
+        trocas.sort(key=_chave_ordenacao, reverse=True)
         return {"trocas": trocas}
     except Exception as e:
         logger.error("Erro interno: %s", e, exc_info=True)
@@ -534,7 +549,7 @@ async def solicitar_troca(pedido: PedidoTroca, current_user: dict = Depends(obte
 
 @router.post("/cancelar-aprovada")
 async def cancelar_troca_aprovada(payload: CancelarTroca, current_user: dict = Depends(obter_user_atual)):
-    """Cancela uma troca já aprovada — notifica ambos os militares."""
+    """Cancela uma troca já aprovada — só os militares envolvidos ou um admin podem fazê-lo."""
     try:
         loader = get_loader()
         df = loader.carregar_trocas()
@@ -548,6 +563,24 @@ async def cancelar_troca_aprovada(payload: CancelarTroca, current_user: dict = D
             raise HTTPException(status_code=404, detail="Troca não encontrada")
         if str(troca.get("status","")).strip() != "Aprovada":
             raise HTTPException(status_code=400, detail="Troca não está aprovada")
+
+        u_id = str(current_user.get("sub", "")).strip()
+        id_origem_troca = str(troca.get("id_origem", "")).strip()
+        id_destino_troca = str(troca.get("id_destino", "")).strip()
+        if not current_user.get("is_admin") and u_id not in (id_origem_troca, id_destino_troca):
+            raise HTTPException(status_code=403, detail="Só os militares envolvidos ou um admin podem cancelar esta troca")
+
+        if not current_user.get("is_admin"):
+            try:
+                from datetime import datetime as _dt3
+                d, m, a = str(troca.get("data", "")).strip().split("/")
+                data_troca_obj = _dt3(int(a), int(m), int(d))
+                if data_troca_obj.date() < _dt3.now().date():
+                    raise HTTPException(status_code=400, detail="Já não é possível cancelar — a data já passou")
+            except HTTPException:
+                raise
+            except Exception:
+                pass  # se a data vier num formato inesperado, não bloquear o cancelamento
 
         loader.actualizar_status_troca(int(troca["id"]) if "id" in troca else payload.row_index, "Cancelada")
         loader.limpar_cache()
@@ -816,7 +849,7 @@ async def trocas_pendentes_admin(current_user: dict = Depends(obter_admin)):
 # ── Admin: validar trocas ────────────────────────────────────
 
 @router.post("/validar")
-async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(obter_admin)):
+async def validar_troca(resposta: RespostaTroca, background_tasks: BackgroundTasks, current_user: dict = Depends(obter_admin)):
     """Admin valida ou rejeita definitivamente uma troca já aceite pelo militar."""
     try:
         loader = get_loader()
@@ -849,34 +882,39 @@ async def validar_troca(resposta: RespostaTroca, current_user: dict = Depends(ob
         loader.actualizar_status_troca(int(troca["id"]), novo_status, _dt2.now().strftime("%d/%m/%Y %H:%M"))
         loader.limpar_cache()
 
-        # Gerar PDF no Drive se aprovada
+        # Gerar PDF no Drive se aprovada — feito em background para a
+        # resposta ao admin ser imediata (assinar 3x + upload Drive pode
+        # demorar vários segundos e não deve bloquear o pedido HTTP).
         if novo_status == "Aprovada":
-            try:
-                _data      = str(troca.get("data","")).strip()
-                _id_orig   = str(troca.get("id_origem","")).strip()
-                _serv_orig = str(troca.get("servico_origem","")).strip()
-                _id_dest   = str(troca.get("id_destino","")).strip()
-                _serv_dest = str(troca.get("servico_destino","")).strip()
-                _data_ped  = str(troca.get("data_pedido","")).strip()
-                _data_ace  = str(troca.get("data_aceitacao","")).strip()
+            _data      = str(troca.get("data","")).strip()
+            _id_orig   = str(troca.get("id_origem","")).strip()
+            _serv_orig = str(troca.get("servico_origem","")).strip()
+            _id_dest   = str(troca.get("id_destino","")).strip()
+            _serv_dest = str(troca.get("servico_destino","")).strip()
+            _data_ped  = str(troca.get("data_pedido","")).strip()
+            _data_ace  = str(troca.get("data_aceitacao","")).strip()
 
-                df_u = loader.carregar_usuarios()
-                _id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
-                            for _, r in df_u.iterrows() if str(r.get("id","")).strip()}
-                _nome_orig = _id_nome.get(_id_orig, _id_orig)
-                _nome_dest = _id_nome.get(_id_dest, _id_dest)
+            df_u = loader.carregar_usuarios()
+            _id_nome = {str(r["id"]).strip(): f"{r.get('posto','')} {r.get('nome','')}".strip()
+                        for _, r in df_u.iterrows() if str(r.get("id","")).strip()}
+            _nome_orig = _id_nome.get(_id_orig, _id_orig)
+            _nome_dest = _id_nome.get(_id_dest, _id_dest)
 
-                from portal.api.trocas_pdf import gerar_e_upload
-                gerar_e_upload(
-                    data=_data, nome_orig=_nome_orig, serv_orig=_serv_orig,
-                    nome_dest=_nome_dest, serv_dest=_serv_dest,
-                    data_pedido=_data_ped, data_aceitacao=_data_ace,
-                    validador=f"{current_user.get('posto','')} {current_user.get('nome','')}".strip(),
-                    data_validacao=_dt2.now().strftime("%d/%m/%Y %H:%M"),
-                    admin_id="1030",  # OAuth Drive sempre com o admin principal
-                )
-            except Exception as _e:
-                pass  # PDF é opcional — não bloquear a validação
+            def _gerar_pdf_em_background():
+                try:
+                    from portal.api.trocas_pdf import gerar_e_upload
+                    gerar_e_upload(
+                        data=_data, nome_orig=_nome_orig, serv_orig=_serv_orig,
+                        nome_dest=_nome_dest, serv_dest=_serv_dest,
+                        data_pedido=_data_ped, data_aceitacao=_data_ace,
+                        validador=f"{current_user.get('posto','')} {current_user.get('nome','')}".strip(),
+                        data_validacao=_dt2.now().strftime("%d/%m/%Y %H:%M"),
+                        admin_id="1030",  # OAuth Drive sempre com o admin principal
+                    )
+                except Exception as _e:
+                    logger.warning("Erro ao gerar/upload PDF de troca em background: %s", _e)
+
+            background_tasks.add_task(_gerar_pdf_em_background)
 
         # Notificar militares
         try:
