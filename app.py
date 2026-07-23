@@ -1742,9 +1742,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_ocorr.empty:
         y_sec_top = y
         y = sec_title(y, "Patrulha Ocorrências")
-        cols_oc = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
-        _w = TW - 16*mm - 32*mm - 40*mm
-        wids_oc = [16*mm, 32*mm, 40*mm, _w/3, _w/3, _w/3]
+        cols_oc = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura", "Giro"]
+        _w = TW - 16*mm - 32*mm - 40*mm - 14*mm
+        wids_oc = [16*mm, 32*mm, 40*mm, _w/3, _w/3, _w/3, 14*mm]
         y = tbl_header(y, cols_oc, wids_oc)
         fill = False
         for hor, grp in df_ocorr.assign(_hor_sort=df_ocorr["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values("_hor_sort").groupby("horário", sort=False):
@@ -1755,8 +1755,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ind  = _clean(_v("indicativo rádio"))
             rad  = _clean(_v("rádio"))
             vtr  = _clean(_v("viatura"))
+            giro = _clean(_v("giro"))
             obs  = _clean(_v("observações"))
-            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_oc, fill, bold_cols={1})
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_oc, fill, bold_cols={1})
             fill = not fill
             if obs:
                 from reportlab.platypus import Paragraph
@@ -1821,9 +1822,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
     if not df_outros.empty:
         y_sec_top = y
         y = sec_title(y, "Outros Serviços")
-        cols_ot = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura"]
-        _wo = TW - 16*mm - 32*mm - 40*mm
-        wids_ot = [16*mm, 32*mm, 40*mm, _wo/3, _wo/3, _wo/3]
+        cols_ot = ["Horário", "Militares", "Serviço", "Indicativo", "Rádio", "Viatura", "Giro"]
+        _wo = TW - 16*mm - 32*mm - 40*mm - 14*mm
+        wids_ot = [16*mm, 32*mm, 40*mm, _wo/3, _wo/3, _wo/3, 14*mm]
         y = tbl_header(y, cols_ot, wids_ot)
         fill = False
         for (hor, serv), grp in df_outros.assign(_hor_sort=df_outros["horário"].str.extract(r"^(\d+)")[0].astype(float)).sort_values(["_hor_sort","serviço"]).groupby(["horário", "serviço"], sort=False):
@@ -1832,8 +1833,9 @@ def gerar_pdf_escala_dia(data: str, df_raw: pd.DataFrame, df_util: pd.DataFrame 
             ind = _clean(grp["indicativo rádio"].iloc[0]) if "indicativo rádio" in grp.columns else ""
             rad = _clean(grp["rádio"].iloc[0]) if "rádio" in grp.columns else ""
             vtr = _clean(grp["viatura"].iloc[0]) if "viatura" in grp.columns else ""
+            giro = _clean(grp["giro"].iloc[0]) if "giro" in grp.columns else ""
             obs = _clean(grp["observações"].iloc[0]) if "observações" in grp.columns else ""
-            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr], wids_ot, fill, bold_cols={1})
+            y = tbl_row(y, [hor, ids, serv, ind, rad, vtr, giro], wids_ot, fill, bold_cols={1})
             fill = not fill
             if obs:
                 from reportlab.platypus import Paragraph
