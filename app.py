@@ -4690,6 +4690,24 @@ else:
                         if col_ed in row_ed.index:
                             df_editado.at[i, col_ed] = row_ed[col_ed]
 
+                # Auto-preencher Giro consoante o serviço, quando ainda não foi
+                # escolhido manualmente (mesma ideia da Patrulha Ocorrências no
+                # "Gerar Escala": Patrulha → Giro I, Res. Expediente → Giro II).
+                def _giro_auto_por_servico(serv_str: str) -> str | None:
+                    s_n = norm(str(serv_str))
+                    if 'patrulha' in s_n and 'ocorr' in s_n:
+                        return 'I'
+                    if 'res' in s_n and 'expedient' in s_n:
+                        return 'II'
+                    return None
+
+                for _idx_giro in df_editado.index:
+                    _giro_atual = str(df_editado.at[_idx_giro, 'giro']).strip()
+                    if not _giro_atual or _giro_atual == 'nan':
+                        _giro_novo = _giro_auto_por_servico(df_editado.at[_idx_giro, 'serviço'])
+                        if _giro_novo:
+                            df_editado.at[_idx_giro, 'giro'] = _giro_novo
+
                 # Guardar edições no session_state para persistir durante pesquisa
                 if pesq.strip():
                     # Só atualizar as linhas que foram editadas (visíveis na pesquisa)
@@ -4716,7 +4734,17 @@ else:
                             for col_t in ['indicativo','rádio','giro','viatura','observações']:
                                 if col_t in row_ed.index:
                                     tabela_df.at[i_t, col_t] = row_ed[col_t]
+                            _giro_atual_t = str(tabela_df.at[i_t, 'giro']).strip()
+                            if not _giro_atual_t or _giro_atual_t == 'nan':
+                                _giro_novo_t = _giro_auto_por_servico(tabela_df.at[i_t, 'serviço'])
+                                if _giro_novo_t:
+                                    tabela_df.at[i_t, 'giro'] = _giro_novo_t
                     st.session_state['tabela_escala'] = tabela_df.to_dict('records')
+                else:
+                    # Sem pesquisa activa: persistir logo a tabela completa já
+                    # com o Giro preenchido, para aparecer no próximo rerender.
+                    st.session_state['tabela_escala'] = df_editado.to_dict('records')
+
 
                 col_g1, col_g2, col_g3 = st.columns(3)
 
