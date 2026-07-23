@@ -2537,39 +2537,6 @@ else:
         if n_pend > 0:
             st.warning(f"🔔 Tens **{n_pend} pedido(s) de troca** por responder! Vai a **📥 Pedidos Recebidos**.")
 
-        # Verificar trocas validadas cujo serviço original já não existe na escala
-        minhas_apr = df_trocas[
-            (df_trocas['status'] == 'Aprovada') &
-            (df_trocas['servico_origem'] != 'MATAR_REMUNERADO') &
-            ((df_trocas['id_origem'].astype(str) == u_id) |
-             (df_trocas['id_destino'].astype(str) == u_id))
-        ]
-        for _, t in minhas_apr.iterrows():
-            fui_origem = str(t['id_origem']) == u_id
-            serv_meu_t = t['servico_origem'] if fui_origem else t['servico_destino']
-            id_meu     = u_id
-            serv_nome  = serv_meu_t.rsplit('(', 1)[0].strip().lower()
-            hor_val    = serv_meu_t.rsplit('(', 1)[1].rstrip(')') if '(' in serv_meu_t else ''
-            try:
-                dt_t = datetime.strptime(t['data'], '%d/%m/%Y')
-            except:
-                continue
-            # Só verificar nos próximos 30 dias
-            hoje_b = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            if dt_t < hoje_b or (dt_t - hoje_b).days > 30:
-                continue
-            df_dia_t = load_data(dt_t.strftime('%d-%m'))
-            if df_dia_t.empty:
-                continue
-            existe = df_dia_t[
-                (df_dia_t['id'].astype(str) == id_meu) &
-                (df_dia_t['serviço'].astype(str).str.strip().str.lower() == serv_nome) &
-                (df_dia_t['horário'].astype(str).str.strip() == hor_val.strip())
-            ]
-            if existe.empty:
-                outro_nome = get_nome_militar(df_util, t['id_destino'] if fui_origem else t['id_origem'])
-                st.error(f"⚠️ **Atenção!** A tua troca de **{t['data']}** com **{outro_nome}** pode estar afetada por uma alteração na escala. Contacta o teu superior.")
-
     # ============================================================
     # EXPIRAÇÃO DE SESSÃO (4 horas)
     # ============================================================
